@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-import {join, resolve} from 'node:path';
+import {dirname, join, resolve} from 'node:path';
+import {fileURLToPath} from 'node:url';
 import {parseArgs} from 'node:util';
 import {loadConfig} from './Config.js';
 import {loadExpected} from './evaluation/Corpus.js';
@@ -33,12 +34,17 @@ const USAGE = [
     ''
 ].join('\n');
 
+// Resolve bundled knowledge/rules relative to the installed package (this file
+// is dist/Cli.js or src/Cli.ts; the package root is one level up), so the CLI
+// works from any working directory after a global install or `npm link`.
+const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+
 const knowledgeDirOf = (values: CliValues): string => {
-    return resolve(values.knowledge ?? join(process.cwd(), 'knowledge', 'marcus'));
+    return values.knowledge !== undefined ? resolve(values.knowledge) : join(PACKAGE_ROOT, 'knowledge', 'marcus');
 };
 
 const ruleSetDirOf = (values: CliValues): string => {
-    return resolve(values.rules ?? join(process.cwd(), 'rules', 'default'));
+    return values.rules !== undefined ? resolve(values.rules) : join(PACKAGE_ROOT, 'rules', 'default');
 };
 
 const render = (format: string | undefined, report: AnalysisReport, lang: string): string => {
