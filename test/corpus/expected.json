@@ -14,6 +14,8 @@
     { "file": "UnusedImport.ts", "rule": "R-DEP-UNUSED", "symbol": "import#0" },
     { "file": "DeepImport.ts", "rule": "R-DEEP-IMPORT", "symbol": "import#0" },
     { "file": "WideSurface.ts", "rule": "R-WIDE-PUBLIC-SURFACE", "symbol": "" },
-    { "file": "OrmConfig.ts", "rule": "R-ORM-SYNCHRONIZE-ENABLED", "symbol": "synchronize#0" }
+    { "file": "OrmConfig.ts", "rule": "R-ORM-SYNCHRONIZE-ENABLED", "symbol": "synchronize#0" },
+    { "file": "OrmMigrationsConflict.ts", "rule": "R-ORM-SYNCHRONIZE-ENABLED", "symbol": "synchronize#0" },
+    { "file": "OrmMigrationsConflict.ts", "rule": "R-ORM-SYNC-WITH-MIGRATIONS", "symbol": "syncWithMigrations#0" }
   ]
 }

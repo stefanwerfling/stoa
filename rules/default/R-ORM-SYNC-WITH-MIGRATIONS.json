@@ -1,0 +1,34 @@
+{
+  "id": "R-ORM-SYNC-WITH-MIGRATIONS",
+  "version": "1.0.0",
+  "title": "ORM synchronize together with migrations",
+  "feature": "orm.syncWithMigrations",
+  "appliesTo": ["statement"],
+  "principles": ["marcus.judgment"],
+  "dimensions": ["decision-evidence", "robustness"],
+  "trigger": {
+    "all": [{ "fact": "orm.syncWithMigrations", "op": "!=", "value": "" }]
+  },
+  "requiredEvidence": ["orm.syncWithMigrations"],
+  "severity": { "base": "high" },
+  "confidence": { "base": 0.85, "capBy": "certainty" },
+  "message": {
+    "en": "DataSource enables 'synchronize' AND configures migrations — two schema managers in conflict.",
+    "de": "DataSource aktiviert 'synchronize' UND konfiguriert Migrationen — zwei Schema-Verwalter im Konflikt."
+  },
+  "rationale": {
+    "en": "The config declares migrations as the source of truth yet also lets synchronize mutate the schema; the declared intent contradicts the actual behavior (marcus.judgment).",
+    "de": "Die Konfiguration erklärt Migrationen zur Quelle der Wahrheit, lässt aber zugleich synchronize das Schema verändern; die erklärte Absicht widerspricht dem tatsächlichen Verhalten (marcus.judgment)."
+  },
+  "remediation": {
+    "suggestion": {
+      "en": "Pick one: with migrations, set synchronize:false.",
+      "de": "Eines wählen: mit Migrationen synchronize:false setzen."
+    },
+    "drawbacks": {
+      "en": "None in practice — running both managers at once is almost always a mistake.",
+      "de": "Praktisch keine — beide Verwalter gleichzeitig zu betreiben ist fast immer ein Fehler."
+    }
+  },
+  "tests": "test/Rules.test.ts"
+}

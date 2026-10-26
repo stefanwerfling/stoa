@@ -98,6 +98,19 @@ test('R-ORM-SYNCHRONIZE-ENABLED flags synchronize:true and ?? true, but not fals
     assert.ok(findings.some((f) => f.observation.statement.includes('defaults to true')));
 });
 
+test('R-ORM-SYNC-WITH-MIGRATIONS fires only when synchronize and migrations coexist', () => {
+    const conflict = analyzePath(join(root, 'test', 'corpus', 'project', 'OrmMigrationsConflict.ts')).filter(
+        (f) => f.rule.id === 'R-ORM-SYNC-WITH-MIGRATIONS'
+    );
+    assert.equal(conflict.length, 1);
+    assert.equal(conflict[0]?.interpretation.principles[0]?.id, 'marcus.judgment');
+
+    const syncOnly = analyzePath(join(root, 'test', 'corpus', 'project', 'OrmConfig.ts')).filter(
+        (f) => f.rule.id === 'R-ORM-SYNC-WITH-MIGRATIONS'
+    );
+    assert.equal(syncOnly.length, 0, 'synchronize without migrations is not the conflict');
+});
+
 test('findings carry observation evidence and are deterministic', () => {
     const a = analyzePath(join(fixtures, 'Complex.ts'));
     const b = analyzePath(join(fixtures, 'Complex.ts'));

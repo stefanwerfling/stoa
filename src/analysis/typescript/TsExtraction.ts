@@ -137,6 +137,27 @@ export const extractFacts = (sourceFile: SourceFile, info: AdapterInfo): Fact[] 
         facts.push(build({kind: 'orm.synchronizeEnabled', kindOf: 'statement', symbol: `synchronize#${index}`, range: rangeOf(sourceFile, property), value}));
     });
 
+    sourceFile.getDescendantsOfKind(SyntaxKind.ObjectLiteralExpression).forEach((object, index) => {
+        const properties = object.getProperties();
+        const syncEnabled = properties.some(
+            (p) => Node.isPropertyAssignment(p) && p.getName() === 'synchronize' && synchronizeValue(p) !== null
+        );
+        const hasMigrations = properties.some(
+            (p) => Node.isPropertyAssignment(p) && (p.getName() === 'migrations' || p.getName() === 'migrationsRun')
+        );
+        if (syncEnabled && hasMigrations) {
+            facts.push(
+                build({
+                    kind: 'orm.syncWithMigrations',
+                    kindOf: 'statement',
+                    symbol: `syncWithMigrations#${index}`,
+                    range: rangeOf(sourceFile, object),
+                    value: 'synchronize + migrations'
+                })
+            );
+        }
+    });
+
     return facts;
 };
 
