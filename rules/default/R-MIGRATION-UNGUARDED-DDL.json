@@ -1,0 +1,40 @@
+{
+  "id": "R-MIGRATION-UNGUARDED-DDL",
+  "version": "1.0.0",
+  "title": "Unguarded DDL in a migration",
+  "feature": "migration.unguardedDdl",
+  "appliesTo": ["statement"],
+  "principles": ["marcus.obstacle"],
+  "dimensions": ["robustness", "error-handling"],
+  "trigger": {
+    "all": [{ "fact": "migration.unguardedDdl", "op": "!=", "value": "" }]
+  },
+  "requiredEvidence": ["migration.unguardedDdl"],
+  "severity": { "base": "medium" },
+  "confidence": { "base": 0.7, "capBy": "certainty" },
+  "message": {
+    "en": "Unguarded DDL in a migration: {value}.",
+    "de": "Ungesicherte DDL in einer Migration: {value}."
+  },
+  "rationale": {
+    "en": "A migration that assumes a table does (not) exist fails hard when the DB state differs — e.g. after synchronize already created it. The obstacle only surfaces at run time (marcus.obstacle).",
+    "de": "Eine Migration, die das (Nicht-)Vorhandensein einer Tabelle voraussetzt, scheitert hart, wenn der DB-Zustand abweicht — z. B. nachdem synchronize sie bereits angelegt hat. Das Hindernis zeigt sich erst zur Laufzeit (marcus.obstacle)."
+  },
+  "remediation": {
+    "suggestion": {
+      "en": "Add IF [NOT] EXISTS or guard with queryRunner.hasTable/hasColumn; better, ensure a clean baseline and synchronize:false.",
+      "de": "IF [NOT] EXISTS ergänzen oder mit queryRunner.hasTable/hasColumn absichern; besser: sauberer Baseline-Stand und synchronize:false."
+    },
+    "drawbacks": {
+      "en": "IF [NOT] EXISTS can mask schema drift — treat it as a safety net, not a substitute for a clean, ordered migration baseline.",
+      "de": "IF [NOT] EXISTS kann Schema-Drift verdecken — als Sicherheitsnetz behandeln, nicht als Ersatz für einen sauberen, geordneten Baseline-Stand."
+    }
+  },
+  "missingContext": [
+    {
+      "en": "Dialect-specific and string-based; the real DB state is only known at run time (use a CI migration dry-run).",
+      "de": "Dialektabhängig und stringbasiert; der echte DB-Zustand ist erst zur Laufzeit bekannt (CI-Migration gegen frische DB)."
+    }
+  ],
+  "tests": "test/Rules.test.ts"
+}

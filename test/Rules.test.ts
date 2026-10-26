@@ -111,6 +111,21 @@ test('R-ORM-SYNC-WITH-MIGRATIONS fires only when synchronize and migrations coex
     assert.equal(syncOnly.length, 0, 'synchronize without migrations is not the conflict');
 });
 
+test('R-MIGRATION-UNGUARDED-DDL flags unguarded CREATE/DROP TABLE, only in migration files', () => {
+    const migration = analyzePath(join(root, 'test', 'corpus', 'project', 'MigrationUnsafe.ts')).filter(
+        (f) => f.rule.id === 'R-MIGRATION-UNGUARDED-DDL'
+    );
+    assert.equal(migration.length, 2, 'unguarded CREATE + DROP; the IF NOT EXISTS one is not flagged');
+    assert.equal(migration[0]?.interpretation.principles[0]?.id, 'marcus.obstacle');
+    assert.ok(migration.some((f) => f.observation.statement.includes('CREATE TABLE')));
+    assert.ok(migration.some((f) => f.observation.statement.includes('DROP TABLE')));
+
+    const plain = analyzePath(join(root, 'test', 'fixtures', 'migration', 'NotAMigration.ts')).filter(
+        (f) => f.rule.id === 'R-MIGRATION-UNGUARDED-DDL'
+    );
+    assert.equal(plain.length, 0, 'a CREATE TABLE string outside a migration file is not the concern');
+});
+
 test('findings carry observation evidence and are deterministic', () => {
     const a = analyzePath(join(fixtures, 'Complex.ts'));
     const b = analyzePath(join(fixtures, 'Complex.ts'));

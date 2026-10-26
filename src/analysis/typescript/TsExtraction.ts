@@ -158,7 +158,44 @@ export const extractFacts = (sourceFile: SourceFile, info: AdapterInfo): Fact[] 
         }
     });
 
+    if (isMigrationFile(sourceFile)) {
+        const literals = [
+            ...sourceFile.getDescendantsOfKind(SyntaxKind.StringLiteral),
+            ...sourceFile.getDescendantsOfKind(SyntaxKind.NoSubstitutionTemplateLiteral)
+        ].sort((a, b) => a.getStart() - b.getStart());
+        let ddlIndex = 0;
+        for (const literal of literals) {
+            const descriptor = unguardedDdl(literal.getLiteralText());
+            if (descriptor === null) {
+                continue;
+            }
+            facts.push(build({kind: 'migration.unguardedDdl', kindOf: 'statement', symbol: `ddl#${ddlIndex}`, range: rangeOf(sourceFile, literal), value: descriptor}));
+            ddlIndex += 1;
+        }
+    }
+
     return facts;
+};
+
+// A TypeORM migration file: a class implementing `MigrationInterface`. Scoping
+// the DDL scan to these files keeps SQL strings elsewhere from being flagged.
+const isMigrationFile = (sourceFile: SourceFile): boolean => {
+    return sourceFile.getClasses().some((cls) => cls.getImplements().some((impl) => impl.getText().includes('MigrationInterface')));
+};
+
+const CREATE_TABLE = /\bcreate\s+table\b/i;
+const CREATE_TABLE_GUARDED = /\bcreate\s+table\s+if\s+not\s+exists\b/i;
+const DROP_TABLE = /\bdrop\s+table\b/i;
+const DROP_TABLE_GUARDED = /\bdrop\s+table\s+if\s+exists\b/i;
+
+const unguardedDdl = (sql: string): string | null => {
+    if (CREATE_TABLE.test(sql) && !CREATE_TABLE_GUARDED.test(sql)) {
+        return 'CREATE TABLE without IF NOT EXISTS';
+    }
+    if (DROP_TABLE.test(sql) && !DROP_TABLE_GUARDED.test(sql)) {
+        return 'DROP TABLE without IF EXISTS';
+    }
+    return null;
 };
 
 // Detects a TypeORM-style `synchronize: true` (or `… ?? true`, which defaults to

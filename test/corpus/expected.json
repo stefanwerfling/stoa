@@ -16,6 +16,8 @@
     { "file": "WideSurface.ts", "rule": "R-WIDE-PUBLIC-SURFACE", "symbol": "" },
     { "file": "OrmConfig.ts", "rule": "R-ORM-SYNCHRONIZE-ENABLED", "symbol": "synchronize#0" },
     { "file": "OrmMigrationsConflict.ts", "rule": "R-ORM-SYNCHRONIZE-ENABLED", "symbol": "synchronize#0" },
-    { "file": "OrmMigrationsConflict.ts", "rule": "R-ORM-SYNC-WITH-MIGRATIONS", "symbol": "syncWithMigrations#0" }
+    { "file": "OrmMigrationsConflict.ts", "rule": "R-ORM-SYNC-WITH-MIGRATIONS", "symbol": "syncWithMigrations#0" },
+    { "file": "MigrationUnsafe.ts", "rule": "R-MIGRATION-UNGUARDED-DDL", "symbol": "ddl#0" },
+    { "file": "MigrationUnsafe.ts", "rule": "R-MIGRATION-UNGUARDED-DDL", "symbol": "ddl#1" }
   ]
 }
