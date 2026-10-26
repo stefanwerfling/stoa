@@ -10,8 +10,9 @@ An LLM is an optional, switchable adapter.
 > schemas, knowledge base, CLI), M2 (real ts-morph fact extraction), M3 (the
 > deterministic rule engine with its first rules), M5 (golden corpus +
 > precision/recall evaluation), M6 (PHP adapter — same rules, same facts, proving
-> the schema is language-neutral). Next: a dependency-cycle rule and SARIF output.
-> See [docs/en/roadmap.md](docs/en/roadmap.md).
+> the schema is language-neutral), plus a cross-file dependency-cycle rule
+> (R-DEP-CYCLE, works across TS and PHP). Next: SARIF output. See
+> [docs/en/roadmap.md](docs/en/roadmap.md).
 
 ## Documentation
 

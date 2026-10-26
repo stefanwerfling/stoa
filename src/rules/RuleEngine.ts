@@ -8,6 +8,8 @@ import type {
 } from '../Types.js';
 import type {KnowledgeBase} from '../knowledge/KnowledgeBase.js';
 import {certaintyCap, evalCondition, evalGroup, maxSeverity, weakestCertainty, type FactUnit} from './Evaluation.js';
+import {DependencyCycleRule} from './project/DependencyCycleRule.js';
+import type {ProjectRule} from './ProjectRule.js';
 import type {RuleSet} from './RuleSet.js';
 import type {Rule} from './RuleTypes.js';
 
@@ -29,6 +31,8 @@ interface KeyedFinding {
  * rule-model §4 and finding-model §4.
  */
 export class RuleEngine {
+    private readonly projectRules: ProjectRule[] = [new DependencyCycleRule()];
+
     public constructor(
         private readonly knowledgeBase: KnowledgeBase,
         private readonly ruleSet: RuleSet
@@ -44,6 +48,13 @@ export class RuleEngine {
                 if (finding !== null) {
                     keyed.push(finding);
                 }
+            }
+        }
+
+        for (const projectRule of this.projectRules) {
+            const findings = projectRule.evaluate({facts, ruleSetId: this.ruleSet.id, knowledgeBase: this.knowledgeBase});
+            for (const finding of findings) {
+                keyed.push({dedupKey: finding.id, finding});
             }
         }
 
