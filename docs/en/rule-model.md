@@ -133,17 +133,36 @@ flowchart TB
   output.
 - **No rule may produce facts** – only read (layer rule).
 
-## 5. Example Rule Set (MVP)
+## 5. Rule Set `default@1` (implemented)
 
-| Rule ID | Feature (Facts) | Principle | Dimension | Confidence character |
-|----------|-----------------|---------|-----------|---------------------|
-| `R-COMPLEXITY-COGNITIVE` | cognitive/cyclomatic complexity, nesting | `marcus.simplicity` | Complexity | syntactic, high |
-| `R-RESP-MIXED-CONCERNS` | layer/namespace mixing per unit | `marcus.purpose` | Responsibility boundaries | heuristic, medium |
-| `R-SIDEEFFECT-IN-PURE` | I/O/global/clock/randomness in "pure"-looking unit | `marcus.control` | Side-effect control | heuristic, medium |
-| `R-ERR-SWALLOWED` | empty/trivial catch, swallowed promise | `marcus.obstacle` | Error handling | syntactic, high |
-| `R-DEP-CYCLE` | cycle in the module graph | `marcus.cooperation` | Dependencies | syntactic, high |
-| `R-DEP-UNUSED` | unused import | `marcus.cooperation` | Dependencies | syntactic, high |
-| `R-ARCH-LAYER-VIOLATION` | import against declared layer rule | `marcus.judgment` | Provability | syntactic, high (only with layer rules) |
+> The actually-implemented rule set (12 rules). Overview, facts and opt-in flags:
+> [implementation-status.md](./implementation-status.md).
+
+Declarative rules (`rules/default/*.json`, on by default):
+
+| Rule ID | Feature (Fact) | Principle | Dimension | Character |
+|---------|----------------|-----------|-----------|-----------|
+| `R-COMPLEXITY-COGNITIVE` | `metric.cognitiveComplexity` (+ `nestingDepth`) | `marcus.simplicity` | Complexity | syntactic |
+| `R-DEEP-NESTING` | `metric.nestingDepth` | `marcus.simplicity` | Complexity | syntactic |
+| `R-FN-TOO-MANY-PARAMS` | `metric.parameterCount` | `marcus.purpose` | Responsibility boundaries | syntactic |
+| `R-WIDE-PUBLIC-SURFACE` | `metric.exportCount` | `marcus.purpose` | Responsibility boundaries | syntactic (TS/JS only) |
+| `R-ERR-SWALLOWED` | `ast.catchSwallowsError` | `marcus.obstacle` | Error handling | syntactic |
+| `R-SIDEEFFECT-NONDETERMINISM` | `ast.usesNondeterminism` | `marcus.control` | Side-effect control | heuristic |
+| `R-DEP-UNUSED` | `deps.importUnused` | `marcus.cooperation` | Dependencies | syntactic |
+| `R-DEEP-IMPORT` | `deps.importDeep` | `marcus.cooperation` | Dependencies | syntactic |
+| `R-TYPE-UNSOUND` | `external.tsc` | `marcus.judgment` | Decision-evidence, robustness | external-tool, opt-in `--typecheck` |
+| `R-FLOATING-PROMISE` | `external.floatingPromise` | `marcus.obstacle` | Error handling, robustness | external-tool, opt-in `--typecheck` |
+
+Procedural rules (`ProjectRule`, cross-file):
+
+| Rule ID | Basis | Principle | Dimension | Character |
+|---------|-------|-----------|-----------|-----------|
+| `R-DEP-CYCLE` | module graph from `deps.import` (Tarjan SCC) | `marcus.cooperation` | Dependencies | syntactic |
+| `R-UNUSED-EXPORT` | `deps.export` × `deps.importName` | `marcus.cooperation` | Dependencies | heuristic, opt-in `--dead-exports` |
+
+> **Not yet implemented** (documented as ideas): `R-RESP-MIXED-CONCERNS`
+> (layer/namespace mixing, `marcus.purpose`) and `R-ARCH-LAYER-VIOLATION`
+> (import against a declared layer rule, `marcus.judgment`).
 
 > Pure style rules (indentation, quotation marks, name length) are
 > **excluded**. Such checks remain with ESLint/CS-Fixer.

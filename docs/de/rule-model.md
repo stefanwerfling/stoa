@@ -133,17 +133,36 @@ flowchart TB
   Ausgabe.
 - **Keine Regel darf Facts erzeugen** – nur lesen (Schichtregel).
 
-## 5. Beispiel-Regelsatz (MVP)
+## 5. Regelsatz `default@1` (umgesetzt)
 
-| Regel-ID | Feature (Facts) | Prinzip | Dimension | Konfidenz-Charakter |
-|----------|-----------------|---------|-----------|---------------------|
-| `R-COMPLEXITY-COGNITIVE` | kognitive/zyklomat. Komplexität, Nesting | `marcus.simplicity` | Komplexität | syntaktisch, hoch |
-| `R-RESP-MIXED-CONCERNS` | Schicht-/Namespace-Mischung je Einheit | `marcus.purpose` | Verantwortungsgrenzen | heuristisch, mittel |
-| `R-SIDEEFFECT-IN-PURE` | I/O/Global/Uhr/Zufall in „rein" wirkender Einheit | `marcus.control` | Seiteneffekt-Kontrolle | heuristisch, mittel |
-| `R-ERR-SWALLOWED` | leerer/trivialer catch, verschluckte Promise | `marcus.obstacle` | Fehlerbehandlung | syntaktisch, hoch |
-| `R-DEP-CYCLE` | Zyklus im Modulgraph | `marcus.cooperation` | Abhängigkeiten | syntaktisch, hoch |
-| `R-DEP-UNUSED` | ungenutzter Import | `marcus.cooperation` | Abhängigkeiten | syntaktisch, hoch |
-| `R-ARCH-LAYER-VIOLATION` | Import gegen deklarierte Schichtregel | `marcus.judgment` | Belegbarkeit | syntaktisch, hoch (nur mit Schichtregeln) |
+> Der tatsächlich implementierte Regelsatz (12 Regeln). Gesamtüberblick, Facts
+> und Opt-in-Flags: [implementation-status.md](./implementation-status.md).
+
+Deklarative Regeln (`rules/default/*.json`, Default aktiv):
+
+| Regel-ID | Feature (Fact) | Prinzip | Dimension | Charakter |
+|----------|----------------|---------|-----------|-----------|
+| `R-COMPLEXITY-COGNITIVE` | `metric.cognitiveComplexity` (+ `nestingDepth`) | `marcus.simplicity` | Komplexität | syntaktisch |
+| `R-DEEP-NESTING` | `metric.nestingDepth` | `marcus.simplicity` | Komplexität | syntaktisch |
+| `R-FN-TOO-MANY-PARAMS` | `metric.parameterCount` | `marcus.purpose` | Verantwortungsgrenzen | syntaktisch |
+| `R-WIDE-PUBLIC-SURFACE` | `metric.exportCount` | `marcus.purpose` | Verantwortungsgrenzen | syntaktisch (nur TS/JS) |
+| `R-ERR-SWALLOWED` | `ast.catchSwallowsError` | `marcus.obstacle` | Fehlerbehandlung | syntaktisch |
+| `R-SIDEEFFECT-NONDETERMINISM` | `ast.usesNondeterminism` | `marcus.control` | Seiteneffekt-Kontrolle | heuristisch |
+| `R-DEP-UNUSED` | `deps.importUnused` | `marcus.cooperation` | Abhängigkeiten | syntaktisch |
+| `R-DEEP-IMPORT` | `deps.importDeep` | `marcus.cooperation` | Abhängigkeiten | syntaktisch |
+| `R-TYPE-UNSOUND` | `external.tsc` | `marcus.judgment` | Belegbarkeit, Robustheit | external-tool, opt-in `--typecheck` |
+| `R-FLOATING-PROMISE` | `external.floatingPromise` | `marcus.obstacle` | Fehlerbehandlung, Robustheit | external-tool, opt-in `--typecheck` |
+
+Prozedurale Regeln (`ProjectRule`, cross-file):
+
+| Regel-ID | Grundlage | Prinzip | Dimension | Charakter |
+|----------|-----------|---------|-----------|-----------|
+| `R-DEP-CYCLE` | Modulgraph aus `deps.import` (Tarjan-SCC) | `marcus.cooperation` | Abhängigkeiten | syntaktisch |
+| `R-UNUSED-EXPORT` | `deps.export` × `deps.importName` | `marcus.cooperation` | Abhängigkeiten | heuristisch, opt-in `--dead-exports` |
+
+> **Noch nicht umgesetzt** (als Ideen dokumentiert): `R-RESP-MIXED-CONCERNS`
+> (Schicht-/Namespace-Mischung, `marcus.purpose`) und `R-ARCH-LAYER-VIOLATION`
+> (Import gegen deklarierte Schichtregel, `marcus.judgment`).
 
 > Reine Stilregeln (Einrückung, Anführungszeichen, Namenslänge) sind
 > **ausgeschlossen**. Solche Prüfungen bleiben bei ESLint/CS-Fixer.
