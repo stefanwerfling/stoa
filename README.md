@@ -21,7 +21,7 @@ An LLM is an optional, switchable adapter.
 
 ## Documentation
 
-Full specification (ten documents), available in both languages:
+Full specification, available in both languages:
 
 - 🇩🇪 [docs/de/](docs/de/) — German (original)
 - 🇬🇧 [docs/en/](docs/en/) — English (1:1 translation)
@@ -29,6 +29,10 @@ Full specification (ten documents), available in both languages:
 Start with `vision`, then `philosophical-foundation`, `architecture`,
 `knowledge-model`, `rule-model`, `finding-model`, `evaluation`,
 `technology-decision`, `roadmap`, `open-questions`.
+
+For what is **actually built** (rule catalog, CLI flags, facts, deviations from
+the concept), see `implementation-status` ([en](docs/en/implementation-status.md) ·
+[de](docs/de/implementation-status.md)).
 
 ## Quick start
 
