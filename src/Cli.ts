@@ -23,14 +23,23 @@ type CliValues = {
     lang?: string;
     typecheck?: boolean;
     'dead-exports'?: boolean;
+    include?: string[];
+    exclude?: string[];
     help?: boolean;
+};
+
+const configFor = (values: CliValues) => {
+    const base = loadConfig(values.config ?? null);
+    const include = values.include !== undefined && values.include.length > 0 ? values.include : base.include;
+    const exclude = values.exclude !== undefined && values.exclude.length > 0 ? values.exclude : base.exclude;
+    return {...base, include, exclude};
 };
 
 const USAGE = [
     'stoa – Stoic Code Analysis Engine',
     '',
     'Usage:',
-    '  stoa analyze <path> [--format markdown|json|sarif] [--lang en|de] [--typecheck] [--dead-exports] [--semantic noop|anthropic] [--config <file>] [--knowledge <dir>] [--rules <dir>]',
+    '  stoa analyze <path> [--format markdown|json|sarif] [--lang en|de] [--include <glob>]... [--exclude <glob>]... [--typecheck] [--dead-exports] [--semantic noop|anthropic] [--config <file>] [--knowledge <dir>] [--rules <dir>]',
     '  stoa eval <path> --expected <file> [--format markdown|json] [--knowledge <dir>] [--rules <dir>]',
     ''
 ].join('\n');
@@ -64,7 +73,7 @@ const runAnalyze = async (values: CliValues, target: string): Promise<number> =>
         rootPath: resolve(target),
         knowledgeDir: knowledgeDirOf(values),
         ruleSetDir: ruleSetDirOf(values),
-        config: loadConfig(values.config ?? null),
+        config: configFor(values),
         lang,
         typecheck: values.typecheck === true,
         deadExports: values['dead-exports'] === true
@@ -90,7 +99,7 @@ const runEval = (values: CliValues, target: string): number => {
         rootPath: resolve(target),
         knowledgeDir: knowledgeDirOf(values),
         ruleSetDir: ruleSetDirOf(values),
-        config: loadConfig(values.config ?? null)
+        config: configFor(values)
     }).report.findings;
     const result = evaluate(findings, loadExpected(resolve(values.expected)));
     const output = values.format === 'json' ? JSON.stringify(result, null, 2) : evaluationMarkdown(result);
@@ -111,6 +120,8 @@ const main = async (): Promise<number> => {
             lang: {type: 'string', default: 'en'},
             typecheck: {type: 'boolean', default: false},
             'dead-exports': {type: 'boolean', default: false},
+            include: {type: 'string', multiple: true},
+            exclude: {type: 'string', multiple: true},
             help: {type: 'boolean', default: false}
         }
     });

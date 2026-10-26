@@ -43,6 +43,7 @@ npm run analyze -- analyze ./src
 node dist/Cli.js analyze ./src --format json
 node dist/Cli.js analyze ./src --lang de            # localized output (en default)
 node dist/Cli.js analyze ./src --typecheck          # + in-process TypeScript type checker as a fact source
+node dist/Cli.js analyze . --include 'src/**/*.ts' --exclude '**/*.test.ts'  # glob file selection
 node dist/Cli.js analyze ./src --format sarif   # SARIF 2.1.0 for CI / code scanning
 
 # evaluate the engine against the golden corpus (precision/recall)

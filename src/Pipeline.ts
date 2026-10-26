@@ -27,7 +27,6 @@ export interface AnalyzeOptions {
 
 const TS_EXTENSIONS: readonly string[] = ['.ts', '.tsx'] as const;
 
-const INCLUDE_EXTENSIONS: readonly string[] = ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.php'] as const;
 
 /**
  * Orchestrates the deterministic analysis pipeline:
@@ -45,7 +44,7 @@ export const analyze = (options: AnalyzeOptions): AnalysisResult => {
     }
     const ruleEngine = new RuleEngine(knowledgeBase, ruleSet, options.lang ?? 'en', projectRules);
 
-    const files = collectFiles(options.rootPath, {includeExtensions: INCLUDE_EXTENSIONS});
+    const files = collectFiles(options.rootPath, {include: options.config.include, exclude: options.config.exclude});
 
     const typeExtractor = options.typecheck === true ? new TypeDiagnosticsExtractor() : null;
 
