@@ -14,7 +14,7 @@
 | OQ-5 | **Default-Single-Score** | an · aus | **Aus** (nur Profil; Index optional). |
 | OQ-6 | **Kohäsionsmetrik** | LCOM-Variante · eigene Heuristik | offen; mit Experten/Empirie am Korpus kalibrieren (Risiko Fehlalarm). |
 | OQ-7 | **Prinzip-Benennung** | `marcus.*` · `stoic.*` | **`marcus.*`** für MVP; Umbenennung zu `stoic.*`, sobald Epiktet als Quelle dazukommt (`marcus.control`). |
-| OQ-8 | **LLM-Default** | lokal · extern · aus | **Aus** im MVP; Adapter anbieterneutral. |
+| OQ-8 | **LLM-Default** | lokal · extern · aus | **Aus** (implementiert): No-Op-Default; optionaler Anthropic-Adapter (Opus 4.8), anbieterneutral, groundedness-geprüft, außerhalb des deterministischen Kerns. |
 | OQ-9 | **Lizenz der Engine** | — | Repo ist **MIT**. Translationslizenzen sind davon getrennt zu behandeln (nur gemeinfreie Texte verbatim). |
 | OQ-10 | **Dokumentationssprache** | DE · EN | **DE** (Umfeld), Dateinamen EN wie beauftragt. Bei Öffnung des Projekts ggf. EN-Übersetzung. |
 | OQ-11 | **Projektname** | „stoa" · anderer | vorläufig „stoa"; endgültigen Namen + Marken-/Namenskonflikte prüfen. |

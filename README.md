@@ -11,9 +11,10 @@ An LLM is an optional, switchable adapter.
 > deterministic rule engine with its first rules), M5 (golden corpus +
 > precision/recall evaluation), M6 (PHP adapter — same rules, same facts, proving
 > the schema is language-neutral), a cross-file dependency-cycle rule
-> (R-DEP-CYCLE), and SARIF 2.1.0 output for CI / code scanning. The MVP is
-> feature-complete; next is hardening (richer context facts, PSR-4 PHP import
-> resolution). See [docs/en/roadmap.md](docs/en/roadmap.md).
+> (R-DEP-CYCLE), SARIF 2.1.0 output for CI / code scanning, and the optional
+> semantic (LLM) layer — off by default, vendor-neutral, grounded and validated,
+> and never part of the deterministic core. Next is hardening (richer context
+> facts, PSR-4 PHP import resolution). See [docs/en/roadmap.md](docs/en/roadmap.md).
 
 ## Documentation
 
@@ -41,6 +42,11 @@ node dist/Cli.js analyze ./src --format sarif   # SARIF 2.1.0 for CI / code scan
 
 # evaluate the engine against the golden corpus (precision/recall)
 node dist/Cli.js eval test/corpus/project --expected test/corpus/expected.json
+
+# optional: augment findings with a grounded LLM second opinion (off by default;
+# needs ANTHROPIC_API_KEY or an `ant auth login` profile). Deterministic output
+# is unchanged — the LLM only adds an advisory, validated note to flagged findings.
+node dist/Cli.js analyze ./src --semantic anthropic
 ```
 
 ## Project layout

@@ -9,6 +9,8 @@ export interface SemanticRequest {
     codeSnippet: string;
     facts: Fact[];
     principleId: string;
+    principleName: string;
+    observation: string;
     projectContext: string;
 }
 

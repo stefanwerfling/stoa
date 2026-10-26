@@ -162,6 +162,19 @@ export type FindingSource = 'deterministic' | 'semantic';
 
 export type BaselineStatus = 'new' | 'known' | 'fixed';
 
+/**
+ * Optional LLM augmentation attached to a deterministic finding. It never alters
+ * the finding's observation, severity or confidence; it is an advisory, grounded,
+ * clearly-marked second opinion (see docs architecture §D, finding-model §1).
+ */
+export interface SemanticAugmentation {
+    adapter: string;
+    verdict: string;
+    rationale: string;
+    citations: string[];
+    confidence: number;
+}
+
 export interface RuleRef {
     id: string;
     version: string;
@@ -186,6 +199,8 @@ export interface Finding {
     source: FindingSource;
     suppressed?: boolean;
     baselineStatus?: BaselineStatus;
+    /** Present only when the optional semantic layer augmented this finding. */
+    semantic?: SemanticAugmentation;
 }
 
 /** Stamped into every report so results are reproducible and attributable. */

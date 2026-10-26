@@ -40,6 +40,13 @@ export const toMarkdown = (report: AnalysisReport): string => {
         if (finding.remediation.drawbacks !== undefined) {
             lines.push(`- Drawbacks: ${finding.remediation.drawbacks}`);
         }
+        if (finding.semantic !== undefined) {
+            const s = finding.semantic;
+            lines.push(
+                `- LLM assessment (${s.adapter}, advisory — not a fact): ` +
+                    `${s.verdict} (confidence ${s.confidence.toFixed(2)}) — ${s.rationale}`
+            );
+        }
     }
     return lines.join('\n');
 };

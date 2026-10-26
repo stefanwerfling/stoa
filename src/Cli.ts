@@ -8,6 +8,8 @@ import {toMarkdown as evaluationMarkdown} from './evaluation/EvaluationReporter.
 import {analyze} from './Pipeline.js';
 import {toJson, toMarkdown} from './reporting/Reporter.js';
 import {toSarif} from './reporting/SarifReporter.js';
+import {createSemanticAdapter} from './semantic/SemanticAdapters.js';
+import {augmentWithSemantics} from './semantic/SemanticRunner.js';
 import type {AnalysisReport} from './Types.js';
 
 type CliValues = {
@@ -16,6 +18,7 @@ type CliValues = {
     knowledge?: string;
     rules?: string;
     expected?: string;
+    semantic?: string;
     help?: boolean;
 };
 
@@ -23,7 +26,7 @@ const USAGE = [
     'stoa – Stoic Code Analysis Engine',
     '',
     'Usage:',
-    '  stoa analyze <path> [--format markdown|json|sarif] [--config <file>] [--knowledge <dir>] [--rules <dir>]',
+    '  stoa analyze <path> [--format markdown|json|sarif] [--config <file>] [--knowledge <dir>] [--rules <dir>] [--semantic noop|anthropic]',
     '  stoa eval <path> --expected <file> [--format markdown|json] [--knowledge <dir>] [--rules <dir>]',
     ''
 ].join('\n');
@@ -46,14 +49,22 @@ const render = (format: string | undefined, report: AnalysisReport): string => {
     return toMarkdown(report);
 };
 
-const runAnalyze = (values: CliValues, target: string): number => {
-    const report = analyze({
+const runAnalyze = async (values: CliValues, target: string): Promise<number> => {
+    let result = analyze({
         rootPath: resolve(target),
         knowledgeDir: knowledgeDirOf(values),
         ruleSetDir: ruleSetDirOf(values),
         config: loadConfig(values.config ?? null)
-    }).report;
-    process.stdout.write(`${render(values.format, report)}\n`);
+    });
+
+    const semanticId = values.semantic ?? 'noop';
+    if (semanticId !== 'noop') {
+        // Optional, async, off the deterministic path: augment findings with a
+        // grounded LLM verdict. Failures degrade gracefully to the plain report.
+        result = await augmentWithSemantics(result, createSemanticAdapter(semanticId));
+    }
+
+    process.stdout.write(`${render(values.format, result.report)}\n`);
     return 0;
 };
 
@@ -74,7 +85,7 @@ const runEval = (values: CliValues, target: string): number => {
     return result.overall.falsePositives === 0 ? 0 : 1;
 };
 
-const main = (): number => {
+const main = async (): Promise<number> => {
     const {values, positionals} = parseArgs({
         allowPositionals: true,
         options: {
@@ -83,6 +94,7 @@ const main = (): number => {
             knowledge: {type: 'string'},
             rules: {type: 'string'},
             expected: {type: 'string'},
+            semantic: {type: 'string'},
             help: {type: 'boolean', default: false}
         }
     });
@@ -106,4 +118,4 @@ const main = (): number => {
     return 1;
 };
 
-process.exit(main());
+process.exit(await main());
