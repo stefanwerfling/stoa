@@ -9,7 +9,7 @@
 |----|----------|---------|----------------------------|
 | OQ-1 | **First target language** | TS/JS · PHP | **TS/JS** (most mature toolchain, dogfooding); PHP as the first second adapter. Since the project environment is PHP-heavy, this is to be explicitly confirmed. |
 | OQ-2 | **Core runtime** | TS (Var. B) · Hybrid (Var. C) | **TS core**, schema-neutral, exit to Hybrid left open (see [technology-decision.md](./technology-decision.md)). |
-| OQ-3 | **PHP bridge** | Subprocess (`nikic/php-parser`) · own parser | **Subprocess** (N3: do not rebuild). |
+| OQ-3 | **PHP parser** | Subprocess (`nikic/php-parser`) · pure-JS parser (`php-parser`/glayzzle) · own parser | **Decided (M6): `php-parser`/glayzzle** — in-process, no PHP/Composer, deterministically testable. Fact schema identical, so revisable. |
 | OQ-4 | **Interprocedural data flow** | local only · project-wide | **MVP: local** (DFG per function). Project-wide is expensive → later stage; affects `R-SIDEEFFECT-IN-PURE` precision. |
 | OQ-5 | **Default single score** | on · off | **Off** (profile only; index optional). |
 | OQ-6 | **Cohesion metric** | LCOM variant · own heuristic | open; calibrate with experts/empirical data on the corpus (risk of false positives). |

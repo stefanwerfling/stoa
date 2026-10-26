@@ -1,4 +1,5 @@
 import {AdapterRegistry} from './analysis/AdapterRegistry.js';
+import {PhpAdapter} from './analysis/PhpAdapter.js';
 import {TypeScriptAdapter} from './analysis/TypeScriptAdapter.js';
 import {collectFiles} from './Ingestion.js';
 import {KnowledgeBase} from './knowledge/KnowledgeBase.js';
@@ -14,7 +15,7 @@ export interface AnalyzeOptions {
     config: StoaConfig;
 }
 
-const INCLUDE_EXTENSIONS: readonly string[] = ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs'] as const;
+const INCLUDE_EXTENSIONS: readonly string[] = ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.php'] as const;
 
 /**
  * Orchestrates the deterministic analysis pipeline:
@@ -23,7 +24,7 @@ const INCLUDE_EXTENSIONS: readonly string[] = ['.ts', '.tsx', '.js', '.jsx', '.m
  * given input and set of versions (see docs architecture §6).
  */
 export const analyze = (options: AnalyzeOptions): AnalysisResult => {
-    const registry = new AdapterRegistry().register(new TypeScriptAdapter());
+    const registry = new AdapterRegistry().register(new TypeScriptAdapter()).register(new PhpAdapter());
     const knowledgeBase = KnowledgeBase.loadFromDirectory(options.knowledgeDir, options.config.knowledgeBase);
     const ruleSet = RuleSet.loadFromDirectory(options.ruleSetDir, options.config.ruleSet);
     const ruleEngine = new RuleEngine(knowledgeBase, ruleSet);

@@ -9,6 +9,7 @@ export {RuleSet} from './rules/RuleSet.js';
 export type {Rule, Condition, ConditionGroup} from './rules/RuleTypes.js';
 export {AdapterRegistry} from './analysis/AdapterRegistry.js';
 export {TypeScriptAdapter} from './analysis/TypeScriptAdapter.js';
+export {PhpAdapter} from './analysis/PhpAdapter.js';
 export type {FileRef, LanguageAdapter, ParseResult, ProjectContext} from './analysis/LanguageAdapter.js';
 export {NoopSemanticAdapter} from './semantic/NoopSemanticAdapter.js';
 export type {SemanticAdapter, SemanticRequest, SemanticVerdict} from './semantic/SemanticAdapter.js';

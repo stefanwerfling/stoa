@@ -9,7 +9,7 @@
 |----|-------|----------|-----------------------|
 | OQ-1 | **Erste Zielsprache** | TS/JS · PHP | **TS/JS** (reifste Toolchain, Dogfooding); PHP als erster zweiter Adapter. Da das Projektumfeld PHP-lastig ist, ist dies explizit zu bestätigen. |
 | OQ-2 | **Kernlaufzeit** | TS (Var. B) · Hybrid (Var. C) | **TS-Kern**, Schema-neutral, Austritt zu Hybrid offen (siehe [technology-decision.md](./technology-decision.md)). |
-| OQ-3 | **PHP-Bridge** | Subprozess (`nikic/php-parser`) · eigener Parser | **Subprozess** (N3: nicht neu bauen). |
+| OQ-3 | **PHP-Parser** | Subprozess (`nikic/php-parser`) · reiner JS-Parser (`php-parser`/glayzzle) · eigener Parser | **Entschieden (M6): `php-parser`/glayzzle** — in-process, kein PHP/Composer, deterministisch testbar. Fact-Schema identisch, daher revidierbar. |
 | OQ-4 | **Interprozeduraler Datenfluss** | nur lokal · projektweit | **MVP: lokal** (DFG pro Funktion). Projektweit ist teuer → spätere Stufe; betrifft `R-SIDEEFFECT-IN-PURE`-Präzision. |
 | OQ-5 | **Default-Single-Score** | an · aus | **Aus** (nur Profil; Index optional). |
 | OQ-6 | **Kohäsionsmetrik** | LCOM-Variante · eigene Heuristik | offen; mit Experten/Empirie am Korpus kalibrieren (Risiko Fehlalarm). |
