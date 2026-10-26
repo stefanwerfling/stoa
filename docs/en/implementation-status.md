@@ -33,7 +33,7 @@ stoa eval <path> --expected <file> [--format markdown|json]
 - `knowledge/` and `rules/` resolve relative to the installed package — the CLI
   runs from any directory after `npm link`/install.
 
-## Rule catalog (12)
+## Rule catalog (15)
 
 Declarative rules (`rules/default/*.json`), on by default:
 
@@ -49,6 +49,9 @@ Declarative rules (`rules/default/*.json`), on by default:
 | R-DEEP-IMPORT | marcus.cooperation | dependencies | TS, PHP |
 | R-TYPE-UNSOUND | marcus.judgment | decision-evidence, robustness | TS (opt-in `--typecheck`) |
 | R-FLOATING-PROMISE | marcus.obstacle | error-handling, robustness | TS (opt-in `--typecheck`) |
+| R-ORM-SYNCHRONIZE-ENABLED | marcus.control | side-effect-control, robustness | TS/JS |
+| R-ORM-SYNC-WITH-MIGRATIONS | marcus.judgment | decision-evidence, robustness | TS/JS |
+| R-MIGRATION-UNGUARDED-DDL | marcus.obstacle | robustness, error-handling | TS/JS (migration files only) |
 
 Procedural rules (`ProjectRule`, cross-file):
 
@@ -65,12 +68,13 @@ All eight quality dimensions have at least one rule.
 `metric.cognitiveComplexity`, `metric.nestingDepth`, `metric.parameterCount`,
 `metric.functionLength`, `doc.hasComplexityRationale`, `ast.usesNondeterminism`,
 `ast.emptyCatch`, `ast.catchSwallowsError`, `deps.import`, `deps.importUnused`,
-`deps.importDeep`, `deps.export`, `deps.importName`, plus (opt-in) `external.tsc`
+`deps.importDeep`, `deps.export`, `deps.importName`, `orm.synchronizeEnabled`,
+`orm.syncWithMigrations`, `migration.unguardedDdl`, plus (opt-in) `external.tsc`
 and `external.floatingPromise`.
 
 ## Quality assurance
 
-- **56 node:test cases** green (rules pos./neg., extraction, schema validation,
+- **61 node:test cases** green (rules pos./neg., extraction, schema validation,
   i18n, determinism, SARIF, evaluation, semantic groundedness).
 - **Golden corpus** (`test/corpus/`, TS+PHP) with ground truth; evaluation
   currently **precision 100% · recall 100%**. Per-rule precision gate (AC-5).

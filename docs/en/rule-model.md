@@ -135,7 +135,7 @@ flowchart TB
 
 ## 5. Rule Set `default@1` (implemented)
 
-> The actually-implemented rule set (12 rules). Overview, facts and opt-in flags:
+> The actually-implemented rule set (15 rules). Overview, facts and opt-in flags:
 > [implementation-status.md](./implementation-status.md).
 
 Declarative rules (`rules/default/*.json`, on by default):
@@ -152,6 +152,23 @@ Declarative rules (`rules/default/*.json`, on by default):
 | `R-DEEP-IMPORT` | `deps.importDeep` | `marcus.cooperation` | Dependencies | syntactic |
 | `R-TYPE-UNSOUND` | `external.tsc` | `marcus.judgment` | Decision-evidence, robustness | external-tool, opt-in `--typecheck` |
 | `R-FLOATING-PROMISE` | `external.floatingPromise` | `marcus.obstacle` | Error handling, robustness | external-tool, opt-in `--typecheck` |
+
+Persistence / ORM (TypeORM, TS/JS only, on by default):
+
+| Rule ID | Feature (Fact) | Principle | Dimension | Character |
+|---------|----------------|-----------|-----------|-----------|
+| `R-ORM-SYNCHRONIZE-ENABLED` | `orm.synchronizeEnabled` | `marcus.control` | Side-effect control, robustness | heuristic |
+| `R-ORM-SYNC-WITH-MIGRATIONS` | `orm.syncWithMigrations` | `marcus.judgment` | Decision-evidence, robustness | heuristic |
+| `R-MIGRATION-UNGUARDED-DDL` | `migration.unguardedDdl` | `marcus.obstacle` | Robustness, error handling | heuristic (migration files only) |
+
+> `R-MIGRATION-UNGUARDED-DDL` fires only in migration files (a class that
+> `implements MigrationInterface`) and covers two paths: raw SQL
+> (`CREATE/DROP TABLE`, `ADD/DROP COLUMN` without `IF [NOT] EXISTS`) and the
+> query-builder API (`createTable`/`dropTable` without `ifNotExist`/`ifExist`,
+> `addColumn`/`dropColumn` without a surrounding `hasColumn()` check).
+> Deliberately conservative (confidence 0.7): `IF [NOT] EXISTS` is a safety net,
+> not a substitute for a clean baseline, and the true DB state is only known at
+> run time (→ a CI migration dry-run against a fresh DB).
 
 Procedural rules (`ProjectRule`, cross-file):
 
