@@ -1,5 +1,5 @@
 import {Node, SyntaxKind} from 'ts-morph';
-import type {ImportDeclaration, SourceFile} from 'ts-morph';
+import type {ImportDeclaration, PropertyAssignment, SourceFile} from 'ts-morph';
 import type {Fact, SourceRange, SubjectKind} from '../../Types.js';
 import {factBuilder, type AdapterInfo} from '../FactBuilder.js';
 import {isDeepImport} from '../ImportPath.js';
@@ -126,7 +126,38 @@ export const extractFacts = (sourceFile: SourceFile, info: AdapterInfo): Fact[] 
         facts.push(build({kind: 'deps.export', kindOf: 'module', symbol: exported.name, range: exported.range, value: exported.name}));
     }
 
+    sourceFile.getDescendantsOfKind(SyntaxKind.PropertyAssignment).forEach((property, index) => {
+        if (property.getName() !== 'synchronize') {
+            return;
+        }
+        const value = synchronizeValue(property);
+        if (value === null) {
+            return;
+        }
+        facts.push(build({kind: 'orm.synchronizeEnabled', kindOf: 'statement', symbol: `synchronize#${index}`, range: rangeOf(sourceFile, property), value}));
+    });
+
     return facts;
+};
+
+// Detects a TypeORM-style `synchronize: true` (or `… ?? true`, which defaults to
+// true) property. The property name is specific enough to be high-precision.
+const synchronizeValue = (property: PropertyAssignment): string | null => {
+    const initializer = property.getInitializer();
+    if (initializer === undefined) {
+        return null;
+    }
+    if (initializer.getKind() === SyntaxKind.TrueKeyword) {
+        return 'true';
+    }
+    if (
+        Node.isBinaryExpression(initializer) &&
+        initializer.getOperatorToken().getKind() === SyntaxKind.QuestionQuestionToken &&
+        initializer.getRight().getKind() === SyntaxKind.TrueKeyword
+    ) {
+        return '?? true (defaults to true)';
+    }
+    return null;
 };
 
 interface ImportBinding {

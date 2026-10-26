@@ -1,0 +1,40 @@
+{
+  "id": "R-ORM-SYNCHRONIZE-ENABLED",
+  "version": "1.0.0",
+  "title": "ORM schema auto-synchronize enabled",
+  "feature": "orm.synchronizeEnabled",
+  "appliesTo": ["statement"],
+  "principles": ["marcus.control"],
+  "dimensions": ["side-effect-control", "robustness"],
+  "trigger": {
+    "all": [{ "fact": "orm.synchronizeEnabled", "op": "!=", "value": "" }]
+  },
+  "requiredEvidence": ["orm.synchronizeEnabled"],
+  "severity": { "base": "medium" },
+  "confidence": { "base": 0.8, "capBy": "certainty" },
+  "message": {
+    "en": "ORM 'synchronize' is enabled ({value}) — the DB schema is auto-mutated at startup.",
+    "de": "ORM-'synchronize' ist aktiv ({value}) — das DB-Schema wird beim Start automatisch verändert."
+  },
+  "rationale": {
+    "en": "Auto-synchronize lets the ORM change the database outside your control and clashes with migrations (table/column already exists or missing) — the obstacle hides until runtime (marcus.control).",
+    "de": "Auto-synchronize lässt das ORM die Datenbank außerhalb deiner Kontrolle verändern und kollidiert mit Migrationen (Tabelle/Spalte existiert schon oder fehlt) — das Hindernis zeigt sich erst zur Laufzeit (marcus.control)."
+  },
+  "remediation": {
+    "suggestion": {
+      "en": "Once migrations manage the schema, set synchronize:false; keep it on only behind an explicit dev-only flag.",
+      "de": "Sobald Migrationen das Schema verwalten, synchronize:false setzen; nur hinter einem expliziten Dev-Flag aktiv lassen."
+    },
+    "drawbacks": {
+      "en": "synchronize is convenient in early development; it is only harmful once migrations own the schema.",
+      "de": "synchronize ist in der frühen Entwicklung bequem; schädlich wird es erst, sobald Migrationen das Schema verwalten."
+    }
+  },
+  "missingContext": [
+    {
+      "en": "Whether the project uses migrations is not known statically; for a pure-synchronize project this is acceptable.",
+      "de": "Ob das Projekt Migrationen nutzt, ist statisch nicht bekannt; für ein reines Synchronize-Projekt ist dies akzeptabel."
+    }
+  ],
+  "tests": "test/Rules.test.ts"
+}

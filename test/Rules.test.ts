@@ -89,6 +89,15 @@ test('R-WIDE-PUBLIC-SURFACE flags a module with many exports', () => {
     assert.equal(findings[0]?.observation.statement, 'Module exposes 15 public exports.');
 });
 
+test('R-ORM-SYNCHRONIZE-ENABLED flags synchronize:true and ?? true, but not false', () => {
+    const findings = analyzePath(join(root, 'test', 'fixtures', 'orm', 'Variants.ts')).filter(
+        (f) => f.rule.id === 'R-ORM-SYNCHRONIZE-ENABLED'
+    );
+    assert.equal(findings.length, 2, 'explicit true + default-true; the false one is not flagged');
+    assert.equal(findings[0]?.interpretation.principles[0]?.id, 'marcus.control');
+    assert.ok(findings.some((f) => f.observation.statement.includes('defaults to true')));
+});
+
 test('findings carry observation evidence and are deterministic', () => {
     const a = analyzePath(join(fixtures, 'Complex.ts'));
     const b = analyzePath(join(fixtures, 'Complex.ts'));
