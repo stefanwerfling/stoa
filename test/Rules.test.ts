@@ -165,6 +165,21 @@ test('R-MIGRATION-NO-DOWN flags a missing or empty down(), but not a throwing on
     assert.equal(throwing.length, 0, 'a deliberately throwing down() is a conscious choice');
 });
 
+test('R-ORM-ENTITY-NO-PK flags an entity without a primary key, but not when one is declared or inherited', () => {
+    const noPk = analyzePath(join(root, 'test', 'corpus', 'project', 'EntityNoPk.ts')).filter(
+        (f) => f.rule.id === 'R-ORM-ENTITY-NO-PK'
+    );
+    assert.equal(noPk.length, 1);
+    assert.equal(noPk[0]?.location.symbol, 'Session');
+    assert.equal(noPk[0]?.interpretation.principles[0]?.id, 'marcus.judgment');
+    assert.equal(noPk[0]?.severity, 'high');
+
+    const withPk = analyzePath(join(root, 'test', 'fixtures', 'orm', 'Entities.ts')).filter(
+        (f) => f.rule.id === 'R-ORM-ENTITY-NO-PK'
+    );
+    assert.equal(withPk.length, 0, '@PrimaryGeneratedColumn, @Column({primary:true}) and an inherited key all count');
+});
+
 test('findings carry observation evidence and are deterministic', () => {
     const a = analyzePath(join(fixtures, 'Complex.ts'));
     const b = analyzePath(join(fixtures, 'Complex.ts'));

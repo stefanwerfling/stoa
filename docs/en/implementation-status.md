@@ -33,7 +33,7 @@ stoa eval <path> --expected <file> [--format markdown|json]
 - `knowledge/` and `rules/` resolve relative to the installed package — the CLI
   runs from any directory after `npm link`/install.
 
-## Rule catalog (16)
+## Rule catalog (17)
 
 Declarative rules (`rules/default/*.json`), on by default:
 
@@ -51,6 +51,7 @@ Declarative rules (`rules/default/*.json`), on by default:
 | R-FLOATING-PROMISE | marcus.obstacle | error-handling, robustness | TS (opt-in `--typecheck`) |
 | R-ORM-SYNCHRONIZE-ENABLED | marcus.control | side-effect-control, robustness | TS/JS |
 | R-ORM-SYNC-WITH-MIGRATIONS | marcus.judgment | decision-evidence, robustness | TS/JS |
+| R-ORM-ENTITY-NO-PK | marcus.judgment | robustness, decision-evidence | TS/JS (`@Entity` classes) |
 | R-MIGRATION-UNGUARDED-DDL | marcus.obstacle | robustness, error-handling | TS/JS (migration files only) |
 | R-MIGRATION-NO-DOWN | marcus.judgment | robustness, decision-evidence | TS/JS (migration files only) |
 
@@ -70,12 +71,12 @@ All eight quality dimensions have at least one rule.
 `metric.functionLength`, `doc.hasComplexityRationale`, `ast.usesNondeterminism`,
 `ast.emptyCatch`, `ast.catchSwallowsError`, `deps.import`, `deps.importUnused`,
 `deps.importDeep`, `deps.export`, `deps.importName`, `orm.synchronizeEnabled`,
-`orm.syncWithMigrations`, `migration.unguardedDdl`, `migration.noDown`, plus
-(opt-in) `external.tsc` and `external.floatingPromise`.
+`orm.syncWithMigrations`, `orm.entityNoPrimaryKey`, `migration.unguardedDdl`,
+`migration.noDown`, plus (opt-in) `external.tsc` and `external.floatingPromise`.
 
 ## Quality assurance
 
-- **62 node:test cases** green (rules pos./neg., extraction, schema validation,
+- **63 node:test cases** green (rules pos./neg., extraction, schema validation,
   i18n, determinism, SARIF, evaluation, semantic groundedness).
 - **Golden corpus** (`test/corpus/`, TS+PHP) with ground truth; evaluation
   currently **precision 100% · recall 100%**. Per-rule precision gate (AC-5).

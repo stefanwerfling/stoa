@@ -1,0 +1,40 @@
+{
+  "id": "R-ORM-ENTITY-NO-PK",
+  "version": "1.0.0",
+  "title": "Entity without a primary key column",
+  "feature": "orm.entityNoPrimaryKey",
+  "appliesTo": ["class"],
+  "principles": ["marcus.judgment"],
+  "dimensions": ["robustness", "decision-evidence"],
+  "trigger": {
+    "all": [{ "fact": "orm.entityNoPrimaryKey", "op": "!=", "value": "" }]
+  },
+  "requiredEvidence": ["orm.entityNoPrimaryKey"],
+  "severity": { "base": "high" },
+  "confidence": { "base": 0.8, "capBy": "certainty" },
+  "message": {
+    "en": "TypeORM entity has no primary key column.",
+    "de": "TypeORM-Entity hat keine Primary-Key-Spalte."
+  },
+  "rationale": {
+    "en": "A persisted entity needs a stable identity. Without a primary column TypeORM rejects the entity at startup, and even where it loads, updates and relations have no reliable key to target — the identity decision was never made explicit (marcus.judgment).",
+    "de": "Eine persistierte Entity braucht eine stabile Identität. Ohne Primary-Spalte weist TypeORM die Entity beim Start ab, und selbst wenn sie lädt, haben Updates und Relationen keinen verlässlichen Schlüssel — die Identitätsentscheidung wurde nie explizit getroffen (marcus.judgment)."
+  },
+  "remediation": {
+    "suggestion": {
+      "en": "Add a primary column: @PrimaryGeneratedColumn() for a surrogate key, @PrimaryColumn() for a natural key, or @Column({primary: true}).",
+      "de": "Eine Primary-Spalte ergänzen: @PrimaryGeneratedColumn() für einen Surrogatschlüssel, @PrimaryColumn() für einen natürlichen Schlüssel oder @Column({primary: true})."
+    },
+    "drawbacks": {
+      "en": "None of note; a primary key is a baseline requirement for a persisted entity.",
+      "de": "Keine nennenswerten; ein Primärschlüssel ist Grundvoraussetzung für eine persistierte Entity."
+    }
+  },
+  "missingContext": [
+    {
+      "en": "A key inherited from a base class is not seen here; entities that extend a base are therefore not flagged.",
+      "de": "Ein aus einer Basisklasse geerbter Schlüssel ist hier nicht sichtbar; Entities mit extends werden daher nicht gemeldet."
+    }
+  ],
+  "tests": "test/Rules.test.ts"
+}

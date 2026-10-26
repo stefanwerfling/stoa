@@ -1,5 +1,5 @@
 import {Node, SyntaxKind} from 'ts-morph';
-import type {CallExpression, ImportDeclaration, MethodDeclaration, PropertyAssignment, SourceFile} from 'ts-morph';
+import type {CallExpression, ClassDeclaration, Decorator, ImportDeclaration, MethodDeclaration, PropertyAssignment, SourceFile} from 'ts-morph';
 import type {Fact, SourceRange, SubjectKind} from '../../Types.js';
 import {factBuilder, type AdapterInfo} from '../FactBuilder.js';
 import {isDeepImport} from '../ImportPath.js';
@@ -196,6 +196,18 @@ export const extractFacts = (sourceFile: SourceFile, info: AdapterInfo): Fact[] 
         }
     }
 
+    for (const cls of sourceFile.getClasses()) {
+        if (!cls.getDecorators().some((decorator) => decorator.getName() === 'Entity')) {
+            continue;
+        }
+        // A subclass may inherit its primary key from a base entity, so only a
+        // standalone @Entity without any primary column is reported.
+        if (cls.getExtends() !== undefined || hasPrimaryKey(cls)) {
+            continue;
+        }
+        facts.push(build({kind: 'orm.entityNoPrimaryKey', kindOf: 'class', symbol: cls.getName() ?? '(anonymous)', range: rangeOf(sourceFile, cls.getNameNode() ?? cls), value: 'entity has no primary key column'}));
+    }
+
     return facts;
 };
 
@@ -263,6 +275,27 @@ const unguardedQueryBuilderDdl = (call: CallExpression): string | null => {
     }
 
     return null;
+};
+
+const PRIMARY_DECORATORS = new Set(['PrimaryColumn', 'PrimaryGeneratedColumn', 'ObjectIdColumn']);
+
+const hasPrimaryKey = (cls: ClassDeclaration): boolean => {
+    return cls.getProperties().some((property) =>
+        property.getDecorators().some((decorator) => {
+            const name = decorator.getName();
+            return PRIMARY_DECORATORS.has(name) || (name === 'Column' && columnMarkedPrimary(decorator));
+        })
+    );
+};
+
+// @Column({primary: true}) is an alternative way to declare the key.
+const columnMarkedPrimary = (decorator: Decorator): boolean => {
+    const argument = decorator.getArguments()[0];
+    if (argument === undefined || !Node.isObjectLiteralExpression(argument)) {
+        return false;
+    }
+    const primary = argument.getProperty('primary');
+    return primary !== undefined && Node.isPropertyAssignment(primary) && primary.getInitializerIfKind(SyntaxKind.TrueKeyword) !== undefined;
 };
 
 // A migration is reversible only if its down() actually undoes something. A
