@@ -1,53 +1,40 @@
+import {Project} from 'ts-morph';
+import type {SourceFile} from 'ts-morph';
 import type {Fact} from '../Types.js';
 import type {FileRef, LanguageAdapter, ParseResult, ProjectContext} from './LanguageAdapter.js';
+import {extractFacts} from './typescript/TsExtraction.js';
 
 const SUPPORTED_EXTENSIONS: readonly string[] = ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs'] as const;
 
 /**
- * M1 skeleton adapter. It selects TypeScript/JavaScript files and emits a single
- * trivially-correct syntactic fact per file (its line count). Real AST, control-
- * flow, dependency and error-handling extraction via the TypeScript Compiler API
- * / ts-morph arrives in M2; this stub keeps the pipeline runnable end-to-end.
+ * TypeScript/JavaScript adapter. It parses each file with ts-morph (in an
+ * in-memory project, so no tsconfig is required for syntactic facts) and emits
+ * complexity, error-handling and dependency facts. Type-aware facts (e.g. tsc
+ * diagnostics) are a separate external-tool adapter and are not produced here.
  */
 export class TypeScriptAdapter implements LanguageAdapter {
     public readonly id = 'typescript';
-    public readonly version = '0.1.0';
+    public readonly version = '0.2.0';
+
+    private readonly project: Project;
+
+    public constructor() {
+        this.project = new Project({useInMemoryFileSystem: true, compilerOptions: {allowJs: true}});
+    }
 
     public supports(file: FileRef): boolean {
         return SUPPORTED_EXTENSIONS.some((ext) => file.path.endsWith(ext));
     }
 
     public parse(file: FileRef): ParseResult {
-        // M1: no real parse yet; a supported file is treated as parseable.
-        return {file, ok: true, diagnostics: []};
+        const sourceFile = this.project.createSourceFile(file.path, file.content, {overwrite: true});
+        return {file, ok: true, diagnostics: [], handle: sourceFile};
     }
 
     public extractFacts(parsed: ParseResult, _ctx: ProjectContext): Fact[] {
-        if (!parsed.ok) {
+        if (!parsed.ok || parsed.handle === undefined) {
             return [];
         }
-
-        const lineCount = countLines(parsed.file.content);
-        const fact: Fact = {
-            id: `fact:${parsed.file.path}:file.lineCount`,
-            kind: 'file.lineCount',
-            subject: {
-                file: parsed.file.path,
-                kindOf: 'file',
-                range: {startLine: 1, startCol: 0, endLine: Math.max(lineCount, 1), endCol: 0}
-            },
-            value: lineCount,
-            evidence: [{source: 'metric', detail: 'line count'}],
-            certainty: 'syntactic',
-            producedBy: {adapter: this.id, version: this.version}
-        };
-        return [fact];
+        return extractFacts(parsed.handle as SourceFile, {id: this.id, version: this.version});
     }
 }
-
-const countLines = (content: string): number => {
-    if (content.length === 0) {
-        return 0;
-    }
-    return content.split('\n').length;
-};

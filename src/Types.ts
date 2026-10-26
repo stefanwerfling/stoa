@@ -200,6 +200,7 @@ export interface CoverageSummary {
     filesSelected: number;
     filesAnalyzed: number;
     filesSkipped: number;
+    factCount: number;
 }
 
 /** The user-facing report. Intermediate facts stay out of it by default. */

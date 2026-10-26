@@ -17,6 +17,7 @@ export const toMarkdown = (report: AnalysisReport): string => {
         `- Files selected/analyzed/skipped: ` +
             `${report.coverage.filesSelected}/${report.coverage.filesAnalyzed}/${report.coverage.filesSkipped}`
     );
+    lines.push(`- Facts extracted: ${report.coverage.factCount}`);
     lines.push('');
 
     if (report.findings.length === 0) {

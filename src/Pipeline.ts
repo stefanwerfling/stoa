@@ -61,7 +61,8 @@ export const analyze = (options: AnalyzeOptions): AnalysisResult => {
         coverage: {
             filesSelected: files.length,
             filesAnalyzed: analyzed,
-            filesSkipped: skipped
+            filesSkipped: skipped,
+            factCount: facts.length
         },
         findings
     };

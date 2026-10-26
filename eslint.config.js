@@ -3,7 +3,8 @@ import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
     {
-        ignores: ['dist/', 'node_modules/', 'coverage/']
+        // Fixtures are deliberately imperfect analysis subjects, not engine code.
+        ignores: ['dist/', 'node_modules/', 'coverage/', 'test/fixtures/']
     },
     js.configs.recommended,
     ...tseslint.configs.recommended,

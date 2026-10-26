@@ -14,7 +14,7 @@ const knowledgeDir = join(root, 'knowledge', 'marcus');
 test('analyze produces a report with versions, coverage and line-count facts', () => {
     const {report, facts} = analyze({rootPath: fixture, knowledgeDir, config: DEFAULT_CONFIG});
     assert.equal(report.versions.engine, '0.1.0');
-    assert.equal(report.versions.adapters.typescript, '0.1.0');
+    assert.equal(report.versions.adapters.typescript, '0.2.0');
     assert.ok(report.coverage.filesAnalyzed >= 2, 'both fixture files analyzed');
     assert.ok(facts.some((fact) => fact.kind === 'file.lineCount'));
 });

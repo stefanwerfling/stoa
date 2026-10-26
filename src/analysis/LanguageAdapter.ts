@@ -9,6 +9,8 @@ export interface ParseResult {
     file: FileRef;
     ok: boolean;
     diagnostics: string[];
+    /** Adapter-specific parse handle (e.g. a ts-morph SourceFile) for extractFacts. */
+    handle?: unknown;
 }
 
 export interface ProjectContext {
