@@ -36,8 +36,9 @@ interface ImportValue {
  * Detects import cycles across files and reports one finding per strongly
  * connected component (so an N-module cycle is counted once, not N times). It
  * resolves only relative specifiers to files in the analyzed set; bare and
- * namespace imports (e.g. PHP `use`) are treated as external and skipped. Maps
- * to marcus.cooperation: a cycle serves neither the whole nor the part.
+ * namespace imports (e.g. PHP `use`) are treated as external and skipped, as are
+ * type-only imports (erased at compile time, so no runtime cycle). Maps to
+ * marcus.cooperation: a cycle serves neither the whole nor the part.
  */
 export class DependencyCycleRule implements ProjectRule {
     public readonly id = 'R-DEP-CYCLE';
@@ -67,7 +68,15 @@ export class DependencyCycleRule implements ProjectRule {
             if (fact.kind !== 'deps.import') {
                 continue;
             }
-            const target = resolveRelativeImport(fact.subject.file, (fact.value as unknown as ImportValue).module, analyzedFiles);
+            const value = fact.value as unknown as ImportValue;
+            // Type-only imports are erased at compile time (they emit no JS), so
+            // they cannot form a runtime module-initialization cycle. Skip them
+            // when building the graph — otherwise a purely type-level reference
+            // is reported as a cycle the running program never has.
+            if (value.isTypeOnly) {
+                continue;
+            }
+            const target = resolveRelativeImport(fact.subject.file, value.module, analyzedFiles);
             if (target !== null && target !== fact.subject.file) {
                 graph.get(fact.subject.file)?.add(target);
             }
