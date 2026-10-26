@@ -199,6 +199,10 @@ const CREATE_TABLE = /\bcreate\s+table\b/i;
 const CREATE_TABLE_GUARDED = /\bcreate\s+table\s+if\s+not\s+exists\b/i;
 const DROP_TABLE = /\bdrop\s+table\b/i;
 const DROP_TABLE_GUARDED = /\bdrop\s+table\s+if\s+exists\b/i;
+const ADD_COLUMN = /\badd\s+column\b/i;
+const ADD_COLUMN_GUARDED = /\badd\s+column\s+if\s+not\s+exists\b/i;
+const DROP_COLUMN = /\bdrop\s+column\b/i;
+const DROP_COLUMN_GUARDED = /\bdrop\s+column\s+if\s+exists\b/i;
 
 const unguardedDdl = (sql: string): string | null => {
     if (CREATE_TABLE.test(sql) && !CREATE_TABLE_GUARDED.test(sql)) {
@@ -206,6 +210,12 @@ const unguardedDdl = (sql: string): string | null => {
     }
     if (DROP_TABLE.test(sql) && !DROP_TABLE_GUARDED.test(sql)) {
         return 'DROP TABLE without IF EXISTS';
+    }
+    if (ADD_COLUMN.test(sql) && !ADD_COLUMN_GUARDED.test(sql)) {
+        return 'ADD COLUMN without IF NOT EXISTS';
+    }
+    if (DROP_COLUMN.test(sql) && !DROP_COLUMN_GUARDED.test(sql)) {
+        return 'DROP COLUMN without IF EXISTS';
     }
     return null;
 };
@@ -221,14 +231,39 @@ const unguardedQueryBuilderDdl = (call: CallExpression): string | null => {
         return null;
     }
     const method = expression.getName();
-    if (method !== 'createTable' && method !== 'dropTable') {
-        return null;
+
+    if (method === 'createTable' || method === 'dropTable') {
+        // createTable(table, ifNotExist?) / dropTable(table, ifExist?): the
+        // existence guard is the second argument.
+        const guard = call.getArguments()[1];
+        if (guard !== undefined && guard.getKind() !== SyntaxKind.FalseKeyword) {
+            return null;
+        }
+        return method === 'createTable' ? 'createTable() without the ifNotExist argument' : 'dropTable() without the ifExist argument';
     }
-    const guard = call.getArguments()[1];
-    if (guard !== undefined && guard.getKind() !== SyntaxKind.FalseKeyword) {
-        return null;
+
+    if (method === 'addColumn' || method === 'dropColumn') {
+        // addColumn/dropColumn have no existence flag in TypeORM; the robust
+        // pattern is a surrounding hasColumn() check. If the enclosing method
+        // never calls hasColumn, treat the column change as unguarded.
+        if (hasColumnGuardInScope(call)) {
+            return null;
+        }
+        return method === 'addColumn' ? 'addColumn() without a hasColumn guard' : 'dropColumn() without a hasColumn guard';
     }
-    return method === 'createTable' ? 'createTable() without the ifNotExist argument' : 'dropTable() without the ifExist argument';
+
+    return null;
+};
+
+const hasColumnGuardInScope = (call: CallExpression): boolean => {
+    const scope =
+        call.getFirstAncestor(
+            (node) => Node.isMethodDeclaration(node) || Node.isFunctionDeclaration(node) || Node.isFunctionExpression(node) || Node.isArrowFunction(node)
+        ) ?? call.getSourceFile();
+    return scope.getDescendantsOfKind(SyntaxKind.CallExpression).some((candidate) => {
+        const callee = candidate.getExpression();
+        return Node.isPropertyAccessExpression(callee) && callee.getName() === 'hasColumn';
+    });
 };
 
 // Detects a TypeORM-style `synchronize: true` (or `… ?? true`, which defaults to

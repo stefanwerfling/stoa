@@ -135,6 +135,21 @@ test('R-MIGRATION-UNGUARDED-DDL flags createTable/dropTable without the existenc
     assert.ok(builder.some((f) => f.observation.statement.includes('dropTable()')));
 });
 
+test('R-MIGRATION-UNGUARDED-DDL flags column changes, but a hasColumn check guards them', () => {
+    const columns = analyzePath(join(root, 'test', 'corpus', 'project', 'MigrationColumns.ts')).filter(
+        (f) => f.rule.id === 'R-MIGRATION-UNGUARDED-DDL'
+    );
+    assert.equal(columns.length, 3, 'raw ADD COLUMN + addColumn() + dropColumn()');
+    assert.ok(columns.some((f) => f.observation.statement.includes('ADD COLUMN')));
+    assert.ok(columns.some((f) => f.observation.statement.includes('addColumn()')));
+    assert.ok(columns.some((f) => f.observation.statement.includes('dropColumn()')));
+
+    const guarded = analyzePath(join(root, 'test', 'fixtures', 'migration', 'GuardedColumns.ts')).filter(
+        (f) => f.rule.id === 'R-MIGRATION-UNGUARDED-DDL'
+    );
+    assert.equal(guarded.length, 0, 'a surrounding hasColumn() check suppresses the finding');
+});
+
 test('findings carry observation evidence and are deterministic', () => {
     const a = analyzePath(join(fixtures, 'Complex.ts'));
     const b = analyzePath(join(fixtures, 'Complex.ts'));
