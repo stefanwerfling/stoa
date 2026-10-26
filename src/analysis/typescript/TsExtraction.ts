@@ -2,6 +2,7 @@ import {Node, SyntaxKind} from 'ts-morph';
 import type {ImportDeclaration, SourceFile} from 'ts-morph';
 import type {Fact, SourceRange, SubjectKind} from '../../Types.js';
 import {factBuilder, type AdapterInfo} from '../FactBuilder.js';
+import {isDeepImport} from '../ImportPath.js';
 
 interface FunctionMetrics {
     cyclomatic: number;
@@ -110,6 +111,9 @@ export const extractFacts = (sourceFile: SourceFile, info: AdapterInfo): Fact[] 
         const names = importedNames(decl);
         if (names.length > 0 && names.every((name) => !referenced.has(name))) {
             facts.push(build({kind: 'deps.importUnused', kindOf: 'import', symbol, range, value: module}));
+        }
+        if (isDeepImport(module, '/')) {
+            facts.push(build({kind: 'deps.importDeep', kindOf: 'import', symbol, range, value: module}));
         }
     });
 

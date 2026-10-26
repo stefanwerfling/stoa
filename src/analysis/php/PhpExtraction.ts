@@ -1,5 +1,6 @@
 import type {Fact, SourceRange, SubjectKind} from '../../Types.js';
 import {factBuilder, type AdapterInfo} from '../FactBuilder.js';
+import {isDeepImport} from '../ImportPath.js';
 
 /**
  * Minimal structural view of a glayzzle php-parser node. We keep this local and
@@ -96,6 +97,9 @@ export const extractFacts = (program: PhpNode, content: string, filePath: string
             const local = aliasName(item) ?? lastSegment(module);
             if (local.length > 0 && !referenced.has(local)) {
                 facts.push(build({kind: 'deps.importUnused', kindOf: 'import', symbol, range: rangeOf(group), value: module}));
+            }
+            if (isDeepImport(module, '\\')) {
+                facts.push(build({kind: 'deps.importDeep', kindOf: 'import', symbol, range: rangeOf(group), value: module}));
             }
             importIndex += 1;
         }

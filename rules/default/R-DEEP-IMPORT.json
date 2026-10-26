@@ -1,0 +1,40 @@
+{
+  "id": "R-DEEP-IMPORT",
+  "version": "1.0.0",
+  "title": "Deep import into internals",
+  "feature": "deps.importDeep",
+  "appliesTo": ["import"],
+  "principles": ["marcus.cooperation"],
+  "dimensions": ["dependencies", "responsibility-boundaries"],
+  "trigger": {
+    "all": [{ "fact": "deps.importDeep", "op": "!=", "value": "" }]
+  },
+  "requiredEvidence": ["deps.importDeep"],
+  "severity": { "base": "medium" },
+  "confidence": { "base": 0.8, "capBy": "certainty" },
+  "message": {
+    "en": "Deep import reaches into internals: {value}.",
+    "de": "Tiefer Import greift in Interna: {value}."
+  },
+  "rationale": {
+    "en": "Reaching past a module's public entry couples you to its internals, which it may change without notice (marcus.cooperation).",
+    "de": "Am öffentlichen Einstieg eines Moduls vorbeizugreifen koppelt dich an dessen Interna, die es ohne Ankündigung ändern darf (marcus.cooperation)."
+  },
+  "remediation": {
+    "suggestion": {
+      "en": "Import through the module's public entry point; if it does not expose what you need, revisit that boundary.",
+      "de": "Über den öffentlichen Einstieg des Moduls importieren; fehlt dort etwas, die Grenze selbst überdenken."
+    },
+    "drawbacks": {
+      "en": "A deep import can be a pragmatic bridge until the public surface is extended.",
+      "de": "Ein tiefer Import kann eine pragmatische Brücke sein, bis die öffentliche Fläche erweitert ist."
+    }
+  },
+  "missingContext": [
+    {
+      "en": "What counts as 'internal' depends on the target module's conventions; segment-name heuristic.",
+      "de": "Was als „intern“ gilt, hängt von den Konventionen des Zielmoduls ab; Segmentnamen-Heuristik."
+    }
+  ],
+  "tests": "test/Rules.test.ts"
+}

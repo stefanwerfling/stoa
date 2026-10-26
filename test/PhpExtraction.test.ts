@@ -55,4 +55,6 @@ test('PHP detects non-deterministic built-ins and unused use statements', () => 
     assert.equal(factFor(facts, 'ast.usesNondeterminism', 'makeId').value, true);
     const unused = facts.filter((fact) => fact.kind === 'deps.importUnused').map((fact) => fact.value);
     assert.deepEqual(unused, ['App\\Unused\\Helper']);
+    const deep = facts.filter((fact) => fact.kind === 'deps.importDeep').map((fact) => fact.value);
+    assert.deepEqual(deep, ['App\\Internal\\Secret']);
 });

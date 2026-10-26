@@ -70,6 +70,15 @@ test('R-DEP-UNUSED flags an unused import but not a used one', () => {
     assert.equal(usedImport.length, 0);
 });
 
+test('R-DEEP-IMPORT flags an import that reaches into internals', () => {
+    const findings = analyzePath(join(root, 'test', 'corpus', 'project', 'DeepImport.ts')).filter(
+        (f) => f.rule.id === 'R-DEEP-IMPORT'
+    );
+    assert.equal(findings.length, 1);
+    assert.equal(findings[0]?.interpretation.principles[0]?.id, 'marcus.cooperation');
+    assert.ok(findings[0]?.observation.statement.includes('../internal/secret.js'));
+});
+
 test('findings carry observation evidence and are deterministic', () => {
     const a = analyzePath(join(fixtures, 'Complex.ts'));
     const b = analyzePath(join(fixtures, 'Complex.ts'));
