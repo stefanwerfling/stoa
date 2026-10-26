@@ -180,6 +180,23 @@ test('R-ORM-ENTITY-NO-PK flags an entity without a primary key, but not when one
     assert.equal(withPk.length, 0, '@PrimaryGeneratedColumn, @Column({primary:true}) and an inherited key all count');
 });
 
+test('R-ORM-EAGER-RELATION flags eager:true in any argument position, not eager:false or plain relations', () => {
+    const eager = analyzePath(join(root, 'test', 'corpus', 'project', 'EagerRelation.ts')).filter(
+        (f) => f.rule.id === 'R-ORM-EAGER-RELATION'
+    );
+    assert.equal(eager.length, 2, 'options as 2nd arg (tags) and as 3rd arg (messages)');
+    assert.deepEqual(
+        eager.map((f) => f.location.symbol).sort(),
+        ['messages', 'tags']
+    );
+    assert.equal(eager[0]?.interpretation.principles[0]?.id, 'marcus.control');
+
+    const lazy = analyzePath(join(root, 'test', 'fixtures', 'orm', 'Relations.ts')).filter(
+        (f) => f.rule.id === 'R-ORM-EAGER-RELATION'
+    );
+    assert.equal(lazy.length, 0, 'eager:false and a relation without options are not flagged');
+});
+
 test('findings carry observation evidence and are deterministic', () => {
     const a = analyzePath(join(fixtures, 'Complex.ts'));
     const b = analyzePath(join(fixtures, 'Complex.ts'));

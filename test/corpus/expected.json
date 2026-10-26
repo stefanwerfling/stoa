@@ -26,6 +26,8 @@
     { "file": "MigrationColumns.ts", "rule": "R-MIGRATION-UNGUARDED-DDL", "symbol": "ddl#2" },
     { "file": "MigrationNoDown.ts", "rule": "R-MIGRATION-NO-DOWN", "symbol": "AddThing1700000000004" },
     { "file": "MigrationNoDown.ts", "rule": "R-MIGRATION-NO-DOWN", "symbol": "EmptyDown1700000000005" },
-    { "file": "EntityNoPk.ts", "rule": "R-ORM-ENTITY-NO-PK", "symbol": "Session" }
+    { "file": "EntityNoPk.ts", "rule": "R-ORM-ENTITY-NO-PK", "symbol": "Session" },
+    { "file": "EagerRelation.ts", "rule": "R-ORM-EAGER-RELATION", "symbol": "tags" },
+    { "file": "EagerRelation.ts", "rule": "R-ORM-EAGER-RELATION", "symbol": "messages" }
   ]
 }

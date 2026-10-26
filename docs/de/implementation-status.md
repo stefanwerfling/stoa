@@ -33,7 +33,7 @@ stoa eval <pfad> --expected <datei> [--format markdown|json]
 - `knowledge/` und `rules/` werden relativ zum installierten Paket aufgelöst —
   die CLI läuft nach `npm link`/Install aus jedem Verzeichnis.
 
-## Regelkatalog (17)
+## Regelkatalog (18)
 
 Deklarative Regeln (`rules/default/*.json`), Default aktiv:
 
@@ -52,6 +52,7 @@ Deklarative Regeln (`rules/default/*.json`), Default aktiv:
 | R-ORM-SYNCHRONIZE-ENABLED | marcus.control | Seiteneffekt-Kontrolle, Robustheit | TS/JS |
 | R-ORM-SYNC-WITH-MIGRATIONS | marcus.judgment | Belegbarkeit, Robustheit | TS/JS |
 | R-ORM-ENTITY-NO-PK | marcus.judgment | Robustheit, Belegbarkeit | TS/JS (`@Entity`-Klassen) |
+| R-ORM-EAGER-RELATION | marcus.control | Seiteneffekt-Kontrolle, Robustheit | TS/JS (`@Entity`-Relationen) |
 | R-MIGRATION-UNGUARDED-DDL | marcus.obstacle | Robustheit, Fehlerbehandlung | TS/JS (nur Migrationsdateien) |
 | R-MIGRATION-NO-DOWN | marcus.judgment | Robustheit, Belegbarkeit | TS/JS (nur Migrationsdateien) |
 
@@ -71,12 +72,13 @@ Alle acht Qualitätsdimensionen haben mindestens eine Regel.
 `metric.functionLength`, `doc.hasComplexityRationale`, `ast.usesNondeterminism`,
 `ast.emptyCatch`, `ast.catchSwallowsError`, `deps.import`, `deps.importUnused`,
 `deps.importDeep`, `deps.export`, `deps.importName`, `orm.synchronizeEnabled`,
-`orm.syncWithMigrations`, `orm.entityNoPrimaryKey`, `migration.unguardedDdl`,
-`migration.noDown`, sowie (opt-in) `external.tsc` und `external.floatingPromise`.
+`orm.syncWithMigrations`, `orm.entityNoPrimaryKey`, `orm.eagerRelation`,
+`migration.unguardedDdl`, `migration.noDown`, sowie (opt-in) `external.tsc` und
+`external.floatingPromise`.
 
 ## Qualitätssicherung
 
-- **63 node:test-Fälle** grün (Regeln pos./neg., Extraktion, Schema-Validierung,
+- **64 node:test-Fälle** grün (Regeln pos./neg., Extraktion, Schema-Validierung,
   i18n, Determinismus, SARIF, Eval, Semantik-Groundedness).
 - **Golden-Korpus** (`test/corpus/`, TS+PHP) mit Ground-Truth; Eval derzeit
   **Precision 100 % · Recall 100 %**. Precision-Gate je Regel (AC-5).

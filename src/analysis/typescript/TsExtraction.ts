@@ -200,6 +200,13 @@ export const extractFacts = (sourceFile: SourceFile, info: AdapterInfo): Fact[] 
         if (!cls.getDecorators().some((decorator) => decorator.getName() === 'Entity')) {
             continue;
         }
+        for (const property of cls.getProperties()) {
+            for (const decorator of property.getDecorators()) {
+                if (RELATION_DECORATORS.has(decorator.getName()) && decoratorHasEager(decorator)) {
+                    facts.push(build({kind: 'orm.eagerRelation', kindOf: 'statement', symbol: property.getName(), range: rangeOf(sourceFile, decorator), value: decorator.getName()}));
+                }
+            }
+        }
         // A subclass may inherit its primary key from a base entity, so only a
         // standalone @Entity without any primary column is reported.
         if (cls.getExtends() !== undefined || hasPrimaryKey(cls)) {
@@ -275,6 +282,21 @@ const unguardedQueryBuilderDdl = (call: CallExpression): string | null => {
     }
 
     return null;
+};
+
+const RELATION_DECORATORS = new Set(['OneToOne', 'OneToMany', 'ManyToOne', 'ManyToMany']);
+
+// The options object may sit in any argument position (after the target, or
+// after both the target and the inverse-side function), so every argument is
+// scanned for an `eager: true` entry.
+const decoratorHasEager = (decorator: Decorator): boolean => {
+    return decorator.getArguments().some((argument) => {
+        if (!Node.isObjectLiteralExpression(argument)) {
+            return false;
+        }
+        const eager = argument.getProperty('eager');
+        return eager !== undefined && Node.isPropertyAssignment(eager) && eager.getInitializerIfKind(SyntaxKind.TrueKeyword) !== undefined;
+    });
 };
 
 const PRIMARY_DECORATORS = new Set(['PrimaryColumn', 'PrimaryGeneratedColumn', 'ObjectIdColumn']);

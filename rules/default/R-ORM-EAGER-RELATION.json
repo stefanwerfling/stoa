@@ -1,0 +1,40 @@
+{
+  "id": "R-ORM-EAGER-RELATION",
+  "version": "1.0.0",
+  "title": "Eagerly loaded relation",
+  "feature": "orm.eagerRelation",
+  "appliesTo": ["statement"],
+  "principles": ["marcus.control"],
+  "dimensions": ["side-effect-control", "robustness"],
+  "trigger": {
+    "all": [{ "fact": "orm.eagerRelation", "op": "!=", "value": "" }]
+  },
+  "requiredEvidence": ["orm.eagerRelation"],
+  "severity": { "base": "medium" },
+  "confidence": { "base": 0.7, "capBy": "certainty" },
+  "message": {
+    "en": "Relation '{symbol}' ({value}) loads eagerly on every query.",
+    "de": "Relation '{symbol}' ({value}) wird bei jeder Abfrage eager geladen."
+  },
+  "rationale": {
+    "en": "An eager relation is joined and loaded on every find of the owning entity, whether the caller needs it or not. The cost is not visible at the call site and compounds through chains of eager relations — the query load is no longer under the caller's control (marcus.control).",
+    "de": "Eine eager-Relation wird bei jedem find der Besitzer-Entity mitgeladen, ob der Aufrufer sie braucht oder nicht. Die Kosten sind an der Aufrufstelle nicht sichtbar und potenzieren sich über Ketten von eager-Relationen — die Query-Last entzieht sich der Kontrolle des Aufrufers (marcus.control)."
+  },
+  "remediation": {
+    "suggestion": {
+      "en": "Default to lazy loading and request the relation explicitly where needed (relations option on find, or a query builder join); reserve eager for relations that truly every caller needs.",
+      "de": "Standardmäßig lazy laden und die Relation dort explizit anfordern, wo sie gebraucht wird (relations-Option beim find oder ein Query-Builder-Join); eager nur für Relationen, die wirklich jeder Aufrufer braucht."
+    },
+    "drawbacks": {
+      "en": "Explicit loading is more verbose at each call site; for a small relation that every path needs, eager can be the simpler choice.",
+      "de": "Explizites Laden ist an jeder Aufrufstelle ausführlicher; bei einer kleinen Relation, die jeder Pfad braucht, kann eager die einfachere Wahl sein."
+    }
+  },
+  "missingContext": [
+    {
+      "en": "Whether the load is actually hot depends on query volume and relation size, which static analysis cannot see.",
+      "de": "Ob das Laden tatsächlich teuer ist, hängt von Abfragevolumen und Relationsgröße ab, die die statische Analyse nicht sieht."
+    }
+  ],
+  "tests": "test/Rules.test.ts"
+}
