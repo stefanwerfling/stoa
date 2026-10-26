@@ -1,0 +1,20 @@
+{
+  "id": "marcus.obstacle",
+  "name": "The obstacle becomes a furtherance",
+  "passages": ["marcus-meditations:5.20"],
+  "originalThought": "QUELLE (Long 1862, 5.20): 'the mind ... changes every hindrance ... into an aid ...'. NOTE: do NOT quote the Hays wording ('what stands in the way becomes the way'), which is copyrighted.",
+  "softwareInterpretation": "INTERPRETATION: Errors/exceptions are information, not a nuisance to be suppressed. Appropriate error handling makes the obstacle usable.",
+  "qualityDimensions": ["error-handling", "robustness"],
+  "applicableAnalyses": ["ast", "cfg", "external-tool"],
+  "preconditions": "Presence of error-handling constructs (catch clauses, promises, error-returning calls).",
+  "limits": "Legitimate empty handling exists (expected cache miss); comment/heuristic signals needed; not every language has checked exceptions.",
+  "counterexamples": [
+    "A catch with deliberate, commented handling ('optional cache miss expected, intentionally ignored').",
+    "A catch with logging or a fallback."
+  ],
+  "attributionConfidence": 0.9,
+  "interpretationConfidence": 0.75,
+  "version": "1.0.0",
+  "changelog": [{ "version": "1.0.0", "note": "Initial version (MVP)." }],
+  "relatedPrinciples": ["marcus.judgment"]
+}

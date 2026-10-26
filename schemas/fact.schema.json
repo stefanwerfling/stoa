@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stoa.dev/schemas/fact.schema.json",
+  "title": "Fact",
+  "description": "A normalized, language-neutral observation produced by a source-analysis adapter. See docs/*/rule-model.md §2.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "kind", "subject", "value", "evidence", "certainty", "producedBy"],
+  "properties": {
+    "id": { "type": "string", "minLength": 1 },
+    "kind": {
+      "type": "string",
+      "pattern": "^[a-z][a-zA-Z0-9]*(\\.[a-zA-Z0-9]+)+$",
+      "description": "Stable fact kind, e.g. 'metric.cognitiveComplexity', 'ast.emptyCatch', 'file.lineCount'."
+    },
+    "subject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["file", "kindOf", "range"],
+      "properties": {
+        "file": { "type": "string", "minLength": 1 },
+        "symbol": { "type": "string" },
+        "kindOf": {
+          "enum": ["file", "module", "class", "function", "method", "statement", "import", "catch-clause"]
+        },
+        "range": { "$ref": "#/$defs/sourceRange" }
+      }
+    },
+    "value": {
+      "description": "Fact payload: number | boolean | string | object, depending on kind.",
+      "type": ["number", "boolean", "string", "object"]
+    },
+    "evidence": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["source", "detail"],
+        "properties": {
+          "source": { "enum": ["ast", "cfg", "dfg", "deps", "metric", "external-tool"] },
+          "detail": { "type": "string" }
+        }
+      }
+    },
+    "certainty": { "enum": ["syntactic", "semantic-heuristic", "external-tool"] },
+    "producedBy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["adapter", "version"],
+      "properties": {
+        "adapter": { "type": "string", "minLength": 1 },
+        "version": { "type": "string", "minLength": 1 }
+      }
+    }
+  },
+  "$defs": {
+    "sourceRange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["startLine", "startCol", "endLine", "endCol"],
+      "properties": {
+        "startLine": { "type": "integer", "minimum": 1 },
+        "startCol": { "type": "integer", "minimum": 0 },
+        "endLine": { "type": "integer", "minimum": 1 },
+        "endCol": { "type": "integer", "minimum": 0 }
+      }
+    }
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "id": "marcus.purpose",
+  "name": "Purpose & task",
+  "passages": ["marcus-meditations:8.19", "marcus-meditations:5.1"],
+  "originalThought": "QUELLE (Long 1862): 8.19 'Everything exists for some end'; 5.1 'I am rising to the work of a human being.' Everything has a purpose and a proper work.",
+  "softwareInterpretation": "INTERPRETATION: Each unit (function/class/module) should serve one recognizable purpose (cohesion, single responsibility).",
+  "qualityDimensions": ["responsibility-boundaries", "understandability"],
+  "applicableAnalyses": ["ast", "deps", "metric", "semantic"],
+  "preconditions": "A unit whose used foreign namespaces/imports and mixed layers are observable; naming conventions help.",
+  "limits": "'Responsibility' is a domain notion, not syntactic. Without context this is only a heuristic; coordination roles (facades/orchestrators) are legitimate.",
+  "counterexamples": [
+    "A facade/orchestrator whose very purpose is coordination.",
+    "A DTO with many fields (many members != many responsibilities)."
+  ],
+  "attributionConfidence": 0.7,
+  "interpretationConfidence": 0.6,
+  "version": "1.0.0",
+  "changelog": [{ "version": "1.0.0", "note": "Initial version (MVP)." }],
+  "relatedPrinciples": ["marcus.simplicity", "marcus.cooperation"]
+}

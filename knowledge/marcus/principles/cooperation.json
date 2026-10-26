@@ -1,0 +1,20 @@
+{
+  "id": "marcus.cooperation",
+  "name": "Serving the whole",
+  "passages": ["marcus-meditations:6.54", "marcus-meditations:2.1"],
+  "originalThought": "QUELLE (Long 1862): 6.54 'That which is not good for the swarm, neither is it good for the bee'; 2.1 'we are made for co-operation, like feet, like hands...'. What harms the whole harms the part.",
+  "softwareInterpretation": "INTERPRETATION: A module should fit into the whole: clear, directed, necessary dependencies — no cycles, no superfluous coupling, no violation of the declared architecture direction.",
+  "qualityDimensions": ["dependencies", "responsibility-boundaries"],
+  "applicableAnalyses": ["deps", "external-tool", "semantic"],
+  "preconditions": "An import/module graph is resolvable (limited dynamic imports/reflection).",
+  "limits": "'Superfluous' sometimes needs domain judgment; dynamic imports/DI can be invisible to static analysis.",
+  "counterexamples": [
+    "High but directed fan-in onto a deliberately central utility.",
+    "A dependency explicitly permitted by the architecture."
+  ],
+  "attributionConfidence": 0.9,
+  "interpretationConfidence": 0.75,
+  "version": "1.0.0",
+  "changelog": [{ "version": "1.0.0", "note": "Initial version (MVP)." }],
+  "relatedPrinciples": ["marcus.purpose"]
+}

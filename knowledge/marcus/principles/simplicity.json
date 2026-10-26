@@ -1,0 +1,21 @@
+{
+  "id": "marcus.simplicity",
+  "name": "Moderation – doing what is necessary",
+  "passages": ["marcus-meditations:4.24"],
+  "originalThought": "QUELLE (Long 1862, 4.24): 'Occupy thyself with few things ... Do what is necessary.' Marcus advises limiting oneself to the necessary in order to gain tranquillity; the addition shifts the focus from 'few' to 'the necessary'.",
+  "softwareInterpretation": "INTERPRETATION: Code should carry only the complexity its task requires. Not 'short at any cost', but 'as complex as necessary, no more'.",
+  "qualityDimensions": ["complexity", "understandability"],
+  "applicableAnalyses": ["ast", "cfg", "metric", "semantic"],
+  "preconditions": "A function/method with measurable control-flow and cognitive complexity; the unit's task roughly known.",
+  "limits": "High complexity can be genuinely necessary (parser, state machine). The metric is a signal, not a verdict. 'Long function = bad' is explicitly disallowed.",
+  "counterexamples": [
+    "A long but linear switch table (high length, low cognitive load).",
+    "An inherently complex algorithm with tests and clear documentation.",
+    "Generated code."
+  ],
+  "attributionConfidence": 0.9,
+  "interpretationConfidence": 0.7,
+  "version": "1.0.0",
+  "changelog": [{ "version": "1.0.0", "note": "Initial version (MVP)." }],
+  "relatedPrinciples": ["marcus.purpose"]
+}

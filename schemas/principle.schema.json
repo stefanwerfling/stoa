@@ -1,0 +1,105 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stoa.dev/schemas/principle.schema.json",
+  "title": "Principle",
+  "description": "A philosophical principle with its source-checked meaning and software interpretation. See docs/*/knowledge-model.md §3.3.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "name",
+    "passages",
+    "originalThought",
+    "softwareInterpretation",
+    "qualityDimensions",
+    "applicableAnalyses",
+    "preconditions",
+    "limits",
+    "counterexamples",
+    "attributionConfidence",
+    "interpretationConfidence",
+    "version",
+    "changelog"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9]*\\.[a-z][a-z0-9-]*$",
+      "description": "Namespaced principle id, e.g. 'marcus.simplicity'."
+    },
+    "name": { "type": "string", "minLength": 1 },
+    "passages": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "description": "Passage id, e.g. 'marcus-meditations:4.24'."
+      }
+    },
+    "originalThought": { "type": "string", "minLength": 1 },
+    "softwareInterpretation": { "type": "string", "minLength": 1 },
+    "qualityDimensions": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/qualityDimension" }
+    },
+    "applicableAnalyses": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/analysisKind" }
+    },
+    "preconditions": { "type": "string" },
+    "limits": { "type": "string" },
+    "counterexamples": {
+      "type": "array",
+      "minItems": 1,
+      "description": "At least one counterexample is mandatory (see evaluation.md).",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "attributionConfidence": { "$ref": "#/$defs/confidence" },
+    "interpretationConfidence": { "$ref": "#/$defs/confidence" },
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "changelog": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["version", "note"],
+        "properties": {
+          "version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+          "note": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "relatedPrinciples": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  },
+  "$defs": {
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "qualityDimension": {
+      "enum": [
+        "complexity",
+        "understandability",
+        "responsibility-boundaries",
+        "dependencies",
+        "error-handling",
+        "side-effect-control",
+        "decision-evidence",
+        "robustness"
+      ]
+    },
+    "analysisKind": {
+      "enum": ["ast", "cfg", "dfg", "deps", "metric", "external-tool", "semantic"]
+    }
+  }
+}

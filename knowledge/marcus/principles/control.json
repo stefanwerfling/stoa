@@ -1,0 +1,22 @@
+{
+  "id": "marcus.control",
+  "name": "What is one's own / the faculty of judgment",
+  "passages": ["marcus-meditations:12.22", "marcus-meditations:6.8", "marcus-meditations:5.19"],
+  "originalThought": "QUELLE: The clear 'dichotomy of control' is primarily Epictetus, Enchiridion 1 — NOT Marcus. Marcus expresses related ideas: 12.22 'everything is opinion, and opinion is in thy power'; 6.8 (the ruling faculty); 5.19 (things do not touch the soul). Attribution to Marcus is deliberately LOW.",
+  "softwareInterpretation": "INTERPRETATION: Code should clearly separate its controllable state from uncontrollable external influences (I/O, time, randomness, global state); side effects should be visible and bounded.",
+  "qualityDimensions": ["side-effect-control", "robustness"],
+  "applicableAnalyses": ["ast", "dfg", "semantic"],
+  "preconditions": "A unit whose name/signature suggests purity, so hidden side effects are detectable as a discrepancy.",
+  "limits": "'Expected purity' is estimated from name/signature -> false-positive risk; language idioms differ. Low attribution to Marcus remains visible in the finding (see Epictetus as primary source).",
+  "counterexamples": [
+    "A clearly named main()/Repository/Service method whose purpose is I/O.",
+    "Deliberately encapsulated state inside a class."
+  ],
+  "attributionConfidence": 0.3,
+  "interpretationConfidence": 0.6,
+  "version": "1.0.0",
+  "changelog": [
+    { "version": "1.0.0", "note": "Initial version (MVP). Flagged low attribution; Epictetus is the primary source and a candidate second knowledge-base source." }
+  ],
+  "relatedPrinciples": ["marcus.judgment"]
+}

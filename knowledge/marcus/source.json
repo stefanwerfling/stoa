@@ -1,0 +1,183 @@
+{
+  "id": "marcus-meditations",
+  "title": "Meditations (Selbstbetrachtungen)",
+  "author": "Marcus Aurelius",
+  "translations": [
+    {
+      "id": "long-1862",
+      "translator": "George Long",
+      "year": 1862,
+      "language": "en",
+      "license": "public-domain",
+      "isPublicDomain": true,
+      "note": "Primary citable base text. Verified against MIT Internet Classics Archive."
+    },
+    {
+      "id": "gleichen-russwurm",
+      "translator": "Alexander von Gleichen-Russwurm",
+      "year": 1911,
+      "language": "de",
+      "license": "public-domain",
+      "isPublicDomain": true,
+      "note": "Translator died 1947; PD in Germany since 2018. Project Gutenberg ebook 15028."
+    }
+  ],
+  "passages": [
+    {
+      "id": "marcus-meditations:4.24",
+      "ref": "4.24",
+      "verification": "CONFIRMED",
+      "verificationNote": "George Long via MIT Internet Classics Archive.",
+      "quotes": [
+        {
+          "translationId": "long-1862",
+          "level": "QUELLE",
+          "text": "Occupy thyself with few things, says the philosopher, if thou wouldst be tranquil.— But consider if it would not be better to say, Do what is necessary..."
+        }
+      ]
+    },
+    {
+      "id": "marcus-meditations:4.7",
+      "ref": "4.7",
+      "verification": "CONFIRMED",
+      "verificationNote": "George Long via MIT Internet Classics Archive.",
+      "quotes": [
+        {
+          "translationId": "long-1862",
+          "level": "QUELLE",
+          "text": "Take away thy opinion, and then there is taken away the complaint, 'I have been harmed.' Take away the complaint, 'I have been harmed,' and the harm is taken away."
+        }
+      ]
+    },
+    {
+      "id": "marcus-meditations:8.47",
+      "ref": "8.47",
+      "verification": "CONFIRMED",
+      "verificationNote": "Wording verbatim; canonical section numbering.",
+      "quotes": [
+        {
+          "translationId": "long-1862",
+          "level": "QUELLE",
+          "text": "If thou art pained by any external thing, it is not this thing that disturbs thee, but thy own judgement about it; and it is in thy power to wipe out this judgement now."
+        }
+      ]
+    },
+    {
+      "id": "marcus-meditations:5.20",
+      "ref": "5.20",
+      "verification": "CONFIRMED",
+      "verificationNote": "Long wording. NOTE: the popular 'what stands in the way becomes the way' is Gregory Hays (2002), copyrighted — do not quote.",
+      "quotes": [
+        {
+          "translationId": "long-1862",
+          "level": "QUELLE",
+          "text": "...the mind converts and changes every hindrance to its activity into an aid; and so that which is a hindrance is made a furtherance to an act; and that which is an obstacle on the road helps us on this road."
+        }
+      ]
+    },
+    {
+      "id": "marcus-meditations:6.54",
+      "ref": "6.54",
+      "verification": "CONFIRMED",
+      "verificationNote": "George Long via MIT Internet Classics Archive.",
+      "quotes": [
+        {
+          "translationId": "long-1862",
+          "level": "QUELLE",
+          "text": "That which is not good for the swarm, neither is it good for the bee."
+        }
+      ]
+    },
+    {
+      "id": "marcus-meditations:2.1",
+      "ref": "2.1",
+      "verification": "CONFIRMED",
+      "verificationNote": "Co-operation clause. NOTE: distinct from 2.5 ('do every act ... as if it were the last').",
+      "quotes": [
+        {
+          "translationId": "long-1862",
+          "level": "QUELLE",
+          "text": "...we are made for co-operation, like feet, like hands, like eyelids, like the rows of the upper and lower teeth."
+        }
+      ]
+    },
+    {
+      "id": "marcus-meditations:5.1",
+      "ref": "5.1",
+      "verification": "CONFIRMED",
+      "verificationNote": "George Long via MIT Internet Classics Archive.",
+      "quotes": [
+        {
+          "translationId": "long-1862",
+          "level": "QUELLE",
+          "text": "In the morning when thou risest unwillingly, let this thought be present— I am rising to the work of a human being."
+        }
+      ]
+    },
+    {
+      "id": "marcus-meditations:8.19",
+      "ref": "8.19",
+      "verification": "CONFIRMED",
+      "verificationNote": "Wording verbatim; canonical section numbering.",
+      "quotes": [
+        {
+          "translationId": "long-1862",
+          "level": "QUELLE",
+          "text": "Everything exists for some end, a horse, a vine. Why dost thou wonder? Even the sun will say, I am for some purpose..."
+        }
+      ]
+    },
+    {
+      "id": "marcus-meditations:12.17",
+      "ref": "12.17",
+      "verification": "CONFIRMED",
+      "verificationNote": "George Long via MIT Internet Classics Archive (colon in original).",
+      "quotes": [
+        {
+          "translationId": "long-1862",
+          "level": "QUELLE",
+          "text": "If it is not right, do not do it: if it is not true, do not say it."
+        }
+      ]
+    },
+    {
+      "id": "marcus-meditations:12.22",
+      "ref": "12.22",
+      "verification": "CONFIRMED",
+      "verificationNote": "Supports 'opinion is in thy power'.",
+      "quotes": [
+        {
+          "translationId": "long-1862",
+          "level": "QUELLE",
+          "text": "Consider that everything is opinion, and opinion is in thy power. Take away then, when thou choosest, thy opinion..."
+        }
+      ]
+    },
+    {
+      "id": "marcus-meditations:6.8",
+      "ref": "6.8",
+      "verification": "CONFIRMED",
+      "verificationNote": "On the ruling faculty (to hegemonikon).",
+      "quotes": [
+        {
+          "translationId": "long-1862",
+          "level": "QUELLE",
+          "text": "the ruling faculty ... makes itself such as it is and such as it wills to be, and it makes everything which happens appear to itself such as it wills."
+        }
+      ]
+    },
+    {
+      "id": "marcus-meditations:5.19",
+      "ref": "5.19",
+      "verification": "CONFIRMED",
+      "verificationNote": "Things themselves do not touch the soul.",
+      "quotes": [
+        {
+          "translationId": "long-1862",
+          "level": "QUELLE",
+          "text": "Things themselves touch not the soul, not in the least degree; nor have they admission to the soul, nor can they turn or move the soul..."
+        }
+      ]
+    }
+  ]
+}

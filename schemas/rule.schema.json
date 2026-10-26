@@ -1,0 +1,122 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stoa.dev/schemas/rule.schema.json",
+  "title": "Rule",
+  "description": "A deterministic rule that evaluates facts and emits findings. See docs/*/rule-model.md §3.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "version",
+    "title",
+    "feature",
+    "appliesTo",
+    "principles",
+    "dimensions",
+    "trigger",
+    "requiredEvidence",
+    "severity",
+    "confidence",
+    "message",
+    "tests"
+  ],
+  "properties": {
+    "id": { "type": "string", "pattern": "^R-[A-Z0-9-]+$" },
+    "version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+    "title": { "type": "string", "minLength": 1 },
+    "feature": { "type": "string", "minLength": 1 },
+    "appliesTo": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string" }
+    },
+    "principles": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string" }
+    },
+    "dimensions": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "principle.schema.json#/$defs/qualityDimension" }
+    },
+    "trigger": { "$ref": "#/$defs/conditionGroup" },
+    "requiredEvidence": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string" }
+    },
+    "suppressWhen": { "$ref": "#/$defs/conditionGroup" },
+    "severity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["base"],
+      "properties": {
+        "base": { "enum": ["info", "low", "medium", "high"] },
+        "escalateWhen": {
+          "type": "array",
+          "items": {
+            "allOf": [
+              { "$ref": "#/$defs/condition" },
+              {
+                "type": "object",
+                "required": ["to"],
+                "properties": { "to": { "enum": ["info", "low", "medium", "high"] } }
+              }
+            ]
+          }
+        }
+      }
+    },
+    "confidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["base"],
+      "properties": {
+        "base": { "type": "number", "minimum": 0, "maximum": 1 },
+        "capBy": { "const": "certainty" },
+        "reduceWhen": {
+          "type": "array",
+          "items": {
+            "allOf": [
+              { "$ref": "#/$defs/condition" },
+              {
+                "type": "object",
+                "required": ["by"],
+                "properties": { "by": { "type": "number", "minimum": 0, "maximum": 1 } }
+              }
+            ]
+          }
+        }
+      }
+    },
+    "message": { "type": "string", "minLength": 1 },
+    "remediationRef": { "type": "string" },
+    "tests": { "type": "string", "minLength": 1 }
+  },
+  "$defs": {
+    "condition": {
+      "type": "object",
+      "required": ["fact", "op"],
+      "properties": {
+        "fact": { "type": "string" },
+        "op": { "enum": ["==", "!=", ">", ">=", "<", "<="] },
+        "value": {},
+        "and": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/condition" }
+        }
+      }
+    },
+    "conditionGroup": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "maxProperties": 1,
+      "properties": {
+        "all": { "type": "array", "items": { "$ref": "#/$defs/condition" } },
+        "any": { "type": "array", "items": { "$ref": "#/$defs/condition" } }
+      }
+    }
+  }
+}

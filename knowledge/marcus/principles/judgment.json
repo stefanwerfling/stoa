@@ -1,0 +1,20 @@
+{
+  "id": "marcus.judgment",
+  "name": "Examining judgments",
+  "passages": ["marcus-meditations:4.7", "marcus-meditations:8.47", "marcus-meditations:12.17"],
+  "originalThought": "QUELLE (Long 1862): 4.7 'Take away thy opinion...'; 8.47 '...not this thing... but thy own judgement...'; 12.17 'if it is not true, do not say it'. Separate the fact from the judgment about it.",
+  "softwareInterpretation": "INTERPRETATION (two roles): (a) meta — separate observation from evaluation and make uncertainty explicit, which grounds separating severity from confidence; (b) for code — declaration should match behavior; contradictions between claimed architecture/signature and actual behavior are findings.",
+  "qualityDimensions": ["decision-evidence", "robustness"],
+  "applicableAnalyses": ["deps", "dfg", "external-tool"],
+  "preconditions": "There is a declared contract (layer rule, visibility, type) to compare against actual facts.",
+  "limits": "Not every architecture is declared; without explicit rules no violation can be detected. The meta role is a product property, not automatic code detection. Avoid double-counting cases the type system already covers.",
+  "counterexamples": [
+    "A deliberately documented, justified exception to a layer rule.",
+    "A case already covered by the type checker (no separate stoa finding)."
+  ],
+  "attributionConfidence": 0.9,
+  "interpretationConfidence": 0.65,
+  "version": "1.0.0",
+  "changelog": [{ "version": "1.0.0", "note": "Initial version (MVP)." }],
+  "relatedPrinciples": ["marcus.control", "marcus.obstacle"]
+}

@@ -1,0 +1,14 @@
+export * from './Types.js';
+export {analyze} from './Pipeline.js';
+export type {AnalyzeOptions} from './Pipeline.js';
+export {loadConfig, DEFAULT_CONFIG} from './Config.js';
+export {collectFiles} from './Ingestion.js';
+export {KnowledgeBase} from './knowledge/KnowledgeBase.js';
+export {RuleEngine} from './rules/RuleEngine.js';
+export {AdapterRegistry} from './analysis/AdapterRegistry.js';
+export {TypeScriptAdapter} from './analysis/TypeScriptAdapter.js';
+export type {FileRef, LanguageAdapter, ParseResult, ProjectContext} from './analysis/LanguageAdapter.js';
+export {NoopSemanticAdapter} from './semantic/NoopSemanticAdapter.js';
+export type {SemanticAdapter, SemanticRequest, SemanticVerdict} from './semantic/SemanticAdapter.js';
+export {toJson, toMarkdown} from './reporting/Reporter.js';
+export {ENGINE_VERSION} from './Version.js';

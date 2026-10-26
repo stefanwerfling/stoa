@@ -1,0 +1,117 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stoa.dev/schemas/finding.schema.json",
+  "title": "Finding",
+  "description": "A transparent finding separating observation (fact) from interpretation, and severity from confidence. See docs/*/finding-model.md §1.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "rule",
+    "ruleSet",
+    "location",
+    "observation",
+    "interpretation",
+    "severity",
+    "confidence",
+    "certaintyBasis",
+    "remediation",
+    "source"
+  ],
+  "properties": {
+    "id": { "type": "string", "minLength": 1 },
+    "rule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "version"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" }
+      }
+    },
+    "ruleSet": { "type": "string", "minLength": 1 },
+    "location": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["file", "range"],
+      "properties": {
+        "file": { "type": "string", "minLength": 1 },
+        "range": { "$ref": "fact.schema.json#/$defs/sourceRange" },
+        "symbol": { "type": "string" },
+        "structure": { "type": "string" }
+      }
+    },
+    "observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["statement", "evidence"],
+      "description": "A verifiable fact. Must contain no evaluation/judgement.",
+      "properties": {
+        "statement": { "type": "string", "minLength": 1 },
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["fact", "value", "certainty"],
+            "properties": {
+              "fact": { "type": "string" },
+              "value": { "type": ["number", "boolean", "string", "object"] },
+              "certainty": { "enum": ["syntactic", "semantic-heuristic", "external-tool"] }
+            }
+          }
+        }
+      }
+    },
+    "interpretation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["principles", "dimensions"],
+      "description": "Flagged as interpretation, never presented as objective fact.",
+      "properties": {
+        "principles": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "name", "passages", "attributionConfidence", "rationale"],
+            "properties": {
+              "id": { "type": "string" },
+              "name": { "type": "string" },
+              "passages": { "type": "array", "items": { "type": "string" } },
+              "attributionConfidence": { "type": "number", "minimum": 0, "maximum": 1 },
+              "rationale": { "type": "string" }
+            }
+          }
+        },
+        "dimensions": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "principle.schema.json#/$defs/qualityDimension" }
+        }
+      }
+    },
+    "severity": { "enum": ["info", "low", "medium", "high"] },
+    "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+    "certaintyBasis": { "enum": ["syntactic", "semantic-heuristic", "external-tool"] },
+    "remediation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["suggestion"],
+      "properties": {
+        "suggestion": { "type": "string", "minLength": 1 },
+        "drawbacks": { "type": "string" },
+        "patch": { "type": ["string", "null"] }
+      }
+    },
+    "missingContext": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "source": { "enum": ["deterministic", "semantic"] },
+    "suppressed": { "type": "boolean" },
+    "baselineStatus": { "enum": ["new", "known", "fixed"] }
+  }
+}
