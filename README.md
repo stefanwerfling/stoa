@@ -10,9 +10,10 @@ An LLM is an optional, switchable adapter.
 > schemas, knowledge base, CLI), M2 (real ts-morph fact extraction), M3 (the
 > deterministic rule engine with its first rules), M5 (golden corpus +
 > precision/recall evaluation), M6 (PHP adapter — same rules, same facts, proving
-> the schema is language-neutral), plus a cross-file dependency-cycle rule
-> (R-DEP-CYCLE, works across TS and PHP). Next: SARIF output. See
-> [docs/en/roadmap.md](docs/en/roadmap.md).
+> the schema is language-neutral), a cross-file dependency-cycle rule
+> (R-DEP-CYCLE), and SARIF 2.1.0 output for CI / code scanning. The MVP is
+> feature-complete; next is hardening (richer context facts, PSR-4 PHP import
+> resolution). See [docs/en/roadmap.md](docs/en/roadmap.md).
 
 ## Documentation
 
@@ -36,6 +37,7 @@ npm run lint         # eslint (synaipse flat-config style)
 # analyze a path (markdown by default)
 npm run analyze -- analyze ./src
 node dist/Cli.js analyze ./src --format json
+node dist/Cli.js analyze ./src --format sarif   # SARIF 2.1.0 for CI / code scanning
 
 # evaluate the engine against the golden corpus (precision/recall)
 node dist/Cli.js eval test/corpus/project --expected test/corpus/expected.json

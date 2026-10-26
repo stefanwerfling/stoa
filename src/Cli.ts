@@ -7,6 +7,8 @@ import {evaluate} from './evaluation/Evaluator.js';
 import {toMarkdown as evaluationMarkdown} from './evaluation/EvaluationReporter.js';
 import {analyze} from './Pipeline.js';
 import {toJson, toMarkdown} from './reporting/Reporter.js';
+import {toSarif} from './reporting/SarifReporter.js';
+import type {AnalysisReport} from './Types.js';
 
 type CliValues = {
     format?: string;
@@ -21,7 +23,7 @@ const USAGE = [
     'stoa – Stoic Code Analysis Engine',
     '',
     'Usage:',
-    '  stoa analyze <path> [--format markdown|json] [--config <file>] [--knowledge <dir>] [--rules <dir>]',
+    '  stoa analyze <path> [--format markdown|json|sarif] [--config <file>] [--knowledge <dir>] [--rules <dir>]',
     '  stoa eval <path> --expected <file> [--format markdown|json] [--knowledge <dir>] [--rules <dir>]',
     ''
 ].join('\n');
@@ -34,6 +36,16 @@ const ruleSetDirOf = (values: CliValues): string => {
     return resolve(values.rules ?? join(process.cwd(), 'rules', 'default'));
 };
 
+const render = (format: string | undefined, report: AnalysisReport): string => {
+    if (format === 'json') {
+        return toJson(report);
+    }
+    if (format === 'sarif') {
+        return toSarif(report, {baseDir: process.cwd()});
+    }
+    return toMarkdown(report);
+};
+
 const runAnalyze = (values: CliValues, target: string): number => {
     const report = analyze({
         rootPath: resolve(target),
@@ -41,8 +53,7 @@ const runAnalyze = (values: CliValues, target: string): number => {
         ruleSetDir: ruleSetDirOf(values),
         config: loadConfig(values.config ?? null)
     }).report;
-    const output = values.format === 'json' ? toJson(report) : toMarkdown(report);
-    process.stdout.write(`${output}\n`);
+    process.stdout.write(`${render(values.format, report)}\n`);
     return 0;
 };
 
