@@ -157,11 +157,71 @@ export const extractFacts = (program: PhpNode, content: string, filePath: string
 
         const descriptor = migrationMissingDown(cls);
         if (descriptor !== null) {
-            facts.push(build({kind: 'migration.noDown', kindOf: 'class', symbol: className(cls), range: rangeOf(cls), value: descriptor}));
+            facts.push(build({kind: 'migration.noDown', kindOf: 'class', symbol: nodeName(cls), range: rangeOf(cls), value: descriptor}));
+        }
+    }
+
+    for (const cls of collect(program, (node) => node.kind === 'class')) {
+        if (!hasAttribute(cls, 'Entity')) {
+            continue;
+        }
+        const properties = collect(cls, (node) => node.kind === 'property');
+
+        for (const property of properties) {
+            for (const attribute of attributesOf(property)) {
+                const relation = attributeShortName(attribute);
+                if (RELATION_ATTRIBUTES.has(relation) && relationIsEager(attribute)) {
+                    facts.push(build({kind: 'orm.eagerRelation', kindOf: 'statement', symbol: nodeName(property), range: rangeOf(attribute), value: relation}));
+                }
+            }
+        }
+
+        // A subclass may inherit its key from a base entity/mapped superclass, so
+        // only a standalone @Entity without any #[ORM\Id] property is reported.
+        const inherits = isPhpNode(cls.extends);
+        const hasPrimaryKey = properties.some((property) => hasAttribute(property, 'Id'));
+        if (!inherits && !hasPrimaryKey) {
+            facts.push(build({kind: 'orm.entityNoPrimaryKey', kindOf: 'class', symbol: nodeName(cls), range: rangeOf(cls), value: 'entity has no primary key column'}));
         }
     }
 
     return facts;
+};
+
+const RELATION_ATTRIBUTES: ReadonlySet<string> = new Set(['OneToOne', 'OneToMany', 'ManyToOne', 'ManyToMany']);
+
+// PHP 8 attributes attach to the `property` node (and the `class` node) as
+// attrGroups, each holding attrs.
+const attributesOf = (node: PhpNode): PhpNode[] => {
+    const attributes: PhpNode[] = [];
+    for (const group of (node.attrGroups as PhpNode[] | undefined) ?? []) {
+        for (const attribute of (group.attrs as PhpNode[] | undefined) ?? []) {
+            attributes.push(attribute);
+        }
+    }
+    return attributes;
+};
+
+const attributeShortName = (attribute: PhpNode): string => {
+    return typeof attribute.name === 'string' ? lastSegment(attribute.name) : '';
+};
+
+const hasAttribute = (node: PhpNode, shortName: string): boolean => {
+    return attributesOf(node).some((attribute) => attributeShortName(attribute) === shortName);
+};
+
+// A Doctrine relation is eager when it carries a `fetch: 'EAGER'` argument.
+const relationIsEager = (attribute: PhpNode): boolean => {
+    for (const argument of (attribute.args as PhpNode[] | undefined) ?? []) {
+        if (!isPhpNode(argument) || argument.kind !== 'namedargument' || argument.name !== 'fetch') {
+            continue;
+        }
+        const value = argument.value;
+        if (isPhpNode(value) && value.kind === 'string' && value.value === 'EAGER') {
+            return true;
+        }
+    }
+    return false;
 };
 
 // A Doctrine migration class extends AbstractMigration.
@@ -205,8 +265,8 @@ const migrationMissingDown = (cls: PhpNode): string | null => {
     return children.length === 0 ? 'migration down() is empty' : null;
 };
 
-const className = (cls: PhpNode): string => {
-    const name = cls.name;
+const nodeName = (node: PhpNode): string => {
+    const name = node.name;
     if (isPhpNode(name) && typeof name.name === 'string') {
         return name.name;
     }

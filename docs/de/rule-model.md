@@ -159,8 +159,8 @@ Persistenz / ORM (TypeORM, nur TS/JS, Default aktiv):
 |----------|----------------|---------|-----------|-----------|
 | `R-ORM-SYNCHRONIZE-ENABLED` | `orm.synchronizeEnabled` | `marcus.control` | Seiteneffekt-Kontrolle, Robustheit | heuristisch |
 | `R-ORM-SYNC-WITH-MIGRATIONS` | `orm.syncWithMigrations` | `marcus.judgment` | Belegbarkeit, Robustheit | heuristisch |
-| `R-ORM-ENTITY-NO-PK` | `orm.entityNoPrimaryKey` | `marcus.judgment` | Robustheit, Belegbarkeit | syntaktisch (`@Entity`-Klassen) |
-| `R-ORM-EAGER-RELATION` | `orm.eagerRelation` | `marcus.control` | Seiteneffekt-Kontrolle, Robustheit | syntaktisch (`@Entity`-Relationen) |
+| `R-ORM-ENTITY-NO-PK` | `orm.entityNoPrimaryKey` | `marcus.judgment` | Robustheit, Belegbarkeit | syntaktisch (`@Entity` / `#[ORM\Entity]`) |
+| `R-ORM-EAGER-RELATION` | `orm.eagerRelation` | `marcus.control` | Seiteneffekt-Kontrolle, Robustheit | syntaktisch (TypeORM + Doctrine) |
 | `R-ORM-NULLABLE-NO-DEFAULT` | `migration.nullableNoDefault` | `marcus.obstacle` | Robustheit, Fehlerbehandlung | heuristisch (NOT-NULL-Add im `up()`) |
 | `R-MIGRATION-UNGUARDED-DDL` | `migration.unguardedDdl` | `marcus.obstacle` | Robustheit, Fehlerbehandlung | heuristisch (nur Migrationsdateien) |
 | `R-MIGRATION-NO-DOWN` | `migration.noDown` | `marcus.judgment` | Robustheit, Belegbarkeit | syntaktisch (nur Migrationsdateien) |
@@ -197,8 +197,10 @@ Persistenz / ORM (TypeORM, nur TS/JS, Default aktiv):
 > `R-MIGRATION-DATA-LOSS`, `R-MIGRATION-NO-DOWN`, `R-ORM-NULLABLE-NO-DEFAULT`)
 > greifen auch für Doctrine-Migrationen (`extends AbstractMigration`). Das Roh-SQL
 > wird aus `$this->addSql('…')` gelesen; die SQL-Prüfungen sind sprachneutral
-> (gemeinsames Modul `MigrationSql`). Der Query-Builder-Pfad (TypeORM) und die
-> `@Entity`-Regeln sind Doctrine-seitig noch nicht abgedeckt.
+> (gemeinsames Modul `MigrationSql`). Ebenso greifen `R-ORM-ENTITY-NO-PK`
+> (`#[ORM\Entity]` ohne `#[ORM\Id]`) und `R-ORM-EAGER-RELATION`
+> (`#[ORM\ManyToOne(fetch: 'EAGER')]` usw.) über PHP-8-Attribute. Der
+> TypeORM-Query-Builder-Pfad bleibt naturgemäß TS-seitig.
 
 Prozedurale Regeln (`ProjectRule`, cross-file):
 

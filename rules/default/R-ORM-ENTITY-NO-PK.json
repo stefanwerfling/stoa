@@ -13,17 +13,17 @@
   "severity": { "base": "high" },
   "confidence": { "base": 0.8, "capBy": "certainty" },
   "message": {
-    "en": "TypeORM entity has no primary key column.",
-    "de": "TypeORM-Entity hat keine Primary-Key-Spalte."
+    "en": "ORM entity has no primary key column.",
+    "de": "ORM-Entity hat keine Primary-Key-Spalte."
   },
   "rationale": {
-    "en": "A persisted entity needs a stable identity. Without a primary column TypeORM rejects the entity at startup, and even where it loads, updates and relations have no reliable key to target — the identity decision was never made explicit (marcus.judgment).",
-    "de": "Eine persistierte Entity braucht eine stabile Identität. Ohne Primary-Spalte weist TypeORM die Entity beim Start ab, und selbst wenn sie lädt, haben Updates und Relationen keinen verlässlichen Schlüssel — die Identitätsentscheidung wurde nie explizit getroffen (marcus.judgment)."
+    "en": "A persisted entity needs a stable identity. Without a primary column the ORM rejects the entity at startup (TypeORM, Doctrine), and even where it loads, updates and relations have no reliable key to target — the identity decision was never made explicit (marcus.judgment).",
+    "de": "Eine persistierte Entity braucht eine stabile Identität. Ohne Primary-Spalte weist das ORM die Entity beim Start ab (TypeORM, Doctrine), und selbst wenn sie lädt, haben Updates und Relationen keinen verlässlichen Schlüssel — die Identitätsentscheidung wurde nie explizit getroffen (marcus.judgment)."
   },
   "remediation": {
     "suggestion": {
-      "en": "Add a primary column: @PrimaryGeneratedColumn() for a surrogate key, @PrimaryColumn() for a natural key, or @Column({primary: true}).",
-      "de": "Eine Primary-Spalte ergänzen: @PrimaryGeneratedColumn() für einen Surrogatschlüssel, @PrimaryColumn() für einen natürlichen Schlüssel oder @Column({primary: true})."
+      "en": "Add a primary key: @PrimaryGeneratedColumn()/@PrimaryColumn()/@Column({primary: true}) in TypeORM, or #[ORM\\Id] in Doctrine.",
+      "de": "Einen Primärschlüssel ergänzen: @PrimaryGeneratedColumn()/@PrimaryColumn()/@Column({primary: true}) in TypeORM, oder #[ORM\\Id] in Doctrine."
     },
     "drawbacks": {
       "en": "None of note; a primary key is a baseline requirement for a persisted entity.",

@@ -159,8 +159,8 @@ Persistence / ORM (TypeORM, TS/JS only, on by default):
 |---------|----------------|-----------|-----------|-----------|
 | `R-ORM-SYNCHRONIZE-ENABLED` | `orm.synchronizeEnabled` | `marcus.control` | Side-effect control, robustness | heuristic |
 | `R-ORM-SYNC-WITH-MIGRATIONS` | `orm.syncWithMigrations` | `marcus.judgment` | Decision-evidence, robustness | heuristic |
-| `R-ORM-ENTITY-NO-PK` | `orm.entityNoPrimaryKey` | `marcus.judgment` | Robustness, decision-evidence | syntactic (`@Entity` classes) |
-| `R-ORM-EAGER-RELATION` | `orm.eagerRelation` | `marcus.control` | Side-effect control, robustness | syntactic (`@Entity` relations) |
+| `R-ORM-ENTITY-NO-PK` | `orm.entityNoPrimaryKey` | `marcus.judgment` | Robustness, decision-evidence | syntactic (`@Entity` / `#[ORM\Entity]`) |
+| `R-ORM-EAGER-RELATION` | `orm.eagerRelation` | `marcus.control` | Side-effect control, robustness | syntactic (TypeORM + Doctrine) |
 | `R-ORM-NULLABLE-NO-DEFAULT` | `migration.nullableNoDefault` | `marcus.obstacle` | Robustness, error handling | heuristic (NOT NULL add in `up()`) |
 | `R-MIGRATION-UNGUARDED-DDL` | `migration.unguardedDdl` | `marcus.obstacle` | Robustness, error handling | heuristic (migration files only) |
 | `R-MIGRATION-NO-DOWN` | `migration.noDown` | `marcus.judgment` | Robustness, decision-evidence | syntactic (migration files only) |
@@ -196,8 +196,10 @@ Persistence / ORM (TypeORM, TS/JS only, on by default):
 > `R-MIGRATION-DATA-LOSS`, `R-MIGRATION-NO-DOWN`, `R-ORM-NULLABLE-NO-DEFAULT`)
 > also fire for Doctrine migrations (`extends AbstractMigration`). The raw SQL is
 > read from `$this->addSql('…')`; the SQL checks are language-neutral (shared
-> `MigrationSql` module). The query-builder path (TypeORM) and the `@Entity`
-> rules are not yet covered on the Doctrine side.
+> `MigrationSql` module). `R-ORM-ENTITY-NO-PK` (`#[ORM\Entity]` without
+> `#[ORM\Id]`) and `R-ORM-EAGER-RELATION` (`#[ORM\ManyToOne(fetch: 'EAGER')]`
+> etc.) also fire via PHP 8 attributes. The TypeORM query-builder path remains
+> TS-side by nature.
 
 Procedural rules (`ProjectRule`, cross-file):
 

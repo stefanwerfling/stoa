@@ -243,6 +243,28 @@ test('the migration rules fire for Doctrine (PHP) via addSql, scoped to up() and
     assert.equal(noDown[0]?.location.symbol, 'Version20260102');
 });
 
+test('the @Entity rules fire for Doctrine (PHP) via #[ORM] attributes', () => {
+    const noPk = analyzePath(join(root, 'test', 'corpus', 'project', 'DoctrineEntityNoPk.php')).filter(
+        (f) => f.rule.id === 'R-ORM-ENTITY-NO-PK'
+    );
+    assert.equal(noPk.length, 1);
+    assert.equal(noPk[0]?.location.symbol, 'Session');
+    assert.equal(noPk[0]?.interpretation.principles[0]?.id, 'marcus.judgment');
+    assert.equal(noPk[0]?.severity, 'high');
+
+    const eager = analyzePath(join(root, 'test', 'corpus', 'project', 'DoctrineEntityEager.php'));
+    const eagerHits = eager.filter((f) => f.rule.id === 'R-ORM-EAGER-RELATION');
+    assert.equal(eagerHits.length, 1, 'the EAGER ManyToOne, not the LAZY OneToMany');
+    assert.equal(eagerHits[0]?.location.symbol, 'customer');
+    assert.equal(eagerHits[0]?.interpretation.principles[0]?.id, 'marcus.control');
+    assert.equal(eager.filter((f) => f.rule.id === 'R-ORM-ENTITY-NO-PK').length, 0, '#[ORM\\Id] is a primary key');
+
+    const inherits = analyzePath(join(root, 'test', 'fixtures', 'orm', 'DoctrineEntityInherits.php')).filter(
+        (f) => f.rule.id === 'R-ORM-ENTITY-NO-PK'
+    );
+    assert.equal(inherits.length, 0, 'a key may be inherited from the base class');
+});
+
 test('findings carry observation evidence and are deterministic', () => {
     const a = analyzePath(join(fixtures, 'Complex.ts'));
     const b = analyzePath(join(fixtures, 'Complex.ts'));
