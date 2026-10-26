@@ -1,4 +1,4 @@
-import type {Fact, FactValue, SourceRange, SubjectKind} from '../Types.js';
+import type {Certainty, Fact, FactEvidence, FactValue, SourceRange, SubjectKind} from '../Types.js';
 
 export interface AdapterInfo {
     id: string;
@@ -11,6 +11,8 @@ export interface FactSpec {
     symbol?: string;
     range: SourceRange;
     value: FactValue;
+    certainty?: Certainty;
+    evidenceSource?: FactEvidence['source'];
 }
 
 /**
@@ -29,8 +31,8 @@ export const factBuilder = (info: AdapterInfo, filePath: string) => {
             kind: spec.kind,
             subject,
             value: spec.value,
-            evidence: [{source: 'ast', detail: spec.kind}],
-            certainty: 'syntactic',
+            evidence: [{source: spec.evidenceSource ?? 'ast', detail: spec.kind}],
+            certainty: spec.certainty ?? 'syntactic',
             producedBy: {adapter: info.id, version: info.version}
         };
     };

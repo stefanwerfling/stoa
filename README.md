@@ -14,7 +14,10 @@ An LLM is an optional, switchable adapter.
 > (R-DEP-CYCLE), SARIF 2.1.0 output for CI / code scanning, and the optional
 > semantic (LLM) layer — off by default, vendor-neutral, grounded and validated,
 > and never part of the deterministic core. Next is hardening (richer context
-> facts, PSR-4 PHP import resolution). See [docs/en/roadmap.md](docs/en/roadmap.md).
+> facts, PSR-4 PHP import resolution), plus a robustness pack — non-determinism
+> (clock/RNG), unused imports, and an opt-in in-process TypeScript type-check
+> fact source — that fills the side-effect-control and decision-evidence
+> dimensions. See [docs/en/roadmap.md](docs/en/roadmap.md).
 
 ## Documentation
 
@@ -39,6 +42,7 @@ npm run lint         # eslint (synaipse flat-config style)
 npm run analyze -- analyze ./src
 node dist/Cli.js analyze ./src --format json
 node dist/Cli.js analyze ./src --lang de            # localized output (en default)
+node dist/Cli.js analyze ./src --typecheck          # + in-process TypeScript type checker as a fact source
 node dist/Cli.js analyze ./src --format sarif   # SARIF 2.1.0 for CI / code scanning
 
 # evaluate the engine against the golden corpus (precision/recall)

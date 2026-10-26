@@ -20,6 +20,7 @@ type CliValues = {
     expected?: string;
     semantic?: string;
     lang?: string;
+    typecheck?: boolean;
     help?: boolean;
 };
 
@@ -27,7 +28,7 @@ const USAGE = [
     'stoa – Stoic Code Analysis Engine',
     '',
     'Usage:',
-    '  stoa analyze <path> [--format markdown|json|sarif] [--lang en|de] [--config <file>] [--knowledge <dir>] [--rules <dir>] [--semantic noop|anthropic]',
+    '  stoa analyze <path> [--format markdown|json|sarif] [--lang en|de] [--typecheck] [--semantic noop|anthropic] [--config <file>] [--knowledge <dir>] [--rules <dir>]',
     '  stoa eval <path> --expected <file> [--format markdown|json] [--knowledge <dir>] [--rules <dir>]',
     ''
 ].join('\n');
@@ -57,7 +58,8 @@ const runAnalyze = async (values: CliValues, target: string): Promise<number> =>
         knowledgeDir: knowledgeDirOf(values),
         ruleSetDir: ruleSetDirOf(values),
         config: loadConfig(values.config ?? null),
-        lang
+        lang,
+        typecheck: values.typecheck === true
     });
 
     const semanticId = values.semantic ?? 'noop';
@@ -99,6 +101,7 @@ const main = async (): Promise<number> => {
             expected: {type: 'string'},
             semantic: {type: 'string'},
             lang: {type: 'string', default: 'en'},
+            typecheck: {type: 'boolean', default: false},
             help: {type: 'boolean', default: false}
         }
     });

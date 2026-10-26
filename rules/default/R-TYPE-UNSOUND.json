@@ -1,0 +1,40 @@
+{
+  "id": "R-TYPE-UNSOUND",
+  "version": "1.0.0",
+  "title": "Type-unsound code",
+  "feature": "external.tsc",
+  "appliesTo": ["statement"],
+  "principles": ["marcus.judgment"],
+  "dimensions": ["decision-evidence", "robustness"],
+  "trigger": {
+    "all": [{ "fact": "external.tsc", "op": "!=", "value": "" }]
+  },
+  "requiredEvidence": ["external.tsc"],
+  "severity": { "base": "high" },
+  "confidence": { "base": 0.9, "capBy": "certainty" },
+  "message": {
+    "en": "Type checker: {value}",
+    "de": "Typprüfer: {value}"
+  },
+  "rationale": {
+    "en": "The type checker's own verdict: the code does not behave as its types declare (marcus.judgment — declaration should match behavior).",
+    "de": "Das Urteil des Typprüfers: Der Code verhält sich nicht so, wie seine Typen behaupten (marcus.judgment – Deklaration soll dem Verhalten entsprechen)."
+  },
+  "remediation": {
+    "suggestion": {
+      "en": "Fix the type mismatch or add a guard/narrowing so declaration and behavior agree.",
+      "de": "Typkonflikt beheben oder eine Prüfung/Narrowing ergänzen, damit Deklaration und Verhalten übereinstimmen."
+    },
+    "drawbacks": {
+      "en": "Narrowing adds code; a cast silences the checker without fixing the underlying mismatch.",
+      "de": "Narrowing bringt mehr Code; ein Cast beruhigt den Prüfer, ohne den Konflikt zu beheben."
+    }
+  },
+  "missingContext": [
+    {
+      "en": "Checked per file without resolved imports; cross-module type errors are not seen.",
+      "de": "Pro Datei ohne aufgelöste Importe geprüft; modulübergreifende Typfehler werden nicht erkannt."
+    }
+  ],
+  "tests": "test/Typecheck.test.ts"
+}

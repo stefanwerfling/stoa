@@ -1,6 +1,7 @@
 import {AdapterRegistry} from './analysis/AdapterRegistry.js';
 import {PhpAdapter} from './analysis/PhpAdapter.js';
 import {TypeScriptAdapter} from './analysis/TypeScriptAdapter.js';
+import {TypeDiagnosticsExtractor} from './analysis/typescript/TypeDiagnostics.js';
 import {collectFiles} from './Ingestion.js';
 import {KnowledgeBase} from './knowledge/KnowledgeBase.js';
 import {RuleEngine} from './rules/RuleEngine.js';
@@ -15,7 +16,11 @@ export interface AnalyzeOptions {
     config: StoaConfig;
     /** Output language for localized finding text; defaults to 'en'. */
     lang?: string;
+    /** Opt-in: run the TypeScript type checker as an external fact source. */
+    typecheck?: boolean;
 }
+
+const TS_EXTENSIONS: readonly string[] = ['.ts', '.tsx'] as const;
 
 const INCLUDE_EXTENSIONS: readonly string[] = ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.php'] as const;
 
@@ -32,6 +37,8 @@ export const analyze = (options: AnalyzeOptions): AnalysisResult => {
     const ruleEngine = new RuleEngine(knowledgeBase, ruleSet, options.lang ?? 'en');
 
     const files = collectFiles(options.rootPath, {includeExtensions: INCLUDE_EXTENSIONS});
+
+    const typeExtractor = options.typecheck === true ? new TypeDiagnosticsExtractor() : null;
 
     const facts: Fact[] = [];
     let analyzed = 0;
@@ -50,6 +57,9 @@ export const analyze = (options: AnalyzeOptions): AnalysisResult => {
         }
 
         facts.push(...adapter.extractFacts(parsed, {rootDir: options.rootPath}));
+        if (typeExtractor !== null && TS_EXTENSIONS.some((ext) => file.path.endsWith(ext))) {
+            facts.push(...typeExtractor.extract(file));
+        }
         analyzed += 1;
     }
 
