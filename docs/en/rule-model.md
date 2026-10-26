@@ -135,7 +135,7 @@ flowchart TB
 
 ## 5. Rule Set `default@1` (implemented)
 
-> The actually-implemented rule set (18 rules). Overview, facts and opt-in flags:
+> The actually-implemented rule set (19 rules). Overview, facts and opt-in flags:
 > [implementation-status.md](./implementation-status.md).
 
 Declarative rules (`rules/default/*.json`, on by default):
@@ -163,6 +163,7 @@ Persistence / ORM (TypeORM, TS/JS only, on by default):
 | `R-ORM-EAGER-RELATION` | `orm.eagerRelation` | `marcus.control` | Side-effect control, robustness | syntactic (`@Entity` relations) |
 | `R-MIGRATION-UNGUARDED-DDL` | `migration.unguardedDdl` | `marcus.obstacle` | Robustness, error handling | heuristic (migration files only) |
 | `R-MIGRATION-NO-DOWN` | `migration.noDown` | `marcus.judgment` | Robustness, decision-evidence | syntactic (migration files only) |
+| `R-MIGRATION-DATA-LOSS` | `migration.dataLoss` | `marcus.judgment` | Robustness, decision-evidence | heuristic (drops in `up()`) |
 
 > `R-MIGRATION-UNGUARDED-DDL` fires only in migration files (a class that
 > `implements MigrationInterface`) and covers two paths: raw SQL
@@ -176,6 +177,13 @@ Persistence / ORM (TypeORM, TS/JS only, on by default):
 > `R-MIGRATION-NO-DOWN` reports a migration class with no `down()` or an empty
 > `down()` (not reversible). A deliberately throwing `down()` (an explicitly
 > one-way migration) counts as a documented decision and is not flagged.
+
+> `R-MIGRATION-DATA-LOSS` reports destructive steps in `up()` (`DROP TABLE`/
+> `DROP COLUMN` or `dropTable`/`dropColumn`) — regardless of an `IF EXISTS`
+> guard, because the guard prevents the crash, not the data loss. Scoped to
+> `up()` so expected drops in `down()` (reversing a create) are not flagged; it
+> complements `R-MIGRATION-UNGUARDED-DDL` (existence guard) with the data-loss
+> perspective.
 
 Procedural rules (`ProjectRule`, cross-file):
 

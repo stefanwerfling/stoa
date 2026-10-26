@@ -1,0 +1,40 @@
+{
+  "id": "R-MIGRATION-DATA-LOSS",
+  "version": "1.0.0",
+  "title": "Destructive DDL in a migration up()",
+  "feature": "migration.dataLoss",
+  "appliesTo": ["statement"],
+  "principles": ["marcus.judgment"],
+  "dimensions": ["robustness", "decision-evidence"],
+  "trigger": {
+    "all": [{ "fact": "migration.dataLoss", "op": "!=", "value": "" }]
+  },
+  "requiredEvidence": ["migration.dataLoss"],
+  "severity": { "base": "high" },
+  "confidence": { "base": 0.75, "capBy": "certainty" },
+  "message": {
+    "en": "Destructive migration step: {value}.",
+    "de": "Zerstörender Migrationsschritt: {value}."
+  },
+  "rationale": {
+    "en": "Dropping a table or column on the forward path deletes data that no down() can restore. An IF EXISTS guard prevents a crash but not the loss. Such a step needs a deliberate, evidenced decision — a backup, a deprecation window, or a confirmed sign-off — not a silent drop (marcus.judgment).",
+    "de": "Eine Tabelle oder Spalte auf dem Vorwärtspfad zu löschen vernichtet Daten, die kein down() wiederherstellen kann. Ein IF-EXISTS-Guard verhindert den Absturz, nicht den Verlust. Ein solcher Schritt braucht eine bewusste, belegte Entscheidung — ein Backup, ein Deprecation-Fenster oder eine bestätigte Freigabe — keinen stillen Drop (marcus.judgment)."
+  },
+  "remediation": {
+    "suggestion": {
+      "en": "Confirm the data is expendable or migrated elsewhere first; prefer a two-step deprecation (stop writing, then drop in a later release) and keep a backup. Document why the drop is safe.",
+      "de": "Zuerst sicherstellen, dass die Daten entbehrlich oder anderweitig migriert sind; besser zweistufig deprecaten (Schreiben einstellen, erst in einem späteren Release droppen) und ein Backup behalten. Begründen, warum der Drop sicher ist."
+    },
+    "drawbacks": {
+      "en": "A two-step deprecation is slower; for a throwaway table that never held real data the ceremony is overkill.",
+      "de": "Ein zweistufiges Deprecaten ist langsamer; bei einer Wegwerf-Tabelle ohne echte Daten ist der Aufwand übertrieben."
+    }
+  },
+  "missingContext": [
+    {
+      "en": "Whether the dropped table/column holds valuable data is a run-time fact this analysis cannot see.",
+      "de": "Ob die gelöschte Tabelle/Spalte wertvolle Daten enthält, ist eine Laufzeit-Tatsache, die diese Analyse nicht sieht."
+    }
+  ],
+  "tests": "test/Rules.test.ts"
+}

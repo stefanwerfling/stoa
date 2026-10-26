@@ -28,6 +28,8 @@
     { "file": "MigrationNoDown.ts", "rule": "R-MIGRATION-NO-DOWN", "symbol": "EmptyDown1700000000005" },
     { "file": "EntityNoPk.ts", "rule": "R-ORM-ENTITY-NO-PK", "symbol": "Session" },
     { "file": "EagerRelation.ts", "rule": "R-ORM-EAGER-RELATION", "symbol": "tags" },
-    { "file": "EagerRelation.ts", "rule": "R-ORM-EAGER-RELATION", "symbol": "messages" }
+    { "file": "EagerRelation.ts", "rule": "R-ORM-EAGER-RELATION", "symbol": "messages" },
+    { "file": "MigrationDataLoss.ts", "rule": "R-MIGRATION-DATA-LOSS", "symbol": "loss#0" },
+    { "file": "MigrationDataLoss.ts", "rule": "R-MIGRATION-DATA-LOSS", "symbol": "loss#1" }
   ]
 }

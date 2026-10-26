@@ -159,19 +159,20 @@ export const extractFacts = (sourceFile: SourceFile, info: AdapterInfo): Fact[] 
     });
 
     if (isMigrationFile(sourceFile)) {
-        const candidates: {node: Node; descriptor: string}[] = [];
-
-        for (const literal of [
+        const literals = [
             ...sourceFile.getDescendantsOfKind(SyntaxKind.StringLiteral),
             ...sourceFile.getDescendantsOfKind(SyntaxKind.NoSubstitutionTemplateLiteral)
-        ]) {
+        ];
+        const calls = sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression);
+
+        const candidates: {node: Node; descriptor: string}[] = [];
+        for (const literal of literals) {
             const descriptor = unguardedDdl(literal.getLiteralText());
             if (descriptor !== null) {
                 candidates.push({node: literal, descriptor});
             }
         }
-
-        for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+        for (const call of calls) {
             const descriptor = unguardedQueryBuilderDdl(call);
             if (descriptor !== null) {
                 candidates.push({node: call, descriptor});
@@ -183,6 +184,33 @@ export const extractFacts = (sourceFile: SourceFile, info: AdapterInfo): Fact[] 
         candidates.sort((a, b) => a.node.getStart() - b.node.getStart());
         candidates.forEach((candidate, index) => {
             facts.push(build({kind: 'migration.unguardedDdl', kindOf: 'statement', symbol: `ddl#${index}`, range: rangeOf(sourceFile, candidate.node), value: candidate.descriptor}));
+        });
+
+        // Dropping a table or column in up() destroys data on the forward path,
+        // even when guarded with IF EXISTS. Scoped to up() so the expected drops
+        // in down() (reversing a create) are not flagged.
+        const losses: {node: Node; descriptor: string}[] = [];
+        for (const literal of literals) {
+            if (enclosingMethodName(literal) !== 'up') {
+                continue;
+            }
+            const descriptor = destructiveDdl(literal.getLiteralText());
+            if (descriptor !== null) {
+                losses.push({node: literal, descriptor});
+            }
+        }
+        for (const call of calls) {
+            if (enclosingMethodName(call) !== 'up') {
+                continue;
+            }
+            const descriptor = destructiveCall(call);
+            if (descriptor !== null) {
+                losses.push({node: call, descriptor});
+            }
+        }
+        losses.sort((a, b) => a.node.getStart() - b.node.getStart());
+        losses.forEach((loss, index) => {
+            facts.push(build({kind: 'migration.dataLoss', kindOf: 'statement', symbol: `loss#${index}`, range: rangeOf(sourceFile, loss.node), value: loss.descriptor}));
         });
 
         for (const cls of sourceFile.getClasses()) {
@@ -245,6 +273,36 @@ const unguardedDdl = (sql: string): string | null => {
     }
     if (DROP_COLUMN.test(sql) && !DROP_COLUMN_GUARDED.test(sql)) {
         return 'DROP COLUMN without IF EXISTS';
+    }
+    return null;
+};
+
+const enclosingMethodName = (node: Node): string | undefined => {
+    return node.getFirstAncestorByKind(SyntaxKind.MethodDeclaration)?.getName();
+};
+
+// Destructive DDL in up() — the drop itself loses data regardless of guards.
+const destructiveDdl = (sql: string): string | null => {
+    if (DROP_TABLE.test(sql)) {
+        return 'DROP TABLE in up() destroys data';
+    }
+    if (DROP_COLUMN.test(sql)) {
+        return 'DROP COLUMN in up() destroys data';
+    }
+    return null;
+};
+
+const destructiveCall = (call: CallExpression): string | null => {
+    const expression = call.getExpression();
+    if (!Node.isPropertyAccessExpression(expression)) {
+        return null;
+    }
+    const method = expression.getName();
+    if (method === 'dropTable') {
+        return 'dropTable() in up() destroys data';
+    }
+    if (method === 'dropColumn') {
+        return 'dropColumn() in up() destroys data';
     }
     return null;
 };

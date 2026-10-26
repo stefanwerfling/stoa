@@ -33,7 +33,7 @@ stoa eval <pfad> --expected <datei> [--format markdown|json]
 - `knowledge/` und `rules/` werden relativ zum installierten Paket aufgelöst —
   die CLI läuft nach `npm link`/Install aus jedem Verzeichnis.
 
-## Regelkatalog (18)
+## Regelkatalog (19)
 
 Deklarative Regeln (`rules/default/*.json`), Default aktiv:
 
@@ -55,6 +55,7 @@ Deklarative Regeln (`rules/default/*.json`), Default aktiv:
 | R-ORM-EAGER-RELATION | marcus.control | Seiteneffekt-Kontrolle, Robustheit | TS/JS (`@Entity`-Relationen) |
 | R-MIGRATION-UNGUARDED-DDL | marcus.obstacle | Robustheit, Fehlerbehandlung | TS/JS (nur Migrationsdateien) |
 | R-MIGRATION-NO-DOWN | marcus.judgment | Robustheit, Belegbarkeit | TS/JS (nur Migrationsdateien) |
+| R-MIGRATION-DATA-LOSS | marcus.judgment | Robustheit, Belegbarkeit | TS/JS (Drops im `up()`) |
 
 Prozedurale Regeln (`ProjectRule`, cross-file):
 
@@ -73,12 +74,12 @@ Alle acht Qualitätsdimensionen haben mindestens eine Regel.
 `ast.emptyCatch`, `ast.catchSwallowsError`, `deps.import`, `deps.importUnused`,
 `deps.importDeep`, `deps.export`, `deps.importName`, `orm.synchronizeEnabled`,
 `orm.syncWithMigrations`, `orm.entityNoPrimaryKey`, `orm.eagerRelation`,
-`migration.unguardedDdl`, `migration.noDown`, sowie (opt-in) `external.tsc` und
-`external.floatingPromise`.
+`migration.unguardedDdl`, `migration.noDown`, `migration.dataLoss`, sowie
+(opt-in) `external.tsc` und `external.floatingPromise`.
 
 ## Qualitätssicherung
 
-- **64 node:test-Fälle** grün (Regeln pos./neg., Extraktion, Schema-Validierung,
+- **65 node:test-Fälle** grün (Regeln pos./neg., Extraktion, Schema-Validierung,
   i18n, Determinismus, SARIF, Eval, Semantik-Groundedness).
 - **Golden-Korpus** (`test/corpus/`, TS+PHP) mit Ground-Truth; Eval derzeit
   **Precision 100 % · Recall 100 %**. Precision-Gate je Regel (AC-5).

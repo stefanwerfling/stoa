@@ -197,6 +197,22 @@ test('R-ORM-EAGER-RELATION flags eager:true in any argument position, not eager:
     assert.equal(lazy.length, 0, 'eager:false and a relation without options are not flagged');
 });
 
+test('R-MIGRATION-DATA-LOSS flags drops in up() (even guarded), not drops in down()', () => {
+    const loss = analyzePath(join(root, 'test', 'corpus', 'project', 'MigrationDataLoss.ts')).filter(
+        (f) => f.rule.id === 'R-MIGRATION-DATA-LOSS'
+    );
+    assert.equal(loss.length, 2, 'guarded DROP TABLE + guarded dropColumn in up()');
+    assert.equal(loss[0]?.interpretation.principles[0]?.id, 'marcus.judgment');
+    assert.ok(loss.every((f) => f.severity === 'high'));
+    assert.ok(loss.some((f) => f.observation.statement.includes('DROP TABLE')));
+    assert.ok(loss.some((f) => f.observation.statement.includes('dropColumn()')));
+
+    const downDrop = analyzePath(join(root, 'test', 'corpus', 'project', 'MigrationUnsafe.ts')).filter(
+        (f) => f.rule.id === 'R-MIGRATION-DATA-LOSS'
+    );
+    assert.equal(downDrop.length, 0, 'a DROP TABLE in down() reverses a create and is expected');
+});
+
 test('findings carry observation evidence and are deterministic', () => {
     const a = analyzePath(join(fixtures, 'Complex.ts'));
     const b = analyzePath(join(fixtures, 'Complex.ts'));
