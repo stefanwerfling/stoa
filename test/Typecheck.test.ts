@@ -38,3 +38,21 @@ test('type-check findings carry the right principle, dimension and certainty', (
 test('type-check analysis is deterministic', () => {
     assert.equal(JSON.stringify(typeFindings(true)), JSON.stringify(typeFindings(true)));
 });
+
+const floatingFindings = (typecheck: boolean): Finding[] =>
+    analyze({
+        rootPath: join(here, 'fixtures', 'typecheck', 'Floating.ts'),
+        knowledgeDir: join(root, 'knowledge', 'marcus'),
+        ruleSetDir: join(root, 'rules', 'default'),
+        config: DEFAULT_CONFIG,
+        typecheck
+    }).report.findings.filter((f) => f.rule.id === 'R-FLOATING-PROMISE');
+
+test('R-FLOATING-PROMISE flags only the unhandled bare promise call', () => {
+    assert.equal(floatingFindings(false).length, 0, 'needs the type checker (opt-in)');
+    const findings = floatingFindings(true);
+    // Only the bare `save();` floats — void / .catch / await are all fine.
+    assert.equal(findings.length, 1);
+    assert.equal(findings[0]?.interpretation.principles[0]?.id, 'marcus.obstacle');
+    assert.ok(findings[0]?.observation.statement.includes('save'));
+});

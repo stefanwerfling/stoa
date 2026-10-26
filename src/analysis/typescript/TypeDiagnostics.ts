@@ -1,5 +1,5 @@
-import {Project, ts} from 'ts-morph';
-import type {SourceFile} from 'ts-morph';
+import {Node, Project, SyntaxKind, ts} from 'ts-morph';
+import type {ExpressionStatement, SourceFile} from 'ts-morph';
 import type {Fact, SourceRange} from '../../Types.js';
 import {factBuilder} from '../FactBuilder.js';
 import type {FileRef} from '../LanguageAdapter.js';
@@ -72,10 +72,52 @@ export class TypeDiagnosticsExtractor {
             index += 1;
         }
 
+        let promiseIndex = 0;
+        for (const statement of sourceFile.getDescendantsOfKind(SyntaxKind.ExpressionStatement)) {
+            const callee = floatingPromiseCallee(statement);
+            if (callee === null) {
+                continue;
+            }
+            facts.push(
+                build({
+                    kind: 'external.floatingPromise',
+                    kindOf: 'statement',
+                    symbol: `promise#${promiseIndex}`,
+                    range: rangeOf(sourceFile, statement.getStart(), statement.getWidth()),
+                    value: callee,
+                    certainty: 'external-tool',
+                    evidenceSource: 'external-tool'
+                })
+            );
+            promiseIndex += 1;
+        }
+
         this.project.removeSourceFile(sourceFile);
         return facts;
     }
 }
+
+// The check @typescript-eslint/no-floating-promises performs, done type-aware
+// in-process: a bare call statement whose result is a Promise, where the
+// rejection is not handled (not awaited/returned/assigned — those are not
+// expression statements — and not a .catch/.finally chain or an explicit void).
+const floatingPromiseCallee = (statement: ExpressionStatement): string | null => {
+    const expression = statement.getExpression();
+    if (!Node.isCallExpression(expression)) {
+        return null;
+    }
+    const callee = expression.getExpression();
+    if (Node.isPropertyAccessExpression(callee)) {
+        const name = callee.getName();
+        if (name === 'catch' || name === 'finally') {
+            return null;
+        }
+    }
+    const type = expression.getType();
+    const typeText = type.getText();
+    const isPromise = type.getSymbol()?.getName() === 'Promise' || typeText === 'Promise' || typeText.startsWith('Promise<');
+    return isPromise ? callee.getText() : null;
+};
 
 const rangeOf = (sourceFile: SourceFile, start: number | undefined, length: number): SourceRange => {
     if (start === undefined) {

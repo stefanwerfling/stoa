@@ -1,0 +1,40 @@
+{
+  "id": "R-FLOATING-PROMISE",
+  "version": "1.0.0",
+  "title": "Floating promise",
+  "feature": "external.floatingPromise",
+  "appliesTo": ["statement"],
+  "principles": ["marcus.obstacle"],
+  "dimensions": ["error-handling", "robustness"],
+  "trigger": {
+    "all": [{ "fact": "external.floatingPromise", "op": "!=", "value": "" }]
+  },
+  "requiredEvidence": ["external.floatingPromise"],
+  "severity": { "base": "high" },
+  "confidence": { "base": 0.85, "capBy": "certainty" },
+  "message": {
+    "en": "Floating promise: {value}() is neither awaited nor its rejection handled.",
+    "de": "Floating Promise: {value}() wird weder awaited noch wird die Rejection behandelt."
+  },
+  "rationale": {
+    "en": "An unawaited promise lets a rejection vanish silently and runs out of order — the obstacle is hidden instead of handled (marcus.obstacle).",
+    "de": "Ein nicht-awaiteter Promise lässt eine Rejection lautlos verschwinden und läuft in falscher Reihenfolge — das Hindernis wird verborgen statt behandelt (marcus.obstacle)."
+  },
+  "remediation": {
+    "suggestion": {
+      "en": "await it, return it, or attach a .catch; use `void` only for a deliberate fire-and-forget.",
+      "de": "await verwenden, zurückgeben oder .catch anhängen; `void` nur für bewusstes Fire-and-forget."
+    },
+    "drawbacks": {
+      "en": "Awaiting changes control flow and may serialize work that could run concurrently.",
+      "de": "await ändert den Kontrollfluss und kann nebenläufige Arbeit serialisieren."
+    }
+  },
+  "missingContext": [
+    {
+      "en": "Whether fire-and-forget is intended is not decidable statically; mark it with `void` if so.",
+      "de": "Ob Fire-and-forget beabsichtigt ist, lässt sich statisch nicht entscheiden; dann mit `void` kennzeichnen."
+    }
+  ],
+  "tests": "test/Typecheck.test.ts"
+}
