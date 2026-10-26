@@ -1,0 +1,40 @@
+{
+  "id": "R-ORM-NULLABLE-NO-DEFAULT",
+  "version": "1.0.0",
+  "title": "NOT NULL column added without a default",
+  "feature": "migration.nullableNoDefault",
+  "appliesTo": ["statement"],
+  "principles": ["marcus.obstacle"],
+  "dimensions": ["robustness", "error-handling"],
+  "trigger": {
+    "all": [{ "fact": "migration.nullableNoDefault", "op": "!=", "value": "" }]
+  },
+  "requiredEvidence": ["migration.nullableNoDefault"],
+  "severity": { "base": "high" },
+  "confidence": { "base": 0.7, "capBy": "certainty" },
+  "message": {
+    "en": "NOT NULL column added without a default: {value}.",
+    "de": "NOT-NULL-Spalte ohne Default hinzugefügt: {value}."
+  },
+  "rationale": {
+    "en": "Adding a NOT NULL column with no default to a table that already holds rows fails: the database has no value to put in the new column for those rows ('Cannot add a NOT NULL column with no default value'). The obstacle only surfaces against a populated table at run time (marcus.obstacle).",
+    "de": "Eine NOT-NULL-Spalte ohne Default zu einer Tabelle hinzuzufügen, die bereits Zeilen enthält, scheitert: Die Datenbank hat für diese Zeilen keinen Wert für die neue Spalte ('Cannot add a NOT NULL column with no default value'). Das Hindernis zeigt sich erst gegen eine gefüllte Tabelle zur Laufzeit (marcus.obstacle)."
+  },
+  "remediation": {
+    "suggestion": {
+      "en": "Give the column a DEFAULT, or add it nullable first, backfill existing rows, then tighten it to NOT NULL in a follow-up step.",
+      "de": "Der Spalte einen DEFAULT geben, oder sie zuerst nullable anlegen, bestehende Zeilen befüllen und erst in einem Folgeschritt auf NOT NULL verschärfen."
+    },
+    "drawbacks": {
+      "en": "A default may not suit every column semantically; the nullable-then-backfill path is more steps.",
+      "de": "Ein Default passt nicht für jede Spalte semantisch; der Weg nullable-dann-Backfill ist mehrstufig."
+    }
+  },
+  "missingContext": [
+    {
+      "en": "Against an empty or freshly created table the add is harmless; whether rows exist is a run-time fact.",
+      "de": "Gegen eine leere oder frisch erstellte Tabelle ist das Hinzufügen harmlos; ob Zeilen existieren, ist eine Laufzeit-Tatsache."
+    }
+  ],
+  "tests": "test/Rules.test.ts"
+}

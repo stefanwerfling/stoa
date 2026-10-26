@@ -135,7 +135,7 @@ flowchart TB
 
 ## 5. Rule Set `default@1` (implemented)
 
-> The actually-implemented rule set (19 rules). Overview, facts and opt-in flags:
+> The actually-implemented rule set (20 rules). Overview, facts and opt-in flags:
 > [implementation-status.md](./implementation-status.md).
 
 Declarative rules (`rules/default/*.json`, on by default):
@@ -161,6 +161,7 @@ Persistence / ORM (TypeORM, TS/JS only, on by default):
 | `R-ORM-SYNC-WITH-MIGRATIONS` | `orm.syncWithMigrations` | `marcus.judgment` | Decision-evidence, robustness | heuristic |
 | `R-ORM-ENTITY-NO-PK` | `orm.entityNoPrimaryKey` | `marcus.judgment` | Robustness, decision-evidence | syntactic (`@Entity` classes) |
 | `R-ORM-EAGER-RELATION` | `orm.eagerRelation` | `marcus.control` | Side-effect control, robustness | syntactic (`@Entity` relations) |
+| `R-ORM-NULLABLE-NO-DEFAULT` | `migration.nullableNoDefault` | `marcus.obstacle` | Robustness, error handling | heuristic (NOT NULL add in `up()`) |
 | `R-MIGRATION-UNGUARDED-DDL` | `migration.unguardedDdl` | `marcus.obstacle` | Robustness, error handling | heuristic (migration files only) |
 | `R-MIGRATION-NO-DOWN` | `migration.noDown` | `marcus.judgment` | Robustness, decision-evidence | syntactic (migration files only) |
 | `R-MIGRATION-DATA-LOSS` | `migration.dataLoss` | `marcus.judgment` | Robustness, decision-evidence | heuristic (drops in `up()`) |
@@ -184,6 +185,12 @@ Persistence / ORM (TypeORM, TS/JS only, on by default):
 > `up()` so expected drops in `down()` (reversing a create) are not flagged; it
 > complements `R-MIGRATION-UNGUARDED-DDL` (existence guard) with the data-loss
 > perspective.
+
+> `R-ORM-NULLABLE-NO-DEFAULT` reports a `NOT NULL` column added in `up()` with no
+> `DEFAULT` (raw SQL `ADD COLUMN … NOT NULL`, or `addColumn` with an explicit
+> `isNullable: false` and no `default`) — it breaks against a populated table.
+> Auto-increment/generated columns and an absent explicit `isNullable` are left
+> out (conservative).
 
 Procedural rules (`ProjectRule`, cross-file):
 

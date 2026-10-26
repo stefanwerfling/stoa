@@ -135,7 +135,7 @@ flowchart TB
 
 ## 5. Regelsatz `default@1` (umgesetzt)
 
-> Der tatsächlich implementierte Regelsatz (19 Regeln). Gesamtüberblick, Facts
+> Der tatsächlich implementierte Regelsatz (20 Regeln). Gesamtüberblick, Facts
 > und Opt-in-Flags: [implementation-status.md](./implementation-status.md).
 
 Deklarative Regeln (`rules/default/*.json`, Default aktiv):
@@ -161,6 +161,7 @@ Persistenz / ORM (TypeORM, nur TS/JS, Default aktiv):
 | `R-ORM-SYNC-WITH-MIGRATIONS` | `orm.syncWithMigrations` | `marcus.judgment` | Belegbarkeit, Robustheit | heuristisch |
 | `R-ORM-ENTITY-NO-PK` | `orm.entityNoPrimaryKey` | `marcus.judgment` | Robustheit, Belegbarkeit | syntaktisch (`@Entity`-Klassen) |
 | `R-ORM-EAGER-RELATION` | `orm.eagerRelation` | `marcus.control` | Seiteneffekt-Kontrolle, Robustheit | syntaktisch (`@Entity`-Relationen) |
+| `R-ORM-NULLABLE-NO-DEFAULT` | `migration.nullableNoDefault` | `marcus.obstacle` | Robustheit, Fehlerbehandlung | heuristisch (NOT-NULL-Add im `up()`) |
 | `R-MIGRATION-UNGUARDED-DDL` | `migration.unguardedDdl` | `marcus.obstacle` | Robustheit, Fehlerbehandlung | heuristisch (nur Migrationsdateien) |
 | `R-MIGRATION-NO-DOWN` | `migration.noDown` | `marcus.judgment` | Robustheit, Belegbarkeit | syntaktisch (nur Migrationsdateien) |
 | `R-MIGRATION-DATA-LOSS` | `migration.dataLoss` | `marcus.judgment` | Robustheit, Belegbarkeit | heuristisch (Drops im `up()`) |
@@ -185,6 +186,12 @@ Persistenz / ORM (TypeORM, nur TS/JS, Default aktiv):
 > `up()`, damit erwartete Drops im `down()` (Rücknahme eines Create) nicht
 > getroffen werden; ergänzt damit `R-MIGRATION-UNGUARDED-DDL` (Existenz-Guard) um
 > die Datenverlust-Perspektive.
+
+> `R-ORM-NULLABLE-NO-DEFAULT` meldet im `up()` eine `NOT NULL`-Spalte ohne
+> `DEFAULT` (Roh-SQL `ADD COLUMN … NOT NULL`, oder `addColumn` mit explizitem
+> `isNullable: false` ohne `default`) — bricht gegen eine gefüllte Tabelle.
+> Auto-increment/generated und ein fehlendes explizites `isNullable` bleiben
+> außen vor (konservativ).
 
 Prozedurale Regeln (`ProjectRule`, cross-file):
 

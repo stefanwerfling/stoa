@@ -1,5 +1,5 @@
 import {Node, SyntaxKind} from 'ts-morph';
-import type {CallExpression, ClassDeclaration, Decorator, ImportDeclaration, MethodDeclaration, PropertyAssignment, SourceFile} from 'ts-morph';
+import type {CallExpression, ClassDeclaration, Decorator, ImportDeclaration, MethodDeclaration, ObjectLiteralExpression, PropertyAssignment, SourceFile} from 'ts-morph';
 import type {Fact, SourceRange, SubjectKind} from '../../Types.js';
 import {factBuilder, type AdapterInfo} from '../FactBuilder.js';
 import {isDeepImport} from '../ImportPath.js';
@@ -213,6 +213,32 @@ export const extractFacts = (sourceFile: SourceFile, info: AdapterInfo): Fact[] 
             facts.push(build({kind: 'migration.dataLoss', kindOf: 'statement', symbol: `loss#${index}`, range: rangeOf(sourceFile, loss.node), value: loss.descriptor}));
         });
 
+        // Adding a NOT NULL column without a default breaks on a non-empty table:
+        // existing rows have no value for it. Only up() is in scope.
+        const nullables: {node: Node; descriptor: string}[] = [];
+        for (const literal of literals) {
+            if (enclosingMethodName(literal) !== 'up') {
+                continue;
+            }
+            const descriptor = nullableNoDefault(literal.getLiteralText());
+            if (descriptor !== null) {
+                nullables.push({node: literal, descriptor});
+            }
+        }
+        for (const call of calls) {
+            if (enclosingMethodName(call) !== 'up') {
+                continue;
+            }
+            const descriptor = addColumnNotNullNoDefault(call);
+            if (descriptor !== null) {
+                nullables.push({node: call, descriptor});
+            }
+        }
+        nullables.sort((a, b) => a.node.getStart() - b.node.getStart());
+        nullables.forEach((nullable, index) => {
+            facts.push(build({kind: 'migration.nullableNoDefault', kindOf: 'statement', symbol: `nullable#${index}`, range: rangeOf(sourceFile, nullable.node), value: nullable.descriptor}));
+        });
+
         for (const cls of sourceFile.getClasses()) {
             if (!cls.getImplements().some((impl) => impl.getText().includes('MigrationInterface'))) {
                 continue;
@@ -305,6 +331,54 @@ const destructiveCall = (call: CallExpression): string | null => {
         return 'dropColumn() in up() destroys data';
     }
     return null;
+};
+
+const NOT_NULL = /\bnot\s+null\b/i;
+const HAS_DEFAULT = /\bdefault\b/i;
+const AUTO_FILLED = /\b(auto_increment|generated|serial)\b/i;
+
+// Raw ADD COLUMN that is NOT NULL and has no DEFAULT (and is not auto-filled).
+const nullableNoDefault = (sql: string): string | null => {
+    if (!ADD_COLUMN.test(sql) || !NOT_NULL.test(sql)) {
+        return null;
+    }
+    if (HAS_DEFAULT.test(sql) || AUTO_FILLED.test(sql)) {
+        return null;
+    }
+    return 'ADD COLUMN ... NOT NULL without DEFAULT';
+};
+
+// Query-builder addColumn whose TableColumn is explicitly isNullable:false with
+// no default. isNullable is left implicit a lot (TypeORM defaults to NOT NULL),
+// so only an explicit false is treated as a signal — keeps the check low-noise.
+const addColumnNotNullNoDefault = (call: CallExpression): string | null => {
+    const expression = call.getExpression();
+    if (!Node.isPropertyAccessExpression(expression) || expression.getName() !== 'addColumn') {
+        return null;
+    }
+    const options = tableColumnOptions(call.getArguments()[1]);
+    if (options === undefined) {
+        return null;
+    }
+    const isNullable = options.getProperty('isNullable');
+    const explicitlyNotNull = isNullable !== undefined && Node.isPropertyAssignment(isNullable) && isNullable.getInitializerIfKind(SyntaxKind.FalseKeyword) !== undefined;
+    if (!explicitlyNotNull || options.getProperty('default') !== undefined) {
+        return null;
+    }
+    return 'addColumn() with isNullable:false and no default';
+};
+
+// The column options are the object literal in `new TableColumn({...})` (or a
+// bare object literal passed directly).
+const tableColumnOptions = (argument: Node | undefined): ObjectLiteralExpression | undefined => {
+    if (argument === undefined) {
+        return undefined;
+    }
+    if (Node.isNewExpression(argument)) {
+        const inner = argument.getArguments()[0];
+        return inner !== undefined && Node.isObjectLiteralExpression(inner) ? inner : undefined;
+    }
+    return Node.isObjectLiteralExpression(argument) ? argument : undefined;
 };
 
 // The programmatic TypeORM query-builder equivalents. Both take the existence

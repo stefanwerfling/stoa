@@ -30,6 +30,8 @@
     { "file": "EagerRelation.ts", "rule": "R-ORM-EAGER-RELATION", "symbol": "tags" },
     { "file": "EagerRelation.ts", "rule": "R-ORM-EAGER-RELATION", "symbol": "messages" },
     { "file": "MigrationDataLoss.ts", "rule": "R-MIGRATION-DATA-LOSS", "symbol": "loss#0" },
-    { "file": "MigrationDataLoss.ts", "rule": "R-MIGRATION-DATA-LOSS", "symbol": "loss#1" }
+    { "file": "MigrationDataLoss.ts", "rule": "R-MIGRATION-DATA-LOSS", "symbol": "loss#1" },
+    { "file": "MigrationNullable.ts", "rule": "R-ORM-NULLABLE-NO-DEFAULT", "symbol": "nullable#0" },
+    { "file": "MigrationNullable.ts", "rule": "R-ORM-NULLABLE-NO-DEFAULT", "symbol": "nullable#1" }
   ]
 }

@@ -33,7 +33,7 @@ stoa eval <pfad> --expected <datei> [--format markdown|json]
 - `knowledge/` und `rules/` werden relativ zum installierten Paket aufgelöst —
   die CLI läuft nach `npm link`/Install aus jedem Verzeichnis.
 
-## Regelkatalog (19)
+## Regelkatalog (20)
 
 Deklarative Regeln (`rules/default/*.json`), Default aktiv:
 
@@ -53,6 +53,7 @@ Deklarative Regeln (`rules/default/*.json`), Default aktiv:
 | R-ORM-SYNC-WITH-MIGRATIONS | marcus.judgment | Belegbarkeit, Robustheit | TS/JS |
 | R-ORM-ENTITY-NO-PK | marcus.judgment | Robustheit, Belegbarkeit | TS/JS (`@Entity`-Klassen) |
 | R-ORM-EAGER-RELATION | marcus.control | Seiteneffekt-Kontrolle, Robustheit | TS/JS (`@Entity`-Relationen) |
+| R-ORM-NULLABLE-NO-DEFAULT | marcus.obstacle | Robustheit, Fehlerbehandlung | TS/JS (NOT-NULL-Add im `up()`) |
 | R-MIGRATION-UNGUARDED-DDL | marcus.obstacle | Robustheit, Fehlerbehandlung | TS/JS (nur Migrationsdateien) |
 | R-MIGRATION-NO-DOWN | marcus.judgment | Robustheit, Belegbarkeit | TS/JS (nur Migrationsdateien) |
 | R-MIGRATION-DATA-LOSS | marcus.judgment | Robustheit, Belegbarkeit | TS/JS (Drops im `up()`) |
@@ -74,12 +75,13 @@ Alle acht Qualitätsdimensionen haben mindestens eine Regel.
 `ast.emptyCatch`, `ast.catchSwallowsError`, `deps.import`, `deps.importUnused`,
 `deps.importDeep`, `deps.export`, `deps.importName`, `orm.synchronizeEnabled`,
 `orm.syncWithMigrations`, `orm.entityNoPrimaryKey`, `orm.eagerRelation`,
-`migration.unguardedDdl`, `migration.noDown`, `migration.dataLoss`, sowie
-(opt-in) `external.tsc` und `external.floatingPromise`.
+`migration.unguardedDdl`, `migration.noDown`, `migration.dataLoss`,
+`migration.nullableNoDefault`, sowie (opt-in) `external.tsc` und
+`external.floatingPromise`.
 
 ## Qualitätssicherung
 
-- **65 node:test-Fälle** grün (Regeln pos./neg., Extraktion, Schema-Validierung,
+- **66 node:test-Fälle** grün (Regeln pos./neg., Extraktion, Schema-Validierung,
   i18n, Determinismus, SARIF, Eval, Semantik-Groundedness).
 - **Golden-Korpus** (`test/corpus/`, TS+PHP) mit Ground-Truth; Eval derzeit
   **Precision 100 % · Recall 100 %**. Precision-Gate je Regel (AC-5).

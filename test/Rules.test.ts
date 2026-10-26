@@ -213,6 +213,21 @@ test('R-MIGRATION-DATA-LOSS flags drops in up() (even guarded), not drops in dow
     assert.equal(downDrop.length, 0, 'a DROP TABLE in down() reverses a create and is expected');
 });
 
+test('R-ORM-NULLABLE-NO-DEFAULT flags NOT NULL columns with no default, raw and builder', () => {
+    const risky = analyzePath(join(root, 'test', 'corpus', 'project', 'MigrationNullable.ts')).filter(
+        (f) => f.rule.id === 'R-ORM-NULLABLE-NO-DEFAULT'
+    );
+    assert.equal(risky.length, 2, 'raw ADD COLUMN NOT NULL + addColumn isNullable:false');
+    assert.equal(risky[0]?.interpretation.principles[0]?.id, 'marcus.obstacle');
+    assert.ok(risky.some((f) => f.observation.statement.includes('ADD COLUMN')));
+    assert.ok(risky.some((f) => f.observation.statement.includes('addColumn()')));
+
+    const fine = analyzePath(join(root, 'test', 'fixtures', 'migration', 'NullableOk.ts')).filter(
+        (f) => f.rule.id === 'R-ORM-NULLABLE-NO-DEFAULT'
+    );
+    assert.equal(fine.length, 0, 'NOT NULL DEFAULT, a nullable column and isNullable:true are all fine');
+});
+
 test('findings carry observation evidence and are deterministic', () => {
     const a = analyzePath(join(fixtures, 'Complex.ts'));
     const b = analyzePath(join(fixtures, 'Complex.ts'));
