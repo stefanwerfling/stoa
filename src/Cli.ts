@@ -9,7 +9,7 @@ const USAGE = [
     'stoa – Stoic Code Analysis Engine',
     '',
     'Usage:',
-    '  stoa analyze <path> [--format markdown|json] [--config <file>] [--knowledge <dir>]',
+    '  stoa analyze <path> [--format markdown|json] [--config <file>] [--knowledge <dir>] [--rules <dir>]',
     ''
 ].join('\n');
 
@@ -20,6 +20,7 @@ const main = (): number => {
             format: {type: 'string', default: 'markdown'},
             config: {type: 'string'},
             knowledge: {type: 'string'},
+            rules: {type: 'string'},
             help: {type: 'boolean', default: false}
         }
     });
@@ -37,9 +38,10 @@ const main = (): number => {
 
     const rootPath = resolve(target);
     const knowledgeDir = resolve(values.knowledge ?? join(process.cwd(), 'knowledge', 'marcus'));
+    const ruleSetDir = resolve(values.rules ?? join(process.cwd(), 'rules', 'default'));
     const config = loadConfig(values.config ?? null);
 
-    const {report} = analyze({rootPath, knowledgeDir, config});
+    const {report} = analyze({rootPath, knowledgeDir, ruleSetDir, config});
     const output = values.format === 'json' ? toJson(report) : toMarkdown(report);
     process.stdout.write(`${output}\n`);
 

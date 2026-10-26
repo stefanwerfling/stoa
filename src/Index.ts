@@ -5,6 +5,8 @@ export {loadConfig, DEFAULT_CONFIG} from './Config.js';
 export {collectFiles} from './Ingestion.js';
 export {KnowledgeBase} from './knowledge/KnowledgeBase.js';
 export {RuleEngine} from './rules/RuleEngine.js';
+export {RuleSet} from './rules/RuleSet.js';
+export type {Rule, Condition, ConditionGroup} from './rules/RuleTypes.js';
 export {AdapterRegistry} from './analysis/AdapterRegistry.js';
 export {TypeScriptAdapter} from './analysis/TypeScriptAdapter.js';
 export type {FileRef, LanguageAdapter, ParseResult, ProjectContext} from './analysis/LanguageAdapter.js';

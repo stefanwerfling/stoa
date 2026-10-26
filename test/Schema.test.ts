@@ -9,28 +9,45 @@ const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, '..');
 const schemasDir = join(root, 'schemas');
 const principlesDir = join(root, 'knowledge', 'marcus', 'principles');
+const rulesDir = join(root, 'rules', 'default');
 
 const loadJson = (path: string): unknown => JSON.parse(readFileSync(path, 'utf8'));
 
-const buildValidator = () => {
+const buildAjv = (): Ajv2020 => {
     const ajv = new Ajv2020({allErrors: true, strict: false});
     for (const name of ['fact.schema.json', 'principle.schema.json', 'finding.schema.json', 'rule.schema.json']) {
         ajv.addSchema(loadJson(join(schemasDir, name)) as object);
     }
-    const validate = ajv.getSchema('https://stoa.dev/schemas/principle.schema.json');
+    return ajv;
+};
+
+const getValidator = (ajv: Ajv2020, id: string) => {
+    const validate = ajv.getSchema(id);
     if (validate === undefined) {
-        throw new Error('principle schema failed to compile');
+        throw new Error(`schema failed to compile: ${id}`);
     }
     return validate;
 };
 
 test('all principle files validate against principle.schema.json', () => {
-    const validate = buildValidator();
+    const validate = getValidator(buildAjv(), 'https://stoa.dev/schemas/principle.schema.json');
     const files = readdirSync(principlesDir).filter((name) => name.endsWith('.json'));
     assert.ok(files.length >= 6, 'expected at least 6 principle files');
 
     for (const file of files) {
         const data = loadJson(join(principlesDir, file));
+        const ok = validate(data);
+        assert.ok(ok, `${file} is invalid: ${JSON.stringify(validate.errors)}`);
+    }
+});
+
+test('all rule files validate against rule.schema.json', () => {
+    const validate = getValidator(buildAjv(), 'https://stoa.dev/schemas/rule.schema.json');
+    const files = readdirSync(rulesDir).filter((name) => name.endsWith('.json'));
+    assert.ok(files.length >= 4, 'expected at least 4 rule files');
+
+    for (const file of files) {
+        const data = loadJson(join(rulesDir, file));
         const ok = validate(data);
         assert.ok(ok, `${file} is invalid: ${JSON.stringify(validate.errors)}`);
     }

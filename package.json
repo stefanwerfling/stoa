@@ -11,7 +11,8 @@
   "files": [
     "dist/",
     "schemas/",
-    "knowledge/"
+    "knowledge/",
+    "rules/"
   ],
   "engines": {
     "node": ">=20"

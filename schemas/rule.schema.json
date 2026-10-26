@@ -91,6 +91,20 @@
       }
     },
     "message": { "type": "string", "minLength": 1 },
+    "rationale": { "type": "string" },
+    "remediation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["suggestion"],
+      "properties": {
+        "suggestion": { "type": "string", "minLength": 1 },
+        "drawbacks": { "type": "string" }
+      }
+    },
+    "missingContext": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
     "remediationRef": { "type": "string" },
     "tests": { "type": "string", "minLength": 1 }
   },

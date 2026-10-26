@@ -68,8 +68,9 @@ const LOGICAL_OPERATORS: ReadonlySet<SyntaxKind> = new Set([
 export const extractFacts = (sourceFile: SourceFile, info: AdapterInfo): Fact[] => {
     const facts: Fact[] = [];
     const filePath = sourceFile.getFilePath();
+    const build = factBuilder(info, filePath);
 
-    facts.push(buildFact(info, filePath, 'file.lineCount', 'file', undefined, fileRange(sourceFile), lineCount(sourceFile)));
+    facts.push(build({kind: 'file.lineCount', kindOf: 'file', range: fileRange(sourceFile), value: lineCount(sourceFile)}));
 
     for (const fn of functionLikeNodes(sourceFile)) {
         const body = functionBody(fn);
@@ -78,37 +79,33 @@ export const extractFacts = (sourceFile: SourceFile, info: AdapterInfo): Fact[] 
         }
 
         const metrics = computeMetrics(fn, body);
-        const name = functionName(fn);
+        const symbol = functionName(fn);
         const kindOf = subjectKindOf(fn);
         const range = rangeOf(sourceFile, fn);
 
-        facts.push(buildFact(info, filePath, 'metric.cyclomaticComplexity', kindOf, name, range, metrics.cyclomatic));
-        facts.push(buildFact(info, filePath, 'metric.cognitiveComplexity', kindOf, name, range, metrics.cognitive));
-        facts.push(buildFact(info, filePath, 'metric.nestingDepth', kindOf, name, range, metrics.nestingDepth));
-        facts.push(buildFact(info, filePath, 'metric.parameterCount', kindOf, name, range, metrics.parameterCount));
-        facts.push(buildFact(info, filePath, 'metric.functionLength', kindOf, name, range, metrics.lineCount));
+        facts.push(build({kind: 'metric.cyclomaticComplexity', kindOf, symbol, range, value: metrics.cyclomatic}));
+        facts.push(build({kind: 'metric.cognitiveComplexity', kindOf, symbol, range, value: metrics.cognitive}));
+        facts.push(build({kind: 'metric.nestingDepth', kindOf, symbol, range, value: metrics.nestingDepth}));
+        facts.push(build({kind: 'metric.parameterCount', kindOf, symbol, range, value: metrics.parameterCount}));
+        facts.push(build({kind: 'metric.functionLength', kindOf, symbol, range, value: metrics.lineCount}));
+        facts.push(build({kind: 'doc.hasComplexityRationale', kindOf, symbol, range, value: hasComplexityRationale(fn)}));
     }
 
     sourceFile.getDescendantsOfKind(SyntaxKind.CatchClause).forEach((clause, index) => {
         const block = clause.getBlock();
-        const statements = block.getStatements();
-        const empty = statements.length === 0;
+        const empty = block.getStatements().length === 0;
         const hasThrow = block.getDescendantsOfKind(SyntaxKind.ThrowStatement).length > 0;
         const hasCall = block.getDescendantsOfKind(SyntaxKind.CallExpression).length > 0;
         const range = rangeOf(sourceFile, clause);
+        const symbol = `catch#${index}`;
 
-        facts.push(buildFact(info, filePath, 'ast.emptyCatch', 'catch-clause', `catch#${index}`, range, empty));
-        facts.push(
-            buildFact(info, filePath, 'ast.catchSwallowsError', 'catch-clause', `catch#${index}`, range, !hasThrow && !hasCall)
-        );
+        facts.push(build({kind: 'ast.emptyCatch', kindOf: 'catch-clause', symbol, range, value: empty}));
+        facts.push(build({kind: 'ast.catchSwallowsError', kindOf: 'catch-clause', symbol, range, value: !hasThrow && !hasCall}));
     });
 
     sourceFile.getImportDeclarations().forEach((decl, index) => {
-        const value: FactValue = {
-            module: decl.getModuleSpecifierValue(),
-            isTypeOnly: decl.isTypeOnly()
-        };
-        facts.push(buildFact(info, filePath, 'deps.import', 'import', `import#${index}`, rangeOf(sourceFile, decl), value));
+        const value: FactValue = {module: decl.getModuleSpecifierValue(), isTypeOnly: decl.isTypeOnly()};
+        facts.push(build({kind: 'deps.import', kindOf: 'import', symbol: `import#${index}`, range: rangeOf(sourceFile, decl), value}));
     });
 
     return facts;
@@ -174,24 +171,31 @@ const visit = (node: Node, nesting: number, state: MetricState): void => {
     });
 };
 
-const buildFact = (
-    info: AdapterInfo,
-    filePath: string,
-    kind: string,
-    kindOf: SubjectKind,
-    symbol: string | undefined,
-    range: SourceRange,
-    value: FactValue
-): Fact => {
-    const subject = symbol === undefined ? {file: filePath, kindOf, range} : {file: filePath, symbol, kindOf, range};
-    return {
-        id: `fact:${filePath}:${kind}:${symbol ?? 'file'}:${range.startLine}`,
-        kind,
-        subject,
-        value,
-        evidence: [{source: 'ast', detail: kind}],
-        certainty: 'syntactic',
-        producedBy: {adapter: info.id, version: info.version}
+interface FactSpec {
+    kind: string;
+    kindOf: SubjectKind;
+    symbol?: string;
+    range: SourceRange;
+    value: FactValue;
+}
+
+// Returns a builder bound to the file/adapter, so each fact is described by a
+// single spec object rather than a long positional argument list.
+const factBuilder = (info: AdapterInfo, filePath: string) => {
+    return (spec: FactSpec): Fact => {
+        const subject =
+            spec.symbol === undefined
+                ? {file: filePath, kindOf: spec.kindOf, range: spec.range}
+                : {file: filePath, symbol: spec.symbol, kindOf: spec.kindOf, range: spec.range};
+        return {
+            id: `fact:${filePath}:${spec.kind}:${spec.symbol ?? 'file'}:${spec.range.startLine}`,
+            kind: spec.kind,
+            subject,
+            value: spec.value,
+            evidence: [{source: 'ast', detail: spec.kind}],
+            certainty: 'syntactic',
+            producedBy: {adapter: info.id, version: info.version}
+        };
     };
 };
 
@@ -219,6 +223,14 @@ const functionName = (fn: Node): string => {
 
 const subjectKindOf = (fn: Node): SubjectKind => {
     return fn.getKind() === SyntaxKind.MethodDeclaration ? 'method' : 'function';
+};
+
+// An explicit, inline opt-out marker lets a team accept complexity it judges
+// necessary — the "context beats threshold" rule in action (see docs rule-model).
+const RATIONALE_MARKER = 'stoa:allow-complexity';
+
+const hasComplexityRationale = (fn: Node): boolean => {
+    return fn.getLeadingCommentRanges().some((comment) => comment.getText().includes(RATIONALE_MARKER));
 };
 
 const rangeOf = (sourceFile: SourceFile, node: Node): SourceRange => {

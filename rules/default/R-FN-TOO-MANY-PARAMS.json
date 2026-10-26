@@ -1,0 +1,26 @@
+{
+  "id": "R-FN-TOO-MANY-PARAMS",
+  "version": "1.0.0",
+  "title": "Too many parameters",
+  "feature": "metric.parameterCount",
+  "appliesTo": ["function", "method"],
+  "principles": ["marcus.purpose"],
+  "dimensions": ["responsibility-boundaries", "understandability"],
+  "trigger": {
+    "all": [{ "fact": "metric.parameterCount", "op": ">=", "value": 5 }]
+  },
+  "requiredEvidence": ["metric.parameterCount"],
+  "severity": {
+    "base": "low",
+    "escalateWhen": [{ "fact": "metric.parameterCount", "op": ">=", "value": 8, "to": "medium" }]
+  },
+  "confidence": { "base": 0.6, "capBy": "certainty" },
+  "message": "{symbol} takes {value} parameters.",
+  "rationale": "A long parameter list often signals more than one responsibility bundled together (marcus.purpose).",
+  "remediation": {
+    "suggestion": "Group related parameters into an object, or split the unit by responsibility.",
+    "drawbacks": "A parameter object can hide required inputs; not every long list is a defect."
+  },
+  "missingContext": ["Whether the parameters form one cohesive concept needs domain knowledge."],
+  "tests": "test/Rules.test.ts"
+}

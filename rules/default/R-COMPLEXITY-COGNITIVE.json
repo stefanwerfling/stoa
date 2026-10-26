@@ -1,0 +1,32 @@
+{
+  "id": "R-COMPLEXITY-COGNITIVE",
+  "version": "1.0.0",
+  "title": "Excessive cognitive complexity",
+  "feature": "metric.cognitiveComplexity",
+  "appliesTo": ["function", "method"],
+  "principles": ["marcus.simplicity"],
+  "dimensions": ["complexity", "understandability"],
+  "trigger": {
+    "all": [{ "fact": "metric.cognitiveComplexity", "op": ">=", "value": 15 }]
+  },
+  "requiredEvidence": ["metric.cognitiveComplexity", "metric.nestingDepth"],
+  "suppressWhen": {
+    "any": [{ "fact": "doc.hasComplexityRationale", "op": "==", "value": true }]
+  },
+  "severity": {
+    "base": "medium",
+    "escalateWhen": [
+      { "fact": "metric.cognitiveComplexity", "op": ">=", "value": 30, "to": "high" },
+      { "fact": "metric.nestingDepth", "op": ">=", "value": 5, "to": "high" }
+    ]
+  },
+  "confidence": { "base": 0.8, "capBy": "certainty" },
+  "message": "Cognitive complexity is {value} in {symbol}.",
+  "rationale": "Complexity beyond what the task requires burdens understanding (marcus.simplicity, 4.24: do what is necessary).",
+  "remediation": {
+    "suggestion": "Extract helpers, reduce nesting, or document that the complexity is necessary.",
+    "drawbacks": "Over-extraction can fragment logic; keep inherently complex algorithms together."
+  },
+  "missingContext": ["Whether the complexity is sachlich necessary is not decidable statically; low-confidence signal."],
+  "tests": "test/Rules.test.ts"
+}

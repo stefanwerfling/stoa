@@ -6,9 +6,11 @@ provides the *interpretation frame* for findings that are always grounded in a
 concrete technical observation — the core is classic static analysis, not an LLM.
 An LLM is an optional, switchable adapter.
 
-> **Status:** concept phase complete; the MVP is being built. M1 (project
-> skeleton, schemas, knowledge-base data, runnable CLI) is in place. The
-> deterministic rule set lands in M3. See [docs/en/roadmap.md](docs/en/roadmap.md).
+> **Status:** concept phase complete; MVP in progress. Done: M1 (skeleton,
+> schemas, knowledge base, CLI), M2 (real ts-morph fact extraction), M3 (the
+> deterministic rule engine with its first rules). Next: a golden-corpus
+> evaluation, a dependency-cycle rule and the PHP adapter. See
+> [docs/en/roadmap.md](docs/en/roadmap.md).
 
 ## Documentation
 

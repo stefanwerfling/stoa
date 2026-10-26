@@ -1,0 +1,23 @@
+{
+  "id": "R-ERR-SWALLOWED",
+  "version": "1.0.0",
+  "title": "Swallowed error",
+  "feature": "ast.catchSwallowsError",
+  "appliesTo": ["catch-clause"],
+  "principles": ["marcus.obstacle"],
+  "dimensions": ["error-handling", "robustness"],
+  "trigger": {
+    "all": [{ "fact": "ast.catchSwallowsError", "op": "==", "value": true }]
+  },
+  "requiredEvidence": ["ast.catchSwallowsError"],
+  "severity": { "base": "high" },
+  "confidence": { "base": 0.9, "capBy": "certainty" },
+  "message": "catch clause neither rethrows, handles nor logs the error.",
+  "rationale": "A swallowed error hides the obstacle instead of turning it into information (marcus.obstacle, 5.20).",
+  "remediation": {
+    "suggestion": "Log, handle specifically, or rethrow; comment an intentionally ignored case.",
+    "drawbacks": "Extra logging paths; for a genuinely expected empty case a short comment suffices."
+  },
+  "missingContext": ["Unknown whether the empty/ignored case is intentional (no comment present)."],
+  "tests": "test/Rules.test.ts"
+}

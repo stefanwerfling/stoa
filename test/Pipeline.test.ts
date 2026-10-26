@@ -10,9 +10,10 @@ const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, '..');
 const fixture = join(here, 'fixtures', 'sample');
 const knowledgeDir = join(root, 'knowledge', 'marcus');
+const ruleSetDir = join(root, 'rules', 'default');
 
 test('analyze produces a report with versions, coverage and line-count facts', () => {
-    const {report, facts} = analyze({rootPath: fixture, knowledgeDir, config: DEFAULT_CONFIG});
+    const {report, facts} = analyze({rootPath: fixture, knowledgeDir, ruleSetDir, config: DEFAULT_CONFIG});
     assert.equal(report.versions.engine, '0.1.0');
     assert.equal(report.versions.adapters.typescript, '0.2.0');
     assert.ok(report.coverage.filesAnalyzed >= 2, 'both fixture files analyzed');
@@ -20,8 +21,8 @@ test('analyze produces a report with versions, coverage and line-count facts', (
 });
 
 test('analysis is deterministic (byte-identical findings across two runs)', () => {
-    const a = analyze({rootPath: fixture, knowledgeDir, config: DEFAULT_CONFIG});
-    const b = analyze({rootPath: fixture, knowledgeDir, config: DEFAULT_CONFIG});
+    const a = analyze({rootPath: fixture, knowledgeDir, ruleSetDir, config: DEFAULT_CONFIG});
+    const b = analyze({rootPath: fixture, knowledgeDir, ruleSetDir, config: DEFAULT_CONFIG});
     assert.equal(JSON.stringify(a.report.findings), JSON.stringify(b.report.findings));
     assert.equal(JSON.stringify(a.facts), JSON.stringify(b.facts));
 });

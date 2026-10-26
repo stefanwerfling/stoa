@@ -1,0 +1,28 @@
+{
+  "id": "R-DEEP-NESTING",
+  "version": "1.0.0",
+  "title": "Deep nesting",
+  "feature": "metric.nestingDepth",
+  "appliesTo": ["function", "method"],
+  "principles": ["marcus.simplicity"],
+  "dimensions": ["complexity", "understandability"],
+  "trigger": {
+    "all": [{ "fact": "metric.nestingDepth", "op": ">=", "value": 4 }]
+  },
+  "requiredEvidence": ["metric.nestingDepth"],
+  "suppressWhen": {
+    "any": [{ "fact": "doc.hasComplexityRationale", "op": "==", "value": true }]
+  },
+  "severity": {
+    "base": "medium",
+    "escalateWhen": [{ "fact": "metric.nestingDepth", "op": ">=", "value": 6, "to": "high" }]
+  },
+  "confidence": { "base": 0.75, "capBy": "certainty" },
+  "message": "Nesting depth is {value} in {symbol}.",
+  "rationale": "Deep nesting raises cognitive load beyond necessity (marcus.simplicity).",
+  "remediation": {
+    "suggestion": "Use early returns / guard clauses or extract inner blocks.",
+    "drawbacks": "Guard-clause refactors can scatter logic if overused."
+  },
+  "tests": "test/Rules.test.ts"
+}
