@@ -1,5 +1,5 @@
 import {Node, SyntaxKind} from 'ts-morph';
-import type {ImportDeclaration, PropertyAssignment, SourceFile} from 'ts-morph';
+import type {CallExpression, ImportDeclaration, PropertyAssignment, SourceFile} from 'ts-morph';
 import type {Fact, SourceRange, SubjectKind} from '../../Types.js';
 import {factBuilder, type AdapterInfo} from '../FactBuilder.js';
 import {isDeepImport} from '../ImportPath.js';
@@ -159,19 +159,31 @@ export const extractFacts = (sourceFile: SourceFile, info: AdapterInfo): Fact[] 
     });
 
     if (isMigrationFile(sourceFile)) {
-        const literals = [
+        const candidates: {node: Node; descriptor: string}[] = [];
+
+        for (const literal of [
             ...sourceFile.getDescendantsOfKind(SyntaxKind.StringLiteral),
             ...sourceFile.getDescendantsOfKind(SyntaxKind.NoSubstitutionTemplateLiteral)
-        ].sort((a, b) => a.getStart() - b.getStart());
-        let ddlIndex = 0;
-        for (const literal of literals) {
+        ]) {
             const descriptor = unguardedDdl(literal.getLiteralText());
-            if (descriptor === null) {
-                continue;
+            if (descriptor !== null) {
+                candidates.push({node: literal, descriptor});
             }
-            facts.push(build({kind: 'migration.unguardedDdl', kindOf: 'statement', symbol: `ddl#${ddlIndex}`, range: rangeOf(sourceFile, literal), value: descriptor}));
-            ddlIndex += 1;
         }
+
+        for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+            const descriptor = unguardedQueryBuilderDdl(call);
+            if (descriptor !== null) {
+                candidates.push({node: call, descriptor});
+            }
+        }
+
+        // One stable numbering across both raw SQL and the query-builder API,
+        // ordered by source position so symbols stay deterministic.
+        candidates.sort((a, b) => a.node.getStart() - b.node.getStart());
+        candidates.forEach((candidate, index) => {
+            facts.push(build({kind: 'migration.unguardedDdl', kindOf: 'statement', symbol: `ddl#${index}`, range: rangeOf(sourceFile, candidate.node), value: candidate.descriptor}));
+        });
     }
 
     return facts;
@@ -196,6 +208,27 @@ const unguardedDdl = (sql: string): string | null => {
         return 'DROP TABLE without IF EXISTS';
     }
     return null;
+};
+
+// The programmatic TypeORM query-builder equivalents. Both take the existence
+// guard as their second argument — createTable(table, ifNotExist?) and
+// dropTable(table, ifExist?) — so a call with no second argument, or an
+// explicit `false`, runs the DDL unconditionally. A non-literal second
+// argument is given the benefit of the doubt to keep the check conservative.
+const unguardedQueryBuilderDdl = (call: CallExpression): string | null => {
+    const expression = call.getExpression();
+    if (!Node.isPropertyAccessExpression(expression)) {
+        return null;
+    }
+    const method = expression.getName();
+    if (method !== 'createTable' && method !== 'dropTable') {
+        return null;
+    }
+    const guard = call.getArguments()[1];
+    if (guard !== undefined && guard.getKind() !== SyntaxKind.FalseKeyword) {
+        return null;
+    }
+    return method === 'createTable' ? 'createTable() without the ifNotExist argument' : 'dropTable() without the ifExist argument';
 };
 
 // Detects a TypeORM-style `synchronize: true` (or `… ?? true`, which defaults to

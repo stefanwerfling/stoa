@@ -126,6 +126,15 @@ test('R-MIGRATION-UNGUARDED-DDL flags unguarded CREATE/DROP TABLE, only in migra
     assert.equal(plain.length, 0, 'a CREATE TABLE string outside a migration file is not the concern');
 });
 
+test('R-MIGRATION-UNGUARDED-DDL flags createTable/dropTable without the existence guard', () => {
+    const builder = analyzePath(join(root, 'test', 'corpus', 'project', 'MigrationBuilder.ts')).filter(
+        (f) => f.rule.id === 'R-MIGRATION-UNGUARDED-DDL'
+    );
+    assert.equal(builder.length, 2, 'unguarded createTable + dropTable; createTable(..., true) is guarded');
+    assert.ok(builder.some((f) => f.observation.statement.includes('createTable()')));
+    assert.ok(builder.some((f) => f.observation.statement.includes('dropTable()')));
+});
+
 test('findings carry observation evidence and are deterministic', () => {
     const a = analyzePath(join(fixtures, 'Complex.ts'));
     const b = analyzePath(join(fixtures, 'Complex.ts'));
