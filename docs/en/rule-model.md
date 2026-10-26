@@ -1,0 +1,178 @@
+# Rule Model – Definition & Execution of the Rule Engine
+
+> Status: Concept phase. Defines how rules are structured, how they
+> are executed deterministically and how they are coupled to principles.
+> Data basis: Facts from [architecture.md](./architecture.md#a-source-analysis).
+
+## 1. Principles
+
+- **Rules check technically, not philosophically.** A rule evaluates facts.
+  The philosophical interpretation is added via the referenced principles
+  (separation from [knowledge-model.md](./knowledge-model.md)).
+- **Determinism.** Same facts + same rule version + same config ⇒
+  identical findings. No clock, no randomness, no network dependency.
+- **Facts instead of AST.** Rules only see the neutral fact schema, never the
+  raw language-specific AST → language independence, easy testability.
+- **Context beats threshold.** A rule must never evaluate a metric on its own as a
+  deficiency; it must take context/exception signals into account (guiding principle L4).
+- **No style as deficiency.** Rules that merely reflect subjective style preference
+  are impermissible (non-goal N4).
+
+## 2. Fact Schema (Input of the Rules)
+
+Facts are normalized, language-neutral observations. Minimal form:
+
+```jsonc
+{
+  "id": "fact:...",
+  "kind": "metric.cognitiveComplexity", // stable fact kind
+  "subject": {                           // what the fact refers to
+    "file": "src/user.ts",
+    "symbol": "formatAddress",
+    "kindOf": "function",
+    "range": { "startLine": 10, "startCol": 1, "endLine": 48, "endCol": 2 }
+  },
+  "value": 25,                           // depending on kind: number | bool | string | struct
+  "evidence": [                          // derived from
+    { "source": "ast", "detail": "nesting depth 5" }
+  ],
+  "certainty": "syntactic",              // syntactic | semantic-heuristic | external-tool
+  "producedBy": { "adapter": "typescript", "version": "0.1.0" }
+}
+```
+
+`certainty` is decisive: it limits the maximum finding confidence
+(a purely heuristic fact cannot trigger a high-confidence rule).
+
+## 3. Rule Definition
+
+A rule must, per the mandate, specify: *which feature*, *which condition*,
+*which principles*, *which evidence*, *when no finding*, *which severity/
+certainty*. Model:
+
+```jsonc
+{
+  "id": "R-COMPLEXITY-COGNITIVE",
+  "version": "1.0.0",
+  "title": "Excessive cognitive complexity",
+  "feature": "metric.cognitiveComplexity",   // examined feature (fact kind)
+  "appliesTo": ["function", "method"],
+  "principles": ["marcus.simplicity"],         // principle references (KB)
+  "dimensions": ["complexity", "understandability"],
+
+  "trigger": {                                 // when a finding is triggered
+    "all": [
+      { "fact": "metric.cognitiveComplexity", "op": ">=", "value": 15 }
+    ]
+  },
+
+  "requiredEvidence": [                         // without these facts, no finding
+    "metric.cognitiveComplexity", "metric.nestingDepth"
+  ],
+
+  "suppressWhen": {                             // when NO finding is justified
+    "any": [
+      { "fact": "flag.generatedCode", "op": "==", "value": true },
+      { "fact": "flag.hasTests", "op": "==", "value": true,
+        "and": [{ "fact": "metric.cognitiveComplexity", "op": "<", "value": 30 }] },
+      { "fact": "shape.isFlatSwitch", "op": "==", "value": true }
+    ]
+  },
+
+  "severity": {                                 // derived, not fixed
+    "base": "medium",
+    "escalateWhen": [
+      { "fact": "metric.cognitiveComplexity", "op": ">=", "value": 30, "to": "high" },
+      { "fact": "metric.churn", "op": ">=", "value": 10, "to": "high" }
+    ]
+  },
+
+  "confidence": {
+    "base": 0.7,
+    "capBy": "certainty",                       // syntactic→1.0, heuristic→0.6, external→0.9
+    "reduceWhen": [
+      { "fact": "doc.hasComplexityRationale", "op": "==", "value": true, "by": 0.3 }
+    ]
+  },
+
+  "message": "Cognitive complexity {value} in {symbol} impedes understanding.",
+  "remediationRef": "fix:reduce-cognitive-complexity",
+  "tests": "tests/rules/R-COMPLEXITY-COGNITIVE/"   // mandatory: test catalog
+}
+```
+
+### Field Meaning (Brief)
+| Field | Purpose |
+|------|-------|
+| `feature` / `requiredEvidence` | which feature; without the named facts **no** run (avoids guessing) |
+| `trigger` | conditions that produce a candidate |
+| `suppressWhen` | explicit non-finding conditions (context!) |
+| `severity` / `confidence` | derived **separately**; confidence capped by `certainty` |
+| `principles` / `dimensions` | coupling to KB & evaluation model |
+| `tests` | mandatory test catalog per rule |
+
+## 4. Execution Model
+
+```mermaid
+flowchart TB
+    FS[(Fact Store)] --> SEL[1. Rule selection\nby feature/requiredEvidence]
+    SEL --> TRG[2. check trigger]
+    TRG -->|no match| DROP[discard]
+    TRG -->|match| SUP[3. check suppressWhen]
+    SUP -->|suppressed| DROP
+    SUP -->|remains| SEV[4. derive severity]
+    SEV --> CONF[5. derive confidence\n+ cap by certainty]
+    CONF --> EMIT[6. create finding\n+ attach principle interpretation]
+    EMIT --> DEDUP[7. de-duplication\nper location/problem]
+```
+
+**Properties:**
+- **Order-independent**: rules only read the fact store; no
+  order dependency between rules (pure function `facts → findings`).
+- **Stable sorting** of the findings (file, line, rule ID) for byte-stable
+  output.
+- **No rule may produce facts** – only read (layer rule).
+
+## 5. Example Rule Set (MVP)
+
+| Rule ID | Feature (Facts) | Principle | Dimension | Confidence character |
+|----------|-----------------|---------|-----------|---------------------|
+| `R-COMPLEXITY-COGNITIVE` | cognitive/cyclomatic complexity, nesting | `marcus.simplicity` | Complexity | syntactic, high |
+| `R-RESP-MIXED-CONCERNS` | layer/namespace mixing per unit | `marcus.purpose` | Responsibility boundaries | heuristic, medium |
+| `R-SIDEEFFECT-IN-PURE` | I/O/global/clock/randomness in "pure"-looking unit | `marcus.control` | Side-effect control | heuristic, medium |
+| `R-ERR-SWALLOWED` | empty/trivial catch, swallowed promise | `marcus.obstacle` | Error handling | syntactic, high |
+| `R-DEP-CYCLE` | cycle in the module graph | `marcus.cooperation` | Dependencies | syntactic, high |
+| `R-DEP-UNUSED` | unused import | `marcus.cooperation` | Dependencies | syntactic, high |
+| `R-ARCH-LAYER-VIOLATION` | import against declared layer rule | `marcus.judgment` | Provability | syntactic, high (only with layer rules) |
+
+> Pure style rules (indentation, quotation marks, name length) are
+> **excluded**. Such checks remain with ESLint/CS-Fixer.
+
+## 6. Versioning & Determinism Guarantees
+
+- **Rule version (semver)** per rule; **rule set version** (`default@1`) bundles
+  rules + thresholds. Reports stamp both (reproducibility).
+- Thresholds (`value` limits) are **part of the rule version** – a
+  threshold change is a version change, not a silent config drift.
+- **Config overrides** are allowed, but are disclosed in the report (so that
+  "why does my result differ?" remains answerable).
+
+## 7. Testability (Mandatory per Rule)
+
+Every rule has a test catalog with at least:
+- **≥ 1 positive fixture** (correctly triggers a finding),
+- **≥ 1 negative fixture** (correctly triggers *no* finding — checks
+  `suppressWhen`/counterexamples),
+- **Snapshot** of the produced finding (fields, severity, confidence).
+
+See [evaluation.md](./evaluation.md#3-tests-und-referenzkorpus).
+
+## 8. Limits of the Rule Model
+
+- Rules are only as good as the facts. Missing interprocedural data flows
+  limit, for example, `R-SIDEEFFECT-IN-PURE`.
+- Context rules (`suppressWhen`) need reliable context facts
+  (tests present? generated? documented?) — their quality must itself be tested.
+- Semantic judgments ("is the abstraction really superfluous?") do **not** belong in
+  deterministic rules, but in the optional LLM layer (as a separately
+  marked, evidence-required addition).
