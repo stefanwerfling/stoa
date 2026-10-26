@@ -116,9 +116,94 @@ export const extractFacts = (sourceFile: SourceFile, info: AdapterInfo): Fact[] 
         if (isDeepImport(module, '/')) {
             facts.push(build({kind: 'deps.importDeep', kindOf: 'import', symbol, range, value: module}));
         }
+
+        for (const binding of importedBindings(decl)) {
+            facts.push(build({kind: 'deps.importName', kindOf: 'import', symbol, range, value: {module, name: binding.name, kind: binding.kind}}));
+        }
     });
 
+    for (const exported of collectExportNames(sourceFile)) {
+        facts.push(build({kind: 'deps.export', kindOf: 'module', symbol: exported.name, range: exported.range, value: exported.name}));
+    }
+
     return facts;
+};
+
+interface ImportBinding {
+    name: string;
+    kind: 'named' | 'default' | 'namespace';
+}
+
+// Imported names, mapped to the name as EXPORTED by the target (not the local
+// alias), so a dead-export rule can match uses against exports.
+const importedBindings = (decl: ImportDeclaration): ImportBinding[] => {
+    const bindings: ImportBinding[] = [];
+    if (decl.getDefaultImport() !== undefined) {
+        bindings.push({name: 'default', kind: 'default'});
+    }
+    if (decl.getNamespaceImport() !== undefined) {
+        bindings.push({name: '*', kind: 'namespace'});
+    }
+    for (const named of decl.getNamedImports()) {
+        bindings.push({name: named.getName(), kind: 'named'});
+    }
+    return bindings;
+};
+
+interface ExportedName {
+    name: string;
+    range: SourceRange;
+}
+
+const collectExportNames = (sourceFile: SourceFile): ExportedName[] => {
+    const out: ExportedName[] = [];
+    const add = (name: string, node: Node): void => {
+        out.push({name, range: rangeOf(sourceFile, node)});
+    };
+
+    for (const d of sourceFile.getFunctions()) {
+        if (d.isExported()) {
+            add(d.isDefaultExport() ? 'default' : (d.getName() ?? 'default'), d);
+        }
+    }
+    for (const d of sourceFile.getClasses()) {
+        if (d.isExported()) {
+            add(d.isDefaultExport() ? 'default' : (d.getName() ?? 'default'), d);
+        }
+    }
+    for (const d of sourceFile.getInterfaces()) {
+        if (d.isExported()) {
+            add(d.getName(), d);
+        }
+    }
+    for (const d of sourceFile.getTypeAliases()) {
+        if (d.isExported()) {
+            add(d.getName(), d);
+        }
+    }
+    for (const d of sourceFile.getEnums()) {
+        if (d.isExported()) {
+            add(d.getName(), d);
+        }
+    }
+    for (const statement of sourceFile.getVariableStatements()) {
+        if (statement.isExported()) {
+            for (const declaration of statement.getDeclarations()) {
+                add(declaration.getName(), declaration);
+            }
+        }
+    }
+    for (const exportDeclaration of sourceFile.getExportDeclarations()) {
+        for (const specifier of exportDeclaration.getNamedExports()) {
+            add((specifier.getAliasNode() ?? specifier.getNameNode()).getText(), specifier);
+        }
+    }
+    for (const assignment of sourceFile.getExportAssignments()) {
+        if (!assignment.isExportEquals()) {
+            add('default', assignment);
+        }
+    }
+    return out;
 };
 
 // Non-deterministic APIs: their use makes a unit's output depend on wall-clock /

@@ -1,10 +1,10 @@
-import {basename, dirname, resolve} from 'node:path';
+import {basename} from 'node:path';
 import type {Fact, Finding, PrincipleInterpretationRef} from '../../Types.js';
+import {resolveRelativeImport} from '../../analysis/ImportPath.js';
 import {localize, type LocalizedText} from '../../i18n/Localized.js';
 import type {KnowledgeBase} from '../../knowledge/KnowledgeBase.js';
 import type {ProjectRule, ProjectRuleInput} from '../ProjectRule.js';
 
-const RESOLVABLE_EXTENSIONS: readonly string[] = ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs'] as const;
 const PRINCIPLE_ID = 'marcus.cooperation';
 
 const TEXT = {
@@ -67,7 +67,7 @@ export class DependencyCycleRule implements ProjectRule {
             if (fact.kind !== 'deps.import') {
                 continue;
             }
-            const target = resolveImport(fact.subject.file, (fact.value as unknown as ImportValue).module, analyzedFiles);
+            const target = resolveRelativeImport(fact.subject.file, (fact.value as unknown as ImportValue).module, analyzedFiles);
             if (target !== null && target !== fact.subject.file) {
                 graph.get(fact.subject.file)?.add(target);
             }
@@ -118,30 +118,6 @@ const resolvePrinciple = (knowledgeBase: KnowledgeBase, lang: string): Principle
             rationale: localize(TEXT.rationale, lang)
         }
     ];
-};
-
-const stripExtension = (path: string): string => {
-    for (const ext of RESOLVABLE_EXTENSIONS) {
-        if (path.endsWith(ext)) {
-            return path.slice(0, -ext.length);
-        }
-    }
-    return path;
-};
-
-const resolveImport = (importer: string, specifier: string, analyzedFiles: Set<string>): string | null => {
-    if (!specifier.startsWith('.')) {
-        return null;
-    }
-    const base = resolve(dirname(importer), specifier);
-    const stem = stripExtension(base);
-    const candidates = [base, ...RESOLVABLE_EXTENSIONS.map((ext) => `${stem}${ext}`), ...RESOLVABLE_EXTENSIONS.map((ext) => resolve(stem, `index${ext}`))];
-    for (const candidate of candidates) {
-        if (analyzedFiles.has(candidate)) {
-            return candidate;
-        }
-    }
-    return null;
 };
 
 const isCycle = (component: string[], graph: Map<string, Set<string>>): boolean => {

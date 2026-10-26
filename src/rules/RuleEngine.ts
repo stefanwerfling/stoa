@@ -32,12 +32,11 @@ interface KeyedFinding {
  * rule-model §4 and finding-model §4.
  */
 export class RuleEngine {
-    private readonly projectRules: ProjectRule[] = [new DependencyCycleRule()];
-
     public constructor(
         private readonly knowledgeBase: KnowledgeBase,
         private readonly ruleSet: RuleSet,
-        private readonly lang: string = DEFAULT_LANG
+        private readonly lang: string = DEFAULT_LANG,
+        private readonly projectRules: ProjectRule[] = [new DependencyCycleRule()]
     ) {}
 
     public evaluate(facts: Fact[]): Finding[] {

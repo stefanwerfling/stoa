@@ -22,6 +22,7 @@ type CliValues = {
     semantic?: string;
     lang?: string;
     typecheck?: boolean;
+    'dead-exports'?: boolean;
     help?: boolean;
 };
 
@@ -29,7 +30,7 @@ const USAGE = [
     'stoa – Stoic Code Analysis Engine',
     '',
     'Usage:',
-    '  stoa analyze <path> [--format markdown|json|sarif] [--lang en|de] [--typecheck] [--semantic noop|anthropic] [--config <file>] [--knowledge <dir>] [--rules <dir>]',
+    '  stoa analyze <path> [--format markdown|json|sarif] [--lang en|de] [--typecheck] [--dead-exports] [--semantic noop|anthropic] [--config <file>] [--knowledge <dir>] [--rules <dir>]',
     '  stoa eval <path> --expected <file> [--format markdown|json] [--knowledge <dir>] [--rules <dir>]',
     ''
 ].join('\n');
@@ -65,7 +66,8 @@ const runAnalyze = async (values: CliValues, target: string): Promise<number> =>
         ruleSetDir: ruleSetDirOf(values),
         config: loadConfig(values.config ?? null),
         lang,
-        typecheck: values.typecheck === true
+        typecheck: values.typecheck === true,
+        deadExports: values['dead-exports'] === true
     });
 
     const semanticId = values.semantic ?? 'noop';
@@ -108,6 +110,7 @@ const main = async (): Promise<number> => {
             semantic: {type: 'string'},
             lang: {type: 'string', default: 'en'},
             typecheck: {type: 'boolean', default: false},
+            'dead-exports': {type: 'boolean', default: false},
             help: {type: 'boolean', default: false}
         }
     });

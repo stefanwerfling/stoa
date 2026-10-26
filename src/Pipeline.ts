@@ -6,6 +6,9 @@ import {collectFiles} from './Ingestion.js';
 import {KnowledgeBase} from './knowledge/KnowledgeBase.js';
 import {RuleEngine} from './rules/RuleEngine.js';
 import {RuleSet} from './rules/RuleSet.js';
+import {DependencyCycleRule} from './rules/project/DependencyCycleRule.js';
+import {DeadExportRule} from './rules/project/DeadExportRule.js';
+import type {ProjectRule} from './rules/ProjectRule.js';
 import {ENGINE_VERSION} from './Version.js';
 import type {AnalysisReport, AnalysisResult, Fact, Finding, StoaConfig, VersionStamp} from './Types.js';
 
@@ -18,6 +21,8 @@ export interface AnalyzeOptions {
     lang?: string;
     /** Opt-in: run the TypeScript type checker as an external fact source. */
     typecheck?: boolean;
+    /** Opt-in: flag exports used nowhere in the analyzed set (whole-project scans only). */
+    deadExports?: boolean;
 }
 
 const TS_EXTENSIONS: readonly string[] = ['.ts', '.tsx'] as const;
@@ -34,7 +39,11 @@ export const analyze = (options: AnalyzeOptions): AnalysisResult => {
     const registry = new AdapterRegistry().register(new TypeScriptAdapter()).register(new PhpAdapter());
     const knowledgeBase = KnowledgeBase.loadFromDirectory(options.knowledgeDir, options.config.knowledgeBase);
     const ruleSet = RuleSet.loadFromDirectory(options.ruleSetDir, options.config.ruleSet);
-    const ruleEngine = new RuleEngine(knowledgeBase, ruleSet, options.lang ?? 'en');
+    const projectRules: ProjectRule[] = [new DependencyCycleRule()];
+    if (options.deadExports === true) {
+        projectRules.push(new DeadExportRule());
+    }
+    const ruleEngine = new RuleEngine(knowledgeBase, ruleSet, options.lang ?? 'en', projectRules);
 
     const files = collectFiles(options.rootPath, {includeExtensions: INCLUDE_EXTENSIONS});
 
