@@ -1,0 +1,43 @@
+{
+  "id": "R-WIDE-PUBLIC-SURFACE",
+  "version": "1.0.0",
+  "title": "Wide public surface",
+  "feature": "metric.exportCount",
+  "appliesTo": ["file"],
+  "principles": ["marcus.purpose"],
+  "dimensions": ["responsibility-boundaries", "understandability"],
+  "trigger": {
+    "all": [{ "fact": "metric.exportCount", "op": ">=", "value": 15 }]
+  },
+  "requiredEvidence": ["metric.exportCount"],
+  "severity": {
+    "base": "low",
+    "escalateWhen": [{ "fact": "metric.exportCount", "op": ">=", "value": 30, "to": "medium" }]
+  },
+  "confidence": { "base": 0.6, "capBy": "certainty" },
+  "message": {
+    "en": "Module exposes {value} public exports.",
+    "de": "Modul stellt {value} öffentliche Exporte bereit."
+  },
+  "rationale": {
+    "en": "A large public surface is hard for others to consume and keep stable, and often means the module serves more than one purpose (marcus.purpose).",
+    "de": "Eine große öffentliche Fläche ist für andere schwer zu konsumieren und stabil zu halten und bedeutet oft, dass das Modul mehr als einen Zweck erfüllt (marcus.purpose)."
+  },
+  "remediation": {
+    "suggestion": {
+      "en": "Split the module by responsibility, or expose a narrower public entry that re-exports only what consumers need.",
+      "de": "Das Modul nach Verantwortung aufteilen oder einen schmaleren öffentlichen Einstieg bieten, der nur das Nötige re-exportiert."
+    },
+    "drawbacks": {
+      "en": "A deliberate barrel/facade legitimately re-exports many symbols; judge by whether consumers need all of them.",
+      "de": "Ein bewusstes Barrel/eine Fassade re-exportiert legitim viele Symbole; danach beurteilen, ob Konsumenten alle brauchen."
+    }
+  },
+  "missingContext": [
+    {
+      "en": "Whether a wide surface is intentional (public API barrel) is not decidable statically.",
+      "de": "Ob eine breite Fläche beabsichtigt ist (öffentliches API-Barrel), lässt sich statisch nicht entscheiden."
+    }
+  ],
+  "tests": "test/Rules.test.ts"
+}

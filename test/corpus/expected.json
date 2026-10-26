@@ -12,6 +12,7 @@
     { "file": "CycleA.ts", "rule": "R-DEP-CYCLE", "symbol": "CycleA.ts,CycleB.ts" },
     { "file": "Clock.ts", "rule": "R-SIDEEFFECT-NONDETERMINISM", "symbol": "stamp" },
     { "file": "UnusedImport.ts", "rule": "R-DEP-UNUSED", "symbol": "import#0" },
-    { "file": "DeepImport.ts", "rule": "R-DEEP-IMPORT", "symbol": "import#0" }
+    { "file": "DeepImport.ts", "rule": "R-DEEP-IMPORT", "symbol": "import#0" },
+    { "file": "WideSurface.ts", "rule": "R-WIDE-PUBLIC-SURFACE", "symbol": "" }
   ]
 }

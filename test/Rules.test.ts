@@ -79,6 +79,16 @@ test('R-DEEP-IMPORT flags an import that reaches into internals', () => {
     assert.ok(findings[0]?.observation.statement.includes('../internal/secret.js'));
 });
 
+test('R-WIDE-PUBLIC-SURFACE flags a module with many exports', () => {
+    const findings = analyzePath(join(root, 'test', 'corpus', 'project', 'WideSurface.ts')).filter(
+        (f) => f.rule.id === 'R-WIDE-PUBLIC-SURFACE'
+    );
+    assert.equal(findings.length, 1);
+    assert.equal(findings[0]?.interpretation.principles[0]?.id, 'marcus.purpose');
+    assert.ok(findings[0]?.interpretation.dimensions.includes('responsibility-boundaries'));
+    assert.equal(findings[0]?.observation.statement, 'Module exposes 15 public exports.');
+});
+
 test('findings carry observation evidence and are deterministic', () => {
     const a = analyzePath(join(fixtures, 'Complex.ts'));
     const b = analyzePath(join(fixtures, 'Complex.ts'));

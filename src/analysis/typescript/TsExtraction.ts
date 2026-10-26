@@ -68,6 +68,7 @@ export const extractFacts = (sourceFile: SourceFile, info: AdapterInfo): Fact[] 
     const build = factBuilder(info, filePath);
 
     facts.push(build({kind: 'file.lineCount', kindOf: 'file', range: fileRange(sourceFile), value: lineCount(sourceFile)}));
+    facts.push(build({kind: 'metric.exportCount', kindOf: 'file', range: fileRange(sourceFile), value: countExports(sourceFile)}));
 
     for (const fn of functionLikeNodes(sourceFile)) {
         const body = functionBody(fn);
@@ -169,6 +170,27 @@ const importedNames = (decl: ImportDeclaration): string[] => {
         names.push((named.getAliasNode() ?? named.getNameNode()).getText());
     }
     return names;
+};
+
+// Counts the module's public surface syntactically (no module resolution), so a
+// file with unresolved re-exports is still counted safely.
+const countExports = (sourceFile: SourceFile): number => {
+    let count = 0;
+    count += sourceFile.getFunctions().filter((declaration) => declaration.isExported()).length;
+    count += sourceFile.getClasses().filter((declaration) => declaration.isExported()).length;
+    count += sourceFile.getInterfaces().filter((declaration) => declaration.isExported()).length;
+    count += sourceFile.getTypeAliases().filter((declaration) => declaration.isExported()).length;
+    count += sourceFile.getEnums().filter((declaration) => declaration.isExported()).length;
+    for (const statement of sourceFile.getVariableStatements()) {
+        if (statement.isExported()) {
+            count += statement.getDeclarations().length;
+        }
+    }
+    for (const exportDeclaration of sourceFile.getExportDeclarations()) {
+        count += exportDeclaration.getNamedExports().length; // `export {a, b}`; `export *` contributes 0
+    }
+    count += sourceFile.getExportAssignments().length; // `export default <expr>` / `export =`
+    return count;
 };
 
 const functionLikeNodes = (sourceFile: SourceFile): Node[] => {
