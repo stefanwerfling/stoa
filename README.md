@@ -8,9 +8,9 @@ An LLM is an optional, switchable adapter.
 
 > **Status:** concept phase complete; MVP in progress. Done: M1 (skeleton,
 > schemas, knowledge base, CLI), M2 (real ts-morph fact extraction), M3 (the
-> deterministic rule engine with its first rules). Next: a golden-corpus
-> evaluation, a dependency-cycle rule and the PHP adapter. See
-> [docs/en/roadmap.md](docs/en/roadmap.md).
+> deterministic rule engine with its first rules), M5 (golden corpus +
+> precision/recall evaluation). Next: a dependency-cycle rule, SARIF output and
+> the PHP adapter. See [docs/en/roadmap.md](docs/en/roadmap.md).
 
 ## Documentation
 
@@ -34,6 +34,9 @@ npm run lint         # eslint (synaipse flat-config style)
 # analyze a path (markdown by default)
 npm run analyze -- analyze ./src
 node dist/Cli.js analyze ./src --format json
+
+# evaluate the engine against the golden corpus (precision/recall)
+node dist/Cli.js eval test/corpus/project --expected test/corpus/expected.json
 ```
 
 ## Project layout

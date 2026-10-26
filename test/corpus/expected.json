@@ -1,0 +1,10 @@
+{
+  "description": "Ground truth for the golden corpus. Each entry is a finding that SHOULD be produced; any produced finding not listed here counts as a false positive.",
+  "findings": [
+    { "file": "ErrorHandling.ts", "rule": "R-ERR-SWALLOWED", "symbol": "catch#0" },
+    { "file": "ErrorHandling.ts", "rule": "R-ERR-SWALLOWED", "symbol": "catch#1" },
+    { "file": "Complexity.ts", "rule": "R-COMPLEXITY-COGNITIVE", "symbol": "tangled" },
+    { "file": "Complexity.ts", "rule": "R-DEEP-NESTING", "symbol": "tangled" },
+    { "file": "Params.ts", "rule": "R-FN-TOO-MANY-PARAMS", "symbol": "eight" }
+  ]
+}

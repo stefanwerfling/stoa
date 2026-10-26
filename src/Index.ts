@@ -13,4 +13,7 @@ export type {FileRef, LanguageAdapter, ParseResult, ProjectContext} from './anal
 export {NoopSemanticAdapter} from './semantic/NoopSemanticAdapter.js';
 export type {SemanticAdapter, SemanticRequest, SemanticVerdict} from './semantic/SemanticAdapter.js';
 export {toJson, toMarkdown} from './reporting/Reporter.js';
+export {loadExpected} from './evaluation/Corpus.js';
+export {evaluate} from './evaluation/Evaluator.js';
+export type {EvaluationResult, ExpectedFinding, RuleMetrics} from './evaluation/EvaluationTypes.js';
 export {ENGINE_VERSION} from './Version.js';
