@@ -150,6 +150,21 @@ test('R-MIGRATION-UNGUARDED-DDL flags column changes, but a hasColumn check guar
     assert.equal(guarded.length, 0, 'a surrounding hasColumn() check suppresses the finding');
 });
 
+test('R-MIGRATION-NO-DOWN flags a missing or empty down(), but not a throwing one', () => {
+    const notReversible = analyzePath(join(root, 'test', 'corpus', 'project', 'MigrationNoDown.ts')).filter(
+        (f) => f.rule.id === 'R-MIGRATION-NO-DOWN'
+    );
+    assert.equal(notReversible.length, 2, 'missing down() + empty down()');
+    assert.equal(notReversible[0]?.interpretation.principles[0]?.id, 'marcus.judgment');
+    assert.ok(notReversible.some((f) => f.observation.statement.includes('no down()')));
+    assert.ok(notReversible.some((f) => f.observation.statement.includes('empty')));
+
+    const throwing = analyzePath(join(root, 'test', 'fixtures', 'migration', 'ThrowDown.ts')).filter(
+        (f) => f.rule.id === 'R-MIGRATION-NO-DOWN'
+    );
+    assert.equal(throwing.length, 0, 'a deliberately throwing down() is a conscious choice');
+});
+
 test('findings carry observation evidence and are deterministic', () => {
     const a = analyzePath(join(fixtures, 'Complex.ts'));
     const b = analyzePath(join(fixtures, 'Complex.ts'));

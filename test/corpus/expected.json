@@ -23,6 +23,8 @@
     { "file": "MigrationBuilder.ts", "rule": "R-MIGRATION-UNGUARDED-DDL", "symbol": "ddl#1" },
     { "file": "MigrationColumns.ts", "rule": "R-MIGRATION-UNGUARDED-DDL", "symbol": "ddl#0" },
     { "file": "MigrationColumns.ts", "rule": "R-MIGRATION-UNGUARDED-DDL", "symbol": "ddl#1" },
-    { "file": "MigrationColumns.ts", "rule": "R-MIGRATION-UNGUARDED-DDL", "symbol": "ddl#2" }
+    { "file": "MigrationColumns.ts", "rule": "R-MIGRATION-UNGUARDED-DDL", "symbol": "ddl#2" },
+    { "file": "MigrationNoDown.ts", "rule": "R-MIGRATION-NO-DOWN", "symbol": "AddThing1700000000004" },
+    { "file": "MigrationNoDown.ts", "rule": "R-MIGRATION-NO-DOWN", "symbol": "EmptyDown1700000000005" }
   ]
 }

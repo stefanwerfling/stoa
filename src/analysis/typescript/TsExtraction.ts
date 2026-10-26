@@ -1,5 +1,5 @@
 import {Node, SyntaxKind} from 'ts-morph';
-import type {CallExpression, ImportDeclaration, PropertyAssignment, SourceFile} from 'ts-morph';
+import type {CallExpression, ImportDeclaration, MethodDeclaration, PropertyAssignment, SourceFile} from 'ts-morph';
 import type {Fact, SourceRange, SubjectKind} from '../../Types.js';
 import {factBuilder, type AdapterInfo} from '../FactBuilder.js';
 import {isDeepImport} from '../ImportPath.js';
@@ -184,6 +184,16 @@ export const extractFacts = (sourceFile: SourceFile, info: AdapterInfo): Fact[] 
         candidates.forEach((candidate, index) => {
             facts.push(build({kind: 'migration.unguardedDdl', kindOf: 'statement', symbol: `ddl#${index}`, range: rangeOf(sourceFile, candidate.node), value: candidate.descriptor}));
         });
+
+        for (const cls of sourceFile.getClasses()) {
+            if (!cls.getImplements().some((impl) => impl.getText().includes('MigrationInterface'))) {
+                continue;
+            }
+            const descriptor = missingDown(cls.getMethod('down'));
+            if (descriptor !== null) {
+                facts.push(build({kind: 'migration.noDown', kindOf: 'class', symbol: cls.getName() ?? '(anonymous)', range: rangeOf(sourceFile, cls.getNameNode() ?? cls), value: descriptor}));
+            }
+        }
     }
 
     return facts;
@@ -252,6 +262,20 @@ const unguardedQueryBuilderDdl = (call: CallExpression): string | null => {
         return method === 'addColumn' ? 'addColumn() without a hasColumn guard' : 'dropColumn() without a hasColumn guard';
     }
 
+    return null;
+};
+
+// A migration is reversible only if its down() actually undoes something. A
+// missing or empty down() is the concern; a down() that deliberately throws
+// (declaring the migration irreversible) is a conscious choice and left alone.
+const missingDown = (down: MethodDeclaration | undefined): string | null => {
+    if (down === undefined) {
+        return 'migration has no down() method';
+    }
+    const body = down.getBody();
+    if (body !== undefined && Node.isBlock(body) && body.getStatements().length === 0) {
+        return 'migration down() is empty';
+    }
     return null;
 };
 

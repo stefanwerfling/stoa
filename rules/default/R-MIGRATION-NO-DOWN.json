@@ -1,0 +1,40 @@
+{
+  "id": "R-MIGRATION-NO-DOWN",
+  "version": "1.0.0",
+  "title": "Migration without a reversible down()",
+  "feature": "migration.noDown",
+  "appliesTo": ["class"],
+  "principles": ["marcus.judgment"],
+  "dimensions": ["robustness", "decision-evidence"],
+  "trigger": {
+    "all": [{ "fact": "migration.noDown", "op": "!=", "value": "" }]
+  },
+  "requiredEvidence": ["migration.noDown"],
+  "severity": { "base": "medium" },
+  "confidence": { "base": 0.75, "capBy": "certainty" },
+  "message": {
+    "en": "Migration is not reversible: {value}.",
+    "de": "Migration ist nicht rückrollbar: {value}."
+  },
+  "rationale": {
+    "en": "A migration with no down() (or an empty one) cannot be rolled back. When an up() fails midway or a release must be reverted, the schema is stranded in a half-applied state — the escape route a sound decision keeps open is missing (marcus.judgment).",
+    "de": "Eine Migration ohne down() (oder mit leerem down()) lässt sich nicht zurückrollen. Scheitert ein up() auf halbem Weg oder muss ein Release zurückgenommen werden, bleibt das Schema halb angewendet stehen — der Rückweg, den eine umsichtige Entscheidung offen hält, fehlt (marcus.judgment)."
+  },
+  "remediation": {
+    "suggestion": {
+      "en": "Implement down() to reverse the up() changes; if the migration is genuinely irreversible, make that explicit by throwing in down() so the choice is documented, not accidental.",
+      "de": "down() implementieren, das die up()-Änderungen rückgängig macht; ist die Migration wirklich nicht umkehrbar, das bewusst machen, indem down() wirft — so ist die Entscheidung dokumentiert, nicht versehentlich."
+    },
+    "drawbacks": {
+      "en": "A correct down() is extra work and can be hard to write for destructive changes (dropped data cannot be restored).",
+      "de": "Ein korrektes down() ist Mehraufwand und bei zerstörenden Änderungen schwer zu schreiben (gelöschte Daten lassen sich nicht wiederherstellen)."
+    }
+  },
+  "missingContext": [
+    {
+      "en": "Some migrations are legitimately one-way; a throwing down() signals that intent and is not flagged.",
+      "de": "Manche Migrationen sind berechtigt einwegig; ein werfendes down() signalisiert das und wird nicht gemeldet."
+    }
+  ],
+  "tests": "test/Rules.test.ts"
+}

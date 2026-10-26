@@ -135,7 +135,7 @@ flowchart TB
 
 ## 5. Regelsatz `default@1` (umgesetzt)
 
-> Der tatsächlich implementierte Regelsatz (15 Regeln). Gesamtüberblick, Facts
+> Der tatsächlich implementierte Regelsatz (16 Regeln). Gesamtüberblick, Facts
 > und Opt-in-Flags: [implementation-status.md](./implementation-status.md).
 
 Deklarative Regeln (`rules/default/*.json`, Default aktiv):
@@ -160,6 +160,7 @@ Persistenz / ORM (TypeORM, nur TS/JS, Default aktiv):
 | `R-ORM-SYNCHRONIZE-ENABLED` | `orm.synchronizeEnabled` | `marcus.control` | Seiteneffekt-Kontrolle, Robustheit | heuristisch |
 | `R-ORM-SYNC-WITH-MIGRATIONS` | `orm.syncWithMigrations` | `marcus.judgment` | Belegbarkeit, Robustheit | heuristisch |
 | `R-MIGRATION-UNGUARDED-DDL` | `migration.unguardedDdl` | `marcus.obstacle` | Robustheit, Fehlerbehandlung | heuristisch (nur Migrationsdateien) |
+| `R-MIGRATION-NO-DOWN` | `migration.noDown` | `marcus.judgment` | Robustheit, Belegbarkeit | syntaktisch (nur Migrationsdateien) |
 
 > `R-MIGRATION-UNGUARDED-DDL` greift nur in Migrationsdateien (Klasse
 > `implements MigrationInterface`) und erfasst zwei Wege: Roh-SQL
@@ -169,6 +170,11 @@ Persistenz / ORM (TypeORM, nur TS/JS, Default aktiv):
 > konservativ (confidence 0.7): `IF [NOT] EXISTS` ist ein Sicherheitsnetz, kein
 > Ersatz für einen sauberen Baseline-Stand, und der echte DB-Zustand ist erst
 > zur Laufzeit bekannt (→ CI-Migration gegen frische DB).
+
+> `R-MIGRATION-NO-DOWN` meldet eine Migrationsklasse ohne `down()` oder mit
+> leerem `down()` (nicht rückrollbar). Ein bewusst werfendes `down()`
+> (ausdrücklich einwegige Migration) gilt als dokumentierte Entscheidung und
+> wird nicht gemeldet.
 
 Prozedurale Regeln (`ProjectRule`, cross-file):
 
