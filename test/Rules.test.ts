@@ -48,6 +48,28 @@ test('R-FN-TOO-MANY-PARAMS escalates severity with parameter count', () => {
     assert.equal(bySymbol(findings, 'eight')[0]?.severity, 'medium');
 });
 
+test('R-SIDEEFFECT-NONDETERMINISM flags direct clock/RNG use (marcus.control)', () => {
+    const findings = analyzePath(join(root, 'test', 'corpus', 'project', 'Clock.ts')).filter(
+        (f) => f.rule.id === 'R-SIDEEFFECT-NONDETERMINISM'
+    );
+    assert.equal(findings.length, 1);
+    assert.equal(findings[0]?.interpretation.principles[0]?.id, 'marcus.control');
+    assert.ok(findings[0]?.interpretation.dimensions.includes('side-effect-control'));
+});
+
+test('R-DEP-UNUSED flags an unused import but not a used one', () => {
+    const unused = analyzePath(join(root, 'test', 'corpus', 'project', 'UnusedImport.ts')).filter(
+        (f) => f.rule.id === 'R-DEP-UNUSED'
+    );
+    assert.equal(unused.length, 1);
+    assert.equal(unused[0]?.observation.statement, 'Unused import: node:fs.');
+
+    const usedImport = analyzePath(join(root, 'test', 'corpus', 'project', 'CycleA.ts')).filter(
+        (f) => f.rule.id === 'R-DEP-UNUSED'
+    );
+    assert.equal(usedImport.length, 0);
+});
+
 test('findings carry observation evidence and are deterministic', () => {
     const a = analyzePath(join(fixtures, 'Complex.ts'));
     const b = analyzePath(join(fixtures, 'Complex.ts'));

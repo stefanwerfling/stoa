@@ -1,4 +1,4 @@
-import type {Fact, FactValue, SourceRange, SubjectKind} from '../../Types.js';
+import type {Fact, SourceRange, SubjectKind} from '../../Types.js';
 import {factBuilder, type AdapterInfo} from '../FactBuilder.js';
 
 /**
@@ -62,6 +62,7 @@ export const extractFacts = (program: PhpNode, content: string, filePath: string
         facts.push(build({kind: 'metric.parameterCount', kindOf, symbol, range, value: metrics.parameterCount}));
         facts.push(build({kind: 'metric.functionLength', kindOf, symbol, range, value: metrics.lineCount}));
         facts.push(build({kind: 'doc.hasComplexityRationale', kindOf, symbol, range, value: leadingHasMarker(lines, range.startLine)}));
+        facts.push(build({kind: 'ast.usesNondeterminism', kindOf, symbol, range, value: usesNondeterminism(body)}));
     }
 
     collect(program, (node) => node.kind === 'catch').forEach((clause, index) => {
@@ -84,16 +85,83 @@ export const extractFacts = (program: PhpNode, content: string, filePath: string
         );
     });
 
+    const referenced = referencedShortNames(program);
     let importIndex = 0;
     for (const group of collect(program, (node) => node.kind === 'usegroup')) {
         for (const item of (group.items as PhpNode[] | undefined) ?? []) {
-            const value: FactValue = {module: String(item.name ?? ''), isTypeOnly: false};
-            facts.push(build({kind: 'deps.import', kindOf: 'import', symbol: `import#${importIndex}`, range: rangeOf(group), value}));
+            const module = String(item.name ?? '');
+            const symbol = `import#${importIndex}`;
+            facts.push(build({kind: 'deps.import', kindOf: 'import', symbol, range: rangeOf(group), value: {module, isTypeOnly: false}}));
+
+            const local = aliasName(item) ?? lastSegment(module);
+            if (local.length > 0 && !referenced.has(local)) {
+                facts.push(build({kind: 'deps.importUnused', kindOf: 'import', symbol, range: rangeOf(group), value: module}));
+            }
             importIndex += 1;
         }
     }
 
     return facts;
+};
+
+// PHP non-deterministic built-ins (clock / RNG / unique ids).
+const NONDETERMINISTIC_PHP: ReadonlySet<string> = new Set([
+    'time',
+    'microtime',
+    'date',
+    'rand',
+    'mt_rand',
+    'random_int',
+    'random_bytes',
+    'uniqid'
+]);
+
+const usesNondeterminism = (body: PhpNode): boolean => {
+    let found = false;
+    const walk = (node: PhpNode): void => {
+        for (const child of childNodes(node)) {
+            if (FUNCTION_LIKE.has(child.kind)) {
+                continue;
+            }
+            if (child.kind === 'call') {
+                const what = child.what;
+                if (isPhpNode(what) && what.kind === 'name' && typeof what.name === 'string') {
+                    if (NONDETERMINISTIC_PHP.has(lastSegment(what.name))) {
+                        found = true;
+                    }
+                }
+            }
+            walk(child);
+        }
+    };
+    walk(body);
+    return found;
+};
+
+const referencedShortNames = (program: PhpNode): Set<string> => {
+    const names = new Set<string>();
+    for (const node of collect(program, (candidate) => candidate.kind === 'name')) {
+        if (typeof node.name === 'string') {
+            names.add(lastSegment(node.name));
+        }
+    }
+    return names;
+};
+
+const aliasName = (item: PhpNode): string | null => {
+    const alias = item.alias;
+    if (typeof alias === 'string') {
+        return alias;
+    }
+    if (isPhpNode(alias) && typeof alias.name === 'string') {
+        return alias.name;
+    }
+    return null;
+};
+
+const lastSegment = (fqn: string): string => {
+    const parts = fqn.split('\\');
+    return parts[parts.length - 1] ?? fqn;
 };
 
 const computeMetrics = (fn: PhpNode, body: PhpNode): FunctionMetrics => {

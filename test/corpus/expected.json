@@ -9,6 +9,8 @@
     { "file": "Service.php", "rule": "R-ERR-SWALLOWED", "symbol": "catch#0" },
     { "file": "Service.php", "rule": "R-COMPLEXITY-COGNITIVE", "symbol": "phpTangled" },
     { "file": "Service.php", "rule": "R-DEEP-NESTING", "symbol": "phpTangled" },
-    { "file": "CycleA.ts", "rule": "R-DEP-CYCLE", "symbol": "CycleA.ts,CycleB.ts" }
+    { "file": "CycleA.ts", "rule": "R-DEP-CYCLE", "symbol": "CycleA.ts,CycleB.ts" },
+    { "file": "Clock.ts", "rule": "R-SIDEEFFECT-NONDETERMINISM", "symbol": "stamp" },
+    { "file": "UnusedImport.ts", "rule": "R-DEP-UNUSED", "symbol": "import#0" }
   ]
 }

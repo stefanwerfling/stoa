@@ -1,6 +1,6 @@
 import {Node, SyntaxKind} from 'ts-morph';
-import type {SourceFile} from 'ts-morph';
-import type {Fact, FactValue, SourceRange, SubjectKind} from '../../Types.js';
+import type {ImportDeclaration, SourceFile} from 'ts-morph';
+import type {Fact, SourceRange, SubjectKind} from '../../Types.js';
 import {factBuilder, type AdapterInfo} from '../FactBuilder.js';
 
 interface FunctionMetrics {
@@ -85,6 +85,7 @@ export const extractFacts = (sourceFile: SourceFile, info: AdapterInfo): Fact[] 
         facts.push(build({kind: 'metric.parameterCount', kindOf, symbol, range, value: metrics.parameterCount}));
         facts.push(build({kind: 'metric.functionLength', kindOf, symbol, range, value: metrics.lineCount}));
         facts.push(build({kind: 'doc.hasComplexityRationale', kindOf, symbol, range, value: hasComplexityRationale(fn)}));
+        facts.push(build({kind: 'ast.usesNondeterminism', kindOf, symbol, range, value: usesNondeterminism(body)}));
     }
 
     sourceFile.getDescendantsOfKind(SyntaxKind.CatchClause).forEach((clause, index) => {
@@ -99,12 +100,71 @@ export const extractFacts = (sourceFile: SourceFile, info: AdapterInfo): Fact[] 
         facts.push(build({kind: 'ast.catchSwallowsError', kindOf: 'catch-clause', symbol, range, value: !hasThrow && !hasCall}));
     });
 
+    const referenced = referencedIdentifiers(sourceFile);
     sourceFile.getImportDeclarations().forEach((decl, index) => {
-        const value: FactValue = {module: decl.getModuleSpecifierValue(), isTypeOnly: decl.isTypeOnly()};
-        facts.push(build({kind: 'deps.import', kindOf: 'import', symbol: `import#${index}`, range: rangeOf(sourceFile, decl), value}));
+        const module = decl.getModuleSpecifierValue();
+        const range = rangeOf(sourceFile, decl);
+        const symbol = `import#${index}`;
+        facts.push(build({kind: 'deps.import', kindOf: 'import', symbol, range, value: {module, isTypeOnly: decl.isTypeOnly()}}));
+
+        const names = importedNames(decl);
+        if (names.length > 0 && names.every((name) => !referenced.has(name))) {
+            facts.push(build({kind: 'deps.importUnused', kindOf: 'import', symbol, range, value: module}));
+        }
     });
 
     return facts;
+};
+
+// Non-deterministic APIs: their use makes a unit's output depend on wall-clock /
+// RNG, which undermines reproducibility and testability (marcus.control).
+const NONDETERMINISTIC_CALLS: ReadonlySet<string> = new Set(['Math.random', 'Date.now', 'performance.now']);
+
+const usesNondeterminism = (body: Node): boolean => {
+    let found = false;
+    const walk = (node: Node): void => {
+        node.forEachChild((child) => {
+            if (FUNCTION_LIKE_KINDS.has(child.getKind())) {
+                return;
+            }
+            if (Node.isCallExpression(child) && NONDETERMINISTIC_CALLS.has(child.getExpression().getText())) {
+                found = true;
+            }
+            if (Node.isNewExpression(child) && child.getExpression().getText() === 'Date' && child.getArguments().length === 0) {
+                found = true;
+            }
+            walk(child);
+        });
+    };
+    walk(body);
+    return found;
+};
+
+// Identifier texts referenced anywhere outside an import declaration.
+const referencedIdentifiers = (sourceFile: SourceFile): Set<string> => {
+    const names = new Set<string>();
+    for (const id of sourceFile.getDescendantsOfKind(SyntaxKind.Identifier)) {
+        if (id.getFirstAncestorByKind(SyntaxKind.ImportDeclaration) === undefined) {
+            names.add(id.getText());
+        }
+    }
+    return names;
+};
+
+const importedNames = (decl: ImportDeclaration): string[] => {
+    const names: string[] = [];
+    const def = decl.getDefaultImport();
+    if (def !== undefined) {
+        names.push(def.getText());
+    }
+    const ns = decl.getNamespaceImport();
+    if (ns !== undefined) {
+        names.push(ns.getText());
+    }
+    for (const named of decl.getNamedImports()) {
+        names.push((named.getAliasNode() ?? named.getNameNode()).getText());
+    }
+    return names;
 };
 
 const functionLikeNodes = (sourceFile: SourceFile): Node[] => {

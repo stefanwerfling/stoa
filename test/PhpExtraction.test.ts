@@ -49,3 +49,10 @@ test('PHP dependency facts carry the use-statement target', () => {
 test('PHP extraction is deterministic across runs', () => {
     assert.equal(JSON.stringify(analyzeFixture('Rate.php')), JSON.stringify(analyzeFixture('Rate.php')));
 });
+
+test('PHP detects non-deterministic built-ins and unused use statements', () => {
+    const facts = analyzeFixture('Robust.php');
+    assert.equal(factFor(facts, 'ast.usesNondeterminism', 'makeId').value, true);
+    const unused = facts.filter((fact) => fact.kind === 'deps.importUnused').map((fact) => fact.value);
+    assert.deepEqual(unused, ['App\\Unused\\Helper']);
+});

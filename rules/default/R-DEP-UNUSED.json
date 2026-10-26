@@ -1,0 +1,40 @@
+{
+  "id": "R-DEP-UNUSED",
+  "version": "1.0.0",
+  "title": "Unused import",
+  "feature": "deps.importUnused",
+  "appliesTo": ["import"],
+  "principles": ["marcus.cooperation"],
+  "dimensions": ["dependencies"],
+  "trigger": {
+    "all": [{ "fact": "deps.importUnused", "op": "!=", "value": "" }]
+  },
+  "requiredEvidence": ["deps.importUnused"],
+  "severity": { "base": "low" },
+  "confidence": { "base": 0.8, "capBy": "certainty" },
+  "message": {
+    "en": "Unused import: {value}.",
+    "de": "Ungenutzter Import: {value}."
+  },
+  "rationale": {
+    "en": "An import nothing uses is a superfluous coupling to the whole (marcus.cooperation).",
+    "de": "Ein Import, den nichts verwendet, ist eine überflüssige Kopplung ans Ganze (marcus.cooperation)."
+  },
+  "remediation": {
+    "suggestion": {
+      "en": "Remove the unused import.",
+      "de": "Den ungenutzten Import entfernen."
+    },
+    "drawbacks": {
+      "en": "Imports with side effects or used only by tooling/types may be intentional.",
+      "de": "Importe mit Seiteneffekten oder nur von Tooling/Typen genutzt können beabsichtigt sein."
+    }
+  },
+  "missingContext": [
+    {
+      "en": "Reference detection is name-based; dynamic or side-effect-only imports may be misjudged.",
+      "de": "Die Referenzerkennung ist namensbasiert; dynamische oder reine Seiteneffekt-Importe können fehlbeurteilt werden."
+    }
+  ],
+  "tests": "test/Rules.test.ts"
+}

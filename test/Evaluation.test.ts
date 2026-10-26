@@ -35,7 +35,7 @@ test('golden corpus: overall precision and recall are perfect', () => {
     const result = runEvaluation();
     assert.equal(result.overall.precision, 1);
     assert.equal(result.overall.recall, 1);
-    assert.equal(result.overall.truePositives, 9);
+    assert.equal(result.overall.truePositives, 11);
 });
 
 test('AC-5: every rule meets the precision gate', () => {

@@ -1,0 +1,40 @@
+{
+  "id": "R-SIDEEFFECT-NONDETERMINISM",
+  "version": "1.0.0",
+  "title": "Non-deterministic side effect",
+  "feature": "ast.usesNondeterminism",
+  "appliesTo": ["function", "method"],
+  "principles": ["marcus.control"],
+  "dimensions": ["side-effect-control", "robustness"],
+  "trigger": {
+    "all": [{ "fact": "ast.usesNondeterminism", "op": "==", "value": true }]
+  },
+  "requiredEvidence": ["ast.usesNondeterminism"],
+  "severity": { "base": "medium" },
+  "confidence": { "base": 0.6, "capBy": "certainty" },
+  "message": {
+    "en": "{symbol} reads the clock or RNG directly (non-deterministic).",
+    "de": "{symbol} liest Uhr oder Zufall direkt (nicht-deterministisch)."
+  },
+  "rationale": {
+    "en": "Depending on wall-clock time or randomness puts behavior outside the unit's control and makes it hard to reproduce or test (marcus.control).",
+    "de": "Die Abhängigkeit von Uhrzeit oder Zufall entzieht das Verhalten der Kontrolle der Einheit und erschwert Reproduzierbarkeit und Tests (marcus.control)."
+  },
+  "remediation": {
+    "suggestion": {
+      "en": "Inject the clock/RNG as a dependency so callers (and tests) can control it.",
+      "de": "Uhr/Zufall als Abhängigkeit injizieren, damit Aufrufer (und Tests) sie kontrollieren können."
+    },
+    "drawbacks": {
+      "en": "Injection adds a parameter; a utility whose very purpose is time or randomness is legitimate.",
+      "de": "Injektion fügt einen Parameter hinzu; ein Utility, dessen Zweck gerade Zeit oder Zufall ist, ist legitim."
+    }
+  },
+  "missingContext": [
+    {
+      "en": "Whether non-determinism is the unit's intended purpose is not decidable statically.",
+      "de": "Ob Nicht-Determinismus der beabsichtigte Zweck der Einheit ist, lässt sich statisch nicht entscheiden."
+    }
+  ],
+  "tests": "test/Rules.test.ts"
+}
