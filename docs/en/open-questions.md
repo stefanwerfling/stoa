@@ -1,22 +1,25 @@
 # Open Questions, Risks & Assumptions
 
 > Status: Concept phase. Collects unresolved decisions (with preliminary
-> recommendation), risks, and explicit assumptions. Nothing here is final.
+> recommendation), risks, and explicit assumptions.
+>
+> **Decisions marked ✅ are now implemented** — the concrete current state is in
+> [implementation-status.md](./implementation-status.md).
 
 ## 1. Open Decisions (with preliminary recommendation)
 
 | ID | Question | Options | Preliminary recommendation |
 |----|----------|---------|----------------------------|
-| OQ-1 | **First target language** | TS/JS · PHP | **TS/JS** (most mature toolchain, dogfooding); PHP as the first second adapter. Since the project environment is PHP-heavy, this is to be explicitly confirmed. |
-| OQ-2 | **Core runtime** | TS (Var. B) · Hybrid (Var. C) | **TS core**, schema-neutral, exit to Hybrid left open (see [technology-decision.md](./technology-decision.md)). |
+| OQ-1 | **First target language** | TS/JS · PHP | **✅ Implemented:** TS/JS first; PHP built as the second adapter (M6). |
+| OQ-2 | **Core runtime** | TS (Var. B) · Hybrid (Var. C) | **✅ Implemented:** TS core, schema-neutral (exit to Hybrid still open; see [technology-decision.md](./technology-decision.md)). |
 | OQ-3 | **PHP parser** | Subprocess (`nikic/php-parser`) · pure-JS parser (`php-parser`/glayzzle) · own parser | **Decided (M6): `php-parser`/glayzzle** — in-process, no PHP/Composer, deterministically testable. Fact schema identical, so revisable. |
-| OQ-4 | **Interprocedural data flow** | local only · project-wide | **MVP: local** (DFG per function). Project-wide is expensive → later stage; affects `R-SIDEEFFECT-IN-PURE` precision. |
-| OQ-5 | **Default single score** | on · off | **Off** (profile only; index optional). |
+| OQ-4 | **Interprocedural data flow** | local only · project-wide | **✅ Implemented (local):** metrics/facts per function are local. Project-wide data flow remains a later stage. |
+| OQ-5 | **Default single score** | on · off | **✅ Decided:** no default single score; findings carry dimensions. An aggregated dimension profile is not built yet. |
 | OQ-6 | **Cohesion metric** | LCOM variant · own heuristic | open; calibrate with experts/empirical data on the corpus (risk of false positives). |
-| OQ-7 | **Principle naming** | `marcus.*` · `stoic.*` | **`marcus.*`** for the MVP; rename to `stoic.*` as soon as Epictetus is added as a source (`marcus.control`). |
+| OQ-7 | **Principle naming** | `marcus.*` · `stoic.*` | **✅ Implemented:** `marcus.*`. Rename to `stoic.*` only once Epictetus is added as a source (open). |
 | OQ-8 | **LLM default** | local · external · off | **Off** (implemented): no-op default; optional Anthropic adapter (Opus 4.8), vendor-neutral, groundedness-validated, outside the deterministic core. |
-| OQ-9 | **License of the engine** | — | Repo is **MIT**. Translation licenses are to be handled separately from this (only public-domain texts verbatim). |
-| OQ-10 | **Documentation language** | DE · EN | **DE** (environment), filenames EN as commissioned. On opening the project, possibly EN translation. |
+| OQ-9 | **License of the engine** | — | **✅ Decided:** MIT. Translation licenses handled separately (only public-domain texts verbatim). |
+| OQ-10 | **Documentation language** | DE · EN | **✅ Implemented:** docs in `docs/de` **and** `docs/en` (1:1); plus localized output (`--lang en|de`). |
 | OQ-11 | **Project name** | “stoa” · other | provisionally “stoa”; check the final name + trademark/naming conflicts. |
 
 ## 2. Risks
@@ -53,7 +56,8 @@
 
 ## 5. Next Decisions Before Implementation Begins
 
-1. **Confirm OQ-1/OQ-2** (target language + core runtime).
-2. **Define the precision threshold** for AC-5.
-3. **Define the golden corpus** (which example projects?).
-4. **Clarify the expert review process** for the KB (who, when).
+> ✅ Done during implementation: OQ-1/OQ-2 confirmed (TS/JS + TS core); the AC-5
+> precision gate is enforced in the tests; the golden corpus is defined
+> (`test/corpus/`). **Still open:** the expert-review process for the
+> philosophical interpretations (who, when). Current state:
+> [implementation-status.md](./implementation-status.md).

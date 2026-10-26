@@ -1,22 +1,25 @@
 # Offene Fragen, Risiken & Annahmen
 
 > Status: Konzeptphase. Sammelt ungeklärte Entscheidungen (mit vorläufiger
-> Empfehlung), Risiken und explizite Annahmen. Nichts hier ist endgültig.
+> Empfehlung), Risiken und explizite Annahmen.
+>
+> **Mit ✅ markierte Entscheidungen sind inzwischen umgesetzt** — der konkrete
+> Ist-Stand steht in [implementation-status.md](./implementation-status.md).
 
 ## 1. Offene Entscheidungen (mit vorläufiger Empfehlung)
 
 | ID | Frage | Optionen | Vorläufige Empfehlung |
 |----|-------|----------|-----------------------|
-| OQ-1 | **Erste Zielsprache** | TS/JS · PHP | **TS/JS** (reifste Toolchain, Dogfooding); PHP als erster zweiter Adapter. Da das Projektumfeld PHP-lastig ist, ist dies explizit zu bestätigen. |
-| OQ-2 | **Kernlaufzeit** | TS (Var. B) · Hybrid (Var. C) | **TS-Kern**, Schema-neutral, Austritt zu Hybrid offen (siehe [technology-decision.md](./technology-decision.md)). |
+| OQ-1 | **Erste Zielsprache** | TS/JS · PHP | **✅ Umgesetzt:** TS/JS zuerst; PHP als zweiter Adapter gebaut (M6). |
+| OQ-2 | **Kernlaufzeit** | TS (Var. B) · Hybrid (Var. C) | **✅ Umgesetzt:** TS-Kern, Schema-neutral (Austritt zu Hybrid weiterhin offen; siehe [technology-decision.md](./technology-decision.md)). |
 | OQ-3 | **PHP-Parser** | Subprozess (`nikic/php-parser`) · reiner JS-Parser (`php-parser`/glayzzle) · eigener Parser | **Entschieden (M6): `php-parser`/glayzzle** — in-process, kein PHP/Composer, deterministisch testbar. Fact-Schema identisch, daher revidierbar. |
-| OQ-4 | **Interprozeduraler Datenfluss** | nur lokal · projektweit | **MVP: lokal** (DFG pro Funktion). Projektweit ist teuer → spätere Stufe; betrifft `R-SIDEEFFECT-IN-PURE`-Präzision. |
-| OQ-5 | **Default-Single-Score** | an · aus | **Aus** (nur Profil; Index optional). |
+| OQ-4 | **Interprozeduraler Datenfluss** | nur lokal · projektweit | **✅ Umgesetzt (lokal):** Metriken/Facts je Funktion lokal. Projektweiter Datenfluss weiterhin spätere Stufe. |
+| OQ-5 | **Default-Single-Score** | an · aus | **✅ Entschieden:** kein Default-Single-Score; Befunde tragen Dimensionen. Ein aggregiertes Dimensionen-Profil ist noch nicht gebaut. |
 | OQ-6 | **Kohäsionsmetrik** | LCOM-Variante · eigene Heuristik | offen; mit Experten/Empirie am Korpus kalibrieren (Risiko Fehlalarm). |
-| OQ-7 | **Prinzip-Benennung** | `marcus.*` · `stoic.*` | **`marcus.*`** für MVP; Umbenennung zu `stoic.*`, sobald Epiktet als Quelle dazukommt (`marcus.control`). |
+| OQ-7 | **Prinzip-Benennung** | `marcus.*` · `stoic.*` | **✅ Umgesetzt:** `marcus.*`. Umbenennung zu `stoic.*` erst, wenn Epiktet als Quelle dazukommt (offen). |
 | OQ-8 | **LLM-Default** | lokal · extern · aus | **Aus** (implementiert): No-Op-Default; optionaler Anthropic-Adapter (Opus 4.8), anbieterneutral, groundedness-geprüft, außerhalb des deterministischen Kerns. |
-| OQ-9 | **Lizenz der Engine** | — | Repo ist **MIT**. Translationslizenzen sind davon getrennt zu behandeln (nur gemeinfreie Texte verbatim). |
-| OQ-10 | **Dokumentationssprache** | DE · EN | **DE** (Umfeld), Dateinamen EN wie beauftragt. Bei Öffnung des Projekts ggf. EN-Übersetzung. |
+| OQ-9 | **Lizenz der Engine** | — | **✅ Entschieden:** MIT. Translationslizenzen getrennt (nur gemeinfreie Texte verbatim). |
+| OQ-10 | **Dokumentationssprache** | DE · EN | **✅ Umgesetzt:** Docs in `docs/de` **und** `docs/en` (1:1); zusätzlich lokalisierte Ausgabe (`--lang en|de`). |
 | OQ-11 | **Projektname** | „stoa" · anderer | vorläufig „stoa"; endgültigen Namen + Marken-/Namenskonflikte prüfen. |
 
 ## 2. Risiken
@@ -53,7 +56,8 @@
 
 ## 5. Nächste Entscheidungen vor Implementierungsbeginn
 
-1. **OQ-1/OQ-2 bestätigen** (Zielsprache + Kernlaufzeit).
-2. **Precision-Schwelle** für AC-5 festlegen.
-3. **Golden-Korpus** definieren (welche Beispielprojekte?).
-4. **Experten-Review-Prozess** für die KB klären (wer, wann).
+> ✅ Erledigt im Zuge der Umsetzung: OQ-1/OQ-2 bestätigt (TS/JS + TS-Kern);
+> Precision-Gate für AC-5 in den Tests verankert; Golden-Korpus definiert
+> (`test/corpus/`). **Weiterhin offen:** Experten-Review-Prozess für die
+> philosophischen Interpretationen (wer, wann). Aktueller Ist-Stand:
+> [implementation-status.md](./implementation-status.md).
