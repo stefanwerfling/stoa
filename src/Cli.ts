@@ -19,6 +19,7 @@ type CliValues = {
     rules?: string;
     expected?: string;
     semantic?: string;
+    lang?: string;
     help?: boolean;
 };
 
@@ -26,7 +27,7 @@ const USAGE = [
     'stoa – Stoic Code Analysis Engine',
     '',
     'Usage:',
-    '  stoa analyze <path> [--format markdown|json|sarif] [--config <file>] [--knowledge <dir>] [--rules <dir>] [--semantic noop|anthropic]',
+    '  stoa analyze <path> [--format markdown|json|sarif] [--lang en|de] [--config <file>] [--knowledge <dir>] [--rules <dir>] [--semantic noop|anthropic]',
     '  stoa eval <path> --expected <file> [--format markdown|json] [--knowledge <dir>] [--rules <dir>]',
     ''
 ].join('\n');
@@ -39,22 +40,24 @@ const ruleSetDirOf = (values: CliValues): string => {
     return resolve(values.rules ?? join(process.cwd(), 'rules', 'default'));
 };
 
-const render = (format: string | undefined, report: AnalysisReport): string => {
+const render = (format: string | undefined, report: AnalysisReport, lang: string): string => {
     if (format === 'json') {
         return toJson(report);
     }
     if (format === 'sarif') {
         return toSarif(report, {baseDir: process.cwd()});
     }
-    return toMarkdown(report);
+    return toMarkdown(report, {lang});
 };
 
 const runAnalyze = async (values: CliValues, target: string): Promise<number> => {
+    const lang = values.lang ?? 'en';
     let result = analyze({
         rootPath: resolve(target),
         knowledgeDir: knowledgeDirOf(values),
         ruleSetDir: ruleSetDirOf(values),
-        config: loadConfig(values.config ?? null)
+        config: loadConfig(values.config ?? null),
+        lang
     });
 
     const semanticId = values.semantic ?? 'noop';
@@ -64,7 +67,7 @@ const runAnalyze = async (values: CliValues, target: string): Promise<number> =>
         result = await augmentWithSemantics(result, createSemanticAdapter(semanticId));
     }
 
-    process.stdout.write(`${render(values.format, result.report)}\n`);
+    process.stdout.write(`${render(values.format, result.report, lang)}\n`);
     return 0;
 };
 
@@ -95,6 +98,7 @@ const main = async (): Promise<number> => {
             rules: {type: 'string'},
             expected: {type: 'string'},
             semantic: {type: 'string'},
+            lang: {type: 'string', default: 'en'},
             help: {type: 'boolean', default: false}
         }
     });

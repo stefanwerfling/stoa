@@ -7,6 +7,7 @@ import type {
     Severity
 } from '../Types.js';
 import type {KnowledgeBase} from '../knowledge/KnowledgeBase.js';
+import {DEFAULT_LANG, localize, type LocalizedText} from '../i18n/Localized.js';
 import {certaintyCap, evalCondition, evalGroup, maxSeverity, weakestCertainty, type FactUnit} from './Evaluation.js';
 import {DependencyCycleRule} from './project/DependencyCycleRule.js';
 import type {ProjectRule} from './ProjectRule.js';
@@ -35,7 +36,8 @@ export class RuleEngine {
 
     public constructor(
         private readonly knowledgeBase: KnowledgeBase,
-        private readonly ruleSet: RuleSet
+        private readonly ruleSet: RuleSet,
+        private readonly lang: string = DEFAULT_LANG
     ) {}
 
     public evaluate(facts: Fact[]): Finding[] {
@@ -52,7 +54,12 @@ export class RuleEngine {
         }
 
         for (const projectRule of this.projectRules) {
-            const findings = projectRule.evaluate({facts, ruleSetId: this.ruleSet.id, knowledgeBase: this.knowledgeBase});
+            const findings = projectRule.evaluate({
+                facts,
+                ruleSetId: this.ruleSet.id,
+                knowledgeBase: this.knowledgeBase,
+                lang: this.lang
+            });
             for (const finding of findings) {
                 keyed.push({dedupKey: finding.id, finding});
             }
@@ -108,7 +115,7 @@ export class RuleEngine {
                 structure: subject.kindOf
             },
             observation: {
-                statement: interpolate(rule.message, featureFact.value, symbol),
+                statement: interpolate(localize(rule.message, this.lang), featureFact.value, symbol),
                 evidence: findingEvidence
             },
             interpretation: {
@@ -118,11 +125,11 @@ export class RuleEngine {
             severity: deriveSeverity(rule, unit.facts),
             confidence: deriveConfidence(rule, unit.facts, evidence),
             certaintyBasis: weakestCertainty(evidence),
-            remediation: rule.remediation ?? {suggestion: 'See rule documentation.'},
+            remediation: this.localizeRemediation(rule),
             source: 'deterministic'
         };
         if (rule.missingContext !== undefined) {
-            finding.missingContext = rule.missingContext;
+            finding.missingContext = rule.missingContext.map((text) => localize(text, this.lang));
         }
 
         const dedupKey = `${subject.file}:${subject.range.startLine}:${subject.range.startCol}:${rule.feature}`;
@@ -136,15 +143,27 @@ export class RuleEngine {
             if (principle === null) {
                 continue;
             }
+            const rationale: LocalizedText = rule.rationale ?? principle.softwareInterpretation;
             refs.push({
                 id: principle.id,
-                name: principle.name,
+                name: localize(principle.name, this.lang),
                 passages: principle.passages,
                 attributionConfidence: principle.attributionConfidence,
-                rationale: rule.rationale ?? principle.softwareInterpretation
+                rationale: localize(rationale, this.lang)
             });
         }
         return refs;
+    }
+
+    private localizeRemediation(rule: Rule) {
+        if (rule.remediation === undefined) {
+            return {suggestion: 'See rule documentation.'};
+        }
+        const suggestion = localize(rule.remediation.suggestion, this.lang);
+        if (rule.remediation.drawbacks === undefined) {
+            return {suggestion};
+        }
+        return {suggestion, drawbacks: localize(rule.remediation.drawbacks, this.lang)};
     }
 }
 

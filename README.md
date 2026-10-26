@@ -38,6 +38,7 @@ npm run lint         # eslint (synaipse flat-config style)
 # analyze a path (markdown by default)
 npm run analyze -- analyze ./src
 node dist/Cli.js analyze ./src --format json
+node dist/Cli.js analyze ./src --lang de            # localized output (en default)
 node dist/Cli.js analyze ./src --format sarif   # SARIF 2.1.0 for CI / code scanning
 
 # evaluate the engine against the golden corpus (precision/recall)
@@ -66,6 +67,9 @@ test/             node:test suites + fixtures
 - **No philosophy presented as fact** — interpretations are flagged and sourced;
   only public-domain translations (George Long) are quoted verbatim.
 - **Context beats threshold** — no metric is a defect on its own.
+- **Localized output** — `--lang en|de`; rule/principle text and report labels are
+  translatable (`LocalizedText`, en fallback). Language is part of the run config,
+  so output stays deterministic.
 
 ## License
 

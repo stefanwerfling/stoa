@@ -13,6 +13,8 @@ export interface AnalyzeOptions {
     knowledgeDir: string;
     ruleSetDir: string;
     config: StoaConfig;
+    /** Output language for localized finding text; defaults to 'en'. */
+    lang?: string;
 }
 
 const INCLUDE_EXTENSIONS: readonly string[] = ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.php'] as const;
@@ -27,7 +29,7 @@ export const analyze = (options: AnalyzeOptions): AnalysisResult => {
     const registry = new AdapterRegistry().register(new TypeScriptAdapter()).register(new PhpAdapter());
     const knowledgeBase = KnowledgeBase.loadFromDirectory(options.knowledgeDir, options.config.knowledgeBase);
     const ruleSet = RuleSet.loadFromDirectory(options.ruleSetDir, options.config.ruleSet);
-    const ruleEngine = new RuleEngine(knowledgeBase, ruleSet);
+    const ruleEngine = new RuleEngine(knowledgeBase, ruleSet, options.lang ?? 'en');
 
     const files = collectFiles(options.rootPath, {includeExtensions: INCLUDE_EXTENSIONS});
 

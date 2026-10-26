@@ -90,25 +90,31 @@
         }
       }
     },
-    "message": { "type": "string", "minLength": 1 },
-    "rationale": { "type": "string" },
+    "message": { "$ref": "#/$defs/localizedText" },
+    "rationale": { "$ref": "#/$defs/localizedText" },
     "remediation": {
       "type": "object",
       "additionalProperties": false,
       "required": ["suggestion"],
       "properties": {
-        "suggestion": { "type": "string", "minLength": 1 },
-        "drawbacks": { "type": "string" }
+        "suggestion": { "$ref": "#/$defs/localizedText" },
+        "drawbacks": { "$ref": "#/$defs/localizedText" }
       }
     },
     "missingContext": {
       "type": "array",
-      "items": { "type": "string" }
+      "items": { "$ref": "#/$defs/localizedText" }
     },
     "remediationRef": { "type": "string" },
     "tests": { "type": "string", "minLength": 1 }
   },
   "$defs": {
+    "localizedText": {
+      "anyOf": [
+        { "type": "string", "minLength": 1 },
+        { "type": "object", "minProperties": 1, "additionalProperties": { "type": "string" } }
+      ]
+    },
     "condition": {
       "type": "object",
       "required": ["fact", "op"],

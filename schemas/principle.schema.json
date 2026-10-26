@@ -27,7 +27,7 @@
       "pattern": "^[a-z][a-z0-9]*\\.[a-z][a-z0-9-]*$",
       "description": "Namespaced principle id, e.g. 'marcus.simplicity'."
     },
-    "name": { "type": "string", "minLength": 1 },
+    "name": { "$ref": "#/$defs/localizedText" },
     "passages": {
       "type": "array",
       "minItems": 1,
@@ -81,6 +81,12 @@
     }
   },
   "$defs": {
+    "localizedText": {
+      "anyOf": [
+        { "type": "string", "minLength": 1 },
+        { "type": "object", "minProperties": 1, "additionalProperties": { "type": "string" } }
+      ]
+    },
     "confidence": {
       "type": "number",
       "minimum": 0,

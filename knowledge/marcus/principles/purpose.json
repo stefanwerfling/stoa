@@ -1,6 +1,6 @@
 {
   "id": "marcus.purpose",
-  "name": "Purpose & task",
+  "name": { "en": "Purpose & task", "de": "Zweck & Aufgabe" },
   "passages": ["marcus-meditations:8.19", "marcus-meditations:5.1"],
   "originalThought": "QUELLE (Long 1862): 8.19 'Everything exists for some end'; 5.1 'I am rising to the work of a human being.' Everything has a purpose and a proper work.",
   "softwareInterpretation": "INTERPRETATION: Each unit (function/class/module) should serve one recognizable purpose (cohesion, single responsibility).",

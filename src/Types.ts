@@ -4,6 +4,7 @@
  * The deterministic core deals in these shapes only; adapters translate
  * language-specific detail into them.
  */
+import type {LocalizedText} from './i18n/Localized.js';
 
 export interface SourceRange {
     startLine: number;
@@ -103,7 +104,7 @@ export interface PrincipleChange {
  */
 export interface Principle {
     id: string;
-    name: string;
+    name: LocalizedText;
     passages: string[];
     originalThought: string;
     softwareInterpretation: string;

@@ -1,6 +1,6 @@
 {
   "id": "marcus.obstacle",
-  "name": "The obstacle becomes a furtherance",
+  "name": { "en": "The obstacle becomes a furtherance", "de": "Hindernis wird zur Förderung" },
   "passages": ["marcus-meditations:5.20"],
   "originalThought": "QUELLE (Long 1862, 5.20): 'the mind ... changes every hindrance ... into an aid ...'. NOTE: do NOT quote the Hays wording ('what stands in the way becomes the way'), which is copyrighted.",
   "softwareInterpretation": "INTERPRETATION: Errors/exceptions are information, not a nuisance to be suppressed. Appropriate error handling makes the obstacle usable.",

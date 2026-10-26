@@ -21,12 +21,29 @@
     ]
   },
   "confidence": { "base": 0.8, "capBy": "certainty" },
-  "message": "Cognitive complexity is {value} in {symbol}.",
-  "rationale": "Complexity beyond what the task requires burdens understanding (marcus.simplicity, 4.24: do what is necessary).",
-  "remediation": {
-    "suggestion": "Extract helpers, reduce nesting, or document that the complexity is necessary.",
-    "drawbacks": "Over-extraction can fragment logic; keep inherently complex algorithms together."
+  "message": {
+    "en": "Cognitive complexity is {value} in {symbol}.",
+    "de": "Kognitive Komplexität {value} in {symbol}."
   },
-  "missingContext": ["Whether the complexity is sachlich necessary is not decidable statically; low-confidence signal."],
+  "rationale": {
+    "en": "Complexity beyond what the task requires burdens understanding (marcus.simplicity, 4.24: do what is necessary).",
+    "de": "Komplexität über das Notwendige hinaus erschwert das Verständnis (marcus.simplicity, 4.24: das Notwendige tun)."
+  },
+  "remediation": {
+    "suggestion": {
+      "en": "Extract helpers, reduce nesting, or document that the complexity is necessary.",
+      "de": "Hilfsfunktionen auslagern, Verschachtelung reduzieren oder die Notwendigkeit der Komplexität dokumentieren."
+    },
+    "drawbacks": {
+      "en": "Over-extraction can fragment logic; keep inherently complex algorithms together.",
+      "de": "Zu starkes Auslagern zerstückelt die Logik; inhärent komplexe Algorithmen zusammenhalten."
+    }
+  },
+  "missingContext": [
+    {
+      "en": "Whether the complexity is sachlich necessary is not decidable statically; low-confidence signal.",
+      "de": "Ob die Komplexität sachlich notwendig ist, lässt sich statisch nicht entscheiden; Signal mit niedriger Konfidenz."
+    }
+  ],
   "tests": "test/Rules.test.ts"
 }

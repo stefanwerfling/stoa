@@ -12,12 +12,29 @@
   "requiredEvidence": ["ast.catchSwallowsError"],
   "severity": { "base": "high" },
   "confidence": { "base": 0.9, "capBy": "certainty" },
-  "message": "catch clause neither rethrows, handles nor logs the error.",
-  "rationale": "A swallowed error hides the obstacle instead of turning it into information (marcus.obstacle, 5.20).",
-  "remediation": {
-    "suggestion": "Log, handle specifically, or rethrow; comment an intentionally ignored case.",
-    "drawbacks": "Extra logging paths; for a genuinely expected empty case a short comment suffices."
+  "message": {
+    "en": "catch clause neither rethrows, handles nor logs the error.",
+    "de": "catch-Block wirft den Fehler weder erneut, behandelt noch protokolliert ihn."
   },
-  "missingContext": ["Unknown whether the empty/ignored case is intentional (no comment present)."],
+  "rationale": {
+    "en": "A swallowed error hides the obstacle instead of turning it into information (marcus.obstacle, 5.20).",
+    "de": "Ein verschluckter Fehler verbirgt das Hindernis, statt es in Information zu verwandeln (marcus.obstacle, 5.20)."
+  },
+  "remediation": {
+    "suggestion": {
+      "en": "Log, handle specifically, or rethrow; comment an intentionally ignored case.",
+      "de": "Protokollieren, gezielt behandeln oder erneut werfen; einen bewusst ignorierten Fall kommentieren."
+    },
+    "drawbacks": {
+      "en": "Extra logging paths; for a genuinely expected empty case a short comment suffices.",
+      "de": "Zusätzliche Logging-Pfade; für einen wirklich erwarteten Leerfall genügt ein kurzer Kommentar."
+    }
+  },
+  "missingContext": [
+    {
+      "en": "Unknown whether the empty/ignored case is intentional (no comment present).",
+      "de": "Unbekannt, ob der leere/ignorierte Fall beabsichtigt ist (kein Kommentar vorhanden)."
+    }
+  ],
   "tests": "test/Rules.test.ts"
 }

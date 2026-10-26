@@ -5,6 +5,7 @@ export interface ProjectRuleInput {
     facts: Fact[];
     ruleSetId: string;
     knowledgeBase: KnowledgeBase;
+    lang: string;
 }
 
 /**

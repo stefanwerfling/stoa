@@ -1,6 +1,6 @@
 {
   "id": "marcus.simplicity",
-  "name": "Moderation – doing what is necessary",
+  "name": { "en": "Moderation – doing what is necessary", "de": "Maßhalten – das Notwendige tun" },
   "passages": ["marcus-meditations:4.24"],
   "originalThought": "QUELLE (Long 1862, 4.24): 'Occupy thyself with few things ... Do what is necessary.' Marcus advises limiting oneself to the necessary in order to gain tranquillity; the addition shifts the focus from 'few' to 'the necessary'.",
   "softwareInterpretation": "INTERPRETATION: Code should carry only the complexity its task requires. Not 'short at any cost', but 'as complex as necessary, no more'.",

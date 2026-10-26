@@ -1,6 +1,6 @@
 {
   "id": "marcus.cooperation",
-  "name": "Serving the whole",
+  "name": { "en": "Serving the whole", "de": "Dem Ganzen dienen" },
   "passages": ["marcus-meditations:6.54", "marcus-meditations:2.1"],
   "originalThought": "QUELLE (Long 1862): 6.54 'That which is not good for the swarm, neither is it good for the bee'; 2.1 'we are made for co-operation, like feet, like hands...'. What harms the whole harms the part.",
   "softwareInterpretation": "INTERPRETATION: A module should fit into the whole: clear, directed, necessary dependencies — no cycles, no superfluous coupling, no violation of the declared architecture direction.",

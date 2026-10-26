@@ -1,4 +1,5 @@
 import type {QualityDimension, Severity} from '../Types.js';
+import type {LocalizedText} from '../i18n/Localized.js';
 
 export type ConditionOp = '==' | '!=' | '>' | '>=' | '<' | '<=';
 
@@ -34,8 +35,8 @@ export interface ConfidenceSpec {
 }
 
 export interface RuleRemediation {
-    suggestion: string;
-    drawbacks?: string;
+    suggestion: LocalizedText;
+    drawbacks?: LocalizedText;
 }
 
 /**
@@ -55,10 +56,10 @@ export interface Rule {
     suppressWhen?: ConditionGroup;
     severity: SeveritySpec;
     confidence: ConfidenceSpec;
-    message: string;
-    rationale?: string;
+    message: LocalizedText;
+    rationale?: LocalizedText;
     remediation?: RuleRemediation;
-    missingContext?: string[];
+    missingContext?: LocalizedText[];
     remediationRef?: string;
     tests: string;
 }

@@ -18,11 +18,23 @@
     "escalateWhen": [{ "fact": "metric.nestingDepth", "op": ">=", "value": 6, "to": "high" }]
   },
   "confidence": { "base": 0.75, "capBy": "certainty" },
-  "message": "Nesting depth is {value} in {symbol}.",
-  "rationale": "Deep nesting raises cognitive load beyond necessity (marcus.simplicity).",
+  "message": {
+    "en": "Nesting depth is {value} in {symbol}.",
+    "de": "Verschachtelungstiefe {value} in {symbol}."
+  },
+  "rationale": {
+    "en": "Deep nesting raises cognitive load beyond necessity (marcus.simplicity).",
+    "de": "Tiefe Verschachtelung erhöht die kognitive Last über das Notwendige hinaus (marcus.simplicity)."
+  },
   "remediation": {
-    "suggestion": "Use early returns / guard clauses or extract inner blocks.",
-    "drawbacks": "Guard-clause refactors can scatter logic if overused."
+    "suggestion": {
+      "en": "Use early returns / guard clauses or extract inner blocks.",
+      "de": "Frühe Rückgaben / Guard-Clauses verwenden oder innere Blöcke auslagern."
+    },
+    "drawbacks": {
+      "en": "Guard-clause refactors can scatter logic if overused.",
+      "de": "Guard-Clause-Refactorings können die Logik zerstreuen, wenn übertrieben."
+    }
   },
   "tests": "test/Rules.test.ts"
 }

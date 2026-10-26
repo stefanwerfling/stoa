@@ -1,6 +1,6 @@
 {
   "id": "marcus.judgment",
-  "name": "Examining judgments",
+  "name": { "en": "Examining judgments", "de": "Prüfung der Urteile" },
   "passages": ["marcus-meditations:4.7", "marcus-meditations:8.47", "marcus-meditations:12.17"],
   "originalThought": "QUELLE (Long 1862): 4.7 'Take away thy opinion...'; 8.47 '...not this thing... but thy own judgement...'; 12.17 'if it is not true, do not say it'. Separate the fact from the judgment about it.",
   "softwareInterpretation": "INTERPRETATION (two roles): (a) meta — separate observation from evaluation and make uncertainty explicit, which grounds separating severity from confidence; (b) for code — declaration should match behavior; contradictions between claimed architecture/signature and actual behavior are findings.",

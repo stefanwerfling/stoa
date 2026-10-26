@@ -1,10 +1,31 @@
 import {basename, dirname, resolve} from 'node:path';
 import type {Fact, Finding, PrincipleInterpretationRef} from '../../Types.js';
+import {localize, type LocalizedText} from '../../i18n/Localized.js';
 import type {KnowledgeBase} from '../../knowledge/KnowledgeBase.js';
 import type {ProjectRule, ProjectRuleInput} from '../ProjectRule.js';
 
 const RESOLVABLE_EXTENSIONS: readonly string[] = ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs'] as const;
 const PRINCIPLE_ID = 'marcus.cooperation';
+
+const TEXT = {
+    statement: {en: 'Import cycle among {members}.', de: 'Import-Zyklus zwischen {members}.'} as LocalizedText,
+    suggestion: {
+        en: 'Break the cycle: invert one dependency, extract a shared module, or introduce a boundary interface.',
+        de: 'Zyklus auflösen: eine Abhängigkeit umkehren, ein gemeinsames Modul extrahieren oder eine Grenz-Schnittstelle einführen.'
+    } as LocalizedText,
+    drawbacks: {
+        en: 'An extra abstraction adds indirection; make sure it carries its weight.',
+        de: 'Eine zusätzliche Abstraktion bringt Indirektion; sie muss ihren Nutzen rechtfertigen.'
+    } as LocalizedText,
+    missingContext: {
+        en: 'Dynamic imports / DI and non-relative (e.g. PHP namespace) imports are not resolved.',
+        de: 'Dynamische Importe / DI und nicht-relative Importe (z. B. PHP-Namespaces) werden nicht aufgelöst.'
+    } as LocalizedText,
+    rationale: {
+        en: 'A cyclic dependency binds modules so that none can change or be understood alone (marcus.cooperation).',
+        de: 'Eine zyklische Abhängigkeit bindet Module so, dass keines allein geändert oder verstanden werden kann (marcus.cooperation).'
+    } as LocalizedText
+};
 
 interface ImportValue {
     module: string;
@@ -66,24 +87,24 @@ export class DependencyCycleRule implements ProjectRule {
             ruleSet: input.ruleSetId,
             location: {file: anchor, range: {startLine: 1, startCol: 0, endLine: 1, endCol: 0}, symbol: cycleKey, structure: 'module'},
             observation: {
-                statement: `Import cycle among ${names.join(', ')}.`,
+                statement: localize(TEXT.statement, input.lang).replace('{members}', names.join(', ')),
                 evidence: [{fact: 'deps.import', value: cycleKey, certainty: 'syntactic'}]
             },
-            interpretation: {principles: resolvePrinciple(input.knowledgeBase), dimensions: ['dependencies']},
+            interpretation: {principles: resolvePrinciple(input.knowledgeBase, input.lang), dimensions: ['dependencies']},
             severity: 'high',
             confidence: 0.9,
             certaintyBasis: 'syntactic',
             remediation: {
-                suggestion: 'Break the cycle: invert one dependency, extract a shared module, or introduce a boundary interface.',
-                drawbacks: 'An extra abstraction adds indirection; make sure it carries its weight.'
+                suggestion: localize(TEXT.suggestion, input.lang),
+                drawbacks: localize(TEXT.drawbacks, input.lang)
             },
-            missingContext: ['Dynamic imports / DI and non-relative (e.g. PHP namespace) imports are not resolved.'],
+            missingContext: [localize(TEXT.missingContext, input.lang)],
             source: 'deterministic'
         };
     }
 }
 
-const resolvePrinciple = (knowledgeBase: KnowledgeBase): PrincipleInterpretationRef[] => {
+const resolvePrinciple = (knowledgeBase: KnowledgeBase, lang: string): PrincipleInterpretationRef[] => {
     const principle = knowledgeBase.get(PRINCIPLE_ID);
     if (principle === null) {
         return [];
@@ -91,10 +112,10 @@ const resolvePrinciple = (knowledgeBase: KnowledgeBase): PrincipleInterpretation
     return [
         {
             id: principle.id,
-            name: principle.name,
+            name: localize(principle.name, lang),
             passages: principle.passages,
             attributionConfidence: principle.attributionConfidence,
-            rationale: 'A cyclic dependency binds modules so that none can change or be understood alone (marcus.cooperation).'
+            rationale: localize(TEXT.rationale, lang)
         }
     ];
 };

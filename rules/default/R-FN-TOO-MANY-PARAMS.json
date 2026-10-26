@@ -15,12 +15,29 @@
     "escalateWhen": [{ "fact": "metric.parameterCount", "op": ">=", "value": 8, "to": "medium" }]
   },
   "confidence": { "base": 0.6, "capBy": "certainty" },
-  "message": "{symbol} takes {value} parameters.",
-  "rationale": "A long parameter list often signals more than one responsibility bundled together (marcus.purpose).",
-  "remediation": {
-    "suggestion": "Group related parameters into an object, or split the unit by responsibility.",
-    "drawbacks": "A parameter object can hide required inputs; not every long list is a defect."
+  "message": {
+    "en": "{symbol} takes {value} parameters.",
+    "de": "{symbol} hat {value} Parameter."
   },
-  "missingContext": ["Whether the parameters form one cohesive concept needs domain knowledge."],
+  "rationale": {
+    "en": "A long parameter list often signals more than one responsibility bundled together (marcus.purpose).",
+    "de": "Eine lange Parameterliste bündelt oft mehr als eine Verantwortung (marcus.purpose)."
+  },
+  "remediation": {
+    "suggestion": {
+      "en": "Group related parameters into an object, or split the unit by responsibility.",
+      "de": "Zusammengehörige Parameter zu einem Objekt bündeln oder die Einheit nach Verantwortung aufteilen."
+    },
+    "drawbacks": {
+      "en": "A parameter object can hide required inputs; not every long list is a defect.",
+      "de": "Ein Parameter-Objekt kann nötige Eingaben verbergen; nicht jede lange Liste ist ein Mangel."
+    }
+  },
+  "missingContext": [
+    {
+      "en": "Whether the parameters form one cohesive concept needs domain knowledge.",
+      "de": "Ob die Parameter ein zusammenhängendes Konzept bilden, erfordert Fachwissen."
+    }
+  ],
   "tests": "test/Rules.test.ts"
 }
