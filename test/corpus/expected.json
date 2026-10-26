@@ -32,6 +32,10 @@
     { "file": "MigrationDataLoss.ts", "rule": "R-MIGRATION-DATA-LOSS", "symbol": "loss#0" },
     { "file": "MigrationDataLoss.ts", "rule": "R-MIGRATION-DATA-LOSS", "symbol": "loss#1" },
     { "file": "MigrationNullable.ts", "rule": "R-ORM-NULLABLE-NO-DEFAULT", "symbol": "nullable#0" },
-    { "file": "MigrationNullable.ts", "rule": "R-ORM-NULLABLE-NO-DEFAULT", "symbol": "nullable#1" }
+    { "file": "MigrationNullable.ts", "rule": "R-ORM-NULLABLE-NO-DEFAULT", "symbol": "nullable#1" },
+    { "file": "MigrationDoctrineUp.php", "rule": "R-MIGRATION-DATA-LOSS", "symbol": "loss#0" },
+    { "file": "MigrationDoctrineUp.php", "rule": "R-ORM-NULLABLE-NO-DEFAULT", "symbol": "nullable#0" },
+    { "file": "MigrationDoctrineBare.php", "rule": "R-MIGRATION-UNGUARDED-DDL", "symbol": "ddl#0" },
+    { "file": "MigrationDoctrineBare.php", "rule": "R-MIGRATION-NO-DOWN", "symbol": "Version20260102" }
   ]
 }

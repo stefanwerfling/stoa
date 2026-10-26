@@ -3,6 +3,7 @@ import type {CallExpression, ClassDeclaration, Decorator, ImportDeclaration, Met
 import type {Fact, SourceRange, SubjectKind} from '../../Types.js';
 import {factBuilder, type AdapterInfo} from '../FactBuilder.js';
 import {isDeepImport} from '../ImportPath.js';
+import {destructiveDdl, nullableNoDefault, unguardedDdl} from '../MigrationSql.js';
 
 interface FunctionMetrics {
     cyclomatic: number;
@@ -278,44 +279,8 @@ const isMigrationFile = (sourceFile: SourceFile): boolean => {
     return sourceFile.getClasses().some((cls) => cls.getImplements().some((impl) => impl.getText().includes('MigrationInterface')));
 };
 
-const CREATE_TABLE = /\bcreate\s+table\b/i;
-const CREATE_TABLE_GUARDED = /\bcreate\s+table\s+if\s+not\s+exists\b/i;
-const DROP_TABLE = /\bdrop\s+table\b/i;
-const DROP_TABLE_GUARDED = /\bdrop\s+table\s+if\s+exists\b/i;
-const ADD_COLUMN = /\badd\s+column\b/i;
-const ADD_COLUMN_GUARDED = /\badd\s+column\s+if\s+not\s+exists\b/i;
-const DROP_COLUMN = /\bdrop\s+column\b/i;
-const DROP_COLUMN_GUARDED = /\bdrop\s+column\s+if\s+exists\b/i;
-
-const unguardedDdl = (sql: string): string | null => {
-    if (CREATE_TABLE.test(sql) && !CREATE_TABLE_GUARDED.test(sql)) {
-        return 'CREATE TABLE without IF NOT EXISTS';
-    }
-    if (DROP_TABLE.test(sql) && !DROP_TABLE_GUARDED.test(sql)) {
-        return 'DROP TABLE without IF EXISTS';
-    }
-    if (ADD_COLUMN.test(sql) && !ADD_COLUMN_GUARDED.test(sql)) {
-        return 'ADD COLUMN without IF NOT EXISTS';
-    }
-    if (DROP_COLUMN.test(sql) && !DROP_COLUMN_GUARDED.test(sql)) {
-        return 'DROP COLUMN without IF EXISTS';
-    }
-    return null;
-};
-
 const enclosingMethodName = (node: Node): string | undefined => {
     return node.getFirstAncestorByKind(SyntaxKind.MethodDeclaration)?.getName();
-};
-
-// Destructive DDL in up() — the drop itself loses data regardless of guards.
-const destructiveDdl = (sql: string): string | null => {
-    if (DROP_TABLE.test(sql)) {
-        return 'DROP TABLE in up() destroys data';
-    }
-    if (DROP_COLUMN.test(sql)) {
-        return 'DROP COLUMN in up() destroys data';
-    }
-    return null;
 };
 
 const destructiveCall = (call: CallExpression): string | null => {
@@ -331,21 +296,6 @@ const destructiveCall = (call: CallExpression): string | null => {
         return 'dropColumn() in up() destroys data';
     }
     return null;
-};
-
-const NOT_NULL = /\bnot\s+null\b/i;
-const HAS_DEFAULT = /\bdefault\b/i;
-const AUTO_FILLED = /\b(auto_increment|generated|serial)\b/i;
-
-// Raw ADD COLUMN that is NOT NULL and has no DEFAULT (and is not auto-filled).
-const nullableNoDefault = (sql: string): string | null => {
-    if (!ADD_COLUMN.test(sql) || !NOT_NULL.test(sql)) {
-        return null;
-    }
-    if (HAS_DEFAULT.test(sql) || AUTO_FILLED.test(sql)) {
-        return null;
-    }
-    return 'ADD COLUMN ... NOT NULL without DEFAULT';
 };
 
 // Query-builder addColumn whose TableColumn is explicitly isNullable:false with

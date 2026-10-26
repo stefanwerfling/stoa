@@ -193,6 +193,13 @@ Persistenz / ORM (TypeORM, nur TS/JS, Default aktiv):
 > Auto-increment/generated und ein fehlendes explizites `isNullable` bleiben
 > außen vor (konservativ).
 
+> **Doctrine (PHP):** Die vier Migrationsregeln (`R-MIGRATION-UNGUARDED-DDL`,
+> `R-MIGRATION-DATA-LOSS`, `R-MIGRATION-NO-DOWN`, `R-ORM-NULLABLE-NO-DEFAULT`)
+> greifen auch für Doctrine-Migrationen (`extends AbstractMigration`). Das Roh-SQL
+> wird aus `$this->addSql('…')` gelesen; die SQL-Prüfungen sind sprachneutral
+> (gemeinsames Modul `MigrationSql`). Der Query-Builder-Pfad (TypeORM) und die
+> `@Entity`-Regeln sind Doctrine-seitig noch nicht abgedeckt.
+
 Prozedurale Regeln (`ProjectRule`, cross-file):
 
 | Regel-ID | Grundlage | Prinzip | Dimension | Charakter |

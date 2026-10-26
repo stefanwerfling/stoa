@@ -1,6 +1,7 @@
 import type {Fact, SourceRange, SubjectKind} from '../../Types.js';
 import {factBuilder, type AdapterInfo} from '../FactBuilder.js';
 import {isDeepImport} from '../ImportPath.js';
+import {destructiveDdl, nullableNoDefault, unguardedDdl} from '../MigrationSql.js';
 
 /**
  * Minimal structural view of a glayzzle php-parser node. We keep this local and
@@ -105,7 +106,120 @@ export const extractFacts = (program: PhpNode, content: string, filePath: string
         }
     }
 
+    for (const cls of collect(program, isDoctrineMigration)) {
+        // Collect every addSql('...') literal with the method it sits in, in
+        // document order, so the same migration rules fire for Doctrine as for
+        // TypeORM (shared SQL checks in MigrationSql).
+        const statements: {sql: string; node: PhpNode; method: string}[] = [];
+        for (const method of collect(cls, (node) => node.kind === 'method')) {
+            const name = functionName(method);
+            for (const call of collect(method, isAddSqlCall)) {
+                const sql = addSqlArgument(call);
+                if (sql !== null) {
+                    statements.push({sql, node: call, method: name});
+                }
+            }
+        }
+        statements.sort(byPosition);
+
+        let ddlIndex = 0;
+        for (const statement of statements) {
+            const descriptor = unguardedDdl(statement.sql);
+            if (descriptor !== null) {
+                facts.push(build({kind: 'migration.unguardedDdl', kindOf: 'statement', symbol: `ddl#${ddlIndex}`, range: rangeOf(statement.node), value: descriptor}));
+                ddlIndex += 1;
+            }
+        }
+
+        let lossIndex = 0;
+        for (const statement of statements) {
+            if (statement.method !== 'up') {
+                continue;
+            }
+            const descriptor = destructiveDdl(statement.sql);
+            if (descriptor !== null) {
+                facts.push(build({kind: 'migration.dataLoss', kindOf: 'statement', symbol: `loss#${lossIndex}`, range: rangeOf(statement.node), value: descriptor}));
+                lossIndex += 1;
+            }
+        }
+
+        let nullableIndex = 0;
+        for (const statement of statements) {
+            if (statement.method !== 'up') {
+                continue;
+            }
+            const descriptor = nullableNoDefault(statement.sql);
+            if (descriptor !== null) {
+                facts.push(build({kind: 'migration.nullableNoDefault', kindOf: 'statement', symbol: `nullable#${nullableIndex}`, range: rangeOf(statement.node), value: descriptor}));
+                nullableIndex += 1;
+            }
+        }
+
+        const descriptor = migrationMissingDown(cls);
+        if (descriptor !== null) {
+            facts.push(build({kind: 'migration.noDown', kindOf: 'class', symbol: className(cls), range: rangeOf(cls), value: descriptor}));
+        }
+    }
+
     return facts;
+};
+
+// A Doctrine migration class extends AbstractMigration.
+const isDoctrineMigration = (node: PhpNode): boolean => {
+    if (node.kind !== 'class') {
+        return false;
+    }
+    const extended = node.extends;
+    return isPhpNode(extended) && typeof extended.name === 'string' && lastSegment(extended.name) === 'AbstractMigration';
+};
+
+const isAddSqlCall = (node: PhpNode): boolean => {
+    if (node.kind !== 'call') {
+        return false;
+    }
+    const what = node.what;
+    if (!isPhpNode(what) || what.kind !== 'propertylookup') {
+        return false;
+    }
+    const offset = what.offset;
+    return isPhpNode(offset) && offset.name === 'addSql';
+};
+
+const addSqlArgument = (call: PhpNode): string | null => {
+    const first = (call.arguments as PhpNode[] | undefined)?.[0];
+    if (isPhpNode(first) && first.kind === 'string' && typeof first.value === 'string') {
+        return first.value;
+    }
+    return null;
+};
+
+// A migration is reversible only if its down() undoes something; a missing or
+// empty down() is the concern (a throwing down() has statements and is left).
+const migrationMissingDown = (cls: PhpNode): string | null => {
+    const down = collect(cls, (node) => node.kind === 'method' && functionName(node) === 'down')[0];
+    if (down === undefined) {
+        return 'migration has no down() method';
+    }
+    const body = down.body as PhpNode | undefined;
+    const children = (body?.children as PhpNode[] | undefined) ?? [];
+    return children.length === 0 ? 'migration down() is empty' : null;
+};
+
+const className = (cls: PhpNode): string => {
+    const name = cls.name;
+    if (isPhpNode(name) && typeof name.name === 'string') {
+        return name.name;
+    }
+    return typeof name === 'string' ? name : '(anonymous)';
+};
+
+const byPosition = (a: {node: PhpNode}, b: {node: PhpNode}): number => {
+    const left = a.node.loc?.start;
+    const right = b.node.loc?.start;
+    if (left === undefined || right === undefined) {
+        return 0;
+    }
+    return left.line - right.line || left.column - right.column;
 };
 
 // PHP non-deterministic built-ins (clock / RNG / unique ids).

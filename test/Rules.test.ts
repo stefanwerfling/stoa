@@ -228,6 +228,21 @@ test('R-ORM-NULLABLE-NO-DEFAULT flags NOT NULL columns with no default, raw and 
     assert.equal(fine.length, 0, 'NOT NULL DEFAULT, a nullable column and isNullable:true are all fine');
 });
 
+test('the migration rules fire for Doctrine (PHP) via addSql, scoped to up() and down()', () => {
+    const up = analyzePath(join(root, 'test', 'corpus', 'project', 'MigrationDoctrineUp.php'));
+    const loss = up.filter((f) => f.rule.id === 'R-MIGRATION-DATA-LOSS');
+    const nullable = up.filter((f) => f.rule.id === 'R-ORM-NULLABLE-NO-DEFAULT');
+    assert.equal(loss.length, 1, 'guarded DROP TABLE in up() still loses data');
+    assert.equal(nullable.length, 1, 'ADD COLUMN NOT NULL with no default');
+    assert.equal(up.filter((f) => f.rule.id === 'R-MIGRATION-UNGUARDED-DDL').length, 0, 'the IF [NOT] EXISTS guards silence unguarded-DDL');
+
+    const bare = analyzePath(join(root, 'test', 'corpus', 'project', 'MigrationDoctrineBare.php'));
+    assert.equal(bare.filter((f) => f.rule.id === 'R-MIGRATION-UNGUARDED-DDL').length, 1, 'unguarded CREATE TABLE');
+    const noDown = bare.filter((f) => f.rule.id === 'R-MIGRATION-NO-DOWN');
+    assert.equal(noDown.length, 1, 'no down() method');
+    assert.equal(noDown[0]?.location.symbol, 'Version20260102');
+});
+
 test('findings carry observation evidence and are deterministic', () => {
     const a = analyzePath(join(fixtures, 'Complex.ts'));
     const b = analyzePath(join(fixtures, 'Complex.ts'));

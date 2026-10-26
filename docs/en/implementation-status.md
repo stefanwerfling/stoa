@@ -53,10 +53,10 @@ Declarative rules (`rules/default/*.json`), on by default:
 | R-ORM-SYNC-WITH-MIGRATIONS | marcus.judgment | decision-evidence, robustness | TS/JS |
 | R-ORM-ENTITY-NO-PK | marcus.judgment | robustness, decision-evidence | TS/JS (`@Entity` classes) |
 | R-ORM-EAGER-RELATION | marcus.control | side-effect-control, robustness | TS/JS (`@Entity` relations) |
-| R-ORM-NULLABLE-NO-DEFAULT | marcus.obstacle | robustness, error-handling | TS/JS (NOT NULL add in `up()`) |
-| R-MIGRATION-UNGUARDED-DDL | marcus.obstacle | robustness, error-handling | TS/JS (migration files only) |
-| R-MIGRATION-NO-DOWN | marcus.judgment | robustness, decision-evidence | TS/JS (migration files only) |
-| R-MIGRATION-DATA-LOSS | marcus.judgment | robustness, decision-evidence | TS/JS (drops in `up()`) |
+| R-ORM-NULLABLE-NO-DEFAULT | marcus.obstacle | robustness, error-handling | TS/JS, PHP (NOT NULL add in `up()`) |
+| R-MIGRATION-UNGUARDED-DDL | marcus.obstacle | robustness, error-handling | TS/JS, PHP (migration files only) |
+| R-MIGRATION-NO-DOWN | marcus.judgment | robustness, decision-evidence | TS/JS, PHP (migration files only) |
+| R-MIGRATION-DATA-LOSS | marcus.judgment | robustness, decision-evidence | TS/JS, PHP (drops in `up()`) |
 
 Procedural rules (`ProjectRule`, cross-file):
 
@@ -81,7 +81,7 @@ All eight quality dimensions have at least one rule.
 
 ## Quality assurance
 
-- **66 node:test cases** green (rules pos./neg., extraction, schema validation,
+- **67 node:test cases** green (rules pos./neg., extraction, schema validation,
   i18n, determinism, SARIF, evaluation, semantic groundedness).
 - **Golden corpus** (`test/corpus/`, TS+PHP) with ground truth; evaluation
   currently **precision 100% · recall 100%**. Per-rule precision gate (AC-5).
