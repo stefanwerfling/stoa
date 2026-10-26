@@ -198,9 +198,11 @@ Persistenz / ORM (TypeORM, nur TS/JS, Default aktiv):
 > greifen auch für Doctrine-Migrationen (`extends AbstractMigration`). Das Roh-SQL
 > wird aus `$this->addSql('…')` gelesen; die SQL-Prüfungen sind sprachneutral
 > (gemeinsames Modul `MigrationSql`). Ebenso greifen `R-ORM-ENTITY-NO-PK`
-> (`#[ORM\Entity]` ohne `#[ORM\Id]`) und `R-ORM-EAGER-RELATION`
-> (`#[ORM\ManyToOne(fetch: 'EAGER')]` usw.) über PHP-8-Attribute. Der
-> TypeORM-Query-Builder-Pfad bleibt naturgemäß TS-seitig.
+> (`@Entity` ohne `@Id`) und `R-ORM-EAGER-RELATION` (Relation mit `fetch EAGER`)
+> — sowohl über **PHP-8-Attribute** (`#[ORM\Entity]`, `#[ORM\ManyToOne(fetch:
+> 'EAGER')]`) als auch über **Annotations-Docblocks** (`@ORM\Entity`, der ältere
+> Stil; `fetch="EAGER"`). Der TypeORM-Query-Builder-Pfad bleibt naturgemäß
+> TS-seitig.
 
 Prozedurale Regeln (`ProjectRule`, cross-file):
 

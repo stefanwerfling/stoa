@@ -38,6 +38,8 @@
     { "file": "MigrationDoctrineBare.php", "rule": "R-MIGRATION-UNGUARDED-DDL", "symbol": "ddl#0" },
     { "file": "MigrationDoctrineBare.php", "rule": "R-MIGRATION-NO-DOWN", "symbol": "Version20260102" },
     { "file": "DoctrineEntityNoPk.php", "rule": "R-ORM-ENTITY-NO-PK", "symbol": "Session" },
-    { "file": "DoctrineEntityEager.php", "rule": "R-ORM-EAGER-RELATION", "symbol": "customer" }
+    { "file": "DoctrineEntityEager.php", "rule": "R-ORM-EAGER-RELATION", "symbol": "customer" },
+    { "file": "DoctrineAnnotatedNoPk.php", "rule": "R-ORM-ENTITY-NO-PK", "symbol": "Account" },
+    { "file": "DoctrineAnnotatedEager.php", "rule": "R-ORM-EAGER-RELATION", "symbol": "customer" }
   ]
 }

@@ -265,6 +265,25 @@ test('the @Entity rules fire for Doctrine (PHP) via #[ORM] attributes', () => {
     assert.equal(inherits.length, 0, 'a key may be inherited from the base class');
 });
 
+test('the @Entity rules also fire for annotation-mapped Doctrine (docblock @ORM)', () => {
+    const noPk = analyzePath(join(root, 'test', 'corpus', 'project', 'DoctrineAnnotatedNoPk.php')).filter(
+        (f) => f.rule.id === 'R-ORM-ENTITY-NO-PK'
+    );
+    assert.equal(noPk.length, 1);
+    assert.equal(noPk[0]?.location.symbol, 'Account');
+
+    const eager = analyzePath(join(root, 'test', 'corpus', 'project', 'DoctrineAnnotatedEager.php'));
+    const eagerHits = eager.filter((f) => f.rule.id === 'R-ORM-EAGER-RELATION');
+    assert.equal(eagerHits.length, 1, 'the EAGER relation, not the LAZY one');
+    assert.equal(eagerHits[0]?.location.symbol, 'customer');
+    assert.equal(eager.filter((f) => f.rule.id === 'R-ORM-ENTITY-NO-PK').length, 0, '@ORM\\Id is a primary key');
+
+    const inherits = analyzePath(join(root, 'test', 'fixtures', 'orm', 'DoctrineAnnotatedInherits.php')).filter(
+        (f) => f.rule.id === 'R-ORM-ENTITY-NO-PK'
+    );
+    assert.equal(inherits.length, 0, 'an inherited key is not seen here');
+});
+
 test('findings carry observation evidence and are deterministic', () => {
     const a = analyzePath(join(fixtures, 'Complex.ts'));
     const b = analyzePath(join(fixtures, 'Complex.ts'));

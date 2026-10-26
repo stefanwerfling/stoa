@@ -196,10 +196,11 @@ Persistence / ORM (TypeORM, TS/JS only, on by default):
 > `R-MIGRATION-DATA-LOSS`, `R-MIGRATION-NO-DOWN`, `R-ORM-NULLABLE-NO-DEFAULT`)
 > also fire for Doctrine migrations (`extends AbstractMigration`). The raw SQL is
 > read from `$this->addSql('…')`; the SQL checks are language-neutral (shared
-> `MigrationSql` module). `R-ORM-ENTITY-NO-PK` (`#[ORM\Entity]` without
-> `#[ORM\Id]`) and `R-ORM-EAGER-RELATION` (`#[ORM\ManyToOne(fetch: 'EAGER')]`
-> etc.) also fire via PHP 8 attributes. The TypeORM query-builder path remains
-> TS-side by nature.
+> `MigrationSql` module). `R-ORM-ENTITY-NO-PK` (`@Entity` without `@Id`) and
+> `R-ORM-EAGER-RELATION` (a relation with `fetch EAGER`) also fire — via both
+> **PHP 8 attributes** (`#[ORM\Entity]`, `#[ORM\ManyToOne(fetch: 'EAGER')]`) and
+> **annotation docblocks** (`@ORM\Entity`, the older style; `fetch="EAGER"`). The
+> TypeORM query-builder path remains TS-side by nature.
 
 Procedural rules (`ProjectRule`, cross-file):
 

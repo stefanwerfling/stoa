@@ -161,26 +161,35 @@ export const extractFacts = (program: PhpNode, content: string, filePath: string
         }
     }
 
+    // Doctrine entities, both PHP 8 attributes (#[ORM\Entity]) and the older
+    // annotation docblocks (@ORM\Entity). Attributes sit on the property node;
+    // annotation docblocks sit on the enclosing propertystatement.
     for (const cls of collect(program, (node) => node.kind === 'class')) {
-        if (!hasAttribute(cls, 'Entity')) {
+        if (!hasAttribute(cls, 'Entity') && !annotationPresent(leadingDoc(cls), 'Entity')) {
             continue;
         }
-        const properties = collect(cls, (node) => node.kind === 'property');
 
-        for (const property of properties) {
-            for (const attribute of attributesOf(property)) {
-                const relation = attributeShortName(attribute);
-                if (RELATION_ATTRIBUTES.has(relation) && relationIsEager(attribute)) {
-                    facts.push(build({kind: 'orm.eagerRelation', kindOf: 'statement', symbol: nodeName(property), range: rangeOf(attribute), value: relation}));
+        let hasPrimaryKey = false;
+        for (const statement of collect(cls, (node) => node.kind === 'propertystatement')) {
+            const doc = leadingDoc(statement);
+            const docHasId = annotationPresent(doc, 'Id');
+            const docRelation = annotationEagerRelation(doc);
+            for (const property of (statement.properties as PhpNode[] | undefined) ?? []) {
+                const attributes = attributesOf(property);
+                if (docHasId || attributes.some((attribute) => attributeShortName(attribute) === 'Id')) {
+                    hasPrimaryKey = true;
+                }
+                const eager = attributes.find((attribute) => RELATION_ATTRIBUTES.has(attributeShortName(attribute)) && relationIsEager(attribute));
+                const relation = eager !== undefined ? attributeShortName(eager) : docRelation;
+                if (relation !== null) {
+                    facts.push(build({kind: 'orm.eagerRelation', kindOf: 'statement', symbol: nodeName(property), range: rangeOf(eager ?? statement), value: relation}));
                 }
             }
         }
 
         // A subclass may inherit its key from a base entity/mapped superclass, so
         // only a standalone @Entity without any #[ORM\Id] property is reported.
-        const inherits = isPhpNode(cls.extends);
-        const hasPrimaryKey = properties.some((property) => hasAttribute(property, 'Id'));
-        if (!inherits && !hasPrimaryKey) {
+        if (!isPhpNode(cls.extends) && !hasPrimaryKey) {
             facts.push(build({kind: 'orm.entityNoPrimaryKey', kindOf: 'class', symbol: nodeName(cls), range: rangeOf(cls), value: 'entity has no primary key column'}));
         }
     }
@@ -208,6 +217,35 @@ const attributeShortName = (attribute: PhpNode): string => {
 
 const hasAttribute = (node: PhpNode, shortName: string): boolean => {
     return attributesOf(node).some((attribute) => attributeShortName(attribute) === shortName);
+};
+
+// The docblock text of a node (glayzzle attaches it as leadingComments; a
+// property's docblock sits on its propertystatement, not the property).
+const leadingDoc = (node: PhpNode): string => {
+    const comments = node.leadingComments as PhpNode[] | undefined;
+    if (comments === undefined) {
+        return '';
+    }
+    return comments.map((comment) => (typeof comment.value === 'string' ? comment.value : '')).join('\n');
+};
+
+// Short names of the @-annotations in a docblock (so @ORM\Entity and @Entity
+// both match the short name 'Entity', mirroring the attribute short name).
+const annotationShortNames = (doc: string): string[] => {
+    return (doc.match(/@[A-Za-z_\\]+/g) ?? []).map((token) => lastSegment(token.slice(1)));
+};
+
+const annotationPresent = (doc: string, shortName: string): boolean => {
+    return annotationShortNames(doc).includes(shortName);
+};
+
+// A relation annotation (@ORM\ManyToOne etc.) carrying fetch="EAGER" in the same
+// docblock; returns the relation short name or null.
+const annotationEagerRelation = (doc: string): string | null => {
+    if (!/fetch\s*=\s*["']EAGER["']/i.test(doc)) {
+        return null;
+    }
+    return annotationShortNames(doc).find((name) => RELATION_ATTRIBUTES.has(name)) ?? null;
 };
 
 // A Doctrine relation is eager when it carries a `fetch: 'EAGER'` argument.
