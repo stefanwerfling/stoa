@@ -13,8 +13,8 @@
   "severity": { "base": "medium" },
   "confidence": { "base": 0.9, "capBy": "certainty" },
   "message": {
-    "en": "ARIA attribute has a value outside its allowed tokens (WCAG 2.2 · 4.1.2): {value}.",
-    "de": "ARIA-Attribut mit einem Wert außerhalb der erlaubten Tokens (WCAG 2.2 · 4.1.2): {value}."
+    "en": "ARIA attribute has a value outside its allowed tokens (related: WCAG 2.2 · 4.1.2): {value}.",
+    "de": "ARIA-Attribut mit einem Wert außerhalb der erlaubten Tokens (verwandt: WCAG 2.2 · 4.1.2): {value}."
   },
   "rationale": {
     "en": "A token-enumerated ARIA state/property carrying a value outside its defined set — aria-hidden=\"yes\" instead of true/false, aria-live=\"rude\" — is undefined: assistive tech falls back to the default or ignores it, so the intended state is not conveyed (marcus.purpose).",
@@ -34,6 +34,10 @@
     {
       "en": "Only token-enumerated attributes are checked; IDREF/string/number values are not. Empty values (default fallback) and values with interpolation markers ({ } < $, likely template output) are skipped to avoid false positives.",
       "de": "Geprüft werden nur token-enumerierte Attribute, keine IDREF-/String-/Zahlwerte. Leere Werte (Default-Fallback) und Werte mit Interpolationsmarkern ({ } < $, vermutlich Template-Ausgabe) werden übersprungen, um Fehlalarme zu vermeiden."
+    },
+    {
+      "en": "This is a statically proven technical anomaly (the value is outside the attribute's token set). The accessibility impact depends on the attribute — assistive tech usually falls back to the default or ignores it — so WCAG 4.1.2 is cited as related guidance, not as a proven violation.",
+      "de": "Dies ist eine statisch bewiesene technische Auffälligkeit (der Wert liegt außerhalb des Token-Satzes des Attributs). Die Auswirkung auf die Barrierefreiheit hängt vom Attribut ab — assistive Technik fällt meist auf den Default zurück oder ignoriert den Wert —, daher ist WCAG 4.1.2 als verwandte Leitlinie genannt, nicht als bewiesener Verstoß."
     }
   ],
   "tests": "test/HtmlA11y.test.ts"

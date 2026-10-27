@@ -13,8 +13,8 @@
   "severity": { "base": "medium" },
   "confidence": { "base": 0.9, "capBy": "certainty" },
   "message": {
-    "en": "Element has an undefined ARIA attribute (WCAG 2.2 · 4.1.2): {value}.",
-    "de": "Element mit undefiniertem ARIA-Attribut (WCAG 2.2 · 4.1.2): {value}."
+    "en": "Element has an undefined ARIA attribute (related: WCAG 2.2 · 4.1.2): {value}.",
+    "de": "Element mit undefiniertem ARIA-Attribut (verwandt: WCAG 2.2 · 4.1.2): {value}."
   },
   "rationale": {
     "en": "An aria-* attribute that is not a defined WAI-ARIA state or property — a typo (aria-labeledby) or an invented name — is silently ignored by assistive tech, so the intended state or relationship never reaches the user (marcus.purpose).",
@@ -34,6 +34,10 @@
     {
       "en": "Only the attribute name is validated, not whether a valid ARIA attribute is allowed on the element's role or carries a valid value.",
       "de": "Geprüft wird nur der Attributname, nicht ob ein gültiges ARIA-Attribut für die Rolle des Elements erlaubt ist oder einen gültigen Wert trägt."
+    },
+    {
+      "en": "This is a statically proven technical anomaly (the attribute name is not defined in WAI-ARIA). Whether it actually fails WCAG 4.1.2 depends on context — often an undefined aria-* is merely a harmless no-op — so 4.1.2 is cited as related guidance, not as a proven violation.",
+      "de": "Dies ist eine statisch bewiesene technische Auffälligkeit (der Attributname ist nicht in WAI-ARIA definiert). Ob daraus ein Verstoß gegen WCAG 4.1.2 folgt, hängt vom Kontext ab — oft ist ein undefiniertes aria-* nur ein harmloser No-op —, daher ist 4.1.2 als verwandte Leitlinie genannt, nicht als bewiesener Verstoß."
     }
   ],
   "tests": "test/HtmlA11y.test.ts"

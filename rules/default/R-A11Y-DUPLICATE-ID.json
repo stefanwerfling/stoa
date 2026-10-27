@@ -13,8 +13,8 @@
   "severity": { "base": "medium" },
   "confidence": { "base": 0.9, "capBy": "certainty" },
   "message": {
-    "en": "id is used more than once in the document (WCAG 2.2 · 1.3.1 / 4.1.2): {value}.",
-    "de": "id wird im Dokument mehrfach verwendet (WCAG 2.2 · 1.3.1 / 4.1.2): {value}."
+    "en": "id is used more than once in the document (related: WCAG 2.2 · 1.3.1 / 4.1.2): {value}.",
+    "de": "id wird im Dokument mehrfach verwendet (verwandt: WCAG 2.2 · 1.3.1 / 4.1.2): {value}."
   },
   "rationale": {
     "en": "An id must be unique per the HTML standard. When two elements share one, a label-for or aria-labelledby/-describedby reference resolves to whichever the user agent picks first — not necessarily the intended one — so the relationship the author meant is ambiguous (marcus.purpose).",
@@ -34,6 +34,10 @@
     {
       "en": "Reported at every occurrence of the shared id, within one file; whether the duplicate actually breaks a reference or only fragment navigation is not distinguished, and ids spread across separately-included documents are not compared.",
       "de": "Gemeldet an jedem Vorkommen der geteilten id, innerhalb einer Datei; ob das Duplikat tatsächlich eine Referenz oder nur die Fragmentnavigation bricht, wird nicht unterschieden, und über getrennt eingebundene Dokumente verteilte ids werden nicht verglichen."
+    },
+    {
+      "en": "This is a statically proven technical anomaly (an id occurs more than once). It only harms accessibility when a reference (label-for, aria-labelledby/-describedby) targets the duplicated id; WCAG 4.1.1 Parsing, which once covered this, was removed in WCAG 2.2, so 1.3.1 / 4.1.2 are cited as related guidance, not as a proven violation.",
+      "de": "Dies ist eine statisch bewiesene technische Auffälligkeit (eine id kommt mehrfach vor). Sie schadet der Barrierefreiheit nur, wenn eine Referenz (label-for, aria-labelledby/-describedby) auf die duplizierte id zeigt; WCAG 4.1.1 (Parsing), das dies früher abdeckte, wurde in WCAG 2.2 entfernt, daher sind 1.3.1 / 4.1.2 als verwandte Leitlinie genannt, nicht als bewiesener Verstoß."
     }
   ],
   "tests": "test/HtmlA11y.test.ts"
