@@ -40,6 +40,21 @@ test('Dart: complexity and parameter rules fire on a tangled function, not a cle
     assert.equal(bySymbol(findings, 'simple').length, 0, 'the clean function is not flagged');
 });
 
+test('Dart: context beats threshold — the stoa:allow-complexity marker suppresses the tangled twin', () => {
+    const findings = analyzePath(join(fixtures, 'Complex.dart'));
+    const tangledComplexity = bySymbol(findings, 'tangled').filter((f) => f.rule.id === 'R-COMPLEXITY-COGNITIVE');
+    assert.ok(tangledComplexity.length > 0, 'the unmarked tangled function still reports cognitive complexity');
+    assert.equal(bySymbol(findings, 'tangledAllowed').length, 0, 'the marked twin (4 params) is fully suppressed via doc.hasComplexityRationale');
+});
+
+test('Dart: R-SIDEEFFECT-NONDETERMINISM flags real Random()/DateTime.now() calls, not mere name mentions', () => {
+    const findings = analyzePath(join(fixtures, 'Nondeterminism.dart')).filter((f) => f.rule.id === 'R-SIDEEFFECT-NONDETERMINISM');
+    const symbols = findings.map((f) => f.location.symbol).sort();
+    assert.deepEqual(symbols, ['roll', 'stamp'], 'both actual calls flagged');
+    assert.equal(findings.some((f) => f.location.symbol === 'pure'), false, 'a param named now / variable named Random / DateTime type is not a call');
+    assert.equal(findings[0]?.interpretation.principles[0]?.id, 'marcus.control');
+});
+
 test('Dart: R-ERR-SWALLOWED fires on an empty catch, not on rethrow or a logged catch', () => {
     const findings = analyzePath(join(fixtures, 'ErrorHandling.dart')).filter((f) => f.rule.id === 'R-ERR-SWALLOWED');
     assert.equal(findings.length, 1, 'only the empty catch swallows');

@@ -127,11 +127,58 @@ const visit = (node: Node, nesting: number, state: MetricState): void => {
     }
 };
 
-// Dart clock/RNG use. A conservative identifier check (Random constructor, or
-// DateTime with a now selector); heuristic, kept low-noise.
+// Dart clock/RNG use, detected by an actual call — not a mere name. Dart models
+// a call as a primary identifier followed by `selector` siblings; a selector
+// carrying an argument list is the call application. We only flag:
+//   Random(...) / Random.<ctor>(...)   — the RNG receiver is actually invoked
+//   DateTime.now(...)                  — the clock factory is actually invoked
+// A parameter/variable/type merely named `Random`, `now` or `DateTime` has no
+// such call chain and is not flagged. Known limitation: a call through an
+// import prefix (e.g. math.Random()) or through a variable already typed Random
+// (rng.nextInt()) is not resolved — conservative (false negative, not positive).
 const usesNondeterminism = (body: Node): boolean => {
-    const names = new Set(descendants(body, ['identifier', 'type_identifier']).map((node) => node.text));
-    return names.has('Random') || (names.has('DateTime') && names.has('now'));
+    return descendants(body, 'selector').some((selector) => {
+        if (!isCallSelector(selector)) {
+            return false;
+        }
+        const parent = selector.parent;
+        if (parent === null) {
+            return false;
+        }
+        const siblings = namedChildren(parent);
+        const index = siblings.findIndex((sibling) => sibling.id === selector.id);
+        if (index < 1) {
+            return false;
+        }
+        // The receiver is the primary to the left of the contiguous selector run
+        // (so in `final rng = Random()` the base is `Random`, not the var `rng`).
+        let baseIndex = index - 1;
+        while (baseIndex >= 0 && siblings[baseIndex]?.type === 'selector') {
+            baseIndex -= 1;
+        }
+        const base = siblings[baseIndex];
+        if (base === undefined || (base.type !== 'identifier' && base.type !== 'type_identifier')) {
+            return false;
+        }
+        const preceding = siblings[index - 1];
+        if (base.text === 'Random') {
+            // Random() / Random.secure() — a call is applied to the Random receiver.
+            return true;
+        }
+        if (base.text === 'DateTime') {
+            // DateTime.now() — the selector immediately before the call is `.now`.
+            return preceding !== undefined && preceding.type === 'selector' && selectorName(preceding) === 'now';
+        }
+        return false;
+    });
+};
+
+const isCallSelector = (selector: Node): boolean => {
+    return descendants(selector, 'arguments').length > 0;
+};
+
+const selectorName = (selector: Node): string | null => {
+    return descendants(selector, 'identifier')[0]?.text ?? null;
 };
 
 const spanRange = (from: Node, to: Node): SourceRange => {

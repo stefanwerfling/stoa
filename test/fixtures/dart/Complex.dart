@@ -18,3 +18,19 @@ int tangled(int a, int b, int c, int d, int e) {
 int simple(int a) {
   return a + 1;
 }
+
+// stoa:allow-complexity: reviewed — this dispatch is intentionally flat
+int tangledAllowed(int a, int b, int c, int d) {
+  if (a > 0) {
+    for (var i = 0; i < b; i++) {
+      while (c > 0) {
+        if (d > 0 && a > 0) {
+          if (a > b || c > d) {
+            c--;
+          }
+        }
+      }
+    }
+  }
+  return a;
+}
