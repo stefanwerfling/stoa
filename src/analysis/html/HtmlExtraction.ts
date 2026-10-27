@@ -26,6 +26,7 @@ export const extractFacts = (root: Node, content: string, filePath: string, info
     let buttonIndex = 0;
     let fieldIndex = 0;
     let linkIndex = 0;
+    let ariaHiddenIndex = 0;
     for (const element of descendants(root, 'element')) {
         const startTag = startTagOf(element);
         if (startTag === null) {
@@ -62,9 +63,39 @@ export const extractFacts = (root: Node, content: string, filePath: string, info
                 facts.push(build({kind: 'ui.linkMissingName', kindOf: 'statement', symbol, range: rangeOf(startTag), value: evidence(startTag)}));
             }
         }
+
+        // Independent of the tag above: a focusable element hidden from assistive
+        // tech (aria-hidden="true") stays operable by keyboard yet is announced to
+        // nobody — a name/role/value defect. tabindex="-1" removes it from the tab
+        // order, so that is correctly hidden and not flagged.
+        if (attrs.get('aria-hidden') === 'true' && isFocusable(tag, attrs)) {
+            facts.push(build({kind: 'ui.ariaHiddenFocusable', kindOf: 'statement', symbol: `aria-hidden#${ariaHiddenIndex}`, range: rangeOf(startTag), value: evidence(startTag)}));
+            ariaHiddenIndex += 1;
+        }
     }
 
     return facts;
+};
+
+const NATIVELY_FOCUSABLE: ReadonlySet<string> = new Set(['button', 'select', 'textarea', 'input']);
+
+// Whether the element itself can take keyboard focus (statically). An explicit
+// tabindex wins: >= 0 is focusable, negative is not. Otherwise the natively
+// interactive elements are focusable (a link needs an href; a hidden input is
+// not). Descendant focusability is not assessed (documented limitation).
+const isFocusable = (tag: string, attrs: Map<string, string>): boolean => {
+    const tabindex = attrs.get('tabindex');
+    if (tabindex !== undefined) {
+        const value = Number.parseInt(tabindex, 10);
+        return !Number.isNaN(value) && value >= 0;
+    }
+    if (tag === 'a') {
+        return attrs.has('href');
+    }
+    if (tag === 'input') {
+        return (attrs.get('type') ?? 'text').toLowerCase() !== 'hidden';
+    }
+    return NATIVELY_FOCUSABLE.has(tag);
 };
 
 // <input> types that are NOT labelable form fields (their name comes from value

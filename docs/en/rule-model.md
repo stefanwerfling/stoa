@@ -138,7 +138,7 @@ flowchart TB
 
 ## 5. Rule Set `default@1` (implemented)
 
-> The actually-implemented rule set (24 rules). Overview, facts and opt-in flags:
+> The actually-implemented rule set (25 rules). Overview, facts and opt-in flags:
 > [implementation-status.md](./implementation-status.md).
 
 Declarative rules (`rules/default/*.json`, on by default):
@@ -177,6 +177,7 @@ UI/UX – accessibility (HTML, static, on by default):
 | `R-A11Y-CONTROL-NAME` | `ui.controlMissingName` | `marcus.purpose` | Accessibility, usability | syntactic (WCAG 4.1.2) |
 | `R-A11Y-FORM-LABEL` | `ui.controlMissingLabel` | `marcus.purpose` | Accessibility, usability | syntactic (WCAG 1.3.1/4.1.2) |
 | `R-A11Y-LINK-NAME` | `ui.linkMissingName` | `marcus.purpose` | Accessibility, usability | syntactic (WCAG 2.4.4/4.1.2) |
+| `R-A11Y-ARIA-HIDDEN-FOCUSABLE` | `ui.ariaHiddenFocusable` | `marcus.cooperation` | Accessibility, usability | syntactic (WCAG 4.1.2) |
 
 > **UI/UX (HTML):** static analysis via tree-sitter-html.
 > `R-A11Y-IMG-ALT` reports `<img>` with no `alt` (decorative `alt=""`,
@@ -188,7 +189,10 @@ UI/UX – accessibility (HTML, static, on by default):
 > placeholder does **not** count; `hidden`/`submit`/`button`/`reset`/`image` are
 > not labelable and are excluded. `R-A11Y-LINK-NAME` reports an `<a href>` with
 > no accessible name (same name sources as the button); an `<a>` with no `href`
-> is not a link and is skipped. The category (accessibility) maps to the
+> is not a link and is skipped. `R-A11Y-ARIA-HIDDEN-FOCUSABLE` reports an element
+> that is itself focusable yet `aria-hidden="true"` (`tabindex="-1"` removes it
+> from the tab order → correctly hidden, not flagged; only the element itself,
+> not aria-hidden containers). The category (accessibility) maps to the
 > `accessibility` dimension. Contrast, visible focus and rendered states are
 > **not** statically decidable and are deliberately omitted.
 

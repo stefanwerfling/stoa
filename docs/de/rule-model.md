@@ -138,7 +138,7 @@ flowchart TB
 
 ## 5. Regelsatz `default@1` (umgesetzt)
 
-> Der tatsächlich implementierte Regelsatz (24 Regeln). Gesamtüberblick, Facts
+> Der tatsächlich implementierte Regelsatz (25 Regeln). Gesamtüberblick, Facts
 > und Opt-in-Flags: [implementation-status.md](./implementation-status.md).
 
 Deklarative Regeln (`rules/default/*.json`, Default aktiv):
@@ -177,6 +177,7 @@ UI/UX – Barrierefreiheit (HTML, statisch, Default aktiv):
 | `R-A11Y-CONTROL-NAME` | `ui.controlMissingName` | `marcus.purpose` | Barrierefreiheit, Bedienbarkeit | syntaktisch (WCAG 4.1.2) |
 | `R-A11Y-FORM-LABEL` | `ui.controlMissingLabel` | `marcus.purpose` | Barrierefreiheit, Bedienbarkeit | syntaktisch (WCAG 1.3.1/4.1.2) |
 | `R-A11Y-LINK-NAME` | `ui.linkMissingName` | `marcus.purpose` | Barrierefreiheit, Bedienbarkeit | syntaktisch (WCAG 2.4.4/4.1.2) |
+| `R-A11Y-ARIA-HIDDEN-FOCUSABLE` | `ui.ariaHiddenFocusable` | `marcus.cooperation` | Barrierefreiheit, Bedienbarkeit | syntaktisch (WCAG 4.1.2) |
 
 > **UI/UX (HTML):** rein statische Analyse via tree-sitter-html.
 > `R-A11Y-IMG-ALT` meldet `<img>` ohne `alt` (dekoratives `alt=""`,
@@ -188,9 +189,13 @@ UI/UX – Barrierefreiheit (HTML, statisch, Default aktiv):
 > ein Placeholder zählt **nicht**; `hidden`/`submit`/`button`/`reset`/`image`
 > sind nicht beschriftbar und ausgenommen. `R-A11Y-LINK-NAME` meldet `<a href>`
 > ohne zugänglichen Namen (gleiche Namensquellen wie beim Button); ein `<a>` ohne
-> `href` ist kein Link und wird übersprungen. Die Kategorie (Accessibility) wird
-> auf die Dimension `Barrierefreiheit` abgebildet. Kontrast, sichtbarer Fokus und
-> gerenderte Zustände sind **nicht** statisch prüfbar und bewusst ausgelassen.
+> `href` ist kein Link und wird übersprungen. `R-A11Y-ARIA-HIDDEN-FOCUSABLE`
+> meldet ein **selbst fokussierbares** Element mit `aria-hidden="true"`
+> (`tabindex="-1"` entfernt aus der Tab-Reihenfolge → korrekt verborgen, nicht
+> gemeldet; nur das Element selbst, nicht aria-hidden-Container). Die Kategorie
+> (Accessibility) wird auf die Dimension `Barrierefreiheit` abgebildet. Kontrast,
+> sichtbarer Fokus und gerenderte Zustände sind **nicht** statisch prüfbar und
+> bewusst ausgelassen.
 
 > `R-MIGRATION-UNGUARDED-DDL` greift nur in Migrationsdateien (Klasse
 > `implements MigrationInterface`) und erfasst zwei Wege: Roh-SQL

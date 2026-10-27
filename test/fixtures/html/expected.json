@@ -8,6 +8,9 @@
     { "file": "forms.html", "rule": "R-A11Y-FORM-LABEL", "symbol": "field#4" },
     { "file": "forms.html", "rule": "R-A11Y-FORM-LABEL", "symbol": "field#6" },
     { "file": "links.html", "rule": "R-A11Y-LINK-NAME", "symbol": "link#1" },
-    { "file": "links.html", "rule": "R-A11Y-LINK-NAME", "symbol": "link#3" }
+    { "file": "links.html", "rule": "R-A11Y-LINK-NAME", "symbol": "link#3" },
+    { "file": "aria-hidden.html", "rule": "R-A11Y-ARIA-HIDDEN-FOCUSABLE", "symbol": "aria-hidden#0" },
+    { "file": "aria-hidden.html", "rule": "R-A11Y-ARIA-HIDDEN-FOCUSABLE", "symbol": "aria-hidden#1" },
+    { "file": "aria-hidden.html", "rule": "R-A11Y-ARIA-HIDDEN-FOCUSABLE", "symbol": "aria-hidden#2" }
   ]
 }

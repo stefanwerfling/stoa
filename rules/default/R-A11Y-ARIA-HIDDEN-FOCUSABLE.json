@@ -1,0 +1,40 @@
+{
+  "id": "R-A11Y-ARIA-HIDDEN-FOCUSABLE",
+  "version": "1.0.0",
+  "title": "Focusable element hidden from assistive tech",
+  "feature": "ui.ariaHiddenFocusable",
+  "appliesTo": ["statement"],
+  "principles": ["marcus.cooperation"],
+  "dimensions": ["accessibility", "usability"],
+  "trigger": {
+    "all": [{ "fact": "ui.ariaHiddenFocusable", "op": "!=", "value": "" }]
+  },
+  "requiredEvidence": ["ui.ariaHiddenFocusable"],
+  "severity": { "base": "high" },
+  "confidence": { "base": 0.85, "capBy": "certainty" },
+  "message": {
+    "en": "Focusable element is aria-hidden (WCAG 2.2 · 4.1.2): {value}.",
+    "de": "Fokussierbares Element ist aria-hidden (WCAG 2.2 · 4.1.2): {value}."
+  },
+  "rationale": {
+    "en": "aria-hidden=\"true\" removes an element from the accessibility tree, but a focusable element stays in the tab order. A keyboard or screen-reader user can land on a control that is announced to no one — a contradictory state that excludes those users (marcus.cooperation).",
+    "de": "aria-hidden=\"true\" entfernt ein Element aus dem Accessibility-Baum, ein fokussierbares Element bleibt aber in der Tab-Reihenfolge. Tastatur- oder Screenreader-Nutzer landen auf einem Bedienelement, das niemandem angesagt wird — ein widersprüchlicher Zustand, der diese Nutzer ausschließt (marcus.cooperation)."
+  },
+  "remediation": {
+    "suggestion": {
+      "en": "Remove aria-hidden from the focusable element, or take it out of the tab order too (e.g. tabindex=\"-1\" plus disabled/inert) so it is consistently hidden.",
+      "de": "aria-hidden vom fokussierbaren Element entfernen, oder es auch aus der Tab-Reihenfolge nehmen (z. B. tabindex=\"-1\" plus disabled/inert), damit es konsistent verborgen ist."
+    },
+    "drawbacks": {
+      "en": "None of note; a consistently hidden or consistently exposed control is always preferable to a contradictory one.",
+      "de": "Keine nennenswerten; ein konsistent verborgenes oder konsistent sichtbares Element ist stets besser als ein widersprüchliches."
+    }
+  },
+  "missingContext": [
+    {
+      "en": "Only the element itself is checked; an aria-hidden container wrapping focusable descendants is not detected statically here.",
+      "de": "Nur das Element selbst wird geprüft; ein aria-hidden-Container, der fokussierbare Nachfahren umschließt, wird hier statisch nicht erkannt."
+    }
+  ],
+  "tests": "test/HtmlA11y.test.ts"
+}
