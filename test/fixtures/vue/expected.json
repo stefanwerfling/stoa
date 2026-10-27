@@ -1,0 +1,12 @@
+{
+  "findings": [
+    { "file": "Widget.vue", "rule": "R-A11Y-IMG-ALT", "symbol": "img#0" },
+    { "file": "Widget.vue", "rule": "R-A11Y-ARIA-INVALID-ROLE", "symbol": "role#0" },
+    { "file": "Widget.vue", "rule": "R-A11Y-ARIA-UNKNOWN-ATTR", "symbol": "aria-attr#0" },
+    { "file": "Widget.vue", "rule": "R-A11Y-ARIA-INVALID-VALUE", "symbol": "aria-val#0" },
+    { "file": "Widget.vue", "rule": "R-A11Y-POSITIVE-TABINDEX", "symbol": "tabindex#0" },
+    { "file": "Widget.vue", "rule": "R-A11Y-ARIA-HIDDEN-FOCUSABLE", "symbol": "aria-hidden#0" },
+    { "file": "Widget.vue", "rule": "R-A11Y-FRAME-TITLE", "symbol": "frame#0" },
+    { "file": "Widget.vue", "rule": "R-A11Y-CONTRAST-TEXT", "symbol": "contrast#0" }
+  ]
+}

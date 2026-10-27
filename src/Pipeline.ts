@@ -2,6 +2,7 @@ import {AdapterRegistry} from './analysis/AdapterRegistry.js';
 import {CppAdapter} from './analysis/CppAdapter.js';
 import {DartAdapter} from './analysis/DartAdapter.js';
 import {HtmlAdapter} from './analysis/HtmlAdapter.js';
+import {VueAdapter} from './analysis/VueAdapter.js';
 import {PhpAdapter} from './analysis/PhpAdapter.js';
 import {TypeScriptAdapter} from './analysis/TypeScriptAdapter.js';
 import {TypeDiagnosticsExtractor} from './analysis/typescript/TypeDiagnostics.js';
@@ -43,7 +44,8 @@ export const analyze = (options: AnalyzeOptions): AnalysisResult => {
         .register(new PhpAdapter())
         .register(new DartAdapter())
         .register(new CppAdapter())
-        .register(new HtmlAdapter());
+        .register(new HtmlAdapter())
+        .register(new VueAdapter());
     const knowledgeBase = KnowledgeBase.loadFromDirectory(options.knowledgeDir, options.config.knowledgeBase);
     const ruleSet = RuleSet.loadFromDirectory(options.ruleSetDir, options.config.ruleSet);
     const projectRules: ProjectRule[] = [new DependencyCycleRule()];

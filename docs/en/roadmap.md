@@ -86,8 +86,8 @@ flowchart LR
 3. **Optional semantics** (LLM) — only with a robust eval framework.
 4. **Knowledge base breadth** (further works/principles, expert review pipeline).
 5. **Trend/history** (quality profile over time, without single-score misincentive).
-6. **UI/UX breadth** — static a11y is implemented for HTML + React/JSX (see
-   implementation-status). The rendered checks (cascade contrast, visible focus)
+6. **UI/UX breadth** — static a11y is implemented for HTML, React/JSX and Vue SFC
+   templates (Angular next; see implementation-status). The rendered checks (cascade contrast, visible focus)
    are designed as an optional, environment-dependent browser layer in
    [visual-analysis-layer.md](./visual-analysis-layer.md), kept out of the
    deterministic core; not yet built.

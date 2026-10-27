@@ -23,6 +23,17 @@ export const initHtml = async (): Promise<void> => {
     parser = instance;
 };
 
+// Shared access to the loaded tree-sitter-html parser, so the HTML-family
+// template adapters (Vue, Angular) reuse the same grammar and the same initHtml()
+// without each loading their own. Returns null until initHtml() has run.
+export const parseHtmlTree = (content: string): Node | null => {
+    if (parser === null) {
+        return null;
+    }
+    const tree = parser.parse(content);
+    return tree === null ? null : tree.rootNode;
+};
+
 /**
  * Static HTML UI adapter. Parses markup with tree-sitter (in-process WASM) and
  * emits verifiable accessibility facts (image/control naming). It is purely

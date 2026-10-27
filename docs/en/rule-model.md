@@ -248,7 +248,11 @@ UI/UX – accessibility (HTML, static, on by default):
 > `<label htmlFor>` by literal id count as a label; spreads and dynamic `id`/`type`
 > suppress the relevant check; components are skipped. The four document/
 > cross-element rules (html-lang, viewport, dangling-idref, duplicate-id) are not
-> ported to JSX (app-shell / dynamic-id reasons). `R-A11Y-CONTRAST-TEXT` computes
+> ported to JSX (app-shell / dynamic-id reasons). The 8 attribute/contrast rules
+> also run on **Vue SFC** `<template>` markup via a shared template extraction with
+> a Vue binding dialect (`:x`/`v-bind` dynamic, `@x`/`v-` dropped, `{{…}}`
+> dynamic); Angular templates will reuse it with an Angular dialect.
+> `R-A11Y-CONTRAST-TEXT` computes
 > the WCAG contrast ratio deterministically **only** when a text colour and a
 > background colour are declared together on the element's inline `style` (HTML) or
 > `style={{…}}` object literal (JSX) (var()

@@ -253,7 +253,11 @@ UI/UX – Barrierefreiheit (HTML, statisch, Default aktiv):
 > gelten als Label; Spreads und dynamische `id`/`type` unterdrücken die jeweilige
 > Prüfung; Komponenten werden übersprungen. Die vier Dokument-/Cross-Element-Regeln
 > (html-lang, viewport, dangling-idref, duplicate-id) sind für JSX nicht portiert
-> (App-Shell-/dynamische-id-Gründe). `R-A11Y-CONTRAST-TEXT` berechnet das
+> (App-Shell-/dynamische-id-Gründe). Die 8 Attribut-/Kontrast-Regeln laufen auch
+> auf **Vue-SFC**-`<template>`-Markup über eine geteilte Template-Extraktion mit
+> Vue-Binding-Dialekt (`:x`/`v-bind` dynamisch, `@x`/`v-` verworfen, `{{…}}`
+> dynamisch); Angular-Templates nutzen sie künftig mit einem Angular-Dialekt.
+> `R-A11Y-CONTRAST-TEXT` berechnet das
 > WCAG-Kontrastverhältnis deterministisch **nur**, wenn eine Text- und eine
 > Hintergrundfarbe gemeinsam im Inline-`style` des Elements (HTML) oder im
 > `style={{…}}`-Objektliteral (JSX) stehen (var() im selben

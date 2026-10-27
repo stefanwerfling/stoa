@@ -106,7 +106,7 @@ Das ist die ehrliche Grenze: stoa meldet das Belegbare und zeigt, wo ein
 ## 8. Vorgeschlagene nächste Schritte
 
 1. **Visueller Analyse-Schnitt** (Browser-Automatisierung) für den Kaskaden-/gerenderten Kontrast (über Inline-Paare hinaus) und sichtbaren Fokus — die größte verbleibende Abdeckungslücke und statisch wirklich nicht erreichbar. Als Konzept entworfen in [visual-analysis-layer.md](./visual-analysis-layer.md) (optional, umgebungsabhängig, vom deterministischen Kern getrennt); noch nicht gebaut.
-2. **React/JSX** — erfolgt: Der TypeScript-Adapter durchläuft JSX und erzeugt dieselben Facts, sodass 11 der 14 Regeln auf `.jsx/.tsx` feuern, inklusive Namensberechnung (dynamikbewusst) und Kontrast aus style={{…}}-Objektliteralen. Die vier Dokument-/Cross-Element-Regeln bleiben HTML-only (App-Shell-/dynamische-id-Gründe).
+2. **React/JSX** — erfolgt: Der TypeScript-Adapter durchläuft JSX und erzeugt dieselben Facts, sodass 11 der 14 Regeln auf `.jsx/.tsx` feuern, inklusive Namensberechnung (dynamikbewusst) und Kontrast aus style={{…}}-Objektliteralen. Die vier Dokument-/Cross-Element-Regeln bleiben HTML-only (App-Shell-/dynamische-id-Gründe). **Vue-SFC**-Templates sind ebenfalls für die 8 Attribut-/Kontrast-Regeln abgedeckt (geteilte Template-Extraktion); **Angular** folgt.
 3. **Tabellensemantik / Überschriftenordnung** nur, falls eine fehlalarmarme, kontextbewusste Formulierung gefunden wird — sonst dem visuellen Schnitt überlassen.
 
 Nichts davon ändert stoas Haltung: Es benennt, was es beweisen kann, schätzt
