@@ -50,8 +50,16 @@ Jede Regel hat einen Testkatalog (siehe [rule-model.md §7](./rule-model.md#7-te
 
 - Annotierter Korpus liefert Ground Truth → **Precision/Recall pro Regel** und
   pro Dimension.
+- Die **Identität** eines Findings beim Abgleich ist `(projektrelativer
+  Dateipfad, Regel-ID, Symbol)` — der Pfad wird gegen die Analysewurzel
+  relativiert, sodass gleichnamige Dateien in verschiedenen Verzeichnissen nicht
+  kollidieren; Zeile/Spalte bleiben außen vor (das Symbol unterscheidet innerhalb
+  einer Datei, Zeilen verschieben sich bei Änderungen). Precision/Recall werden
+  über die Menge eindeutiger Schlüssel berechnet; doppelte erzeugte Findings
+  werden berichtet, nicht still verworfen.
 - **False Positives** (gemeldet, aber kein echtes Problem) und **False Negatives**
-  (echtes Problem übersehen) werden getrennt berichtet.
+  (echtes Problem übersehen) werden getrennt berichtet. `stoa eval` endet mit
+  Fehlercode, sobald eines von beiden auftritt.
 - **Release-Gate (Vorschlag):** je Regel Mindest-Precision; Regeln, die das
   verfehlen, starten als „experimental" (niedrige Default-Konfidenz, abschaltbar).
 - Fehlalarmquote ist Teil des Bericht-Vertrauens (siehe

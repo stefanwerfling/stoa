@@ -19,7 +19,7 @@ const runEvaluation = () => {
         ruleSetDir: join(root, 'rules', 'default'),
         config: DEFAULT_CONFIG
     }).report.findings;
-    return evaluate(findings, loadExpected(expectedFile));
+    return evaluate(findings, loadExpected(expectedFile), corpusProject);
 };
 
 // AC-5: a per-rule precision gate. Rules below the gate would ship as experimental.

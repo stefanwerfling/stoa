@@ -1,0 +1,6 @@
+{
+  "description": "Matches the single produced finding exactly.",
+  "findings": [
+    { "file": "Swallow.ts", "rule": "R-ERR-SWALLOWED", "symbol": "catch#0" }
+  ]
+}

@@ -12,7 +12,8 @@ export const toMarkdown = (result: EvaluationResult): string => {
     lines.push('');
     lines.push(
         `- Overall: precision ${pct(overall.precision)} · recall ${pct(overall.recall)} ` +
-            `(TP ${overall.truePositives} / FP ${overall.falsePositives} / FN ${overall.falseNegatives})`
+            `(TP ${overall.truePositives} / FP ${overall.falsePositives} / FN ${overall.falseNegatives}; ` +
+            `${overall.producedCount} produced)`
     );
     lines.push('');
     lines.push('## Per rule');
@@ -35,6 +36,11 @@ export const toMarkdown = (result: EvaluationResult): string => {
         lines.push('');
         lines.push('## False negatives');
         result.falseNegatives.forEach((key) => lines.push(keyLine(key)));
+    }
+    if (result.duplicates.length > 0) {
+        lines.push('');
+        lines.push('## Duplicate findings (same identity key)');
+        result.duplicates.forEach((key) => lines.push(keyLine(key)));
     }
     return lines.join('\n');
 };

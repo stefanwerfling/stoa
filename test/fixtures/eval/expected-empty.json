@@ -1,0 +1,4 @@
+{
+  "description": "Expects nothing, so the produced finding is a false positive.",
+  "findings": []
+}

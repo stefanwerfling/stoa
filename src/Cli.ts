@@ -100,16 +100,19 @@ const runEval = (values: CliValues, target: string): number => {
         process.stdout.write(`${USAGE}\n`);
         return 1;
     }
+    const root = resolve(target);
     const findings = analyze({
-        rootPath: resolve(target),
+        rootPath: root,
         knowledgeDir: knowledgeDirOf(values),
         ruleSetDir: ruleSetDirOf(values),
         config: configFor(values)
     }).report.findings;
-    const result = evaluate(findings, loadExpected(resolve(values.expected)));
+    const result = evaluate(findings, loadExpected(resolve(values.expected)), root);
     const output = values.format === 'json' ? JSON.stringify(result, null, 2) : evaluationMarkdown(result);
     process.stdout.write(`${output}\n`);
-    return result.overall.falsePositives === 0 ? 0 : 1;
+    // The evaluation passes only when nothing is missing and nothing is spurious:
+    // any false negative (a missing expected finding) or false positive fails it.
+    return result.overall.falseNegatives === 0 && result.overall.falsePositives === 0 ? 0 : 1;
 };
 
 const main = async (): Promise<number> => {

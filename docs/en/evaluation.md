@@ -50,8 +50,15 @@ Each rule has a test catalog (see [rule-model.md §7](./rule-model.md#7-testbark
 
 - Annotated corpus provides ground truth → **precision/recall per rule** and
   per dimension.
+- A finding's **identity** for matching is `(project-relative file path, rule
+  id, symbol)` — the path is relativized against the analysis root, so
+  same-named files in different directories do not collide; line/column are
+  excluded (the symbol disambiguates within a file, lines shift under edits).
+  Precision/recall are computed over the set of distinct keys; duplicate
+  produced findings are reported, not silently dropped.
 - **False positives** (reported, but no real problem) and **false negatives**
-  (real problem overlooked) are reported separately.
+  (real problem overlooked) are reported separately. `stoa eval` exits non-zero
+  when either is present.
 - **Release gate (proposal):** minimum precision per rule; rules that
   miss this start as "experimental" (low default confidence, can be disabled).
 - The false-positive rate is part of the report's trustworthiness (see

@@ -1,4 +1,4 @@
-import {basename} from 'node:path';
+import {relative} from 'node:path';
 import type {Finding} from '../Types.js';
 import type {
     EvaluationResult,
@@ -8,10 +8,21 @@ import type {
     RuleMetrics
 } from './EvaluationTypes.js';
 
-const keyString = (key: FindingKey): string => `${basename(key.file)}::${key.rule}::${key.symbol}`;
+const toForwardSlashes = (path: string): string => path.split('\\').join('/');
 
-const findingKey = (finding: Finding): FindingKey => ({
-    file: basename(finding.location.file),
+const keyString = (key: FindingKey): string => `${toForwardSlashes(key.file)}::${key.rule}::${key.symbol}`;
+
+const expectedKey = (item: ExpectedFinding): FindingKey => ({
+    file: toForwardSlashes(item.file),
+    rule: item.rule,
+    symbol: item.symbol
+});
+
+// Produced findings carry an absolute location; relativize it against the
+// analysis root so the identity matches the project-relative paths in the
+// corpus manifest and does not depend on where the scan was launched.
+const producedKey = (rootDir: string, finding: Finding): FindingKey => ({
+    file: toForwardSlashes(relative(rootDir, finding.location.file)),
     rule: finding.rule.id,
     symbol: finding.location.symbol ?? ''
 });
@@ -24,20 +35,39 @@ const ratio = (hit: number, other: number): number => {
 
 /**
  * Compares produced findings against the corpus ground truth and returns
- * precision/recall per rule and overall, plus the explicit false-positive and
- * false-negative lists. Matching is by (file basename, rule id, symbol), so
- * results do not depend on absolute paths. See docs evaluation §3–§4.
+ * precision/recall per rule and overall, plus the explicit false-positive,
+ * false-negative and duplicate lists.
+ *
+ * A finding's identity is (project-relative file, rule id, symbol); `rootDir`
+ * is the analysis root the produced paths are relativized against. True
+ * positives, false positives and false negatives are all computed over the set
+ * of distinct keys, so a duplicate produced finding cannot inflate the metrics;
+ * duplicates are reported separately rather than silently removed. See docs
+ * evaluation §3–§4.
  */
-export const evaluate = (findings: Finding[], expected: ExpectedFinding[]): EvaluationResult => {
-    const produced: FindingKey[] = findings.map(findingKey);
-    const expectedKeys = new Set(expected.map((item) => keyString(item)));
-    const producedKeys = new Set(produced.map(keyString));
+export const evaluate = (findings: Finding[], expected: ExpectedFinding[], rootDir: string): EvaluationResult => {
+    const expectedKeys = new Set(expected.map((item) => keyString(expectedKey(item))));
 
-    const rules = new Set<string>([...expected.map((item) => item.rule), ...produced.map((item) => item.rule)]);
+    const seen = new Set<string>();
+    const uniqueProduced: FindingKey[] = [];
+    const duplicates: FindingKey[] = [];
+    for (const finding of findings) {
+        const key = producedKey(rootDir, finding);
+        const asString = keyString(key);
+        if (seen.has(asString)) {
+            duplicates.push(key);
+            continue;
+        }
+        seen.add(asString);
+        uniqueProduced.push(key);
+    }
+    const producedKeys = seen;
+
+    const rules = new Set<string>([...expected.map((item) => item.rule), ...uniqueProduced.map((item) => item.rule)]);
     const perRule: RuleMetrics[] = [];
     for (const rule of [...rules].sort()) {
-        const producedForRule = produced.filter((item) => item.rule === rule);
-        const expectedForRule = expected.filter((item) => item.rule === rule);
+        const producedForRule = uniqueProduced.filter((item) => item.rule === rule);
+        const expectedForRule = expected.filter((item) => item.rule === rule).map(expectedKey);
         const truePositives = producedForRule.filter((item) => expectedKeys.has(keyString(item))).length;
         const falsePositives = producedForRule.length - truePositives;
         const falseNegatives = expectedForRule.filter((item) => !producedKeys.has(keyString(item))).length;
@@ -51,19 +81,18 @@ export const evaluate = (findings: Finding[], expected: ExpectedFinding[]): Eval
         });
     }
 
-    const falsePositives = produced.filter((item) => !expectedKeys.has(keyString(item)));
-    const falseNegatives = expected
-        .filter((item) => !producedKeys.has(keyString(item)))
-        .map((item) => ({file: basename(item.file), rule: item.rule, symbol: item.symbol}));
+    const falsePositives = uniqueProduced.filter((item) => !expectedKeys.has(keyString(item)));
+    const falseNegatives = expected.map(expectedKey).filter((item) => !producedKeys.has(keyString(item)));
+    const truePositives = uniqueProduced.length - falsePositives.length;
 
-    const truePositives = produced.length - falsePositives.length;
     const overall: OverallMetrics = {
         truePositives,
         falsePositives: falsePositives.length,
         falseNegatives: falseNegatives.length,
+        producedCount: findings.length,
         precision: ratio(truePositives, falsePositives.length),
         recall: ratio(truePositives, falseNegatives.length)
     };
 
-    return {overall, perRule, falsePositives, falseNegatives};
+    return {overall, perRule, falsePositives, falseNegatives, duplicates};
 };
