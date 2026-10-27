@@ -58,8 +58,8 @@ export const extractFacts = (root: Node, content: string, filePath: string, info
     descendants(root, 'catch_clause').forEach((clause, index) => {
         const block = clause.childForFieldName('body');
         const statements = block === null ? 0 : namedChildren(block).length;
-        const hasThrow = block !== null && descendants(block, 'throw_statement').length > 0;
-        const hasCall = block !== null && descendants(block, 'call_expression').length > 0;
+        const hasThrow = block !== null && ownDescendants(block, 'throw_statement').length > 0;
+        const hasCall = block !== null && ownDescendants(block, 'call_expression').length > 0;
         const symbol = `catch#${index}`;
         const range = rangeOf(block ?? clause);
 
@@ -72,6 +72,25 @@ export const extractFacts = (root: Node, content: string, filePath: string, info
 
 const descendants = (node: Node, types: string | string[]): Node[] => {
     return node.descendantsOfType(types).filter((candidate): candidate is Node => candidate !== null);
+};
+
+// Like descendants(), but does not cross into nested functions or lambdas, so a
+// call/throw inside a lambda is not attributed to the enclosing function.
+const ownDescendants = (root: Node, type: string): Node[] => {
+    const found: Node[] = [];
+    const walk = (node: Node): void => {
+        for (const child of namedChildren(node)) {
+            if (FUNCTION_BOUNDARY.has(child.type)) {
+                continue;
+            }
+            if (child.type === type) {
+                found.push(child);
+            }
+            walk(child);
+        }
+    };
+    walk(root);
+    return found;
 };
 
 const namedChildren = (node: Node): Node[] => {
@@ -144,7 +163,8 @@ const isLogical = (node: Node): boolean => {
 };
 
 const usesNondeterminism = (body: Node): boolean => {
-    return descendants(body, 'call_expression').some((call) => {
+    // Only calls in THIS function body count — not calls nested in a lambda.
+    return ownDescendants(body, 'call_expression').some((call) => {
         const callee = call.childForFieldName('function');
         if (callee === null) {
             return false;

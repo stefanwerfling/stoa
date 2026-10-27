@@ -42,6 +42,24 @@ test('C++: R-ERR-SWALLOWED fires on an empty catch, not on rethrow or a logged c
     assert.equal(findings[0]?.interpretation.principles[0]?.id, 'marcus.obstacle');
 });
 
+test('C++: lambda complexity and calls are not attributed to the enclosing function', () => {
+    const findings = analyzePath(join(fixtures, 'lambda.cpp'));
+    const outer = bySymbol(findings, 'outer');
+    assert.equal(outer.filter((f) => f.rule.id === 'R-COMPLEXITY-COGNITIVE').length, 0, "the lambda's complexity is not outer()'s");
+    assert.equal(outer.filter((f) => f.rule.id === 'R-DEEP-NESTING').length, 0, "the lambda's nesting is not outer()'s");
+    assert.equal(outer.filter((f) => f.rule.id === 'R-SIDEEFFECT-NONDETERMINISM').length, 0, "the lambda's rand() is not outer()'s");
+
+    const direct = bySymbol(findings, 'direct').filter((f) => f.rule.id === 'R-SIDEEFFECT-NONDETERMINISM');
+    assert.equal(direct.length, 1, 'a direct rand() call is flagged');
+});
+
+test('C: malformed source and preprocessor guards do not crash extraction', () => {
+    const first = analyzePath(join(fixtures, 'broken.c'));
+    assert.ok(Array.isArray(first), 'extraction returns findings without throwing on a parse error');
+    // and it stays deterministic on error-tolerant input
+    assert.equal(JSON.stringify(first), JSON.stringify(analyzePath(join(fixtures, 'broken.c'))));
+});
+
 test('C/C++: analysis is deterministic', () => {
     assert.equal(JSON.stringify(analyzePath(join(fixtures, 'tangled.c'))), JSON.stringify(analyzePath(join(fixtures, 'tangled.c'))));
 });
