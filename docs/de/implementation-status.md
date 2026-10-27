@@ -84,10 +84,15 @@ Alle acht Qualitätsdimensionen haben mindestens eine Regel.
 
 ## Qualitätssicherung
 
-- **77 node:test-Fälle** grün (Regeln pos./neg., Extraktion, Schema-Validierung,
-  i18n, Determinismus, SARIF, Eval, Semantik-Groundedness).
-- **Golden-Korpus** (`test/corpus/`, TS+PHP) mit Ground-Truth; Eval derzeit
-  **Precision 100 % · Recall 100 %**. Precision-Gate je Regel (AC-5).
+- **111 node:test-Fälle** grün (Regeln pos./neg., Extraktion, Schema-Validierung,
+  i18n, Determinismus, SARIF, Eval, Semantik-Groundedness, Datenschutz,
+  Finding-Trennung).
+- **Golden-Korpus** (`test/corpus/`, **nur TS+PHP**) mit Ground-Truth; Eval
+  derzeit **Precision 100 % · Recall 100 %** (TP 44) mit sprachbezogener
+  Aufschlüsselung (`byLanguage`). Precision-Gate je Regel (AC-5). Dart und C/C++
+  werden durch **Adaptertests** abgedeckt, noch **nicht** durch den Golden-Korpus.
+- **Wichtig:** Diese Werte gelten nur für den kleinen, kuratierten Korpus und
+  sind **keine** allgemeine Zuverlässigkeitsgarantie für beliebige Projekte.
 - Dogfooding: stoa analysiert den eigenen `src/`.
 
 ## Abweichungen vom Konzept (bewusst, dokumentiert)

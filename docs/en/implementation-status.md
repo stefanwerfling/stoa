@@ -84,10 +84,15 @@ All eight quality dimensions have at least one rule.
 
 ## Quality assurance
 
-- **77 node:test cases** green (rules pos./neg., extraction, schema validation,
-  i18n, determinism, SARIF, evaluation, semantic groundedness).
-- **Golden corpus** (`test/corpus/`, TS+PHP) with ground truth; evaluation
-  currently **precision 100% · recall 100%**. Per-rule precision gate (AC-5).
+- **111 node:test cases** green (rules pos./neg., extraction, schema validation,
+  i18n, determinism, SARIF, evaluation, semantic groundedness, privacy,
+  finding-model separation).
+- **Golden corpus** (`test/corpus/`, **TS+PHP only**) with ground truth;
+  evaluation currently **precision 100% · recall 100%** (TP 44) with a
+  per-language breakdown (`byLanguage`). Per-rule precision gate (AC-5). Dart and
+  C/C++ are covered by **adapter tests**, **not yet** by the golden corpus.
+- **Important:** these numbers hold only for the small, curated corpus and are
+  **not** a general reliability guarantee for arbitrary projects.
 - Dogfooding: stoa analyzes its own `src/`.
 
 ## Deviations from the concept (deliberate, documented)

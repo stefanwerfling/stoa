@@ -6,18 +6,28 @@ provides the *interpretation frame* for findings that are always grounded in a
 concrete technical observation — the core is classic static analysis, not an LLM.
 An LLM is an optional, switchable adapter.
 
-> **Status:** concept phase complete; MVP in progress. Done: M1 (skeleton,
-> schemas, knowledge base, CLI), M2 (real ts-morph fact extraction), M3 (the
-> deterministic rule engine with its first rules), M5 (golden corpus +
-> precision/recall evaluation), M6 (PHP adapter — same rules, same facts, proving
-> the schema is language-neutral), a cross-file dependency-cycle rule
-> (R-DEP-CYCLE), SARIF 2.1.0 output for CI / code scanning, and the optional
-> semantic (LLM) layer — off by default, vendor-neutral, grounded and validated,
-> and never part of the deterministic core. Next is hardening (richer context
-> facts, PSR-4 PHP import resolution), plus a robustness pack — non-determinism
-> (clock/RNG), unused imports, and an opt-in in-process TypeScript type-check
-> fact source — that fills the side-effect-control and decision-evidence
-> dimensions. See [docs/en/roadmap.md](docs/en/roadmap.md).
+> **Status:** past the MVP. The deterministic core (ingestion → facts → rule
+> engine → findings → reports), a knowledge base of 6 source-checked principles,
+> 20 rules across 8 quality dimensions (incl. a TypeORM/Doctrine persistence pack
+> and a robustness pack), SARIF 2.1.0 / JSON / Markdown output, localized output
+> (`--lang en|de`), a golden-corpus evaluator with a per-language breakdown, and
+> an optional, off-by-default, grounded semantic (LLM) layer are implemented.
+> See [docs/en/roadmap.md](docs/en/roadmap.md) and, for what is actually built
+> and tested, [docs/en/implementation-status.md](docs/en/implementation-status.md).
+>
+> **Maturity, honestly tiered:**
+> - *Implemented and unit-tested:* TypeScript/JavaScript (`ts-morph`), PHP
+>   (`php-parser`/glayzzle), Dart and C/C++ (tree-sitter / `web-tree-sitter`,
+>   in-process WASM); all 20 rules; the evaluator; the grounded semantic layer.
+> - *In the golden corpus (precision/recall measured):* **TypeScript and PHP
+>   only.** Dart and C/C++ are covered by adapter tests, not yet by the corpus.
+> - *Evaluated on independent external projects:* **not yet** — `stoa eval` works
+>   on any project, but no externally-validated corpus ships here.
+> - *Planned / not yet validated:* baseline & diff/PR mode, richer context facts,
+>   PSR-4 PHP import resolution, Dart/C/C++ dependency facts.
+>
+> Golden-corpus precision/recall reflect that small, curated corpus only; they
+> are **not** a general reliability guarantee for arbitrary code.
 
 ## Documentation
 
