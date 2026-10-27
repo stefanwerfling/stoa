@@ -69,6 +69,19 @@ Jede Regel hat einen Testkatalog (siehe [rule-model.md §7](./rule-model.md#7-te
 - **False Positives** (gemeldet, aber kein echtes Problem) und **False Negatives**
   (echtes Problem übersehen) werden getrennt berichtet. `stoa eval` endet mit
   Fehlercode, sobald eines von beiden auftritt.
+- **Sprachbezogene Aufschlüsselung.** Das Ergebnis trägt einen `byLanguage`-Teil
+  (aus der Dateiendung je Finding: TypeScript/JavaScript, PHP, Dart, C/C++),
+  sodass die unterstützten Sprachen *innerhalb eines Korpus* vergleichbar sind.
+  Zahlen aus getrennten Korpora werden nicht zusammengeführt. `stoa eval` lädt
+  alle Grammatiken, ein gemischter Korpus wird also über alle vier Sprachen
+  ausgewertet. Der aktuelle Golden-Korpus deckt nur TypeScript und PHP ab; Dart
+  und C/C++ werden durch Adaptertests geprüft, noch nicht durch den Korpus.
+- **Externe Projekte.** `stoa eval <pfad> --expected <manifest>` funktioniert
+  bereits für beliebige Projekte — Identitäten sind projektrelativ. Ein separater
+  Mechanismus ist nicht nötig. **Vorbehalt:** Findings eines externen Projekts
+  erst als Ground Truth verwenden, wenn jeder erwartete Eintrag manuell (oder
+  anderweitig nachvollziehbar) validiert wurde; ein unvalidiertes Manifest misst
+  Übereinstimmung, nicht Korrektheit.
 - **Release-Gate (Vorschlag):** je Regel Mindest-Precision; Regeln, die das
   verfehlen, starten als „experimental" (niedrige Default-Konfidenz, abschaltbar).
 - Fehlalarmquote ist Teil des Bericht-Vertrauens (siehe

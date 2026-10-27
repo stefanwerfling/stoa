@@ -4,6 +4,7 @@ import type {
     EvaluationResult,
     ExpectedFinding,
     FindingKey,
+    LanguageMetrics,
     OverallMetrics,
     RuleMetrics
 } from './EvaluationTypes.js';
@@ -97,6 +98,26 @@ export const evaluate = (findings: Finding[], expected: ExpectedFinding[], rootD
         });
     }
 
+    const languages = new Set<string>([...uniqueExpected, ...uniqueProduced].map((item) => languageOf(item.file)));
+    const byLanguage: LanguageMetrics[] = [];
+    for (const language of [...languages].sort()) {
+        const producedForLang = uniqueProduced.filter((item) => languageOf(item.file) === language);
+        const expectedForLang = uniqueExpected.filter((item) => languageOf(item.file) === language);
+        const tp = producedForLang.filter((item) => expectedKeys.has(keyString(item))).length;
+        const fp = producedForLang.length - tp;
+        const fn = expectedForLang.filter((item) => !producedKeys.has(keyString(item))).length;
+        byLanguage.push({
+            language,
+            expected: expectedForLang.length,
+            produced: producedForLang.length,
+            truePositives: tp,
+            falsePositives: fp,
+            falseNegatives: fn,
+            precision: ratio(tp, fp),
+            recall: ratio(tp, fn)
+        });
+    }
+
     const falsePositives = uniqueProduced.filter((item) => !expectedKeys.has(keyString(item)));
     const falseNegatives = uniqueExpected.filter((item) => !producedKeys.has(keyString(item)));
     const truePositives = uniqueProduced.length - falsePositives.length;
@@ -110,5 +131,24 @@ export const evaluate = (findings: Finding[], expected: ExpectedFinding[], rootD
         recall: ratio(truePositives, falseNegatives.length)
     };
 
-    return {overall, perRule, falsePositives, falseNegatives, duplicates, duplicateExpected};
+    return {overall, perRule, byLanguage, falsePositives, falseNegatives, duplicates, duplicateExpected};
+};
+
+// Classifies a finding by its file extension so results can be split per
+// language. Mirrors the adapter file-extension routing.
+const languageOf = (file: string): string => {
+    const lower = file.toLowerCase();
+    if (/\.(ts|tsx|js|jsx|mjs|cjs)$/.test(lower)) {
+        return 'TypeScript/JavaScript';
+    }
+    if (lower.endsWith('.php')) {
+        return 'PHP';
+    }
+    if (lower.endsWith('.dart')) {
+        return 'Dart';
+    }
+    if (/\.(c|h|cpp|cc|cxx|hpp|hh|hxx)$/.test(lower)) {
+        return 'C/C++';
+    }
+    return 'other';
 };

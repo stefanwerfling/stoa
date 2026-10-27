@@ -117,6 +117,20 @@ test('2.6 zero produced against non-empty expected is recall 0 (not a misleading
     assert.equal(result.overall.precision, 1);
 });
 
+test('5 per-language breakdown splits TP/FP/FN by file extension', () => {
+    const findings = [makeFinding('a.ts', 'R-X', 's1'), makeFinding('b.php', 'R-Y', 's2'), makeFinding('c.dart', 'R-Z', 's3')];
+    const manifest = [expected('a.ts', 'R-X', 's1'), expected('b.php', 'R-Y', 's2'), expected('d.cpp', 'R-W', 's4')];
+    const result = evaluate(findings, manifest, ROOT);
+    const lang = (name: string) => result.byLanguage.find((item) => item.language === name);
+
+    assert.deepEqual([lang('TypeScript/JavaScript')?.truePositives, lang('TypeScript/JavaScript')?.falsePositives], [1, 0]);
+    assert.deepEqual([lang('PHP')?.truePositives, lang('PHP')?.falsePositives], [1, 0]);
+    // c.dart is produced but not expected → a Dart false positive.
+    assert.deepEqual([lang('Dart')?.produced, lang('Dart')?.falsePositives, lang('Dart')?.precision], [1, 1, 0]);
+    // d.cpp is expected but not produced → a C/C++ false negative.
+    assert.deepEqual([lang('C/C++')?.expected, lang('C/C++')?.falseNegatives, lang('C/C++')?.recall], [1, 1, 0]);
+});
+
 // 1.4.6 — the CLI exit code must follow the evaluation result, end to end.
 const runEvalCli = (expectedFile: string): number => {
     try {

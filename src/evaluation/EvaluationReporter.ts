@@ -27,6 +27,20 @@ export const toMarkdown = (result: EvaluationResult): string => {
         );
     }
 
+    if (result.byLanguage.length > 0) {
+        lines.push('');
+        lines.push('## Per language');
+        lines.push('');
+        lines.push('| language | expected | produced | TP | FP | FN | precision | recall |');
+        lines.push('|----------|----------|----------|----|----|----|-----------|--------|');
+        for (const language of result.byLanguage) {
+            lines.push(
+                `| ${language.language} | ${language.expected} | ${language.produced} | ${language.truePositives} | ` +
+                    `${language.falsePositives} | ${language.falseNegatives} | ${pct(language.precision)} | ${pct(language.recall)} |`
+            );
+        }
+    }
+
     if (result.falsePositives.length > 0) {
         lines.push('');
         lines.push('## False positives');

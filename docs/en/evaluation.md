@@ -68,6 +68,18 @@ Each rule has a test catalog (see [rule-model.md §7](./rule-model.md#7-testbark
 - **False positives** (reported, but no real problem) and **false negatives**
   (real problem overlooked) are reported separately. `stoa eval` exits non-zero
   when either is present.
+- **Per-language breakdown.** The result carries a `byLanguage` section (derived
+  from each finding's file extension: TypeScript/JavaScript, PHP, Dart, C/C++) so
+  the supported languages can be compared *within one corpus*. Numbers from
+  separate corpora are not merged. `stoa eval` loads every grammar, so a mixed
+  corpus is evaluated across all four languages. The current golden corpus covers
+  TypeScript and PHP only; Dart and C/C++ are exercised by adapter tests, not yet
+  by the golden corpus.
+- **External projects.** `stoa eval <path> --expected <manifest>` already works
+  on any project — identities are project-relative. No separate mechanism is
+  needed. **Caveat:** do not treat an external project's findings as ground truth
+  until each expected entry has been validated manually (or otherwise
+  traceably); an unvalidated manifest measures agreement, not correctness.
 - **Release gate (proposal):** minimum precision per rule; rules that
   miss this start as "experimental" (low default confidence, can be disabled).
 - The false-positive rate is part of the report's trustworthiness (see

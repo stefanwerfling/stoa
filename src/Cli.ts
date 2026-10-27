@@ -72,8 +72,10 @@ const render = (format: string | undefined, report: AnalysisReport, lang: string
 const runAnalyze = async (values: CliValues, target: string): Promise<number> => {
     const lang = values.lang ?? 'en';
     // Load the tree-sitter (WASM) grammars once before the synchronous pipeline
-    // runs; on failure the affected files are simply skipped.
-    await Promise.all([initDart().catch(() => undefined), initCpp().catch(() => undefined)]);
+    // runs. Sequentially, not concurrently: both call the shared web-tree-sitter
+    // Parser.init(), which is not safe to race. On failure those files are skipped.
+    await initDart().catch(() => undefined);
+    await initCpp().catch(() => undefined);
     let result = analyze({
         rootPath: resolve(target),
         knowledgeDir: knowledgeDirOf(values),
@@ -95,11 +97,16 @@ const runAnalyze = async (values: CliValues, target: string): Promise<number> =>
     return 0;
 };
 
-const runEval = (values: CliValues, target: string): number => {
+const runEval = async (values: CliValues, target: string): Promise<number> => {
     if (values.expected === undefined) {
         process.stdout.write(`${USAGE}\n`);
         return 1;
     }
+    // Load the tree-sitter grammars so eval covers Dart and C/C++ too, not only
+    // the synchronously-parsed TS/PHP. Sequentially (shared Parser.init() is not
+    // safe to race); on failure those files are skipped.
+    await initDart().catch(() => undefined);
+    await initCpp().catch(() => undefined);
     const root = resolve(target);
     let expected;
     try {

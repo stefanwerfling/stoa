@@ -22,6 +22,23 @@ export interface RuleMetrics {
 }
 
 /**
+ * Per-language breakdown (derived from each finding's file extension) so results
+ * can be compared across the supported languages within one corpus. Comparing
+ * across SEPARATE corpora is left to the caller — these numbers are not merged
+ * across corpora.
+ */
+export interface LanguageMetrics {
+    language: string;
+    expected: number;
+    produced: number;
+    truePositives: number;
+    falsePositives: number;
+    falseNegatives: number;
+    precision: number;
+    recall: number;
+}
+
+/**
  * Counts and derived rates. Over the set of distinct identity keys:
  * TP = produced ∩ expected, FP = produced \ expected, FN = expected \ produced.
  * precision = TP / (TP + FP), recall = TP / (TP + FN). Undefined cases (no
@@ -53,6 +70,7 @@ export interface OverallMetrics {
 export interface EvaluationResult {
     overall: OverallMetrics;
     perRule: RuleMetrics[];
+    byLanguage: LanguageMetrics[];
     falsePositives: FindingKey[];
     falseNegatives: FindingKey[];
     /** Produced findings whose identity key already appeared — reported, never silently dropped. */
