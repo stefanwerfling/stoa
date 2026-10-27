@@ -25,6 +25,7 @@ export const extractFacts = (root: Node, content: string, filePath: string, info
     let imageIndex = 0;
     let buttonIndex = 0;
     let fieldIndex = 0;
+    let linkIndex = 0;
     for (const element of descendants(root, 'element')) {
         const startTag = startTagOf(element);
         if (startTag === null) {
@@ -52,6 +53,13 @@ export const extractFacts = (root: Node, content: string, filePath: string, info
             fieldIndex += 1;
             if (!isHiddenFromA11y(attrs) && !hasLabel(element, attrs, labelForIds)) {
                 facts.push(build({kind: 'ui.controlMissingLabel', kindOf: 'statement', symbol, range: rangeOf(startTag), value: evidence(startTag)}));
+            }
+        } else if (tag === 'a' && attrs.has('href')) {
+            // Only an <a> with an href is a link; a bare anchor is not a control.
+            const symbol = `link#${linkIndex}`;
+            linkIndex += 1;
+            if (!isHiddenFromA11y(attrs) && !hasAccessibleName(element, attrs)) {
+                facts.push(build({kind: 'ui.linkMissingName', kindOf: 'statement', symbol, range: rangeOf(startTag), value: evidence(startTag)}));
             }
         }
     }

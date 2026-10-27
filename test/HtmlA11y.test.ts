@@ -55,6 +55,15 @@ test('R-A11Y-FORM-LABEL flags unlabelled fields, not label-for / wrapping-label 
     assert.ok(first?.interpretation.dimensions.includes('accessibility'));
 });
 
+test('R-A11Y-LINK-NAME flags empty/icon-only links, not text / aria-label / a bare anchor', () => {
+    const findings = analyzePath(join(corpus, 'links.html'));
+    assert.deepEqual(
+        ids(findings, 'R-A11Y-LINK-NAME'),
+        ['link#1', 'link#3'],
+        'the empty link and the unlabeled icon-only link; an <a> without href is not a link'
+    );
+});
+
 test('a clean page produces no accessibility findings (no false positives)', () => {
     const findings = analyzePath(join(corpus, 'clean.html')).filter((f) => f.rule.id.startsWith('R-A11Y-'));
     assert.deepEqual(findings, []);
@@ -65,15 +74,15 @@ test('UI golden corpus: precision/recall 100% with a per-category breakdown', ()
     const result = evaluate(findings, loadExpected(join(here, 'fixtures', 'html', 'expected.json')), corpus);
     assert.equal(result.overall.precision, 1);
     assert.equal(result.overall.recall, 1);
-    assert.equal(result.overall.truePositives, 6);
+    assert.equal(result.overall.truePositives, 8);
     assert.equal(result.overall.falsePositives, 0);
     assert.equal(result.overall.falseNegatives, 0);
 
     const html = result.byLanguage.find((item) => item.language === 'HTML');
-    assert.equal(html?.truePositives, 6, 'all findings are HTML findings');
+    assert.equal(html?.truePositives, 8, 'all findings are HTML findings');
 
     const rules = result.perRule.map((item) => item.rule).sort();
-    assert.deepEqual(rules, ['R-A11Y-CONTROL-NAME', 'R-A11Y-FORM-LABEL', 'R-A11Y-IMG-ALT']);
+    assert.deepEqual(rules, ['R-A11Y-CONTROL-NAME', 'R-A11Y-FORM-LABEL', 'R-A11Y-IMG-ALT', 'R-A11Y-LINK-NAME']);
     for (const rule of result.perRule) {
         assert.equal(rule.precision, 1, `${rule.rule} precision`);
         assert.equal(rule.recall, 1, `${rule.rule} recall`);

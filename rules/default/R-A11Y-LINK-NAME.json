@@ -1,0 +1,40 @@
+{
+  "id": "R-A11Y-LINK-NAME",
+  "version": "1.0.0",
+  "title": "Link without an accessible name",
+  "feature": "ui.linkMissingName",
+  "appliesTo": ["statement"],
+  "principles": ["marcus.purpose"],
+  "dimensions": ["accessibility", "usability"],
+  "trigger": {
+    "all": [{ "fact": "ui.linkMissingName", "op": "!=", "value": "" }]
+  },
+  "requiredEvidence": ["ui.linkMissingName"],
+  "severity": { "base": "high" },
+  "confidence": { "base": 0.85, "capBy": "certainty" },
+  "message": {
+    "en": "Link has no accessible name (WCAG 2.2 · 2.4.4 / 4.1.2): {value}.",
+    "de": "Link ohne zugänglichen Namen (WCAG 2.2 · 2.4.4 / 4.1.2): {value}."
+  },
+  "rationale": {
+    "en": "A link (<a href>) with no accessible name — no text, aria-label(ledby), title, or a named child (img[alt] / svg>title) — gives no clue where it leads; its purpose cannot be determined from the link itself (marcus.purpose).",
+    "de": "Ein Link (<a href>) ohne zugänglichen Namen — kein Text, kein aria-label(ledby), kein title und kein benanntes Kind (img[alt] / svg>title) — gibt keinen Hinweis auf sein Ziel; sein Zweck ist aus dem Link selbst nicht bestimmbar (marcus.purpose)."
+  },
+  "remediation": {
+    "suggestion": {
+      "en": "Give the link visible text, or an aria-label/title; for an icon-only link, name the nested icon (img alt / svg <title>).",
+      "de": "Dem Link sichtbaren Text oder ein aria-label/title geben; bei reinen Icon-Links das verschachtelte Icon benennen (img alt / svg <title>)."
+    },
+    "drawbacks": {
+      "en": "None of note; link text also helps sighted users scan and understand destinations.",
+      "de": "Keine nennenswerten; Linktext hilft auch sehenden Nutzern beim Überfliegen und Verstehen von Zielen."
+    }
+  },
+  "missingContext": [
+    {
+      "en": "An <a> with no href is treated as a non-link and skipped; a name via aria-labelledby is counted as present but its target is not resolved.",
+      "de": "Ein <a> ohne href gilt als Nicht-Link und wird übersprungen; ein Name via aria-labelledby gilt als vorhanden, das Ziel wird aber nicht aufgelöst."
+    }
+  ],
+  "tests": "test/HtmlA11y.test.ts"
+}

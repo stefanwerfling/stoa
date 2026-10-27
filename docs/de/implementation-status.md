@@ -40,7 +40,7 @@ stoa eval <pfad> --expected <datei> [--format markdown|json]
 - `knowledge/` und `rules/` werden relativ zum installierten Paket aufgelöst —
   die CLI läuft nach `npm link`/Install aus jedem Verzeichnis.
 
-## Regelkatalog (23)
+## Regelkatalog (24)
 
 Deklarative Regeln (`rules/default/*.json`), Default aktiv:
 
@@ -67,6 +67,7 @@ Deklarative Regeln (`rules/default/*.json`), Default aktiv:
 | R-A11Y-IMG-ALT | marcus.purpose | Barrierefreiheit | HTML (statisch, WCAG 1.1.1) |
 | R-A11Y-CONTROL-NAME | marcus.purpose | Barrierefreiheit, Bedienbarkeit | HTML (statisch, WCAG 4.1.2) |
 | R-A11Y-FORM-LABEL | marcus.purpose | Barrierefreiheit, Bedienbarkeit | HTML (statisch, WCAG 1.3.1/4.1.2) |
+| R-A11Y-LINK-NAME | marcus.purpose | Barrierefreiheit, Bedienbarkeit | HTML (statisch, WCAG 2.4.4/4.1.2) |
 
 Prozedurale Regeln (`ProjectRule`, cross-file):
 
@@ -88,12 +89,12 @@ mindestens eine Regel.
 `orm.syncWithMigrations`, `orm.entityNoPrimaryKey`, `orm.eagerRelation`,
 `migration.unguardedDdl`, `migration.noDown`, `migration.dataLoss`,
 `migration.nullableNoDefault`, `ui.imageMissingAlt`, `ui.controlMissingName`,
-`ui.controlMissingLabel`, sowie (opt-in) `external.tsc` und
-`external.floatingPromise`.
+`ui.controlMissingLabel`, `ui.linkMissingName`, sowie (opt-in) `external.tsc`
+und `external.floatingPromise`.
 
 ## Qualitätssicherung
 
-- **116 node:test-Fälle** grün (Regeln pos./neg., Extraktion, Schema-Validierung,
+- **117 node:test-Fälle** grün (Regeln pos./neg., Extraktion, Schema-Validierung,
   i18n, Determinismus, SARIF, Eval, Semantik-Groundedness, Datenschutz,
   Finding-Trennung).
 - **Golden-Korpus** (`test/corpus/`, **nur TS+PHP**) mit Ground-Truth; Eval
@@ -103,7 +104,7 @@ mindestens eine Regel.
 - **Wichtig:** Diese Werte gelten nur für den kleinen, kuratierten Korpus und
   sind **keine** allgemeine Zuverlässigkeitsgarantie für beliebige Projekte.
 - **UI/UX-Korpus** (`test/fixtures/html/`, statisches HTML) mit positiven,
-  negativen und legitim-nicht-warnenden Fällen; Eval 100 %/100 % (TP 6) je Regel.
+  negativen und legitim-nicht-warnenden Fällen; Eval 100 %/100 % (TP 8) je Regel.
   Semantische (LLM-)Bewertung wird getrennt gehalten und ist hier nicht verlangt.
 - Dogfooding: stoa analysiert den eigenen `src/`.
 
@@ -132,6 +133,7 @@ LLM-Ausgabe-Evaluierung im Maßstab.
 zuverlässig prüfbar und daher bewusst ausgelassen: Farbkontrast (WCAG 1.4.3),
 sichtbarer Fokus, Fokusreihenfolge/-fallen, Zielgrößen, dynamische Zustände —
 sie brauchen gerenderte Seiten/Interaktion (geplanter visueller Analyse-Schnitt
-mit Browser-Automatisierung). Nächste statische Schritte: `<a href>`-ohne-Namen,
-grobe ARIA-Konsistenz; weitere Plattformen (React/JSX via ts-morph, Vue, Angular)
-über eigene Adapter. (Formular-Label-Zuordnung ist umgesetzt: `R-A11Y-FORM-LABEL`.)
+mit Browser-Automatisierung). Nächste statische Schritte: grobe ARIA-Konsistenz;
+weitere Plattformen (React/JSX via ts-morph, Vue, Angular) über eigene Adapter.
+(Formular-Label-Zuordnung und Link-Namen sind umgesetzt: `R-A11Y-FORM-LABEL` /
+`R-A11Y-LINK-NAME`.)
