@@ -1,7 +1,7 @@
 import type {Node} from 'web-tree-sitter';
 import type {Fact, SourceRange} from '../../Types.js';
 import {factBuilder, type AdapterInfo} from '../FactBuilder.js';
-import {ariaValueIsInvalid, hasRoleTokens, hasValidRole, isPositiveTabindexLiteral, isUnknownAriaName} from '../AriaVocabulary.js';
+import {ariaValueIsInvalid, hasRoleTokens, hasValidRole, isPositiveTabindexLiteral, isUnknownAriaName, parseTabindex} from '../AriaVocabulary.js';
 import {contrastViolation, parseStyleDeclarations} from '../Contrast.js';
 
 /**
@@ -51,7 +51,7 @@ export const extractTemplateA11yFacts = (root: Node, content: string, filePath: 
         const range = rangeOf(startTag);
         const evidenceText = evidence(startTag);
 
-        if (tag === 'img' && !isHidden(attrs) && !attrs.has('alt')) {
+        if (tag === 'img' && !isDecorative(tag, attrs) && !attrs.has('alt')) {
             facts.push(build({kind: 'ui.imageMissingAlt', kindOf: 'statement', symbol: `img#${counters.img}`, range, value: evidenceText}));
             counters.img += 1;
         }
@@ -95,12 +95,14 @@ export const extractTemplateA11yFacts = (root: Node, content: string, filePath: 
             counters.ariaHidden += 1;
         }
 
-        if ((tag === 'iframe' || tag === 'frame') && !isHidden(attrs) && !hasFrameName(attrs)) {
+        if ((tag === 'iframe' || tag === 'frame') && !isAriaHidden(attrs) && !hasFrameName(attrs)) {
             facts.push(build({kind: 'ui.frameMissingTitle', kindOf: 'statement', symbol: `frame#${counters.frame}`, range, value: evidenceText}));
             counters.frame += 1;
         }
 
-        if (!isHidden(attrs)) {
+        // aria-hidden / role=presentation do not hide text visually, so contrast is
+        // judged regardless of them (WCAG 1.4.3 is about visually rendered text).
+        {
             const lowContrast = contrastFromAttrs(attrs);
             if (lowContrast !== null) {
                 facts.push(build({kind: 'ui.lowContrastText', kindOf: 'statement', symbol: `contrast#${counters.contrast}`, range, value: lowContrast}));
@@ -158,21 +160,35 @@ const readAttributes = (startTag: Node, dialect: BindingDialect): Attrs => {
     return attrs;
 };
 
-const isHidden = (attrs: Attrs): boolean => {
-    if (attrs.get('aria-hidden') === 'true') {
+// aria-hidden="true" removes the element from the accessibility tree.
+// role=presentation/none is NOT treated as hidden (it only strips semantics and is
+// ignored on a focusable element); use isDecorative for the image case.
+const isAriaHidden = (attrs: Attrs): boolean => attrs.get('aria-hidden') === 'true';
+
+// Whether an image is exempt from needing alt: aria-hidden, or presentation/none on
+// this non-focusable element (the ARIA decorative marker, equivalent to alt="").
+const isDecorative = (tag: string, attrs: Attrs): boolean => {
+    if (isAriaHidden(attrs)) {
         return true;
     }
     const role = attrs.get('role');
-    return role === 'presentation' || role === 'none';
+    return (role === 'presentation' || role === 'none') && !isFocusable(tag, attrs);
 };
 
+// Whether the element can take keyboard focus (statically). A clean integer
+// tabindex wins (>= 0 focusable, negative not); a malformed or dynamic tabindex is
+// ignored. An editing host (contenteditable) is focusable. Otherwise native
+// interactivity decides (a link needs href; a hidden input is not focusable).
 const isFocusable = (tag: string, attrs: Attrs): boolean => {
     const tabindex = attrs.get('tabindex');
     if (typeof tabindex === 'string') {
-        const value = Number.parseInt(tabindex.trim(), 10);
-        if (!Number.isNaN(value)) {
+        const value = parseTabindex(tabindex);
+        if (value !== null) {
             return value >= 0;
         }
+    }
+    if (isEditingHost(attrs)) {
+        return true;
     }
     if (tag === 'a') {
         return attrs.has('href');
@@ -183,12 +199,37 @@ const isFocusable = (tag: string, attrs: Attrs): boolean => {
     return NATIVELY_FOCUSABLE.has(tag);
 };
 
+// A contenteditable editing host: present with "" (bare) or "true" is focusable;
+// "false"/dynamic is not treated as an editing host.
+const isEditingHost = (attrs: Attrs): boolean => {
+    const value = attrs.get('contenteditable');
+    if (typeof value !== 'string') {
+        return false;
+    }
+    const normalized = value.trim().toLowerCase();
+    return normalized === '' || normalized === 'true';
+};
+
 const hasFrameName = (attrs: Attrs): boolean => {
     const title = attrs.get('title');
     const label = attrs.get('aria-label');
     return (typeof title === 'string' && title.trim().length > 0)
         || (typeof label === 'string' && label.trim().length > 0)
-        || attrs.has('aria-labelledby');
+        || hasLabelledbyName(attrs);
+};
+
+// aria-labelledby in templates: targets are heavily dynamic and not resolved, so a
+// static non-empty value (or a binding) is conservatively treated as a name, while
+// an empty value ("") is not (documented limitation).
+const hasLabelledbyName = (attrs: Attrs): boolean => {
+    const value = attrs.get('aria-labelledby');
+    if (value === undefined) {
+        return false;
+    }
+    if (value === null) {
+        return true;
+    }
+    return value.trim().split(/\s+/).filter((token) => token.length > 0).length > 0;
 };
 
 const contrastFromAttrs = (attrs: Attrs): string | null => {

@@ -2,7 +2,7 @@ import {Node, SyntaxKind} from 'ts-morph';
 import type {JsxAttribute, JsxElement, JsxOpeningElement, JsxSelfClosingElement, SourceFile} from 'ts-morph';
 import type {Fact, SourceRange} from '../../Types.js';
 import type {FactSpec} from '../FactBuilder.js';
-import {ariaValueIsInvalid, hasRoleTokens, hasValidRole, isPositiveTabindexLiteral, isUnknownAriaName} from '../AriaVocabulary.js';
+import {ariaValueIsInvalid, hasRoleTokens, hasValidRole, isPositiveTabindexLiteral, isUnknownAriaName, parseTabindex} from '../AriaVocabulary.js';
 import {contrastViolation} from '../Contrast.js';
 
 type Build = (spec: FactSpec) => Fact;
@@ -49,22 +49,24 @@ export const extractJsxA11yFacts = (sourceFile: SourceFile, build: Build): Fact[
         const range = rangeOf(sourceFile, element);
         const evidence = `<${tag}>`;
 
-        if (tag === 'img' && !hasSpread && !isHidden(attrs) && !attrs.has('alt')) {
+        if (tag === 'img' && !hasSpread && !isDecorative(tag, attrs) && !attrs.has('alt')) {
             facts.push(build({kind: 'ui.imageMissingAlt', kindOf: 'statement', symbol: `img#${counters.img}`, range, value: evidence}));
             counters.img += 1;
         }
 
-        if (tag === 'button' && !hasSpread && !isHidden(attrs) && !hasAccessibleName(element, attrs)) {
+        // A control is only exempt when aria-hidden; role=presentation/none is
+        // ignored by the browser on a focusable element, so it still needs a name.
+        if (tag === 'button' && !hasSpread && !isAriaHidden(attrs) && !hasAccessibleName(element, attrs)) {
             facts.push(build({kind: 'ui.controlMissingName', kindOf: 'statement', symbol: `button#${counters.button}`, range, value: evidence}));
             counters.button += 1;
         }
 
-        if (tag === 'a' && attrs.has('href') && !hasSpread && !isHidden(attrs) && !hasAccessibleName(element, attrs)) {
+        if (tag === 'a' && attrs.has('href') && !hasSpread && !isAriaHidden(attrs) && !hasAccessibleName(element, attrs)) {
             facts.push(build({kind: 'ui.linkMissingName', kindOf: 'statement', symbol: `link#${counters.link}`, range, value: evidence}));
             counters.link += 1;
         }
 
-        if (isLabelableControl(tag, attrs) && !hasSpread && !isHidden(attrs) && !hasLabel(element, attrs, labelForIds)) {
+        if (isLabelableControl(tag, attrs) && !hasSpread && !isAriaHidden(attrs) && !hasLabel(element, attrs, labelForIds)) {
             facts.push(build({kind: 'ui.controlMissingLabel', kindOf: 'statement', symbol: `field#${counters.field}`, range, value: evidence}));
             counters.field += 1;
         }
@@ -108,14 +110,16 @@ export const extractJsxA11yFacts = (sourceFile: SourceFile, build: Build): Fact[
             counters.ariaHidden += 1;
         }
 
-        if ((tag === 'iframe' || tag === 'frame') && !hasSpread && !isHidden(attrs) && !hasFrameName(attrs)) {
+        if ((tag === 'iframe' || tag === 'frame') && !hasSpread && !isAriaHidden(attrs) && !hasFrameName(attrs)) {
             facts.push(build({kind: 'ui.frameMissingTitle', kindOf: 'statement', symbol: `frame#${counters.frame}`, range, value: evidence}));
             counters.frame += 1;
         }
 
         // Text/background contrast from a static style={{…}} object literal (the
         // same rule as HTML inline style; dynamic values skipped, no cascade).
-        if (!isHidden(attrs)) {
+        // aria-hidden / role=presentation do not hide text visually, so contrast is
+        // judged regardless of them (WCAG 1.4.3 is about visually rendered text).
+        {
             const style = jsxStyleDeclarations(element);
             const lowContrast = style === null ? null : contrastViolation(style.declarations, style.vars);
             if (lowContrast !== null) {
@@ -174,24 +178,35 @@ const attributeValue = (attribute: JsxAttribute): string | null => {
     return null;
 };
 
-const isHidden = (attrs: Attrs): boolean => {
-    if (attrs.get('aria-hidden') === 'true') {
+// aria-hidden="true" removes the element from the accessibility tree.
+// role=presentation/none is NOT treated as hidden (it only strips semantics and is
+// ignored on a focusable element); use isDecorative for the image case.
+const isAriaHidden = (attrs: Attrs): boolean => attrs.get('aria-hidden') === 'true';
+
+// Whether an image is exempt from needing alt: aria-hidden, or presentation/none on
+// this non-focusable element (the ARIA decorative marker, equivalent to alt="").
+const isDecorative = (tag: string, attrs: Attrs): boolean => {
+    if (isAriaHidden(attrs)) {
         return true;
     }
     const role = attrs.get('role');
-    return role === 'presentation' || role === 'none';
+    return (role === 'presentation' || role === 'none') && !isFocusable(tag, attrs);
 };
 
-// Whether the element can take keyboard focus (statically). A literal tabIndex
-// wins (>= 0 focusable, negative not); a dynamic tabIndex is ignored and the
-// native interactivity is used (a link needs href; a hidden input is not focusable).
+// Whether the element can take keyboard focus (statically). A clean integer
+// tabIndex wins (>= 0 focusable, negative not); a malformed or dynamic tabIndex is
+// ignored. An editing host (contentEditable) is focusable. Otherwise native
+// interactivity decides (a link needs href; a hidden input is not focusable).
 const isFocusable = (tag: string, attrs: Attrs): boolean => {
     const tabIndex = attrs.get('tabIndex');
     if (typeof tabIndex === 'string') {
-        const value = Number.parseInt(tabIndex.trim(), 10);
-        if (!Number.isNaN(value)) {
+        const value = parseTabindex(tabIndex);
+        if (value !== null) {
             return value >= 0;
         }
+    }
+    if (isEditingHost(attrs)) {
+        return true;
     }
     if (tag === 'a') {
         return attrs.has('href');
@@ -200,6 +215,17 @@ const isFocusable = (tag: string, attrs: Attrs): boolean => {
         return (attrs.get('type') ?? 'text') !== 'hidden';
     }
     return NATIVELY_FOCUSABLE.has(tag);
+};
+
+// A contentEditable editing host: present with "" (bare), the boolean true, or
+// "true" is focusable; "false"/dynamic is not treated as an editing host.
+const isEditingHost = (attrs: Attrs): boolean => {
+    const value = attrs.get('contentEditable');
+    if (value === undefined || value === null) {
+        return false;
+    }
+    const normalized = value.trim().toLowerCase();
+    return normalized === '' || normalized === 'true';
 };
 
 // Literal htmlFor values across the file (a <label htmlFor="x">). Dynamic
@@ -225,9 +251,24 @@ const attributeProvidesText = (attrs: Attrs, name: string): boolean => {
     return typeof value === 'string' && value.trim().length > 0;
 };
 
+// aria-labelledby in JSX: targets cannot be resolved across components/files, so a
+// static non-empty value (or a dynamic {expr}) is conservatively treated as a name,
+// while an empty value ("") is not. Unlike the HTML adapter, the referenced text is
+// not resolved here (documented limitation), so this only rejects the empty case.
+const hasLabelledbyName = (attrs: Attrs): boolean => {
+    const value = attrs.get('aria-labelledby');
+    if (value === undefined) {
+        return false;
+    }
+    if (value === null) {
+        return true;
+    }
+    return value.trim().split(/\s+/).filter((token) => token.length > 0).length > 0;
+};
+
 // Accessible name for a button/link: aria-label(ledby)/title, or naming content.
 const hasAccessibleName = (element: JsxOpeningElement | JsxSelfClosingElement, attrs: Attrs): boolean => {
-    if (attributeProvidesText(attrs, 'aria-label') || attrs.has('aria-labelledby') || attributeProvidesText(attrs, 'title')) {
+    if (attributeProvidesText(attrs, 'aria-label') || hasLabelledbyName(attrs) || attributeProvidesText(attrs, 'title')) {
         return true;
     }
     if (Node.isJsxSelfClosingElement(element)) {
@@ -269,7 +310,11 @@ const elementProvidesName = (opening: JsxOpeningElement | JsxSelfClosingElement,
         return true;
     }
     const {attrs} = readAttributes(opening);
-    if (attributeProvidesText(attrs, 'aria-label') || attrs.has('aria-labelledby') || attributeProvidesText(attrs, 'title')) {
+    // A child hidden from assistive tech contributes nothing to the name.
+    if (isAriaHidden(attrs)) {
+        return false;
+    }
+    if (attributeProvidesText(attrs, 'aria-label') || hasLabelledbyName(attrs) || attributeProvidesText(attrs, 'title')) {
         return true;
     }
     if (tag === 'img' || tag === 'area') {
@@ -304,7 +349,7 @@ const isLabelableControl = (tag: string, attrs: Attrs): boolean => {
 // ancestor, or a <label htmlFor> pointing at its literal id. A placeholder is
 // deliberately not a label. A dynamic id is not matched (so not falsely flagged).
 const hasLabel = (element: JsxOpeningElement | JsxSelfClosingElement, attrs: Attrs, labelForIds: ReadonlySet<string>): boolean => {
-    if (attributeProvidesText(attrs, 'aria-label') || attrs.has('aria-labelledby') || attributeProvidesText(attrs, 'title')) {
+    if (attributeProvidesText(attrs, 'aria-label') || hasLabelledbyName(attrs) || attributeProvidesText(attrs, 'title')) {
         return true;
     }
     const id = attrs.get('id');
@@ -335,7 +380,7 @@ const hasFrameName = (attrs: Attrs): boolean => {
     const label = attrs.get('aria-label');
     return (typeof title === 'string' && title.trim().length > 0)
         || (typeof label === 'string' && label.trim().length > 0)
-        || attrs.has('aria-labelledby');
+        || hasLabelledbyName(attrs);
 };
 
 // React style-object property names mapped to the CSS property names the shared

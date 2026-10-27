@@ -99,3 +99,17 @@ export const isPositiveTabindexLiteral = (raw: string): boolean => {
     const parsed = Number.parseInt(value, 10);
     return !Number.isNaN(parsed) && parsed > 0 && String(parsed) === value;
 };
+
+// A strict signed-integer tabindex literal (e.g. "0", "-1", "3"), or null when the
+// value is not a clean integer ("3px", "abc", "1.0", empty, dynamic). Deliberately
+// stricter than Number.parseInt, which would accept "3px" as 3 — a malformed
+// tabindex should not be read as focusable; the caller falls back to native
+// focusability instead.
+export const parseTabindex = (raw: string): number | null => {
+    const value = raw.trim();
+    if (!/^[+-]?\d+$/.test(value)) {
+        return null;
+    }
+    const parsed = Number.parseInt(value, 10);
+    return Number.isNaN(parsed) ? null : parsed;
+};

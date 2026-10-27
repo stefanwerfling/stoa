@@ -1,0 +1,9 @@
+<!doctype html>
+<html lang="en">
+  <body>
+    <!-- flagged: aria-hidden does not hide text visually, so low contrast still applies -->
+    <p aria-hidden="true" style="color: #999999; background-color: #ffffff">grey on white ~2.85:1</p>
+    <!-- flagged: role=presentation strips semantics only, text is still rendered -->
+    <p role="presentation" style="color: #999999; background-color: #ffffff">grey on white ~2.85:1</p>
+  </body>
+</html>

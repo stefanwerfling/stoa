@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <body>
+    <!-- flagged: the only text is inside an aria-hidden subtree (not the name) -->
+    <button><span aria-hidden="true">Menu</span></button>
+    <!-- flagged: aria-labelledby present but empty -->
+    <button aria-labelledby=""></button>
+    <!-- flagged: aria-labelledby points at a missing id -->
+    <button aria-labelledby="ghost"></button>
+    <!-- flagged: aria-labelledby points at an element with empty text -->
+    <span id="empty"></span>
+    <button aria-labelledby="empty"></button>
+    <!-- flagged: role=presentation is ignored on a focusable button → still unnamed -->
+    <button role="presentation"></button>
+    <!-- fine: aria-labelledby resolves to real text -->
+    <span id="lbl">Delete</span>
+    <button aria-labelledby="lbl"></button>
+    <!-- fine: has visible text beside a decorative span -->
+    <button>Visible <span aria-hidden="true">(decorative)</span></button>
+    <!-- fine: aria-label wins over the hidden content -->
+    <button aria-label="Close"><span aria-hidden="true">&times;</span></button>
+    <!-- fine: chained aria-labelledby resolves via the referenced element's own label -->
+    <span id="chain" aria-labelledby="lbl"></span>
+    <button aria-labelledby="chain"></button>
+  </body>
+</html>

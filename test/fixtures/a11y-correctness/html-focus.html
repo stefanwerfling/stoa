@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="en">
+  <body>
+    <!-- flagged: a contenteditable editing host is focusable yet aria-hidden -->
+    <div aria-hidden="true" contenteditable="true">Edit me</div>
+    <!-- fine: a malformed tabindex is not a clean integer → not treated as focusable -->
+    <div aria-hidden="true" tabindex="3px">Not actually focusable</div>
+    <!-- fine: contenteditable="false" is not an editing host -->
+    <div aria-hidden="true" contenteditable="false">Static</div>
+    <!-- fine: a decorative aria-hidden span is not focusable -->
+    <span aria-hidden="true">decorative</span>
+  </body>
+</html>

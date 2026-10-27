@@ -1,7 +1,7 @@
 import type {Node} from 'web-tree-sitter';
 import type {Fact, SourceRange} from '../../Types.js';
 import {factBuilder, type AdapterInfo} from '../FactBuilder.js';
-import {ariaValueIsInvalid, hasRoleTokens, hasValidRole, isPositiveTabindexLiteral, isUnknownAriaName} from '../AriaVocabulary.js';
+import {ariaValueIsInvalid, hasRoleTokens, hasValidRole, isPositiveTabindexLiteral, isUnknownAriaName, parseTabindex} from '../AriaVocabulary.js';
 import {contrastViolation, parseStyleDeclarations} from '../Contrast.js';
 
 /**
@@ -24,9 +24,11 @@ export const extractFacts = (root: Node, content: string, filePath: string, info
     // decide whether a form control has an associated label.
     const labelForIds = labelTargets(root);
 
-    // Every id present in the document; needed to resolve aria-labelledby /
-    // aria-describedby references (a reference to an absent id is dangling).
-    const documentIds = collectIds(root);
+    // Every id present in the document mapped to its (first) element; needed to
+    // resolve aria-labelledby / aria-describedby references (a reference to an
+    // absent id is dangling) and to compute the text an aria-labelledby points at.
+    const idToElement = collectIdElements(root);
+    const documentIds = new Set(idToElement.keys());
 
     // id values that occur on more than one element — an id must be unique per
     // the HTML standard, and a duplicate makes reference targets ambiguous.
@@ -58,28 +60,31 @@ export const extractFacts = (root: Node, content: string, filePath: string, info
         if (tag === 'img') {
             const symbol = `img#${imageIndex}`;
             imageIndex += 1;
-            // alt="" is a valid decorative image; aria-hidden / role=presentation
-            // remove the image from the accessibility tree — none is a violation.
-            if (!attrs.has('alt') && !isHiddenFromA11y(attrs)) {
+            // alt="" is a valid decorative image; aria-hidden, or role=presentation/
+            // none on this non-focusable element, removes it from the accessibility
+            // tree — none of these is a violation.
+            if (!attrs.has('alt') && !isDecorative(tag, attrs)) {
                 facts.push(build({kind: 'ui.imageMissingAlt', kindOf: 'statement', symbol, range: rangeOf(startTag), value: evidence(startTag)}));
             }
         } else if (tag === 'button') {
             const symbol = `button#${buttonIndex}`;
             buttonIndex += 1;
-            if (!isHiddenFromA11y(attrs) && !hasAccessibleName(element, attrs)) {
+            // A control is only exempt when aria-hidden; role=presentation/none is
+            // ignored by the browser on a focusable element, so it still needs a name.
+            if (!isAriaHidden(attrs) && !hasAccessibleName(element, attrs, idToElement)) {
                 facts.push(build({kind: 'ui.controlMissingName', kindOf: 'statement', symbol, range: rangeOf(startTag), value: evidence(startTag)}));
             }
         } else if (isLabelableControl(tag, attrs)) {
             const symbol = `field#${fieldIndex}`;
             fieldIndex += 1;
-            if (!isHiddenFromA11y(attrs) && !hasLabel(element, attrs, labelForIds)) {
+            if (!isAriaHidden(attrs) && !hasLabel(element, attrs, labelForIds, idToElement)) {
                 facts.push(build({kind: 'ui.controlMissingLabel', kindOf: 'statement', symbol, range: rangeOf(startTag), value: evidence(startTag)}));
             }
         } else if (tag === 'a' && attrs.has('href')) {
             // Only an <a> with an href is a link; a bare anchor is not a control.
             const symbol = `link#${linkIndex}`;
             linkIndex += 1;
-            if (!isHiddenFromA11y(attrs) && !hasAccessibleName(element, attrs)) {
+            if (!isAriaHidden(attrs) && !hasAccessibleName(element, attrs, idToElement)) {
                 facts.push(build({kind: 'ui.linkMissingName', kindOf: 'statement', symbol, range: rangeOf(startTag), value: evidence(startTag)}));
             }
         }
@@ -165,7 +170,7 @@ export const extractFacts = (root: Node, content: string, filePath: string, info
         // An iframe/frame needs its own accessible name (title or aria-label[ledby])
         // — its embedded document cannot supply one across the boundary, so without
         // it the frame is announced only as "frame". A hidden frame is exempt.
-        if ((tag === 'iframe' || tag === 'frame') && !isHiddenFromA11y(attrs) && !hasFrameName(attrs)) {
+        if ((tag === 'iframe' || tag === 'frame') && !isAriaHidden(attrs) && !hasFrameName(attrs, idToElement)) {
             facts.push(build({kind: 'ui.frameMissingTitle', kindOf: 'statement', symbol: `frame#${frameIndex}`, range: rangeOf(startTag), value: evidence(startTag)}));
             frameIndex += 1;
         }
@@ -173,9 +178,11 @@ export const extractFacts = (root: Node, content: string, filePath: string, info
         // Text/background contrast — only when BOTH colours are provably declared
         // on this element's inline style (var() resolved within the same block).
         // The cascade, inheritance and rendered backgrounds are not resolved, so a
-        // low ratio here is a fact about this element's own declarations.
+        // low ratio here is a fact about this element's own declarations. Neither
+        // aria-hidden nor role=presentation hides the text visually, so the contrast
+        // is judged regardless of those (WCAG 1.4.3 is about visually rendered text).
         const lowContrast = inlineContrastViolation(attrs);
-        if (lowContrast !== null && !isHiddenFromA11y(attrs)) {
+        if (lowContrast !== null) {
             facts.push(build({kind: 'ui.lowContrastText', kindOf: 'statement', symbol: `contrast#${contrastIndex}`, range: rangeOf(startTag), value: lowContrast}));
             contrastIndex += 1;
         }
@@ -235,15 +242,22 @@ const blocksZoom = (content: string): boolean => {
 
 const NATIVELY_FOCUSABLE: ReadonlySet<string> = new Set(['button', 'select', 'textarea', 'input']);
 
-// Whether the element itself can take keyboard focus (statically). An explicit
-// tabindex wins: >= 0 is focusable, negative is not. Otherwise the natively
-// interactive elements are focusable (a link needs an href; a hidden input is
-// not). Descendant focusability is not assessed (documented limitation).
+// Whether the element itself can take keyboard focus (statically). A clean integer
+// tabindex wins: >= 0 is focusable, negative is not; a malformed tabindex ("3px",
+// "abc") is ignored and native focusability decides. An editing host
+// (contenteditable) is focusable. Otherwise the natively interactive elements are
+// focusable (a link needs an href; a hidden input is not). Descendant focusability
+// is not assessed (documented limitation).
 const isFocusable = (tag: string, attrs: Map<string, string>): boolean => {
     const tabindex = attrs.get('tabindex');
     if (tabindex !== undefined) {
-        const value = Number.parseInt(tabindex, 10);
-        return !Number.isNaN(value) && value >= 0;
+        const value = parseTabindex(tabindex);
+        if (value !== null) {
+            return value >= 0;
+        }
+    }
+    if (isEditingHost(attrs)) {
+        return true;
     }
     if (tag === 'a') {
         return attrs.has('href');
@@ -252,6 +266,18 @@ const isFocusable = (tag: string, attrs: Map<string, string>): boolean => {
         return (attrs.get('type') ?? 'text').toLowerCase() !== 'hidden';
     }
     return NATIVELY_FOCUSABLE.has(tag);
+};
+
+// A contenteditable editing host: the attribute present with "" (bare) or "true"
+// makes the element focusable; "false" does not, and "inherit"/dynamic is unknown
+// and conservatively treated as not an editing host here.
+const isEditingHost = (attrs: Map<string, string>): boolean => {
+    const value = attrs.get('contenteditable');
+    if (value === undefined) {
+        return false;
+    }
+    const normalized = value.trim().toLowerCase();
+    return normalized === '' || normalized === 'true';
 };
 
 // <input> types that are NOT labelable form fields (their name comes from value
@@ -268,12 +294,13 @@ const isLabelableControl = (tag: string, attrs: Map<string, string>): boolean =>
     return !NON_LABELABLE_INPUT_TYPES.has((attrs.get('type') ?? 'text').toLowerCase());
 };
 
-// A form control is labelled if it has an aria-label(ledby)/title, an id that a
-// <label for> points at, or a wrapping <label> ancestor. A placeholder is
-// deliberately NOT accepted — it is not a label (WCAG). aria-labelledby is
-// treated as present but its target is not resolved (documented limitation).
-const hasLabel = (element: Node, attrs: Map<string, string>, labelForIds: ReadonlySet<string>): boolean => {
-    if ((attrs.get('aria-label') ?? '').trim().length > 0 || attrs.has('aria-labelledby') || (attrs.get('title') ?? '').trim().length > 0) {
+// A form control is labelled if it has a non-empty aria-label, an aria-labelledby
+// that resolves to non-empty text, a non-empty title, an id that a <label for>
+// points at, or a wrapping <label> ancestor. A placeholder is deliberately NOT
+// accepted — it is not a label (WCAG). An aria-labelledby with an empty value,
+// only-dangling targets, or only-empty target text does NOT count as a label.
+const hasLabel = (element: Node, attrs: Map<string, string>, labelForIds: ReadonlySet<string>, idToElement: ReadonlyMap<string, Node>): boolean => {
+    if ((attrs.get('aria-label') ?? '').trim().length > 0 || labelledbyResolvesToName(attrs, idToElement) || (attrs.get('title') ?? '').trim().length > 0) {
         return true;
     }
     const id = attrs.get('id');
@@ -298,16 +325,19 @@ const labelTargets = (root: Node): Set<string> => {
     return ids;
 };
 
-const collectIds = (root: Node): Set<string> => {
-    const ids = new Set<string>();
+// Each non-empty id mapped to the first element that carries it; later duplicates
+// are ignored (a reference resolves to whichever the user agent picks, which we
+// approximate as the first in document order).
+const collectIdElements = (root: Node): Map<string, Node> => {
+    const ids = new Map<string, Node>();
     for (const element of descendants(root, 'element')) {
         const startTag = startTagOf(element);
         if (startTag === null) {
             continue;
         }
         const id = attributes(startTag).get('id');
-        if (id !== undefined && id.trim().length > 0) {
-            ids.add(id.trim());
+        if (id !== undefined && id.trim().length > 0 && !ids.has(id.trim())) {
+            ids.set(id.trim(), element);
         }
     }
     return ids;
@@ -336,9 +366,6 @@ const findDuplicateIds = (root: Node): Set<string> => {
     return duplicated;
 };
 
-// A frame's accessible name can only come from its own attributes (its embedded
-// document is a separate context): a non-empty title or aria-label, or an
-// aria-labelledby reference.
 // A description like `2.85:1 (needs 4.5:1)` when this element's inline style
 // declares both a text colour and a background colour whose contrast is below the
 // WCAG 1.4.3 AA threshold; null when either colour is absent or not statically
@@ -358,10 +385,10 @@ const inlineContrastViolation = (attrs: Map<string, string>): string | null => {
     return contrastViolation(declarations, vars);
 };
 
-const hasFrameName = (attrs: Map<string, string>): boolean => {
+const hasFrameName = (attrs: Map<string, string>, idToElement: ReadonlyMap<string, Node>): boolean => {
     return (attrs.get('title') ?? '').trim().length > 0
         || (attrs.get('aria-label') ?? '').trim().length > 0
-        || (attrs.get('aria-labelledby') ?? '').trim().length > 0;
+        || labelledbyResolvesToName(attrs, idToElement);
 };
 
 // `name="id"` for each aria-labelledby / aria-describedby token that names an id
@@ -439,28 +466,42 @@ const attributes = (startTag: Node): Map<string, string> => {
     return result;
 };
 
-const isHiddenFromA11y = (attrs: Map<string, string>): boolean => {
-    if (attrs.get('aria-hidden') === 'true') {
+// aria-hidden="true" genuinely removes the element (and its subtree) from the
+// accessibility tree. role=presentation/none is deliberately NOT treated as hidden
+// here: it only strips semantics, and the browser even ignores it on a focusable
+// element — so controls still need a name. Use isDecorative for the image case.
+const isAriaHidden = (attrs: Map<string, string>): boolean => {
+    return attrs.get('aria-hidden') === 'true';
+};
+
+// Whether an image is exempt from needing alt text: aria-hidden, or a
+// presentation/none role on this non-focusable element (the ARIA way to mark a
+// decorative image, equivalent to alt=""). A focusable element would have the
+// presentational role ignored, so the role only counts when it is honoured.
+const isDecorative = (tag: string, attrs: Map<string, string>): boolean => {
+    if (isAriaHidden(attrs)) {
         return true;
     }
     const role = attrs.get('role');
-    return role === 'presentation' || role === 'none';
+    return (role === 'presentation' || role === 'none') && !isFocusable(tag, attrs);
 };
 
-// Whether a control has an accessible name from any static source: an aria-label
-// / aria-labelledby / title, visible descendant text, or a name-bearing child
-// (a nested img[alt] or an <svg><title>). This is a static approximation of the
-// accessible-name computation — see the adapter's documented limitations.
-const hasAccessibleName = (element: Node, attrs: Map<string, string>): boolean => {
-    if ((attrs.get('aria-label') ?? '').trim().length > 0 || attrs.has('aria-labelledby') || (attrs.get('title') ?? '').trim().length > 0) {
+// Whether a control has an accessible name from any static source: a non-empty
+// aria-label, an aria-labelledby that resolves to non-empty text, a non-empty
+// title, visible descendant text, or a name-bearing child (a nested img[alt] or an
+// <svg><title>). Text inside an aria-hidden="true" subtree is excluded — it is not
+// part of the accessible name. This is a static approximation of the accessible-
+// name computation — see the adapter's documented limitations.
+const hasAccessibleName = (element: Node, attrs: Map<string, string>, idToElement: ReadonlyMap<string, Node>): boolean => {
+    if ((attrs.get('aria-label') ?? '').trim().length > 0 || labelledbyResolvesToName(attrs, idToElement) || (attrs.get('title') ?? '').trim().length > 0) {
         return true;
     }
-    if (descendants(element, 'text').some((node) => node.text.trim().length > 0)) {
+    if (visibleTextContent(element).length > 0) {
         return true;
     }
     for (const nested of descendants(element, 'element')) {
         const startTag = startTagOf(nested);
-        if (startTag === null) {
+        if (startTag === null || isInAriaHiddenSubtree(nested, element)) {
             continue;
         }
         const tag = tagName(startTag);
@@ -468,6 +509,110 @@ const hasAccessibleName = (element: Node, attrs: Map<string, string>): boolean =
             return true;
         }
         if (tag === 'title' && descendants(nested, 'text').some((node) => node.text.trim().length > 0)) {
+            return true;
+        }
+    }
+    return false;
+};
+
+const tokensOf = (raw: string): string[] => raw.trim().split(/\s+/).filter((token) => token.length > 0);
+
+// Whether aria-labelledby is present and resolves to a non-empty accessible name.
+// An absent attribute, an empty value, only-dangling targets, or targets whose
+// (recursively resolved) text is empty all yield false.
+const labelledbyResolvesToName = (attrs: Map<string, string>, idToElement: ReadonlyMap<string, Node>): boolean => {
+    const raw = attrs.get('aria-labelledby');
+    if (raw === undefined) {
+        return false;
+    }
+    return labelledbyName(raw, idToElement, new Set()).length > 0;
+};
+
+// The concatenated accessible text that an aria-labelledby value points at.
+// Dangling tokens contribute nothing; a `visited` set of element start indices
+// guards against reference cycles and repeated traversal, so chains terminate.
+const labelledbyName = (raw: string, idToElement: ReadonlyMap<string, Node>, visited: Set<number>): string => {
+    const parts: string[] = [];
+    for (const token of tokensOf(raw)) {
+        const target = idToElement.get(token);
+        if (target === undefined || visited.has(target.startIndex)) {
+            continue;
+        }
+        parts.push(elementAccName(target, idToElement, visited));
+    }
+    return parts.join(' ').replace(/\s+/g, ' ').trim();
+};
+
+// The accessible name contributed by a single referenced element: its own
+// aria-labelledby (followed, with the cycle guard), else a non-empty aria-label,
+// else its full text content. aria-labelledby traversal includes hidden subtrees
+// (per the AccName spec), so full — not visible-only — text is used here.
+const elementAccName = (element: Node, idToElement: ReadonlyMap<string, Node>, visited: Set<number>): string => {
+    visited.add(element.startIndex);
+    const startTag = startTagOf(element);
+    const attrs = startTag === null ? new Map<string, string>() : attributes(startTag);
+    const nestedLabelledby = attrs.get('aria-labelledby');
+    if (nestedLabelledby !== undefined && tokensOf(nestedLabelledby).length > 0) {
+        const nested = labelledbyName(nestedLabelledby, idToElement, visited);
+        if (nested.length > 0) {
+            return nested;
+        }
+    }
+    const ariaLabel = (attrs.get('aria-label') ?? '').trim();
+    if (ariaLabel.length > 0) {
+        return ariaLabel;
+    }
+    return fullTextContent(element);
+};
+
+// Trimmed visible text content of an element: concatenated text nodes, skipping
+// any subtree rooted at an element with aria-hidden="true". Used for the on-element
+// accessible name (hidden text is not announced as the control's name).
+const visibleTextContent = (element: Node): string => {
+    let text = '';
+    const walk = (node: Node): void => {
+        for (const child of namedChildren(node)) {
+            if (child.type === 'element') {
+                const startTag = startTagOf(child);
+                if (startTag !== null && attributes(startTag).get('aria-hidden') === 'true') {
+                    continue;
+                }
+                walk(child);
+            } else if (child.type === 'text') {
+                text += ` ${child.text}`;
+            } else {
+                walk(child);
+            }
+        }
+    };
+    walk(element);
+    return text.replace(/\s+/g, ' ').trim();
+};
+
+// Trimmed full text content of an element including hidden subtrees (aria-labelledby
+// traversal includes hidden content, so this is used for referenced targets only).
+const fullTextContent = (element: Node): string => {
+    return descendants(element, 'text').map((node) => node.text).join(' ').replace(/\s+/g, ' ').trim();
+};
+
+// Whether `node` lies inside an aria-hidden="true" element at or below `boundary`
+// (exclusive of boundary itself). Used to exclude name-bearing children (img/svg
+// title) that sit in a hidden subtree.
+const isInAriaHiddenSubtree = (node: Node, boundary: Node): boolean => {
+    let current = node.parent;
+    while (current !== null && current.startIndex !== boundary.startIndex) {
+        if (current.type === 'element') {
+            const startTag = startTagOf(current);
+            if (startTag !== null && attributes(startTag).get('aria-hidden') === 'true') {
+                return true;
+            }
+        }
+        current = current.parent;
+    }
+    // Also exclude when the nested element itself is aria-hidden.
+    if (node.type === 'element') {
+        const startTag = startTagOf(node);
+        if (startTag !== null && attributes(startTag).get('aria-hidden') === 'true') {
             return true;
         }
     }
