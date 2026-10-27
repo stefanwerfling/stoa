@@ -138,7 +138,7 @@ flowchart TB
 
 ## 5. Regelsatz `default@1` (umgesetzt)
 
-> Der tatsächlich implementierte Regelsatz (26 Regeln). Gesamtüberblick, Facts
+> Der tatsächlich implementierte Regelsatz (27 Regeln). Gesamtüberblick, Facts
 > und Opt-in-Flags: [implementation-status.md](./implementation-status.md).
 
 Deklarative Regeln (`rules/default/*.json`, Default aktiv):
@@ -179,6 +179,7 @@ UI/UX – Barrierefreiheit (HTML, statisch, Default aktiv):
 | `R-A11Y-LINK-NAME` | `ui.linkMissingName` | `marcus.purpose` | Barrierefreiheit, Bedienbarkeit | syntaktisch (WCAG 2.4.4/4.1.2) |
 | `R-A11Y-ARIA-HIDDEN-FOCUSABLE` | `ui.ariaHiddenFocusable` | `marcus.cooperation` | Barrierefreiheit, Bedienbarkeit | syntaktisch (WCAG 4.1.2) |
 | `R-A11Y-ARIA-INVALID-ROLE` | `ui.invalidRole` | `marcus.purpose` | Barrierefreiheit | syntaktisch (WCAG 4.1.2) |
+| `R-A11Y-ARIA-UNKNOWN-ATTR` | `ui.unknownAriaAttribute` | `marcus.purpose` | Barrierefreiheit | syntaktisch (WCAG 4.1.2) |
 
 > **UI/UX (HTML):** rein statische Analyse via tree-sitter-html.
 > `R-A11Y-IMG-ALT` meldet `<img>` ohne `alt` (dekoratives `alt=""`,
@@ -199,7 +200,12 @@ UI/UX – Barrierefreiheit (HTML, statisch, Default aktiv):
 > (`role="buton"`) oder eine für Autoren verbotene abstrakte Rolle
 > (`role="widget"`); das erste gültige Token gewinnt (ARIA-Fallback),
 > `doc-*`/`graphics-*`-Modulrollen werden per Präfix akzeptiert und eine leere
-> `role` ist wirkungslos. Die Kategorie
+> `role` ist wirkungslos. `R-A11Y-ARIA-UNKNOWN-ATTR` meldet ein `aria-*`-Attribut,
+> dessen Name kein definierter WAI-ARIA-1.2-Zustand bzw. keine Eigenschaft ist —
+> ein Tippfehler (`aria-labeledby`) oder ein erfundener Name; gültige Attribute
+> und Nicht-`aria-*`-Namen (`data-aria-*`, `class`) bleiben unberührt, und geprüft
+> wird nur der Name (nicht ob er für die Rolle erlaubt ist oder einen gültigen
+> Wert trägt). Die Kategorie
 > (Accessibility) wird auf die Dimension `Barrierefreiheit` abgebildet. Kontrast,
 > sichtbarer Fokus und gerenderte Zustände sind **nicht** statisch prüfbar und
 > bewusst ausgelassen.

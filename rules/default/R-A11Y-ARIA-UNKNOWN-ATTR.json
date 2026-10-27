@@ -1,0 +1,40 @@
+{
+  "id": "R-A11Y-ARIA-UNKNOWN-ATTR",
+  "version": "1.0.0",
+  "title": "Unknown ARIA attribute",
+  "feature": "ui.unknownAriaAttribute",
+  "appliesTo": ["statement"],
+  "principles": ["marcus.purpose"],
+  "dimensions": ["accessibility"],
+  "trigger": {
+    "all": [{ "fact": "ui.unknownAriaAttribute", "op": "!=", "value": "" }]
+  },
+  "requiredEvidence": ["ui.unknownAriaAttribute"],
+  "severity": { "base": "medium" },
+  "confidence": { "base": 0.9, "capBy": "certainty" },
+  "message": {
+    "en": "Element has an undefined ARIA attribute (WCAG 2.2 · 4.1.2): {value}.",
+    "de": "Element mit undefiniertem ARIA-Attribut (WCAG 2.2 · 4.1.2): {value}."
+  },
+  "rationale": {
+    "en": "An aria-* attribute that is not a defined WAI-ARIA state or property — a typo (aria-labeledby) or an invented name — is silently ignored by assistive tech, so the intended state or relationship never reaches the user (marcus.purpose).",
+    "de": "Ein aria-*-Attribut, das kein definierter WAI-ARIA-Zustand bzw. keine definierte Eigenschaft ist — ein Tippfehler (aria-labeledby) oder ein erfundener Name — wird von assistiver Technik stillschweigend ignoriert; der beabsichtigte Zustand bzw. die Beziehung erreicht den Nutzer nie (marcus.purpose)."
+  },
+  "remediation": {
+    "suggestion": {
+      "en": "Correct the attribute name to the defined ARIA state/property (e.g. aria-labelledby), or remove it if it was never needed.",
+      "de": "Den Attributnamen auf den definierten ARIA-Zustand/die Eigenschaft korrigieren (z. B. aria-labelledby) oder entfernen, falls nie benötigt."
+    },
+    "drawbacks": {
+      "en": "None of note; an undefined aria-* attribute has no effect.",
+      "de": "Keine nennenswerten; ein undefiniertes aria-*-Attribut hat keine Wirkung."
+    }
+  },
+  "missingContext": [
+    {
+      "en": "Only the attribute name is validated, not whether a valid ARIA attribute is allowed on the element's role or carries a valid value.",
+      "de": "Geprüft wird nur der Attributname, nicht ob ein gültiges ARIA-Attribut für die Rolle des Elements erlaubt ist oder einen gültigen Wert trägt."
+    }
+  ],
+  "tests": "test/HtmlA11y.test.ts"
+}

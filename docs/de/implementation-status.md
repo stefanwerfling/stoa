@@ -40,7 +40,7 @@ stoa eval <pfad> --expected <datei> [--format markdown|json]
 - `knowledge/` und `rules/` werden relativ zum installierten Paket aufgelöst —
   die CLI läuft nach `npm link`/Install aus jedem Verzeichnis.
 
-## Regelkatalog (26)
+## Regelkatalog (27)
 
 Deklarative Regeln (`rules/default/*.json`), Default aktiv:
 
@@ -70,6 +70,7 @@ Deklarative Regeln (`rules/default/*.json`), Default aktiv:
 | R-A11Y-LINK-NAME | marcus.purpose | Barrierefreiheit, Bedienbarkeit | HTML (statisch, WCAG 2.4.4/4.1.2) |
 | R-A11Y-ARIA-HIDDEN-FOCUSABLE | marcus.cooperation | Barrierefreiheit, Bedienbarkeit | HTML (statisch, WCAG 4.1.2) |
 | R-A11Y-ARIA-INVALID-ROLE | marcus.purpose | Barrierefreiheit | HTML (statisch, WCAG 4.1.2) |
+| R-A11Y-ARIA-UNKNOWN-ATTR | marcus.purpose | Barrierefreiheit | HTML (statisch, WCAG 4.1.2) |
 
 Prozedurale Regeln (`ProjectRule`, cross-file):
 
@@ -92,11 +93,12 @@ mindestens eine Regel.
 `migration.unguardedDdl`, `migration.noDown`, `migration.dataLoss`,
 `migration.nullableNoDefault`, `ui.imageMissingAlt`, `ui.controlMissingName`,
 `ui.controlMissingLabel`, `ui.linkMissingName`, `ui.ariaHiddenFocusable`,
-`ui.invalidRole`, sowie (opt-in) `external.tsc` und `external.floatingPromise`.
+`ui.invalidRole`, `ui.unknownAriaAttribute`, sowie (opt-in) `external.tsc` und
+`external.floatingPromise`.
 
 ## Qualitätssicherung
 
-- **119 node:test-Fälle** grün (Regeln pos./neg., Extraktion, Schema-Validierung,
+- **120 node:test-Fälle** grün (Regeln pos./neg., Extraktion, Schema-Validierung,
   i18n, Determinismus, SARIF, Eval, Semantik-Groundedness, Datenschutz,
   Finding-Trennung).
 - **Golden-Korpus** (`test/corpus/`, **nur TS+PHP**) mit Ground-Truth; Eval
@@ -106,7 +108,7 @@ mindestens eine Regel.
 - **Wichtig:** Diese Werte gelten nur für den kleinen, kuratierten Korpus und
   sind **keine** allgemeine Zuverlässigkeitsgarantie für beliebige Projekte.
 - **UI/UX-Korpus** (`test/fixtures/html/`, statisches HTML) mit positiven,
-  negativen und legitim-nicht-warnenden Fällen; Eval 100 %/100 % (TP 13) je Regel.
+  negativen und legitim-nicht-warnenden Fällen; Eval 100 %/100 % (TP 16) je Regel.
   Semantische (LLM-)Bewertung wird getrennt gehalten und ist hier nicht verlangt.
 - Dogfooding: stoa analysiert den eigenen `src/`.
 
@@ -136,7 +138,8 @@ zuverlässig prüfbar und daher bewusst ausgelassen: Farbkontrast (WCAG 1.4.3),
 sichtbarer Fokus, Fokusreihenfolge/-fallen, Zielgrößen, dynamische Zustände —
 sie brauchen gerenderte Seiten/Interaktion (geplanter visueller Analyse-Schnitt
 mit Browser-Automatisierung). Nächste statische Schritte: weitere ARIA-Prüfungen
-(z. B. `aria-*`-Attribute, die für die Rolle des Elements ungültig sind); weitere
-Plattformen (React/JSX via ts-morph, Vue, Angular) über eigene Adapter.
-(Umgesetzt: `R-A11Y-FORM-LABEL`, `R-A11Y-LINK-NAME`,
-`R-A11Y-ARIA-HIDDEN-FOCUSABLE`, `R-A11Y-ARIA-INVALID-ROLE`.)
+(z. B. `aria-*`-Attribute mit ungültigem Wert oder die für die Rolle des Elements
+ungültig sind); weitere Plattformen (React/JSX via ts-morph, Vue, Angular) über
+eigene Adapter. (Umgesetzt: `R-A11Y-FORM-LABEL`, `R-A11Y-LINK-NAME`,
+`R-A11Y-ARIA-HIDDEN-FOCUSABLE`, `R-A11Y-ARIA-INVALID-ROLE`,
+`R-A11Y-ARIA-UNKNOWN-ATTR`.)

@@ -28,6 +28,7 @@ export const extractFacts = (root: Node, content: string, filePath: string, info
     let linkIndex = 0;
     let ariaHiddenIndex = 0;
     let roleIndex = 0;
+    let ariaAttrIndex = 0;
     for (const element of descendants(root, 'element')) {
         const startTag = startTagOf(element);
         if (startTag === null) {
@@ -81,6 +82,15 @@ export const extractFacts = (root: Node, content: string, filePath: string, info
             facts.push(build({kind: 'ui.invalidRole', kindOf: 'statement', symbol: `role#${roleIndex}`, range: rangeOf(startTag), value: `role="${role}"`}));
             roleIndex += 1;
         }
+
+        // An aria-* attribute whose name is not a defined WAI-ARIA state or
+        // property (a typo such as aria-labeledby) is silently ignored by
+        // assistive tech — the intended state/relationship never reaches the user.
+        const unknownAria = unknownAriaAttributes(attrs);
+        if (unknownAria.length > 0) {
+            facts.push(build({kind: 'ui.unknownAriaAttribute', kindOf: 'statement', symbol: `aria-attr#${ariaAttrIndex}`, range: rangeOf(startTag), value: unknownAria.join(', ')}));
+            ariaAttrIndex += 1;
+        }
     }
 
     return facts;
@@ -107,6 +117,33 @@ const hasRoleTokens = (role: string): boolean => roleTokens(role).length > 0;
 
 const hasValidRole = (role: string): boolean => {
     return roleTokens(role).some((token) => ARIA_ROLES.has(token.toLowerCase()) || token.startsWith('doc-') || token.startsWith('graphics-'));
+};
+
+// WAI-ARIA 1.2 states and properties (the complete aria-* set). Any aria-*
+// attribute outside this set is undefined and ignored by assistive tech.
+const ARIA_ATTRIBUTES: ReadonlySet<string> = new Set([
+    'aria-activedescendant', 'aria-atomic', 'aria-autocomplete', 'aria-braillelabel', 'aria-brailleroledescription',
+    'aria-busy', 'aria-checked', 'aria-colcount', 'aria-colindex', 'aria-colindextext', 'aria-colspan', 'aria-controls',
+    'aria-current', 'aria-describedby', 'aria-description', 'aria-details', 'aria-disabled', 'aria-dropeffect',
+    'aria-errormessage', 'aria-expanded', 'aria-flowto', 'aria-grabbed', 'aria-haspopup', 'aria-hidden', 'aria-invalid',
+    'aria-keyshortcuts', 'aria-label', 'aria-labelledby', 'aria-level', 'aria-live', 'aria-modal', 'aria-multiline',
+    'aria-multiselectable', 'aria-orientation', 'aria-owns', 'aria-placeholder', 'aria-posinset', 'aria-pressed',
+    'aria-readonly', 'aria-relevant', 'aria-required', 'aria-roledescription', 'aria-rowcount', 'aria-rowindex',
+    'aria-rowindextext', 'aria-rowspan', 'aria-selected', 'aria-setsize', 'aria-sort', 'aria-valuemax', 'aria-valuemin',
+    'aria-valuenow', 'aria-valuetext'
+]);
+
+// The distinct aria-* attribute names on the element that are not defined ARIA
+// states/properties, in document order and de-duplicated by the attribute map.
+const unknownAriaAttributes = (attrs: Map<string, string>): string[] => {
+    const unknown: string[] = [];
+    for (const name of attrs.keys()) {
+        const lower = name.toLowerCase();
+        if (lower.startsWith('aria-') && !ARIA_ATTRIBUTES.has(lower)) {
+            unknown.push(lower);
+        }
+    }
+    return unknown;
 };
 
 const NATIVELY_FOCUSABLE: ReadonlySet<string> = new Set(['button', 'select', 'textarea', 'input']);

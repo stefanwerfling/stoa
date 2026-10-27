@@ -13,6 +13,9 @@
     { "file": "aria-hidden.html", "rule": "R-A11Y-ARIA-HIDDEN-FOCUSABLE", "symbol": "aria-hidden#1" },
     { "file": "aria-hidden.html", "rule": "R-A11Y-ARIA-HIDDEN-FOCUSABLE", "symbol": "aria-hidden#2" },
     { "file": "roles.html", "rule": "R-A11Y-ARIA-INVALID-ROLE", "symbol": "role#0" },
-    { "file": "roles.html", "rule": "R-A11Y-ARIA-INVALID-ROLE", "symbol": "role#1" }
+    { "file": "roles.html", "rule": "R-A11Y-ARIA-INVALID-ROLE", "symbol": "role#1" },
+    { "file": "aria-attrs.html", "rule": "R-A11Y-ARIA-UNKNOWN-ATTR", "symbol": "aria-attr#0" },
+    { "file": "aria-attrs.html", "rule": "R-A11Y-ARIA-UNKNOWN-ATTR", "symbol": "aria-attr#1" },
+    { "file": "aria-attrs.html", "rule": "R-A11Y-ARIA-UNKNOWN-ATTR", "symbol": "aria-attr#2" }
   ]
 }

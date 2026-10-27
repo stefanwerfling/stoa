@@ -138,7 +138,7 @@ flowchart TB
 
 ## 5. Rule Set `default@1` (implemented)
 
-> The actually-implemented rule set (26 rules). Overview, facts and opt-in flags:
+> The actually-implemented rule set (27 rules). Overview, facts and opt-in flags:
 > [implementation-status.md](./implementation-status.md).
 
 Declarative rules (`rules/default/*.json`, on by default):
@@ -179,6 +179,7 @@ UI/UX – accessibility (HTML, static, on by default):
 | `R-A11Y-LINK-NAME` | `ui.linkMissingName` | `marcus.purpose` | Accessibility, usability | syntactic (WCAG 2.4.4/4.1.2) |
 | `R-A11Y-ARIA-HIDDEN-FOCUSABLE` | `ui.ariaHiddenFocusable` | `marcus.cooperation` | Accessibility, usability | syntactic (WCAG 4.1.2) |
 | `R-A11Y-ARIA-INVALID-ROLE` | `ui.invalidRole` | `marcus.purpose` | Accessibility | syntactic (WCAG 4.1.2) |
+| `R-A11Y-ARIA-UNKNOWN-ATTR` | `ui.unknownAriaAttribute` | `marcus.purpose` | Accessibility | syntactic (WCAG 4.1.2) |
 
 > **UI/UX (HTML):** static analysis via tree-sitter-html.
 > `R-A11Y-IMG-ALT` reports `<img>` with no `alt` (decorative `alt=""`,
@@ -197,7 +198,11 @@ UI/UX – accessibility (HTML, static, on by default):
 > whose `role` has tokens but none is a defined WAI-ARIA role — a typo
 > (`role="buton"`) or an author-forbidden abstract role (`role="widget"`); the
 > first valid token wins (ARIA fallback), `doc-*`/`graphics-*` module roles are
-> accepted by prefix and an empty `role` is a no-op. The category (accessibility) maps to the
+> accepted by prefix and an empty `role` is a no-op. `R-A11Y-ARIA-UNKNOWN-ATTR`
+> reports an `aria-*` attribute whose name is not a defined WAI-ARIA 1.2 state or
+> property — a typo (`aria-labeledby`) or an invented name; valid attributes and
+> non-`aria-*` names (`data-aria-*`, `class`) are left alone, and only the name is
+> checked (not whether it is allowed on the role or carries a valid value). The category (accessibility) maps to the
 > `accessibility` dimension. Contrast, visible focus and rendered states are
 > **not** statically decidable and are deliberately omitted.
 

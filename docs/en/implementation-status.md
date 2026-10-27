@@ -40,7 +40,7 @@ stoa eval <path> --expected <file> [--format markdown|json]
 - `knowledge/` and `rules/` resolve relative to the installed package — the CLI
   runs from any directory after `npm link`/install.
 
-## Rule catalog (26)
+## Rule catalog (27)
 
 Declarative rules (`rules/default/*.json`), on by default:
 
@@ -70,6 +70,7 @@ Declarative rules (`rules/default/*.json`), on by default:
 | R-A11Y-LINK-NAME | marcus.purpose | accessibility, usability | HTML (static, WCAG 2.4.4/4.1.2) |
 | R-A11Y-ARIA-HIDDEN-FOCUSABLE | marcus.cooperation | accessibility, usability | HTML (static, WCAG 4.1.2) |
 | R-A11Y-ARIA-INVALID-ROLE | marcus.purpose | accessibility | HTML (static, WCAG 4.1.2) |
+| R-A11Y-ARIA-UNKNOWN-ATTR | marcus.purpose | accessibility | HTML (static, WCAG 4.1.2) |
 
 Procedural rules (`ProjectRule`, cross-file):
 
@@ -91,11 +92,12 @@ All ten quality dimensions (incl. accessibility, usability) have at least one ru
 `migration.unguardedDdl`, `migration.noDown`, `migration.dataLoss`,
 `migration.nullableNoDefault`, `ui.imageMissingAlt`, `ui.controlMissingName`,
 `ui.controlMissingLabel`, `ui.linkMissingName`, `ui.ariaHiddenFocusable`,
-`ui.invalidRole`, plus (opt-in) `external.tsc` and `external.floatingPromise`.
+`ui.invalidRole`, `ui.unknownAriaAttribute`, plus (opt-in) `external.tsc` and
+`external.floatingPromise`.
 
 ## Quality assurance
 
-- **119 node:test cases** green (rules pos./neg., extraction, schema validation,
+- **120 node:test cases** green (rules pos./neg., extraction, schema validation,
   i18n, determinism, SARIF, evaluation, semantic groundedness, privacy,
   finding-model separation).
 - **Golden corpus** (`test/corpus/`, **TS+PHP only**) with ground truth;
@@ -105,7 +107,7 @@ All ten quality dimensions (incl. accessibility, usability) have at least one ru
 - **Important:** these numbers hold only for the small, curated corpus and are
   **not** a general reliability guarantee for arbitrary projects.
 - **UI/UX corpus** (`test/fixtures/html/`, static HTML) with positive, negative
-  and deliberately-no-warning cases; evaluation 100%/100% (TP 13) per rule. The
+  and deliberately-no-warning cases; evaluation 100%/100% (TP 16) per rule. The
   semantic (LLM) assessment is kept separate and is not required here.
 - Dogfooding: stoa analyzes its own `src/`.
 
@@ -134,7 +136,8 @@ statically, and therefore deliberately omitted: colour contrast (WCAG 1.4.3),
 visible focus, focus order/traps, target size, dynamic states — these need a
 rendered page/interaction (a planned visual-analysis slice with browser
 automation). Next static steps: further ARIA checks (e.g. `aria-*` attributes
-that are invalid for the element's role); further platforms (React/JSX via
-ts-morph, Vue, Angular) behind their own adapters. (Implemented:
-`R-A11Y-FORM-LABEL`, `R-A11Y-LINK-NAME`, `R-A11Y-ARIA-HIDDEN-FOCUSABLE`,
-`R-A11Y-ARIA-INVALID-ROLE`.)
+that carry an invalid value, or are invalid for the element's role); further
+platforms (React/JSX via ts-morph, Vue, Angular) behind their own adapters.
+(Implemented: `R-A11Y-FORM-LABEL`, `R-A11Y-LINK-NAME`,
+`R-A11Y-ARIA-HIDDEN-FOCUSABLE`, `R-A11Y-ARIA-INVALID-ROLE`,
+`R-A11Y-ARIA-UNKNOWN-ATTR`.)
