@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="en">
+  <body>
+    <h2 id="sec">Billing</h2>
+    <span id="help">We never share this.</span>
+    <div role="group" aria-labelledby="sec">resolves to an existing id</div>
+    <input aria-label="Card" aria-describedby="help">
+    <div role="group" aria-labelledby="missing">points at nothing</div>
+    <input aria-label="CVV" aria-describedby="help nope">
+    <div aria-labelledby="sec missing2">one good, one dangling</div>
+    <div aria-controls="whatever">aria-controls is not resolved by this rule</div>
+  </body>
+</html>

@@ -1,0 +1,40 @@
+{
+  "id": "R-A11Y-ARIA-DANGLING-IDREF",
+  "version": "1.0.0",
+  "title": "ARIA reference points to a missing id",
+  "feature": "ui.danglingAriaIdref",
+  "appliesTo": ["statement"],
+  "principles": ["marcus.purpose"],
+  "dimensions": ["accessibility"],
+  "trigger": {
+    "all": [{ "fact": "ui.danglingAriaIdref", "op": "!=", "value": "" }]
+  },
+  "requiredEvidence": ["ui.danglingAriaIdref"],
+  "severity": { "base": "high" },
+  "confidence": { "base": 0.85, "capBy": "certainty" },
+  "message": {
+    "en": "ARIA reference points to an id not in the document (WCAG 2.2 · 1.3.1): {value}.",
+    "de": "ARIA-Referenz zeigt auf eine im Dokument fehlende id (WCAG 2.2 · 1.3.1): {value}."
+  },
+  "rationale": {
+    "en": "aria-labelledby / aria-describedby that names an absent id resolves to nothing, so the accessible name or description the author intended is silently dropped — the element does not state what it is (marcus.purpose).",
+    "de": "aria-labelledby / aria-describedby, das eine fehlende id nennt, löst sich ins Leere auf; der beabsichtigte zugängliche Name bzw. die Beschreibung entfällt stillschweigend — das Element benennt nicht, was es ist (marcus.purpose)."
+  },
+  "remediation": {
+    "suggestion": {
+      "en": "Point the reference at the id of an element that actually exists, or correct the id on the target element; remove the reference if it is no longer needed.",
+      "de": "Die Referenz auf die id eines tatsächlich vorhandenen Elements richten oder die id am Zielelement korrigieren; die Referenz entfernen, wenn sie nicht mehr gebraucht wird."
+    },
+    "drawbacks": {
+      "en": "None of note; a dangling reference never has an effect.",
+      "de": "Keine nennenswerten; eine ins Leere zeigende Referenz hat keine Wirkung."
+    }
+  },
+  "missingContext": [
+    {
+      "en": "Only aria-labelledby and aria-describedby are resolved, within the same file; ids injected at runtime (JS frameworks) or defined in another included document are not visible statically and may cause false positives.",
+      "de": "Aufgelöst werden nur aria-labelledby und aria-describedby, innerhalb derselben Datei; zur Laufzeit (JS-Frameworks) eingefügte oder in einem anderen eingebundenen Dokument definierte ids sind statisch nicht sichtbar und können Fehlalarme verursachen."
+    }
+  ],
+  "tests": "test/HtmlA11y.test.ts"
+}

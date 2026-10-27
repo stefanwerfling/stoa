@@ -25,6 +25,9 @@
     { "file": "tabindex.html", "rule": "R-A11Y-POSITIVE-TABINDEX", "symbol": "tabindex#1" },
     { "file": "lang.html", "rule": "R-A11Y-HTML-LANG", "symbol": "html#0" },
     { "file": "viewport.html", "rule": "R-A11Y-META-VIEWPORT-ZOOM", "symbol": "viewport#0" },
-    { "file": "viewport.html", "rule": "R-A11Y-META-VIEWPORT-ZOOM", "symbol": "viewport#1" }
+    { "file": "viewport.html", "rule": "R-A11Y-META-VIEWPORT-ZOOM", "symbol": "viewport#1" },
+    { "file": "idref.html", "rule": "R-A11Y-ARIA-DANGLING-IDREF", "symbol": "idref#0" },
+    { "file": "idref.html", "rule": "R-A11Y-ARIA-DANGLING-IDREF", "symbol": "idref#1" },
+    { "file": "idref.html", "rule": "R-A11Y-ARIA-DANGLING-IDREF", "symbol": "idref#2" }
   ]
 }

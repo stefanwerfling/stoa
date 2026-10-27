@@ -22,6 +22,10 @@ export const extractFacts = (root: Node, content: string, filePath: string, info
     // decide whether a form control has an associated label.
     const labelForIds = labelTargets(root);
 
+    // Every id present in the document; needed to resolve aria-labelledby /
+    // aria-describedby references (a reference to an absent id is dangling).
+    const documentIds = collectIds(root);
+
     let imageIndex = 0;
     let buttonIndex = 0;
     let fieldIndex = 0;
@@ -33,6 +37,7 @@ export const extractFacts = (root: Node, content: string, filePath: string, info
     let tabindexIndex = 0;
     let htmlIndex = 0;
     let viewportIndex = 0;
+    let danglingIdrefIndex = 0;
     for (const element of descendants(root, 'element')) {
         const startTag = startTagOf(element);
         if (startTag === null) {
@@ -132,6 +137,15 @@ export const extractFacts = (root: Node, content: string, filePath: string, info
         if (tag === 'meta' && (attrs.get('name') ?? '').trim().toLowerCase() === 'viewport' && blocksZoom(attrs.get('content') ?? '')) {
             facts.push(build({kind: 'ui.viewportBlocksZoom', kindOf: 'statement', symbol: `viewport#${viewportIndex}`, range: rangeOf(startTag), value: `content="${attrs.get('content') ?? ''}"`}));
             viewportIndex += 1;
+        }
+
+        // aria-labelledby / aria-describedby that reference an id absent from the
+        // document resolve to nothing, so the accessible name/description the
+        // author intended is silently dropped.
+        const dangling = danglingIdrefs(attrs, documentIds);
+        if (dangling.length > 0) {
+            facts.push(build({kind: 'ui.danglingAriaIdref', kindOf: 'statement', symbol: `idref#${danglingIdrefIndex}`, range: rangeOf(startTag), value: dangling.join(', ')}));
+            danglingIdrefIndex += 1;
         }
     }
 
@@ -326,6 +340,41 @@ const labelTargets = (root: Node): Set<string> => {
         }
     }
     return ids;
+};
+
+const collectIds = (root: Node): Set<string> => {
+    const ids = new Set<string>();
+    for (const element of descendants(root, 'element')) {
+        const startTag = startTagOf(element);
+        if (startTag === null) {
+            continue;
+        }
+        const id = attributes(startTag).get('id');
+        if (id !== undefined && id.trim().length > 0) {
+            ids.add(id.trim());
+        }
+    }
+    return ids;
+};
+
+// `name="id"` for each aria-labelledby / aria-describedby token that names an id
+// not present in the document. Empty references are skipped.
+const IDREF_ATTRIBUTES: readonly string[] = ['aria-labelledby', 'aria-describedby'];
+
+const danglingIdrefs = (attrs: Map<string, string>, documentIds: ReadonlySet<string>): string[] => {
+    const dangling: string[] = [];
+    for (const name of IDREF_ATTRIBUTES) {
+        const raw = attrs.get(name);
+        if (raw === undefined) {
+            continue;
+        }
+        for (const token of raw.trim().split(/\s+/).filter((part) => part.length > 0)) {
+            if (!documentIds.has(token)) {
+                dangling.push(`${name}="${token}"`);
+            }
+        }
+    }
+    return dangling;
 };
 
 const hasAncestorTag = (element: Node, wanted: string): boolean => {

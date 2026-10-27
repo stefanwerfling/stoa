@@ -138,7 +138,7 @@ flowchart TB
 
 ## 5. Rule Set `default@1` (implemented)
 
-> The actually-implemented rule set (31 rules). Overview, facts and opt-in flags:
+> The actually-implemented rule set (32 rules). Overview, facts and opt-in flags:
 > [implementation-status.md](./implementation-status.md).
 
 Declarative rules (`rules/default/*.json`, on by default):
@@ -184,6 +184,7 @@ UI/UX – accessibility (HTML, static, on by default):
 | `R-A11Y-POSITIVE-TABINDEX` | `ui.positiveTabindex` | `marcus.cooperation` | Accessibility, usability | syntactic (WCAG 2.4.3) |
 | `R-A11Y-HTML-LANG` | `ui.documentMissingLang` | `marcus.purpose` | Accessibility | syntactic (WCAG 3.1.1) |
 | `R-A11Y-META-VIEWPORT-ZOOM` | `ui.viewportBlocksZoom` | `marcus.cooperation` | Accessibility, usability | syntactic (WCAG 1.4.4) |
+| `R-A11Y-ARIA-DANGLING-IDREF` | `ui.danglingAriaIdref` | `marcus.purpose` | Accessibility | syntactic (WCAG 1.3.1/4.1.2) |
 
 > **UI/UX (HTML):** static analysis via tree-sitter-html.
 > `R-A11Y-IMG-ALT` reports `<img>` with no `alt` (decorative `alt=""`,
@@ -221,6 +222,10 @@ UI/UX – accessibility (HTML, static, on by default):
 > reports a `<meta name="viewport">` whose `content` disables zoom
 > (`user-scalable=no`) or caps it below 200% (a clean numeric `maximum-scale` < 2);
 > non-numeric/dynamic scale values and other metas are left alone (WCAG 1.4.4).
+> `R-A11Y-ARIA-DANGLING-IDREF` reports an `aria-labelledby`/`aria-describedby`
+> token that names an id absent from the same document, so the intended name or
+> description silently resolves to nothing; resolvable references, `aria-controls`
+> and runtime-injected ids are out of scope (WCAG 1.3.1/4.1.2).
 > The category (accessibility) maps to the
 > `accessibility` dimension. Contrast, visible focus and rendered states are
 > **not** statically decidable and are deliberately omitted.

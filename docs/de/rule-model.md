@@ -138,7 +138,7 @@ flowchart TB
 
 ## 5. Regelsatz `default@1` (umgesetzt)
 
-> Der tatsächlich implementierte Regelsatz (31 Regeln). Gesamtüberblick, Facts
+> Der tatsächlich implementierte Regelsatz (32 Regeln). Gesamtüberblick, Facts
 > und Opt-in-Flags: [implementation-status.md](./implementation-status.md).
 
 Deklarative Regeln (`rules/default/*.json`, Default aktiv):
@@ -184,6 +184,7 @@ UI/UX – Barrierefreiheit (HTML, statisch, Default aktiv):
 | `R-A11Y-POSITIVE-TABINDEX` | `ui.positiveTabindex` | `marcus.cooperation` | Barrierefreiheit, Bedienbarkeit | syntaktisch (WCAG 2.4.3) |
 | `R-A11Y-HTML-LANG` | `ui.documentMissingLang` | `marcus.purpose` | Barrierefreiheit | syntaktisch (WCAG 3.1.1) |
 | `R-A11Y-META-VIEWPORT-ZOOM` | `ui.viewportBlocksZoom` | `marcus.cooperation` | Barrierefreiheit, Bedienbarkeit | syntaktisch (WCAG 1.4.4) |
+| `R-A11Y-ARIA-DANGLING-IDREF` | `ui.danglingAriaIdref` | `marcus.purpose` | Barrierefreiheit | syntaktisch (WCAG 1.3.1/4.1.2) |
 
 > **UI/UX (HTML):** rein statische Analyse via tree-sitter-html.
 > `R-A11Y-IMG-ALT` meldet `<img>` ohne `alt` (dekoratives `alt=""`,
@@ -225,7 +226,11 @@ UI/UX – Barrierefreiheit (HTML, statisch, Default aktiv):
 > `<meta name="viewport">`, dessen `content` den Zoom deaktiviert
 > (`user-scalable=no`) oder unter 200 % begrenzt (ein sauberer numerischer
 > `maximum-scale` < 2); nicht-numerische/dynamische Skalenwerte und andere Metas
-> bleiben unberührt (WCAG 1.4.4). Die Kategorie
+> bleiben unberührt (WCAG 1.4.4). `R-A11Y-ARIA-DANGLING-IDREF` meldet ein
+> `aria-labelledby`/`aria-describedby`-Token, das eine im selben Dokument fehlende
+> id nennt, sodass der beabsichtigte Name bzw. die Beschreibung still ins Leere
+> läuft; auflösbare Referenzen, `aria-controls` und zur Laufzeit eingefügte ids
+> sind ausgenommen (WCAG 1.3.1/4.1.2). Die Kategorie
 > (Accessibility) wird auf die Dimension `Barrierefreiheit` abgebildet. Kontrast,
 > sichtbarer Fokus und gerenderte Zustände sind **nicht** statisch prüfbar und
 > bewusst ausgelassen.

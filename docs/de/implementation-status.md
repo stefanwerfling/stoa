@@ -40,7 +40,7 @@ stoa eval <pfad> --expected <datei> [--format markdown|json]
 - `knowledge/` und `rules/` werden relativ zum installierten Paket aufgelöst —
   die CLI läuft nach `npm link`/Install aus jedem Verzeichnis.
 
-## Regelkatalog (31)
+## Regelkatalog (32)
 
 Deklarative Regeln (`rules/default/*.json`), Default aktiv:
 
@@ -75,6 +75,7 @@ Deklarative Regeln (`rules/default/*.json`), Default aktiv:
 | R-A11Y-POSITIVE-TABINDEX | marcus.cooperation | Barrierefreiheit, Bedienbarkeit | HTML (statisch, WCAG 2.4.3) |
 | R-A11Y-HTML-LANG | marcus.purpose | Barrierefreiheit | HTML (statisch, WCAG 3.1.1) |
 | R-A11Y-META-VIEWPORT-ZOOM | marcus.cooperation | Barrierefreiheit, Bedienbarkeit | HTML (statisch, WCAG 1.4.4) |
+| R-A11Y-ARIA-DANGLING-IDREF | marcus.purpose | Barrierefreiheit | HTML (statisch, WCAG 1.3.1/4.1.2) |
 
 Prozedurale Regeln (`ProjectRule`, cross-file):
 
@@ -98,12 +99,12 @@ mindestens eine Regel.
 `migration.nullableNoDefault`, `ui.imageMissingAlt`, `ui.controlMissingName`,
 `ui.controlMissingLabel`, `ui.linkMissingName`, `ui.ariaHiddenFocusable`,
 `ui.invalidRole`, `ui.unknownAriaAttribute`, `ui.invalidAriaValue`,
-`ui.positiveTabindex`, `ui.documentMissingLang`, `ui.viewportBlocksZoom`, sowie
-(opt-in) `external.tsc` und `external.floatingPromise`.
+`ui.positiveTabindex`, `ui.documentMissingLang`, `ui.viewportBlocksZoom`,
+`ui.danglingAriaIdref`, sowie (opt-in) `external.tsc` und `external.floatingPromise`.
 
 ## Qualitätssicherung
 
-- **124 node:test-Fälle** grün (Regeln pos./neg., Extraktion, Schema-Validierung,
+- **125 node:test-Fälle** grün (Regeln pos./neg., Extraktion, Schema-Validierung,
   i18n, Determinismus, SARIF, Eval, Semantik-Groundedness, Datenschutz,
   Finding-Trennung).
 - **Golden-Korpus** (`test/corpus/`, **nur TS+PHP**) mit Ground-Truth; Eval
@@ -113,7 +114,7 @@ mindestens eine Regel.
 - **Wichtig:** Diese Werte gelten nur für den kleinen, kuratierten Korpus und
   sind **keine** allgemeine Zuverlässigkeitsgarantie für beliebige Projekte.
 - **UI/UX-Korpus** (`test/fixtures/html/`, statisches HTML) mit positiven,
-  negativen und legitim-nicht-warnenden Fällen; Eval 100 %/100 % (TP 25) je Regel.
+  negativen und legitim-nicht-warnenden Fällen; Eval 100 %/100 % (TP 28) je Regel.
   Semantische (LLM-)Bewertung wird getrennt gehalten und ist hier nicht verlangt.
 - Dogfooding: stoa analysiert den eigenen `src/`.
 
@@ -149,4 +150,5 @@ erforderlich-aber-fehlend sind); weitere Plattformen (React/JSX via ts-morph, Vu
 Angular) über eigene Adapter. (Umgesetzt: `R-A11Y-FORM-LABEL`, `R-A11Y-LINK-NAME`,
 `R-A11Y-ARIA-HIDDEN-FOCUSABLE`, `R-A11Y-ARIA-INVALID-ROLE`,
 `R-A11Y-ARIA-UNKNOWN-ATTR`, `R-A11Y-ARIA-INVALID-VALUE`,
-`R-A11Y-POSITIVE-TABINDEX`, `R-A11Y-HTML-LANG`, `R-A11Y-META-VIEWPORT-ZOOM`.)
+`R-A11Y-POSITIVE-TABINDEX`, `R-A11Y-HTML-LANG`, `R-A11Y-META-VIEWPORT-ZOOM`,
+`R-A11Y-ARIA-DANGLING-IDREF`.)
