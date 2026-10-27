@@ -46,7 +46,23 @@ const ratio = (hit: number, other: number): number => {
  * evaluation §3–§4.
  */
 export const evaluate = (findings: Finding[], expected: ExpectedFinding[], rootDir: string): EvaluationResult => {
-    const expectedKeys = new Set(expected.map((item) => keyString(expectedKey(item))));
+    // Expected identities must themselves be unique; a repeated manifest entry
+    // is a corpus-integrity error (it would otherwise collapse into the set and
+    // hide a mistake). Reported explicitly, not silently de-duplicated.
+    const expectedSeen = new Set<string>();
+    const uniqueExpected: FindingKey[] = [];
+    const duplicateExpected: FindingKey[] = [];
+    for (const item of expected) {
+        const key = expectedKey(item);
+        const asString = keyString(key);
+        if (expectedSeen.has(asString)) {
+            duplicateExpected.push(key);
+            continue;
+        }
+        expectedSeen.add(asString);
+        uniqueExpected.push(key);
+    }
+    const expectedKeys = expectedSeen;
 
     const seen = new Set<string>();
     const uniqueProduced: FindingKey[] = [];
@@ -63,11 +79,11 @@ export const evaluate = (findings: Finding[], expected: ExpectedFinding[], rootD
     }
     const producedKeys = seen;
 
-    const rules = new Set<string>([...expected.map((item) => item.rule), ...uniqueProduced.map((item) => item.rule)]);
+    const rules = new Set<string>([...uniqueExpected.map((item) => item.rule), ...uniqueProduced.map((item) => item.rule)]);
     const perRule: RuleMetrics[] = [];
     for (const rule of [...rules].sort()) {
         const producedForRule = uniqueProduced.filter((item) => item.rule === rule);
-        const expectedForRule = expected.filter((item) => item.rule === rule).map(expectedKey);
+        const expectedForRule = uniqueExpected.filter((item) => item.rule === rule);
         const truePositives = producedForRule.filter((item) => expectedKeys.has(keyString(item))).length;
         const falsePositives = producedForRule.length - truePositives;
         const falseNegatives = expectedForRule.filter((item) => !producedKeys.has(keyString(item))).length;
@@ -82,7 +98,7 @@ export const evaluate = (findings: Finding[], expected: ExpectedFinding[], rootD
     }
 
     const falsePositives = uniqueProduced.filter((item) => !expectedKeys.has(keyString(item)));
-    const falseNegatives = expected.map(expectedKey).filter((item) => !producedKeys.has(keyString(item)));
+    const falseNegatives = uniqueExpected.filter((item) => !producedKeys.has(keyString(item)));
     const truePositives = uniqueProduced.length - falsePositives.length;
 
     const overall: OverallMetrics = {
@@ -94,5 +110,5 @@ export const evaluate = (findings: Finding[], expected: ExpectedFinding[], rootD
         recall: ratio(truePositives, falseNegatives.length)
     };
 
-    return {overall, perRule, falsePositives, falseNegatives, duplicates};
+    return {overall, perRule, falsePositives, falseNegatives, duplicates, duplicateExpected};
 };

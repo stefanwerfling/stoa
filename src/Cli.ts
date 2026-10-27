@@ -101,18 +101,28 @@ const runEval = (values: CliValues, target: string): number => {
         return 1;
     }
     const root = resolve(target);
+    let expected;
+    try {
+        expected = loadExpected(resolve(values.expected));
+    } catch (error) {
+        // A malformed/unreadable manifest is an explicit evaluation error, not a pass.
+        process.stderr.write(`${(error as Error).message}\n`);
+        return 1;
+    }
     const findings = analyze({
         rootPath: root,
         knowledgeDir: knowledgeDirOf(values),
         ruleSetDir: ruleSetDirOf(values),
         config: configFor(values)
     }).report.findings;
-    const result = evaluate(findings, loadExpected(resolve(values.expected)), root);
+    const result = evaluate(findings, expected, root);
     const output = values.format === 'json' ? JSON.stringify(result, null, 2) : evaluationMarkdown(result);
     process.stdout.write(`${output}\n`);
-    // The evaluation passes only when nothing is missing and nothing is spurious:
-    // any false negative (a missing expected finding) or false positive fails it.
-    return result.overall.falseNegatives === 0 && result.overall.falsePositives === 0 ? 0 : 1;
+    // The evaluation passes only when nothing is missing or spurious and the
+    // manifest is internally consistent: any false negative, false positive, or
+    // duplicate expected identity fails it.
+    const passed = result.overall.falseNegatives === 0 && result.overall.falsePositives === 0 && result.duplicateExpected.length === 0;
+    return passed ? 0 : 1;
 };
 
 const main = async (): Promise<number> => {

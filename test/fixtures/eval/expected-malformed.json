@@ -1,0 +1,6 @@
+{
+  "description": "A finding entry missing its rule — malformed manifest.",
+  "findings": [
+    { "file": "Swallow.ts", "symbol": "catch#0" }
+  ]
+}

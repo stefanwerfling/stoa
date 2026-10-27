@@ -4,6 +4,7 @@ import {dirname, join} from 'node:path';
 import {test} from 'node:test';
 import {fileURLToPath} from 'node:url';
 import {evaluate} from '../src/evaluation/Evaluator.js';
+import {loadExpected} from '../src/evaluation/Corpus.js';
 import type {ExpectedFinding} from '../src/evaluation/EvaluationTypes.js';
 import type {Certainty, Finding, QualityDimension, Severity} from '../src/Types.js';
 
@@ -87,6 +88,35 @@ test('1.4.5 a fully matching corpus is perfect', () => {
     assert.equal(result.duplicates.length, 0);
 });
 
+test('2.3 a duplicate expected identity is reported, not silently collapsed', () => {
+    const result = evaluate([makeFinding('a.ts', 'R-X', 's1')], [expected('a.ts', 'R-X', 's1'), expected('a.ts', 'R-X', 's1')], ROOT);
+    assert.deepEqual(result.duplicateExpected, [{file: 'a.ts', rule: 'R-X', symbol: 's1'}]);
+    // The duplicate collapses for matching (one TP), but is surfaced as an error.
+    assert.equal(result.overall.truePositives, 1);
+    assert.equal(result.overall.falseNegatives, 0);
+});
+
+test('2.4 a malformed manifest throws an explicit error', () => {
+    assert.throws(() => loadExpected(join(evalFixture, 'expected-malformed.json')), /finding #0 has an empty or non-string "rule"/);
+});
+
+test('2.5 precision/recall on empty sets are the documented vacuous 1.0', () => {
+    const empty = evaluate([], [], ROOT);
+    assert.equal(empty.overall.precision, 1);
+    assert.equal(empty.overall.recall, 1);
+    assert.equal(empty.overall.producedCount, 0);
+    assert.equal(empty.overall.truePositives, 0);
+});
+
+test('2.6 zero produced against non-empty expected is recall 0 (not a misleading pass)', () => {
+    const result = evaluate([], [expected('a.ts', 'R-X', 's1')], ROOT);
+    assert.equal(result.overall.recall, 0);
+    assert.equal(result.overall.falseNegatives, 1);
+    assert.equal(result.overall.producedCount, 0);
+    // Precision is vacuously 1 (no predictions) — only meaningful with producedCount 0.
+    assert.equal(result.overall.precision, 1);
+});
+
 // 1.4.6 — the CLI exit code must follow the evaluation result, end to end.
 const runEvalCli = (expectedFile: string): number => {
     try {
@@ -101,4 +131,9 @@ test('1.4.6 CLI eval exits 0 on a match, non-zero on a false negative or false p
     assert.equal(runEvalCli('expected-ok.json'), 0, 'exact match passes');
     assert.notEqual(runEvalCli('expected-missing.json'), 0, 'a missing expected finding (false negative, no false positive) must fail');
     assert.notEqual(runEvalCli('expected-empty.json'), 0, 'a spurious finding (false positive) must fail');
+});
+
+test('2.8 CLI eval fails on a duplicate expected identity and on a malformed manifest', () => {
+    assert.notEqual(runEvalCli('expected-dup.json'), 0, 'a duplicate expected identity must fail the evaluation');
+    assert.notEqual(runEvalCli('expected-malformed.json'), 0, 'a malformed manifest must fail the evaluation');
 });

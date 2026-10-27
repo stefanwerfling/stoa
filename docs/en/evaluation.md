@@ -55,7 +55,16 @@ Each rule has a test catalog (see [rule-model.md §7](./rule-model.md#7-testbark
   same-named files in different directories do not collide; line/column are
   excluded (the symbol disambiguates within a file, lines shift under edits).
   Precision/recall are computed over the set of distinct keys; duplicate
-  produced findings are reported, not silently dropped.
+  produced findings are reported, not silently dropped. Duplicate **expected**
+  entries in the manifest are a corpus-integrity error (reported and failing),
+  and a malformed/unreadable manifest is an explicit evaluation error, not a
+  pass.
+- **Metric definitions.** Over distinct keys: TP = produced ∩ expected,
+  FP = produced \ expected, FN = expected \ produced;
+  `precision = TP / (TP + FP)`, `recall = TP / (TP + FN)`. Undefined cases
+  (no predictions, or no expectations) are reported as the vacuous `1.0`; such a
+  value is only meaningful read together with the produced count (precision
+  `1.0` with 0 produced means "nothing was produced", not "all correct").
 - **False positives** (reported, but no real problem) and **false negatives**
   (real problem overlooked) are reported separately. `stoa eval` exits non-zero
   when either is present.

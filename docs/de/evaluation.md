@@ -56,7 +56,16 @@ Jede Regel hat einen Testkatalog (siehe [rule-model.md §7](./rule-model.md#7-te
   kollidieren; Zeile/Spalte bleiben außen vor (das Symbol unterscheidet innerhalb
   einer Datei, Zeilen verschieben sich bei Änderungen). Precision/Recall werden
   über die Menge eindeutiger Schlüssel berechnet; doppelte erzeugte Findings
-  werden berichtet, nicht still verworfen.
+  werden berichtet, nicht still verworfen. Doppelte **erwartete** Einträge im
+  Manifest sind ein Korpus-Integritätsfehler (werden berichtet und lassen die
+  Evaluierung scheitern); ein fehlerhaftes/unlesbares Manifest ist ein expliziter
+  Evaluierungsfehler, kein Bestehen.
+- **Kennzahl-Definition.** Über eindeutige Schlüssel: TP = erzeugt ∩ erwartet,
+  FP = erzeugt \ erwartet, FN = erwartet \ erzeugt;
+  `precision = TP / (TP + FP)`, `recall = TP / (TP + FN)`. Undefinierte Fälle
+  (keine Vorhersagen bzw. keine Erwartungen) werden als vakuöse `1.0` berichtet;
+  dieser Wert ist nur zusammen mit der Erzeugt-Anzahl aussagekräftig (Precision
+  `1.0` bei 0 Erzeugten bedeutet „nichts erzeugt", nicht „alles korrekt").
 - **False Positives** (gemeldet, aber kein echtes Problem) und **False Negatives**
   (echtes Problem übersehen) werden getrennt berichtet. `stoa eval` endet mit
   Fehlercode, sobald eines von beiden auftritt.

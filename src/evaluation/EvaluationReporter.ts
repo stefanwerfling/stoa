@@ -42,5 +42,10 @@ export const toMarkdown = (result: EvaluationResult): string => {
         lines.push('## Duplicate findings (same identity key)');
         result.duplicates.forEach((key) => lines.push(keyLine(key)));
     }
+    if (result.duplicateExpected.length > 0) {
+        lines.push('');
+        lines.push('## Duplicate expected entries (corpus error)');
+        result.duplicateExpected.forEach((key) => lines.push(keyLine(key)));
+    }
     return lines.join('\n');
 };
