@@ -29,6 +29,7 @@ export const extractFacts = (root: Node, content: string, filePath: string, info
     let ariaHiddenIndex = 0;
     let roleIndex = 0;
     let ariaAttrIndex = 0;
+    let ariaValueIndex = 0;
     for (const element of descendants(root, 'element')) {
         const startTag = startTagOf(element);
         if (startTag === null) {
@@ -91,6 +92,15 @@ export const extractFacts = (root: Node, content: string, filePath: string, info
             facts.push(build({kind: 'ui.unknownAriaAttribute', kindOf: 'statement', symbol: `aria-attr#${ariaAttrIndex}`, range: rangeOf(startTag), value: unknownAria.join(', ')}));
             ariaAttrIndex += 1;
         }
+
+        // A defined ARIA attribute with a token-enumerated value type carrying a
+        // value outside its allowed token set (e.g. aria-hidden="yes") is undefined
+        // and ignored — the intended state is not conveyed.
+        const invalidValues = invalidAriaValues(attrs);
+        if (invalidValues.length > 0) {
+            facts.push(build({kind: 'ui.invalidAriaValue', kindOf: 'statement', symbol: `aria-val#${ariaValueIndex}`, range: rangeOf(startTag), value: invalidValues.join(', ')}));
+            ariaValueIndex += 1;
+        }
     }
 
     return facts;
@@ -144,6 +154,60 @@ const unknownAriaAttributes = (attrs: Map<string, string>): string[] => {
         }
     }
     return unknown;
+};
+
+// ARIA states/properties whose value is a token (or token-list) from a fixed
+// enumeration (WAI-ARIA 1.2). Attributes with free-form value types — IDREF(s),
+// string, integer, number — are intentionally absent: their values are not
+// statically checkable this way. The literal token "undefined" is a valid value
+// for the attributes that list it (it means the state does not apply).
+const ENUMERATED_ARIA_VALUES: ReadonlyMap<string, ReadonlySet<string>> = new Map([
+    ['aria-atomic', new Set(['true', 'false'])],
+    ['aria-busy', new Set(['true', 'false'])],
+    ['aria-disabled', new Set(['true', 'false'])],
+    ['aria-hidden', new Set(['true', 'false'])],
+    ['aria-modal', new Set(['true', 'false'])],
+    ['aria-multiline', new Set(['true', 'false'])],
+    ['aria-multiselectable', new Set(['true', 'false'])],
+    ['aria-readonly', new Set(['true', 'false'])],
+    ['aria-required', new Set(['true', 'false'])],
+    ['aria-checked', new Set(['true', 'false', 'mixed', 'undefined'])],
+    ['aria-pressed', new Set(['true', 'false', 'mixed', 'undefined'])],
+    ['aria-expanded', new Set(['true', 'false', 'undefined'])],
+    ['aria-grabbed', new Set(['true', 'false', 'undefined'])],
+    ['aria-selected', new Set(['true', 'false', 'undefined'])],
+    ['aria-current', new Set(['page', 'step', 'location', 'date', 'time', 'true', 'false'])],
+    ['aria-live', new Set(['off', 'polite', 'assertive'])],
+    ['aria-haspopup', new Set(['false', 'true', 'menu', 'listbox', 'tree', 'grid', 'dialog'])],
+    ['aria-sort', new Set(['ascending', 'descending', 'none', 'other'])],
+    ['aria-orientation', new Set(['horizontal', 'vertical', 'undefined'])],
+    ['aria-autocomplete', new Set(['inline', 'list', 'both', 'none'])],
+    ['aria-invalid', new Set(['grammar', 'false', 'spelling', 'true'])],
+    ['aria-dropeffect', new Set(['copy', 'execute', 'link', 'move', 'none', 'popup'])],
+    ['aria-relevant', new Set(['additions', 'removals', 'text', 'all'])]
+]);
+
+// `name="value"` for each enumerated ARIA attribute whose value contains a token
+// outside its allowed set. Empty values are skipped (the attribute falls back to
+// its default) and values with interpolation markers ({ } < $) are skipped as
+// likely template output rather than a literal author mistake.
+const invalidAriaValues = (attrs: Map<string, string>): string[] => {
+    const invalid: string[] = [];
+    for (const [name, raw] of attrs) {
+        const allowed = ENUMERATED_ARIA_VALUES.get(name.toLowerCase());
+        if (allowed === undefined) {
+            continue;
+        }
+        const value = raw.trim();
+        if (value.length === 0 || /[{}<$]/.test(value)) {
+            continue;
+        }
+        const tokens = value.toLowerCase().split(/\s+/);
+        if (tokens.some((token) => !allowed.has(token))) {
+            invalid.push(`${name.toLowerCase()}="${raw}"`);
+        }
+    }
+    return invalid;
 };
 
 const NATIVELY_FOCUSABLE: ReadonlySet<string> = new Set(['button', 'select', 'textarea', 'input']);

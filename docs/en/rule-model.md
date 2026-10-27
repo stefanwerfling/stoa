@@ -138,7 +138,7 @@ flowchart TB
 
 ## 5. Rule Set `default@1` (implemented)
 
-> The actually-implemented rule set (27 rules). Overview, facts and opt-in flags:
+> The actually-implemented rule set (28 rules). Overview, facts and opt-in flags:
 > [implementation-status.md](./implementation-status.md).
 
 Declarative rules (`rules/default/*.json`, on by default):
@@ -180,6 +180,7 @@ UI/UX – accessibility (HTML, static, on by default):
 | `R-A11Y-ARIA-HIDDEN-FOCUSABLE` | `ui.ariaHiddenFocusable` | `marcus.cooperation` | Accessibility, usability | syntactic (WCAG 4.1.2) |
 | `R-A11Y-ARIA-INVALID-ROLE` | `ui.invalidRole` | `marcus.purpose` | Accessibility | syntactic (WCAG 4.1.2) |
 | `R-A11Y-ARIA-UNKNOWN-ATTR` | `ui.unknownAriaAttribute` | `marcus.purpose` | Accessibility | syntactic (WCAG 4.1.2) |
+| `R-A11Y-ARIA-INVALID-VALUE` | `ui.invalidAriaValue` | `marcus.purpose` | Accessibility | syntactic (WCAG 4.1.2) |
 
 > **UI/UX (HTML):** static analysis via tree-sitter-html.
 > `R-A11Y-IMG-ALT` reports `<img>` with no `alt` (decorative `alt=""`,
@@ -202,7 +203,12 @@ UI/UX – accessibility (HTML, static, on by default):
 > reports an `aria-*` attribute whose name is not a defined WAI-ARIA 1.2 state or
 > property — a typo (`aria-labeledby`) or an invented name; valid attributes and
 > non-`aria-*` names (`data-aria-*`, `class`) are left alone, and only the name is
-> checked (not whether it is allowed on the role or carries a valid value). The category (accessibility) maps to the
+> checked (not whether it is allowed on the role or carries a valid value).
+> `R-A11Y-ARIA-INVALID-VALUE` reports a token-enumerated ARIA state/property whose
+> value is outside its defined token set (`aria-hidden="yes"`, `aria-live="rude"`);
+> free-form value types (IDREF/string/number) are not checked, and empty values
+> (default fallback) and values with interpolation markers (`{ } < $`, likely
+> template output) are skipped to avoid false positives. The category (accessibility) maps to the
 > `accessibility` dimension. Contrast, visible focus and rendered states are
 > **not** statically decidable and are deliberately omitted.
 

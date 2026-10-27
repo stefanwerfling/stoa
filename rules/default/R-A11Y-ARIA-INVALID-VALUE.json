@@ -1,0 +1,40 @@
+{
+  "id": "R-A11Y-ARIA-INVALID-VALUE",
+  "version": "1.0.0",
+  "title": "Invalid ARIA attribute value",
+  "feature": "ui.invalidAriaValue",
+  "appliesTo": ["statement"],
+  "principles": ["marcus.purpose"],
+  "dimensions": ["accessibility"],
+  "trigger": {
+    "all": [{ "fact": "ui.invalidAriaValue", "op": "!=", "value": "" }]
+  },
+  "requiredEvidence": ["ui.invalidAriaValue"],
+  "severity": { "base": "medium" },
+  "confidence": { "base": 0.9, "capBy": "certainty" },
+  "message": {
+    "en": "ARIA attribute has a value outside its allowed tokens (WCAG 2.2 · 4.1.2): {value}.",
+    "de": "ARIA-Attribut mit einem Wert außerhalb der erlaubten Tokens (WCAG 2.2 · 4.1.2): {value}."
+  },
+  "rationale": {
+    "en": "A token-enumerated ARIA state/property carrying a value outside its defined set — aria-hidden=\"yes\" instead of true/false, aria-live=\"rude\" — is undefined: assistive tech falls back to the default or ignores it, so the intended state is not conveyed (marcus.purpose).",
+    "de": "Ein token-enumerierter ARIA-Zustand bzw. eine Eigenschaft mit einem Wert außerhalb der definierten Menge — aria-hidden=\"yes\" statt true/false, aria-live=\"rude\" — ist undefiniert: assistive Technik fällt auf den Default zurück oder ignoriert ihn; der beabsichtigte Zustand wird nicht vermittelt (marcus.purpose)."
+  },
+  "remediation": {
+    "suggestion": {
+      "en": "Use one of the defined tokens for the attribute (e.g. true/false for boolean states, off/polite/assertive for aria-live).",
+      "de": "Eines der definierten Tokens für das Attribut verwenden (z. B. true/false für boolesche Zustände, off/polite/assertive für aria-live)."
+    },
+    "drawbacks": {
+      "en": "None of note; an out-of-range value never has the intended effect.",
+      "de": "Keine nennenswerten; ein unzulässiger Wert hat nie die beabsichtigte Wirkung."
+    }
+  },
+  "missingContext": [
+    {
+      "en": "Only token-enumerated attributes are checked; IDREF/string/number values are not. Empty values (default fallback) and values with interpolation markers ({ } < $, likely template output) are skipped to avoid false positives.",
+      "de": "Geprüft werden nur token-enumerierte Attribute, keine IDREF-/String-/Zahlwerte. Leere Werte (Default-Fallback) und Werte mit Interpolationsmarkern ({ } < $, vermutlich Template-Ausgabe) werden übersprungen, um Fehlalarme zu vermeiden."
+    }
+  ],
+  "tests": "test/HtmlA11y.test.ts"
+}

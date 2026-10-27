@@ -1,0 +1,17 @@
+<!doctype html>
+<html>
+  <body>
+    <div aria-hidden="yes">boolean expects true/false</div>
+    <button aria-pressed="true">valid</button>
+    <div aria-expanded="undefined">undefined is a valid token</div>
+    <div aria-current="page">valid enumerated token</div>
+    <div aria-current="yes">not an aria-current token</div>
+    <div aria-live="rude">not a live-region token</div>
+    <div aria-checked="mixed">valid tristate</div>
+    <div aria-hidden="">empty falls back to default, skipped</div>
+    <div aria-expanded="{{open}}">dynamic marker, skipped</div>
+    <div aria-relevant="additions text">valid token list</div>
+    <div aria-relevant="additions bogus">one bad token in the list</div>
+    <div aria-label="any free text is fine">not enumerated</div>
+  </body>
+</html>

@@ -16,6 +16,10 @@
     { "file": "roles.html", "rule": "R-A11Y-ARIA-INVALID-ROLE", "symbol": "role#1" },
     { "file": "aria-attrs.html", "rule": "R-A11Y-ARIA-UNKNOWN-ATTR", "symbol": "aria-attr#0" },
     { "file": "aria-attrs.html", "rule": "R-A11Y-ARIA-UNKNOWN-ATTR", "symbol": "aria-attr#1" },
-    { "file": "aria-attrs.html", "rule": "R-A11Y-ARIA-UNKNOWN-ATTR", "symbol": "aria-attr#2" }
+    { "file": "aria-attrs.html", "rule": "R-A11Y-ARIA-UNKNOWN-ATTR", "symbol": "aria-attr#2" },
+    { "file": "aria-values.html", "rule": "R-A11Y-ARIA-INVALID-VALUE", "symbol": "aria-val#0" },
+    { "file": "aria-values.html", "rule": "R-A11Y-ARIA-INVALID-VALUE", "symbol": "aria-val#1" },
+    { "file": "aria-values.html", "rule": "R-A11Y-ARIA-INVALID-VALUE", "symbol": "aria-val#2" },
+    { "file": "aria-values.html", "rule": "R-A11Y-ARIA-INVALID-VALUE", "symbol": "aria-val#3" }
   ]
 }
