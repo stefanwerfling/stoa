@@ -99,6 +99,27 @@ Statisch **nicht** zuverlässig entscheidbar, daher ausgelassen statt geraten:
 - **Ob ein Name/Label/Titel *aussagekräftig* ist** — menschliches Urteil; stoa prüft Präsenz, nicht Qualität.
 - **Überschriftenhierarchie / visuelle Konsistenz** — absichtsabhängig; wäre Meinung, nicht Tatsache.
 
+**Zugänglicher Name — was statisch gewertet wird:** Die Namensberechnung ist eine
+konservative Annäherung, keine Nachbildung des Browser-Accessibility-Trees. Als Name
+zählen nicht-leeres `aria-label`, sichtbarer Text **ohne** `aria-hidden`-Subbäume,
+verschachteltes `img[alt]`/`svg > title` und — nur in HTML — `aria-labelledby`, das
+gegen seine Ziele im Dokument aufgelöst wird (leerer Wert, fehlende/leere Ziele →
+kein Name; Referenzketten mit Zyklus-Schutz). In JSX/Vue/Angular bleiben
+`aria-labelledby`-Ziele unaufgelöst (ein nicht-leerer Wert gilt konservativ als Name,
+ein leerer nicht). `role=presentation`/`none` nimmt ein fokussierbares Control nicht
+von der Namenspflicht aus; Fokusierbarkeit folgt aus striktem Integer-`tabindex`,
+`contenteditable` und nativer Interaktivität.
+
+**Drei Stufen der Aussagekraft.** stoa unterscheidet sauber zwischen (1) einer
+*statisch bewiesenen technischen Auffälligkeit*, (2) einem daraus *abgeleiteten
+Risiko* und (3) einem *begründbaren WCAG-Verstoß*. Ein fehlendes `alt`, ein fehlender
+zugänglicher Name oder ein zu geringer Inline-Kontrast fällt unter (3) (die SC wird
+als Verstoß genannt). Ein **unbekanntes ARIA-Attribut, ein ungültiger ARIA-Wert/eine
+ungültige Rolle oder eine doppelte id** ist Stufe (1)/(2): der Fakt ist bewiesen, der
+konkrete WCAG-Bezug ist kontextabhängig und wird daher als *„verwandt: WCAG …"*
+geführt, nicht als bewiesener Verstoß (siehe `missingContext` der jeweiligen Regel;
+WCAG 4.1.1 Parsing wurde in WCAG 2.2 entfernt).
+
 Das ist die ehrliche Grenze: stoa meldet das Belegbare und zeigt, wo ein
 **gerenderter/interaktiver (visueller) Schnitt** oder **menschliche Prüfung**
 übernehmen muss.

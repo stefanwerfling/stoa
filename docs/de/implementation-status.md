@@ -103,14 +103,14 @@ Deklarative Regeln (`rules/default/*.json`), Default aktiv:
 | R-A11Y-FORM-LABEL | marcus.purpose | Barrierefreiheit, Bedienbarkeit | HTML, JSX (statisch, WCAG 1.3.1/4.1.2) |
 | R-A11Y-LINK-NAME | marcus.purpose | Barrierefreiheit, Bedienbarkeit | HTML, JSX (statisch, WCAG 2.4.4/4.1.2) |
 | R-A11Y-ARIA-HIDDEN-FOCUSABLE | marcus.cooperation | Barrierefreiheit, Bedienbarkeit | HTML, JSX, Vue, Angular (statisch, WCAG 4.1.2) |
-| R-A11Y-ARIA-INVALID-ROLE | marcus.purpose | Barrierefreiheit | HTML, JSX, Vue, Angular (statisch, WCAG 4.1.2) |
-| R-A11Y-ARIA-UNKNOWN-ATTR | marcus.purpose | Barrierefreiheit | HTML, JSX, Vue, Angular (statisch, WCAG 4.1.2) |
-| R-A11Y-ARIA-INVALID-VALUE | marcus.purpose | Barrierefreiheit | HTML, JSX, Vue, Angular (statisch, WCAG 4.1.2) |
+| R-A11Y-ARIA-INVALID-ROLE | marcus.purpose | Barrierefreiheit | HTML, JSX, Vue, Angular (statisch, verwandt: WCAG 4.1.2) |
+| R-A11Y-ARIA-UNKNOWN-ATTR | marcus.purpose | Barrierefreiheit | HTML, JSX, Vue, Angular (statisch, verwandt: WCAG 4.1.2) |
+| R-A11Y-ARIA-INVALID-VALUE | marcus.purpose | Barrierefreiheit | HTML, JSX, Vue, Angular (statisch, verwandt: WCAG 4.1.2) |
 | R-A11Y-POSITIVE-TABINDEX | marcus.cooperation | Barrierefreiheit, Bedienbarkeit | HTML, JSX, Vue, Angular (statisch, WCAG 2.4.3) |
 | R-A11Y-HTML-LANG | marcus.purpose | Barrierefreiheit | HTML (statisch, WCAG 3.1.1) |
 | R-A11Y-META-VIEWPORT-ZOOM | marcus.cooperation | Barrierefreiheit, Bedienbarkeit | HTML (statisch, WCAG 1.4.4) |
 | R-A11Y-ARIA-DANGLING-IDREF | marcus.purpose | Barrierefreiheit | HTML (statisch, WCAG 1.3.1/4.1.2) |
-| R-A11Y-DUPLICATE-ID | marcus.purpose | Barrierefreiheit | HTML (statisch, WCAG 1.3.1/4.1.2) |
+| R-A11Y-DUPLICATE-ID | marcus.purpose | Barrierefreiheit | HTML (statisch, verwandt: WCAG 1.3.1/4.1.2) |
 | R-A11Y-FRAME-TITLE | marcus.purpose | Barrierefreiheit, Bedienbarkeit | HTML, JSX, Vue, Angular (statisch, WCAG 4.1.2) |
 | R-A11Y-CONTRAST-TEXT | marcus.cooperation | Barrierefreiheit, Bedienbarkeit | HTML, JSX, Vue, Angular (Inline-Farben, WCAG 1.4.3) |
 | R-A11Y-FLUTTER-IMAGE-LABEL | marcus.purpose | Barrierefreiheit | Flutter/Dart (Widget, `semanticLabel`/`excludeFromSemantics`) |
@@ -147,7 +147,7 @@ mindestens eine Regel.
 
 ## Qualitätssicherung
 
-- **147 node:test-Fälle** grün (Regeln pos./neg., Extraktion, Schema-Validierung,
+- **152 node:test-Fälle** grün (Regeln pos./neg., Extraktion, Schema-Validierung,
   i18n, Determinismus, SARIF, Eval, Semantik-Groundedness, Datenschutz,
   Finding-Trennung).
 - **Golden-Korpus** (`test/corpus/`, **nur TS+PHP**) mit Ground-Truth; Eval
@@ -176,6 +176,14 @@ mindestens eine Regel.
   einem mit label-loser `InputDecoration`, sowie Negativfällen (vorhandenes
   `semanticLabel`, `excludeFromSemantics: true`, `tooltip`, `labelText`, `hintText`,
   Variablen-Decoration) und einem Clean-Widget.
+- **A11y-Korrektheits-Korpus** (`test/fixtures/a11y-correctness/`): Regressionstests
+  für die Korrektheitsprüfung der Namens-/Fokus-/ARIA-Semantik über den echten
+  Analysepfad (HTML, JSX, Vue). Fixiert: Text in `aria-hidden`-Subbäumen zählt nicht
+  als Name; `aria-labelledby` wird in HTML gegen seine Ziele aufgelöst (leerer Wert,
+  fehlende/leere Ziele → kein Name; Referenzketten mit Zyklus-Schutz); `role=presentation`
+  nimmt ein fokussierbares Control nicht von der Namenspflicht aus; strikte
+  tabindex-Prüfung und `contenteditable`-Fokus; Kontrast wird auch unter `aria-hidden`/
+  `role=presentation` geprüft (Text bleibt visuell sichtbar).
 - Dogfooding: stoa analysiert den eigenen `src/`.
 
 ## Abweichungen vom Konzept (bewusst, dokumentiert)
@@ -229,3 +237,27 @@ ungültig sind). (Umgesetzt: `R-A11Y-FORM-LABEL`, `R-A11Y-LINK-NAME`,
 `R-A11Y-ARIA-UNKNOWN-ATTR`, `R-A11Y-ARIA-INVALID-VALUE`,
 `R-A11Y-POSITIVE-TABINDEX`, `R-A11Y-HTML-LANG`, `R-A11Y-META-VIEWPORT-ZOOM`,
 `R-A11Y-ARIA-DANGLING-IDREF`, `R-A11Y-DUPLICATE-ID`, `R-A11Y-FRAME-TITLE`.)
+
+**Zugänglicher Name — statische Annäherung:** Die Namensberechnung ist eine
+konservative statische Näherung, **keine** Nachbildung des Browser-Accessibility-
+Trees. Berücksichtigt werden: nicht-leeres `aria-label`; sichtbarer Textinhalt
+**ohne** `aria-hidden`-Subbäume; verschachteltes `img[alt]`/`svg > title`; und —
+nur in HTML — `aria-labelledby`, das gegen seine Ziele im selben Dokument aufgelöst
+wird (leerer Wert, fehlende Ziele oder ausschließlich leere Zielinhalte zählen
+**nicht** als Name; Referenzketten werden mit Zyklus-Schutz verfolgt). In JSX, Vue
+und Angular werden `aria-labelledby`-Ziele mangels statisch auflösbarer Referenzen
+**nicht** aufgelöst — ein nicht-leerer Wert gilt dort konservativ als Name (ein
+leerer Wert nicht). Laufzeit-/dynamische Inhalte werden weder als bewiesener Fehler
+noch als bewiesene Korrektheit gewertet. Fokusierbarkeit wird aus striktem
+Integer-`tabindex`, `contenteditable` und nativer Interaktivität abgeleitet;
+`role=presentation`/`none` entfernt ein Element **nicht** pauschal aus dem A11y-Tree
+(auf einem fokussierbaren Control wird die Rolle ignoriert, ein dekoratives Bild
+bleibt zulässig).
+
+**Statische Auffälligkeit vs. WCAG-Verstoß:** Bei `R-A11Y-ARIA-UNKNOWN-ATTR`,
+`-ARIA-INVALID-VALUE`, `-ARIA-INVALID-ROLE` und `-DUPLICATE-ID` ist der *statische
+Fakt* bewiesen (unbekanntes Attribut, ungültiger Token, doppelte id), der konkrete
+WCAG-Verstoß hängt aber vom Kontext ab. Die zugehörigen SC werden daher als
+*verwandte Leitlinie* genannt (Message/Doku: „verwandt: WCAG …"), nicht als
+bewiesener Verstoß; `missingContext` jeder Regel erläutert die Unterscheidung.
+WCAG 4.1.1 (Parsing), das doppelte ids früher abdeckte, wurde in WCAG 2.2 entfernt.

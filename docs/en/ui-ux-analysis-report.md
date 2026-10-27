@@ -99,6 +99,26 @@ Statically **not** reliably decidable, therefore omitted rather than guessed:
 - **Whether a name/label/title is *meaningful*** — a human judgement; stoa checks presence, not quality.
 - **Heading hierarchy / visual consistency** — intent-dependent; would be opinion, not fact.
 
+**Accessible name — what is judged statically:** name computation is a conservative
+approximation, not a reproduction of the browser accessibility tree. A name counts
+from a non-empty `aria-label`, visible text **excluding** `aria-hidden` subtrees, a
+nested `img[alt]`/`svg > title`, and — in HTML only — `aria-labelledby` resolved
+against its targets in the document (an empty value, missing/empty targets → no name;
+reference chains with a cycle guard). In JSX/Vue/Angular `aria-labelledby` targets
+stay unresolved (a non-empty value is conservatively a name, an empty one is not).
+`role=presentation`/`none` does not exempt a focusable control from needing a name;
+focusability follows from a strict integer `tabindex`, `contenteditable` and native
+interactivity.
+
+**Three levels of claim.** stoa separates (1) a *statically proven technical
+anomaly*, (2) a *derived accessibility risk*, and (3) a *defensible WCAG violation*.
+A missing `alt`, a missing accessible name, or a low inline contrast is level (3)
+(the SC is cited as a violation). An **unknown ARIA attribute, an invalid ARIA
+value/role, or a duplicate id** is level (1)/(2): the fact is proven, but the
+concrete WCAG link is context-dependent and is therefore cited as *"related: WCAG …"*,
+not as a proven violation (see each rule's `missingContext`; WCAG 4.1.1 Parsing was
+removed in WCAG 2.2).
+
 These are the honest boundary: stoa reports the provable and points at where a
 **rendered/interactive (visual) slice** or **human review** must take over.
 

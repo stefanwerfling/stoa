@@ -100,14 +100,14 @@ Declarative rules (`rules/default/*.json`), on by default:
 | R-A11Y-FORM-LABEL | marcus.purpose | accessibility, usability | HTML, JSX (static, WCAG 1.3.1/4.1.2) |
 | R-A11Y-LINK-NAME | marcus.purpose | accessibility, usability | HTML, JSX (static, WCAG 2.4.4/4.1.2) |
 | R-A11Y-ARIA-HIDDEN-FOCUSABLE | marcus.cooperation | accessibility, usability | HTML, JSX, Vue, Angular (static, WCAG 4.1.2) |
-| R-A11Y-ARIA-INVALID-ROLE | marcus.purpose | accessibility | HTML, JSX, Vue, Angular (static, WCAG 4.1.2) |
-| R-A11Y-ARIA-UNKNOWN-ATTR | marcus.purpose | accessibility | HTML, JSX, Vue, Angular (static, WCAG 4.1.2) |
-| R-A11Y-ARIA-INVALID-VALUE | marcus.purpose | accessibility | HTML, JSX, Vue, Angular (static, WCAG 4.1.2) |
+| R-A11Y-ARIA-INVALID-ROLE | marcus.purpose | accessibility | HTML, JSX, Vue, Angular (static, related: WCAG 4.1.2) |
+| R-A11Y-ARIA-UNKNOWN-ATTR | marcus.purpose | accessibility | HTML, JSX, Vue, Angular (static, related: WCAG 4.1.2) |
+| R-A11Y-ARIA-INVALID-VALUE | marcus.purpose | accessibility | HTML, JSX, Vue, Angular (static, related: WCAG 4.1.2) |
 | R-A11Y-POSITIVE-TABINDEX | marcus.cooperation | accessibility, usability | HTML, JSX, Vue, Angular (static, WCAG 2.4.3) |
 | R-A11Y-HTML-LANG | marcus.purpose | accessibility | HTML (static, WCAG 3.1.1) |
 | R-A11Y-META-VIEWPORT-ZOOM | marcus.cooperation | accessibility, usability | HTML (static, WCAG 1.4.4) |
 | R-A11Y-ARIA-DANGLING-IDREF | marcus.purpose | accessibility | HTML (static, WCAG 1.3.1/4.1.2) |
-| R-A11Y-DUPLICATE-ID | marcus.purpose | accessibility | HTML (static, WCAG 1.3.1/4.1.2) |
+| R-A11Y-DUPLICATE-ID | marcus.purpose | accessibility | HTML (static, related: WCAG 1.3.1/4.1.2) |
 | R-A11Y-FRAME-TITLE | marcus.purpose | accessibility, usability | HTML, JSX, Vue, Angular (static, WCAG 4.1.2) |
 | R-A11Y-CONTRAST-TEXT | marcus.cooperation | accessibility, usability | HTML, JSX, Vue, Angular (inline colours, WCAG 1.4.3) |
 | R-A11Y-FLUTTER-IMAGE-LABEL | marcus.purpose | accessibility | Flutter/Dart (widget, `semanticLabel`/`excludeFromSemantics`) |
@@ -143,7 +143,7 @@ All ten quality dimensions (incl. accessibility, usability) have at least one ru
 
 ## Quality assurance
 
-- **147 node:test cases** green (rules pos./neg., extraction, schema validation,
+- **152 node:test cases** green (rules pos./neg., extraction, schema validation,
   i18n, determinism, SARIF, evaluation, semantic groundedness, privacy,
   finding-model separation).
 - **Golden corpus** (`test/corpus/`, **TS+PHP only**) with ground truth;
@@ -171,6 +171,14 @@ All ten quality dimensions (incl. accessibility, usability) have at least one ru
   label-less `InputDecoration`, plus negative cases (present `semanticLabel`,
   `excludeFromSemantics: true`, `tooltip`, `labelText`, `hintText`, a variable
   decoration) and a clean widget.
+- **A11y correctness corpus** (`test/fixtures/a11y-correctness/`): regression tests
+  for the name/focus/ARIA correctness pass, exercised through the real analysis path
+  (HTML, JSX, Vue). Pinned: text inside an `aria-hidden` subtree is not a name;
+  `aria-labelledby` is resolved against its targets in HTML (empty value, missing or
+  empty targets → no name; reference chains with a cycle guard); `role=presentation`
+  does not exempt a focusable control from needing a name; strict tabindex and
+  `contenteditable` focus; contrast is judged even under `aria-hidden`/
+  `role=presentation` (the text is still visually rendered).
 - Dogfooding: stoa analyzes its own `src/`.
 
 ## Deviations from the concept (deliberate, documented)
@@ -222,3 +230,26 @@ attributes invalid for the element's role).
 `R-A11Y-ARIA-UNKNOWN-ATTR`, `R-A11Y-ARIA-INVALID-VALUE`,
 `R-A11Y-POSITIVE-TABINDEX`, `R-A11Y-HTML-LANG`, `R-A11Y-META-VIEWPORT-ZOOM`,
 `R-A11Y-ARIA-DANGLING-IDREF`, `R-A11Y-DUPLICATE-ID`, `R-A11Y-FRAME-TITLE`.)
+
+**Accessible name — static approximation:** name computation is a conservative
+static approximation, **not** a reproduction of the browser accessibility tree. It
+counts: a non-empty `aria-label`; visible text content **excluding** `aria-hidden`
+subtrees; a nested `img[alt]`/`svg > title`; and — in HTML only — `aria-labelledby`
+resolved against its targets in the same document (an empty value, missing targets,
+or only-empty target text do **not** count as a name; reference chains are followed
+with a cycle guard). In JSX, Vue and Angular `aria-labelledby` targets are **not**
+resolved (no statically resolvable references), so a non-empty value is
+conservatively treated as a name there (an empty value is not). Runtime/dynamic
+content is treated as neither a proven defect nor proven correctness. Focusability
+is derived from a strict integer `tabindex`, `contenteditable` and native
+interactivity; `role=presentation`/`none` does **not** blanket-remove an element
+from the a11y tree (the role is ignored on a focusable control, while a decorative
+image stays valid).
+
+**Technical anomaly vs WCAG violation:** for `R-A11Y-ARIA-UNKNOWN-ATTR`,
+`-ARIA-INVALID-VALUE`, `-ARIA-INVALID-ROLE` and `-DUPLICATE-ID` the *static fact* is
+proven (undefined attribute, out-of-range token, duplicate id), but the concrete
+WCAG violation depends on context. The related SC are therefore cited as *related
+guidance* (message/docs: "related: WCAG …"), not as a proven violation; each rule's
+`missingContext` spells out the distinction. WCAG 4.1.1 (Parsing), which once
+covered duplicate ids, was removed in WCAG 2.2.

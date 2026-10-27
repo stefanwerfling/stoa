@@ -8,31 +8,39 @@ An LLM is an optional, switchable adapter.
 
 > **Status:** past the MVP. The deterministic core (ingestion → facts → rule
 > engine → findings → reports), a knowledge base of 6 source-checked principles,
-> 20 rules across 8 quality dimensions (incl. a TypeORM/Doctrine persistence pack
-> and a robustness pack), SARIF 2.1.0 / JSON / Markdown output, localized output
-> (`--lang en|de`), a golden-corpus evaluator with a per-language breakdown, and
-> an optional, off-by-default, grounded semantic (LLM) layer are implemented.
-> See [docs/en/roadmap.md](docs/en/roadmap.md) and, for what is actually built
-> and tested, [docs/en/implementation-status.md](docs/en/implementation-status.md).
+> 38 rules across 10 quality dimensions (incl. a TypeORM/Doctrine persistence pack,
+> a robustness pack and a UI/UX accessibility pack), SARIF 2.1.0 / JSON / Markdown
+> output, localized output (`--lang en|de`), a golden-corpus evaluator with a
+> per-language breakdown, and an optional, off-by-default, grounded semantic (LLM)
+> layer are implemented. See [docs/en/roadmap.md](docs/en/roadmap.md) and, for what
+> is actually built and tested, [docs/en/implementation-status.md](docs/en/implementation-status.md).
 >
 > **Maturity, honestly tiered:**
 > - *Implemented and unit-tested:* TypeScript/JavaScript (`ts-morph`), PHP
 >   (`php-parser`/glayzzle), Dart and C/C++ (tree-sitter / `web-tree-sitter`,
->   in-process WASM), and static **HTML accessibility** (tree-sitter-html:
->   `<img>` alt and control accessible-name, WCAG-anchored); 22 rules; the
->   evaluator (with a per-language/category breakdown); the grounded semantic layer.
-> - *UI/UX scope:* static HTML only, with its own test corpus. Rendering-dependent
->   checks (contrast, visible focus, dynamic states) are deliberately out of scope
->   for the static analyser and flagged as needing a future visual slice.
+>   in-process WASM); the evaluator (with a per-language/category breakdown); the
+>   grounded semantic layer. 38 rules.
+> - *UI/UX accessibility, per surface (static):* **HTML** (tree-sitter-html, all 14
+>   WCAG-anchored rules); **React/JSX** (ts-morph, 11 of 14); **Vue SFC** and
+>   **Angular** templates (8 attribute/contrast rules via a shared binding-aware
+>   extraction); **Flutter/Dart** widgets (3 widget-tree rules: Image/IconButton/
+>   TextField labelling). Accessible-name, focusability and ARIA semantics are a
+>   conservative static approximation, not a browser accessibility-tree replica.
+> - *Contrast:* **static inline only** — computed when both text and background
+>   colour are declared together on an element's inline style (WCAG 1.4.3). The
+>   cascade/rendered contrast, visible focus and dynamic states are deliberately out
+>   of scope for the static analyser and designed as a future, opt-in visual slice.
 > - *In the golden corpus (precision/recall measured):* **TypeScript and PHP
->   only.** Dart and C/C++ are covered by adapter tests, not yet by the corpus.
+>   only.** Dart and C/C++ are covered by adapter tests; the HTML/JSX/Vue/Angular/
+>   Flutter a11y packs each have their own **curated** corpus at 100/100 — curated,
+>   not external.
 > - *Evaluated on independent external projects:* **not yet** — `stoa eval` works
 >   on any project, but no externally-validated corpus ships here.
 > - *Planned / not yet validated:* baseline & diff/PR mode, richer context facts,
 >   PSR-4 PHP import resolution, Dart/C/C++ dependency facts.
 >
-> Golden-corpus precision/recall reflect that small, curated corpus only; they
-> are **not** a general reliability guarantee for arbitrary code.
+> Golden- and a11y-corpus precision/recall reflect those small, curated corpora
+> only; they are **not** a general reliability guarantee for arbitrary code.
 
 ## Documentation
 
