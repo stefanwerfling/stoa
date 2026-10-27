@@ -1,6 +1,6 @@
 # Umsetzungsstand
 
-> Stand: 2026-10-26. Diese Seite beschreibt, was **tatsächlich implementiert** ist.
+> Stand: 2026-10-27. Diese Seite beschreibt, was **tatsächlich implementiert** ist.
 > Die übrigen `docs/`-Dokumente beschreiben die **Entwurfsabsicht** (Konzeptphase)
 > und bleiben als Begründung gültig; wo die Umsetzung abweicht, zählt diese Seite.
 
@@ -40,6 +40,14 @@
   werden verworfen. Der Angular-Adapter wird vor dem HTML-Adapter registriert,
   damit `.component.html` nicht als Plain-HTML behandelt wird. Inline-`template:`-Strings
   sind noch nicht abgedeckt.
+- **UI/UX (Flutter/Dart):** Flutter kennt kein HTML/ARIA — Barrierefreiheit hängt an
+  Widget-Eigenschaften. Der Dart-Adapter durchläuft daher zusätzlich den Widget-Baum
+  (derselbe tree-sitter-Parse) und erzeugt zwei bewusst konservative, fehlalarmarme
+  Facts: ein `Image*` ohne `semanticLabel:` **und** ohne `excludeFromSemantics: true`,
+  sowie ein `IconButton` ohne `tooltip:`. Geprüft werden nur die **eigenen**
+  Konstruktor-Argumente des Widgets — ein umschließendes `Semantics(...)` oder ein
+  Label auf einem Kind-Widget wird nicht aufgelöst (im `missingContext` vermerkt),
+  damit die Prüfungen konservativ bleiben.
 - **Pipeline:** Ingestion → Fact-Extraktion → Regel-Engine → Befunde → Reporter.
   Keine Uhr/kein Zufall/kein Netz im Kern; gleiche Eingabe + Versionen + Sprache ⇒
   byte-identische Befunde.
@@ -64,7 +72,7 @@ stoa eval <pfad> --expected <datei> [--format markdown|json]
 - `knowledge/` und `rules/` werden relativ zum installierten Paket aufgelöst —
   die CLI läuft nach `npm link`/Install aus jedem Verzeichnis.
 
-## Regelkatalog (35)
+## Regelkatalog (37)
 
 Deklarative Regeln (`rules/default/*.json`), Default aktiv:
 
@@ -103,6 +111,8 @@ Deklarative Regeln (`rules/default/*.json`), Default aktiv:
 | R-A11Y-DUPLICATE-ID | marcus.purpose | Barrierefreiheit | HTML (statisch, WCAG 1.3.1/4.1.2) |
 | R-A11Y-FRAME-TITLE | marcus.purpose | Barrierefreiheit, Bedienbarkeit | HTML, JSX, Vue, Angular (statisch, WCAG 4.1.2) |
 | R-A11Y-CONTRAST-TEXT | marcus.cooperation | Barrierefreiheit, Bedienbarkeit | HTML, JSX, Vue, Angular (Inline-Farben, WCAG 1.4.3) |
+| R-A11Y-FLUTTER-IMAGE-LABEL | marcus.purpose | Barrierefreiheit | Flutter/Dart (Widget, `semanticLabel`/`excludeFromSemantics`) |
+| R-A11Y-FLUTTER-ICONBUTTON-LABEL | marcus.purpose | Barrierefreiheit, Bedienbarkeit | Flutter/Dart (Widget, `tooltip`) |
 
 Prozedurale Regeln (`ProjectRule`, cross-file):
 
@@ -128,11 +138,13 @@ mindestens eine Regel.
 `ui.invalidRole`, `ui.unknownAriaAttribute`, `ui.invalidAriaValue`,
 `ui.positiveTabindex`, `ui.documentMissingLang`, `ui.viewportBlocksZoom`,
 `ui.danglingAriaIdref`, `ui.duplicateId`, `ui.frameMissingTitle`,
-`ui.lowContrastText`, sowie (opt-in) `external.tsc` und `external.floatingPromise`.
+`ui.lowContrastText`, `ui.flutterImageNoSemanticLabel`,
+`ui.flutterIconButtonNoTooltip`, sowie (opt-in) `external.tsc` und
+`external.floatingPromise`.
 
 ## Qualitätssicherung
 
-- **142 node:test-Fälle** grün (Regeln pos./neg., Extraktion, Schema-Validierung,
+- **146 node:test-Fälle** grün (Regeln pos./neg., Extraktion, Schema-Validierung,
   i18n, Determinismus, SARIF, Eval, Semantik-Groundedness, Datenschutz,
   Finding-Trennung).
 - **Golden-Korpus** (`test/corpus/`, **nur TS+PHP**) mit Ground-Truth; Eval
@@ -155,6 +167,10 @@ mindestens eine Regel.
   einer `*.component.html`; 100 %/100 % (TP 8), mit `[x]`/`[attr.x]`/`(event)`/`*ngIf`-Bindings
   und einem dynamischen `[style.color]`, plus einem Clean-Template — und einem Test,
   dass der Angular-Dialekt (nicht Plain-HTML) lief.
+- **Flutter-Korpus** (`test/fixtures/flutter/`): die zwei Widget-A11y-Regeln auf
+  einem Dart-Widget-Baum; 100 %/100 % (TP 3), mit `Image.network`/`Image(...)` ohne
+  Label, einem `IconButton` ohne `tooltip`, sowie Negativfällen (vorhandenes
+  `semanticLabel`, `excludeFromSemantics: true`, `tooltip`) und einem Clean-Widget.
 - Dogfooding: stoa analysiert den eigenen `src/`.
 
 ## Abweichungen vom Konzept (bewusst, dokumentiert)
@@ -196,7 +212,10 @@ Next.js-`_document`/`Head`, nicht im Komponenten-JSX), und id/idref-Auflösung �
 Komponenten mit dynamischen ids ist statisch nicht zuverlässig. **Vue SFC** ist
 für die 8 Attribut-/Kontrast-Regeln abgedeckt (geteilte Template-Extraktion mit
 Vue-Binding-Dialekt); **Angular** externe `*.component.html`-Templates nutzen sie
-mit einem Angular-Dialekt (`[x]`/`[attr.x]`/`(x)`/`*ngX`). Nächste statische
+mit einem Angular-Dialekt (`[x]`/`[attr.x]`/`(x)`/`*ngX`). **Flutter/Dart** wird
+nicht über Markup, sondern über den Widget-Baum geprüft (zwei widget-eigene Checks:
+`Image`-`semanticLabel`/`excludeFromSemantics`, `IconButton`-`tooltip`) — ohne
+Auflösung umschließender `Semantics(...)`-Wrapper. Nächste statische
 Schritte: Inline-Angular-`template:`-Strings und Vue/Angular-Namensberechnungs-Regeln;
 weitere ARIA-Prüfungen (z. B. `aria-*`-Attribute, die für die Rolle des Elements
 ungültig sind). (Umgesetzt: `R-A11Y-FORM-LABEL`, `R-A11Y-LINK-NAME`,

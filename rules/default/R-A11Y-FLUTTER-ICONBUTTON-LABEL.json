@@ -1,0 +1,40 @@
+{
+  "id": "R-A11Y-FLUTTER-ICONBUTTON-LABEL",
+  "version": "1.0.0",
+  "title": "Flutter IconButton has no tooltip",
+  "feature": "ui.flutterIconButtonNoTooltip",
+  "appliesTo": ["statement"],
+  "principles": ["marcus.purpose"],
+  "dimensions": ["accessibility", "usability"],
+  "trigger": {
+    "all": [{ "fact": "ui.flutterIconButtonNoTooltip", "op": "!=", "value": "" }]
+  },
+  "requiredEvidence": ["ui.flutterIconButtonNoTooltip"],
+  "severity": { "base": "medium" },
+  "confidence": { "base": 0.8, "capBy": "certainty" },
+  "message": {
+    "en": "Flutter IconButton has no tooltip (no accessible name): {value}.",
+    "de": "Flutter-IconButton ohne tooltip (kein zugänglicher Name): {value}."
+  },
+  "rationale": {
+    "en": "An IconButton shows only an icon; its accessible name comes from tooltip. Without it a screen-reader user hears just \"button\" and cannot tell what it does — and sighted users lose the hover/long-press hint too (marcus.purpose).",
+    "de": "Ein IconButton zeigt nur ein Icon; sein zugänglicher Name stammt aus tooltip. Ohne ihn hört ein Screenreader-Nutzer nur \"Schaltfläche\" und erfährt nicht, was sie tut — und sehende Nutzer verlieren zudem den Hover-/Long-Press-Hinweis (marcus.purpose)."
+  },
+  "remediation": {
+    "suggestion": {
+      "en": "Add a tooltip naming the action, e.g. IconButton(tooltip: 'Close', …), or wrap it in a Semantics(label: …).",
+      "de": "Ein tooltip ergänzen, das die Aktion benennt, z. B. IconButton(tooltip: 'Schließen', …), oder in ein Semantics(label: …) einbetten."
+    },
+    "drawbacks": {
+      "en": "None of note.",
+      "de": "Keine nennenswerten."
+    }
+  },
+  "missingContext": [
+    {
+      "en": "Only this IconButton's own arguments are inspected; an ancestor Semantics(...) wrapper or a semanticLabel on the child Icon is not resolved and may make this a false positive.",
+      "de": "Geprüft werden nur die eigenen Argumente dieses IconButton; ein umschließendes Semantics(...) oder ein semanticLabel am Kind-Icon wird nicht aufgelöst und kann einen Fehlalarm bedeuten."
+    }
+  ],
+  "tests": "test/FlutterA11y.test.ts"
+}

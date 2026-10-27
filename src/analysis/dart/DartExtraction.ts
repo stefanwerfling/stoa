@@ -1,6 +1,7 @@
 import type {Node} from 'web-tree-sitter';
 import type {Fact, SourceRange, SubjectKind} from '../../Types.js';
 import {factBuilder, type AdapterInfo} from '../FactBuilder.js';
+import {extractFlutterA11yFacts} from './FlutterA11y.js';
 
 /**
  * Extracts the language-neutral fact set from a Dart (Flutter) source tree,
@@ -65,6 +66,9 @@ export const extractFacts = (root: Node, content: string, filePath: string, info
         facts.push(build({kind: 'ast.emptyCatch', kindOf: 'catch-clause', symbol, range, value: statements === 0}));
         facts.push(build({kind: 'ast.catchSwallowsError', kindOf: 'catch-clause', symbol, range, value: !hasThrow && !hasCall}));
     });
+
+    // Flutter widget-tree accessibility facts (Image/IconButton labelling).
+    facts.push(...extractFlutterA11yFacts(root, build));
 
     return facts;
 };

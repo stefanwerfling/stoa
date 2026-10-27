@@ -1,0 +1,40 @@
+{
+  "id": "R-A11Y-FLUTTER-IMAGE-LABEL",
+  "version": "1.0.0",
+  "title": "Flutter image has no semantic label",
+  "feature": "ui.flutterImageNoSemanticLabel",
+  "appliesTo": ["statement"],
+  "principles": ["marcus.purpose"],
+  "dimensions": ["accessibility"],
+  "trigger": {
+    "all": [{ "fact": "ui.flutterImageNoSemanticLabel", "op": "!=", "value": "" }]
+  },
+  "requiredEvidence": ["ui.flutterImageNoSemanticLabel"],
+  "severity": { "base": "medium" },
+  "confidence": { "base": 0.8, "capBy": "certainty" },
+  "message": {
+    "en": "Flutter Image has neither semanticLabel nor excludeFromSemantics: {value}.",
+    "de": "Flutter-Image ohne semanticLabel und ohne excludeFromSemantics: {value}."
+  },
+  "rationale": {
+    "en": "An Image built with no semanticLabel is announced by TalkBack/VoiceOver as an unlabelled image; a screen-reader user cannot tell what it shows. A genuinely decorative image should instead be marked excludeFromSemantics: true, so the author's intent is explicit either way (marcus.purpose).",
+    "de": "Ein Image ohne semanticLabel wird von TalkBack/VoiceOver als unbeschriftetes Bild angesagt; ein Screenreader-Nutzer erfährt nicht, was es zeigt. Ein wirklich dekoratives Bild sollte stattdessen excludeFromSemantics: true tragen, damit die Absicht so oder so explizit ist (marcus.purpose)."
+  },
+  "remediation": {
+    "suggestion": {
+      "en": "Add a semanticLabel describing the image, or excludeFromSemantics: true if it is purely decorative.",
+      "de": "Ein semanticLabel ergänzen, das das Bild beschreibt, oder excludeFromSemantics: true, wenn es rein dekorativ ist."
+    },
+    "drawbacks": {
+      "en": "None of note; the label is announced only to assistive tech.",
+      "de": "Keine nennenswerten; das Label wird nur von assistiver Technik angesagt."
+    }
+  },
+  "missingContext": [
+    {
+      "en": "Only this Image's own constructor arguments are inspected; an ancestor Semantics(...) wrapper, a forwarded/const label, or a label computed at runtime is not resolved and may make this a false positive.",
+      "de": "Geprüft werden nur die eigenen Konstruktor-Argumente dieses Image; ein umschließendes Semantics(...), ein weitergereichtes/const Label oder ein zur Laufzeit berechnetes Label wird nicht aufgelöst und kann einen Fehlalarm bedeuten."
+    }
+  ],
+  "tests": "test/FlutterA11y.test.ts"
+}
