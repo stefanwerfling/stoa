@@ -163,6 +163,20 @@ gültige ID-Referenz beweist nur, dass die Citation auf echte, kontextbezogene
 Evidenz zeigt — nicht, dass die daraus gezogene Schlussfolgerung korrekt ist.
 Grounding begrenzt halluzinierte *Referenzen*, nicht fehlerhafte *Schlüsse*.
 
+**Extern übertragene Daten (nur bei ausdrücklich aktivierter semantischer
+Analyse, d. h. `--semantic anthropic` / einem Nicht-noop-Adapter):** je
+ausgewähltem Finding werden übertragen: der **Code-Ausschnitt** der betroffenen
+Zeilen, je Fakt **Art, Wert und Certainty** unter einem request-lokalen Label
+(`e1`, `e2`, …), **Prinzip-ID/-Name**, der deterministische **Observation**-Text
+und der vom Aufrufer gesetzte **Projektkontext** (standardmäßig leer). Bewusst
+**nicht** übertragen: Dateipfade, die stabile Fakt-ID (die Pfad und Symbol
+enthält) oder sonstige Dateimetadaten — Fakten werden per lokalem Label statt per
+ID referenziert. Die deterministischen `analyze`/`eval`-Pfade erzeugen bzw. rufen
+nie einen externen Adapter (Default ist der No-Op-Adapter; ein unbekannter
+`--semantic`-Wert fällt auf No-Op zurück). Fehlende Zugangsdaten treten innerhalb
+von `assess()` auf und werden vom Runner abgefangen; das Finding bleibt
+unverändert — ein fehlgeschlagener Aufruf bricht den Lauf nie ab.
+
 ```ts
 interface SemanticAdapter {
   readonly id: string;             // "noop" | "local-llm" | "api-xyz"

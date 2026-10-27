@@ -1,4 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
+import type {Fact} from '../Types.js';
 import type {SemanticAdapter, SemanticRequest, SemanticVerdict} from './SemanticAdapter.js';
 
 const DEFAULT_MODEL = 'claude-opus-4-8';
@@ -10,7 +11,7 @@ const SYSTEM_PROMPT = [
     'Ground every statement strictly in the provided code snippet and facts.',
     'Do NOT invent facts, APIs, call sites, or project details that are not shown.',
     'If the provided context is insufficient, answer "uncertain" with low confidence.',
-    'In "citations", list ONLY the exact fact id(s) (the "id:" value of each fact) you relied on;',
+    'In "citations", list ONLY the evidence labels (e.g. "e1", "e2") of the facts you relied on;',
     'do not put prose, snippet text, or fact kinds there. If you relied on no provided fact, return an empty citations array.'
 ].join(' ');
 
@@ -66,12 +67,26 @@ export class AnthropicSemanticAdapter implements SemanticAdapter {
             output_config: {format: {type: 'json_schema', schema: VERDICT_SCHEMA}},
             messages: [{role: 'user', content: buildPrompt(input)}]
         });
-        return parseVerdict(response);
+        const verdict = parseVerdict(response);
+        // Map the transmitted evidence labels back to stable fact ids so the
+        // runner can ground against the request's facts. Unknown labels are
+        // kept verbatim so they fail grounding rather than being hidden.
+        return {...verdict, citations: resolveCitations(verdict.citations, input.facts)};
     }
 }
 
-const buildPrompt = (input: SemanticRequest): string => {
-    const facts = input.facts.map((fact) => `- id: ${fact.id} | ${fact.kind} = ${JSON.stringify(fact.value)} (${fact.certainty})`).join('\n');
+const factLabel = (index: number): string => `e${index + 1}`;
+
+export const resolveCitations = (citations: string[], facts: Fact[]): string[] => {
+    const byLabel = new Map<string, string>();
+    facts.forEach((fact, index) => byLabel.set(factLabel(index), fact.id));
+    return citations.map((citation) => byLabel.get(citation) ?? citation);
+};
+
+export const buildPrompt = (input: SemanticRequest): string => {
+    // Facts are presented with a request-local label (e1, e2, …) rather than
+    // their id, so no file paths or symbols leave the machine via the id.
+    const facts = input.facts.map((fact, index) => `- ${factLabel(index)}: ${fact.kind} = ${JSON.stringify(fact.value)} (${fact.certainty})`).join('\n');
     return [
         `Principle under consideration: ${input.principleName} (${input.principleId}).`,
         `Deterministic observation: ${input.observation}`,
@@ -85,7 +100,7 @@ const buildPrompt = (input: SemanticRequest): string => {
         input.codeSnippet,
         '```',
         '',
-        'Cite facts by their exact id. Is the observation a real concern here for this principle?',
+        'Cite facts by their label (e1, e2, …). Is the observation a real concern here for this principle?',
         'Answer in the required JSON shape.'
     ]
         .filter((line) => line.length > 0 || line === '')

@@ -162,6 +162,19 @@ untouched. **Limitation:** a valid id reference proves only that the citation
 points at real, in-context evidence — not that the conclusion drawn from it is
 correct. Grounding bounds hallucinated *references*, not flawed *reasoning*.
 
+**Data sent externally (only when semantic analysis is explicitly enabled, i.e.
+`--semantic anthropic` / a non-noop adapter):** for each selected finding, the
+request transmits the **code snippet** of the finding's lines, each fact's
+**kind, value and certainty** under a request-local label (`e1`, `e2`, …), the
+**principle id/name**, the deterministic **observation** text and the
+caller-supplied **project context** (empty by default). Deliberately **not**
+transmitted: file paths, the stable fact id (which embeds the path and symbol),
+or any other file metadata — facts are referenced by local label, not id. The
+deterministic `analyze`/`eval` paths never construct or call an external adapter
+(the default is the no-op adapter; an unknown `--semantic` value falls back to
+no-op). Missing credentials surface inside `assess()` and are caught by the
+runner, leaving the finding unchanged — a failed call never aborts the run.
+
 ```ts
 interface SemanticAdapter {
   readonly id: string;             // "noop" | "local-llm" | "api-xyz"
