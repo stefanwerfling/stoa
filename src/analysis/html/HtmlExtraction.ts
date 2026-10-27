@@ -32,6 +32,7 @@ export const extractFacts = (root: Node, content: string, filePath: string, info
     let ariaValueIndex = 0;
     let tabindexIndex = 0;
     let htmlIndex = 0;
+    let viewportIndex = 0;
     for (const element of descendants(root, 'element')) {
         const startTag = startTagOf(element);
         if (startTag === null) {
@@ -124,6 +125,13 @@ export const extractFacts = (root: Node, content: string, filePath: string, info
         if (tag === 'html' && (attrs.get('lang') ?? attrs.get('xml:lang') ?? '').trim().length === 0) {
             facts.push(build({kind: 'ui.documentMissingLang', kindOf: 'statement', symbol: `html#${htmlIndex}`, range: rangeOf(startTag), value: evidence(startTag)}));
             htmlIndex += 1;
+        }
+
+        // A viewport meta that disables pinch-zoom (user-scalable=no) or caps the
+        // zoom below 200% (maximum-scale < 2) stops users from enlarging text.
+        if (tag === 'meta' && (attrs.get('name') ?? '').trim().toLowerCase() === 'viewport' && blocksZoom(attrs.get('content') ?? '')) {
+            facts.push(build({kind: 'ui.viewportBlocksZoom', kindOf: 'statement', symbol: `viewport#${viewportIndex}`, range: rangeOf(startTag), value: `content="${attrs.get('content') ?? ''}"`}));
+            viewportIndex += 1;
         }
     }
 
@@ -232,6 +240,27 @@ const invalidAriaValues = (attrs: Map<string, string>): string[] => {
         }
     }
     return invalid;
+};
+
+// Whether a viewport `content` string disables zoom: user-scalable=no/0, or a
+// clean numeric maximum-scale below 2 (WCAG asks for 200% zoom). Non-numeric or
+// dynamic maximum-scale values are not judged.
+const blocksZoom = (content: string): boolean => {
+    for (const part of content.split(',')) {
+        const [rawKey, rawValue] = part.split('=');
+        if (rawKey === undefined || rawValue === undefined) {
+            continue;
+        }
+        const key = rawKey.trim().toLowerCase();
+        const value = rawValue.trim().toLowerCase();
+        if (key === 'user-scalable' && (value === 'no' || value === '0')) {
+            return true;
+        }
+        if (key === 'maximum-scale' && /^\d+(\.\d+)?$/.test(value) && Number.parseFloat(value) < 2) {
+            return true;
+        }
+    }
+    return false;
 };
 
 const NATIVELY_FOCUSABLE: ReadonlySet<string> = new Set(['button', 'select', 'textarea', 'input']);

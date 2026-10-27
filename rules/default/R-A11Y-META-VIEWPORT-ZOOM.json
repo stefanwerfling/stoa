@@ -1,0 +1,40 @@
+{
+  "id": "R-A11Y-META-VIEWPORT-ZOOM",
+  "version": "1.0.0",
+  "title": "Viewport meta disables zoom",
+  "feature": "ui.viewportBlocksZoom",
+  "appliesTo": ["statement"],
+  "principles": ["marcus.cooperation"],
+  "dimensions": ["accessibility", "usability"],
+  "trigger": {
+    "all": [{ "fact": "ui.viewportBlocksZoom", "op": "!=", "value": "" }]
+  },
+  "requiredEvidence": ["ui.viewportBlocksZoom"],
+  "severity": { "base": "medium" },
+  "confidence": { "base": 0.9, "capBy": "certainty" },
+  "message": {
+    "en": "Viewport meta disables or caps zoom (WCAG 2.2 · 1.4.4): {value}.",
+    "de": "Viewport-Meta deaktiviert oder begrenzt den Zoom (WCAG 2.2 · 1.4.4): {value}."
+  },
+  "rationale": {
+    "en": "user-scalable=no or maximum-scale below 2 stops users from enlarging text to at least 200%, which people with low vision rely on — it overrides an assistive affordance the platform provides instead of cooperating with it (marcus.cooperation).",
+    "de": "user-scalable=no oder maximum-scale unter 2 hindert Nutzer daran, Text auf mindestens 200 % zu vergrößern, worauf sehbehinderte Menschen angewiesen sind — es überschreibt eine vom System bereitgestellte Hilfe, statt mit ihr zusammenzuarbeiten (marcus.cooperation)."
+  },
+  "remediation": {
+    "suggestion": {
+      "en": "Remove user-scalable=no and any maximum-scale below 2 (e.g. use content=\"width=device-width, initial-scale=1\").",
+      "de": "user-scalable=no und jedes maximum-scale unter 2 entfernen (z. B. content=\"width=device-width, initial-scale=1\" verwenden)."
+    },
+    "drawbacks": {
+      "en": "Allowing zoom can change layout on small screens; design for reflow rather than locking the scale.",
+      "de": "Zoom zuzulassen kann das Layout auf kleinen Bildschirmen verändern; auf Reflow auslegen statt die Skalierung zu sperren."
+    }
+  },
+  "missingContext": [
+    {
+      "en": "Only user-scalable=no/0 and a clean numeric maximum-scale below 2 are flagged; non-numeric or dynamically produced values are not judged. Whether the page actually needs a fixed scale is not inferable statically.",
+      "de": "Gemeldet werden nur user-scalable=no/0 und ein sauberer numerischer maximum-scale unter 2; nicht-numerische oder dynamisch erzeugte Werte werden nicht beurteilt. Ob die Seite tatsächlich eine feste Skalierung braucht, ist statisch nicht ableitbar."
+    }
+  ],
+  "tests": "test/HtmlA11y.test.ts"
+}
