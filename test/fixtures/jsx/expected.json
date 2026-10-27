@@ -11,6 +11,8 @@
     { "file": "Names.tsx", "rule": "R-A11Y-CONTROL-NAME", "symbol": "button#1" },
     { "file": "Names.tsx", "rule": "R-A11Y-LINK-NAME", "symbol": "link#0" },
     { "file": "Names.tsx", "rule": "R-A11Y-FORM-LABEL", "symbol": "field#0" },
-    { "file": "Names.tsx", "rule": "R-A11Y-FORM-LABEL", "symbol": "field#1" }
+    { "file": "Names.tsx", "rule": "R-A11Y-FORM-LABEL", "symbol": "field#1" },
+    { "file": "Contrast.tsx", "rule": "R-A11Y-CONTRAST-TEXT", "symbol": "contrast#0" },
+    { "file": "Contrast.tsx", "rule": "R-A11Y-CONTRAST-TEXT", "symbol": "contrast#1" }
   ]
 }

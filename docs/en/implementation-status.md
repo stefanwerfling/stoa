@@ -18,9 +18,10 @@
   inline style (a provable fact); cascade/rendered contrast stays out of scope
   (see limitations). The first vertical slice of the UI/UX area.
 - **UI/UX (React/JSX):** the TypeScript adapter additionally walks JSX elements
-  (ts-morph, same parse) and emits the same `ui.*` facts, so **10 of the a11y
+  (ts-morph, same parse) and emits the same `ui.*` facts, so **11 of the a11y
   rules** fire on `.jsx/.tsx` intrinsic elements — including the name-computation
-  rules (control/link name, form label). Dynamic attribute values (`{expr}`) and
+  rules (control/link name, form label) and contrast from `style={{…}}` object
+  literals. Dynamic attribute values (`{expr}`) and
   dynamic children (`{label}`) are treated as present-but-unknown, a spread
   (`{...props}`) and a dynamic `id`/`type` suppress the relevant checks, and React
   components (`<Button/>`) are skipped — all to avoid false positives.
@@ -86,7 +87,7 @@ Declarative rules (`rules/default/*.json`), on by default:
 | R-A11Y-ARIA-DANGLING-IDREF | marcus.purpose | accessibility | HTML (static, WCAG 1.3.1/4.1.2) |
 | R-A11Y-DUPLICATE-ID | marcus.purpose | accessibility | HTML (static, WCAG 1.3.1/4.1.2) |
 | R-A11Y-FRAME-TITLE | marcus.purpose | accessibility, usability | HTML, JSX (static, WCAG 4.1.2) |
-| R-A11Y-CONTRAST-TEXT | marcus.cooperation | accessibility, usability | HTML (inline colours, WCAG 1.4.3) |
+| R-A11Y-CONTRAST-TEXT | marcus.cooperation | accessibility, usability | HTML, JSX (inline colours, WCAG 1.4.3) |
 
 Procedural rules (`ProjectRule`, cross-file):
 
@@ -115,7 +116,7 @@ All ten quality dimensions (incl. accessibility, usability) have at least one ru
 
 ## Quality assurance
 
-- **133 node:test cases** green (rules pos./neg., extraction, schema validation,
+- **134 node:test cases** green (rules pos./neg., extraction, schema validation,
   i18n, determinism, SARIF, evaluation, semantic groundedness, privacy,
   finding-model separation).
 - **Golden corpus** (`test/corpus/`, **TS+PHP only**) with ground truth;
@@ -127,9 +128,9 @@ All ten quality dimensions (incl. accessibility, usability) have at least one ru
 - **UI/UX corpus** (`test/fixtures/html/`, static HTML) with positive, negative
   and deliberately-no-warning cases; evaluation 100%/100% (TP 37) per rule. The
   semantic (LLM) assessment is kept separate and is not required here.
-- **JSX corpus** (`test/fixtures/jsx/`): the ten ported a11y rules evaluated on
-  React/JSX intrinsics; 100%/100% (TP 12), with positive, dynamic-value/children,
-  spread, wrapping-label, htmlFor, component and clean cases.
+- **JSX corpus** (`test/fixtures/jsx/`): the eleven ported a11y rules evaluated on
+  React/JSX intrinsics; 100%/100% (TP 14), with positive, dynamic-value/children,
+  spread, wrapping-label, htmlFor, style-object, component and clean cases.
 - Dogfooding: stoa analyzes its own `src/`.
 
 ## Deviations from the concept (deliberate, documented)

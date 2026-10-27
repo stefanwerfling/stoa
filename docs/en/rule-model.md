@@ -250,7 +250,8 @@ UI/UX – accessibility (HTML, static, on by default):
 > cross-element rules (html-lang, viewport, dangling-idref, duplicate-id) are not
 > ported to JSX (app-shell / dynamic-id reasons). `R-A11Y-CONTRAST-TEXT` computes
 > the WCAG contrast ratio deterministically **only** when a text colour and a
-> background colour are declared together on the element's inline `style` (var()
+> background colour are declared together on the element's inline `style` (HTML) or
+> `style={{…}}` object literal (JSX) (var()
 > resolved within the same block; 4.5:1, or 3:1 for an inline large font); the
 > cascade, inherited/stylesheet colours, images behind text and translucent
 > colours are not resolved (those cases are skipped, not assumed to pass).

@@ -3,6 +3,7 @@ import type {JsxAttribute, JsxElement, JsxOpeningElement, JsxSelfClosingElement,
 import type {Fact, SourceRange} from '../../Types.js';
 import type {FactSpec} from '../FactBuilder.js';
 import {ariaValueIsInvalid, hasRoleTokens, hasValidRole, isPositiveTabindexLiteral, isUnknownAriaName} from '../AriaVocabulary.js';
+import {contrastViolation} from '../Contrast.js';
 
 type Build = (spec: FactSpec) => Fact;
 
@@ -30,7 +31,7 @@ const NATIVELY_FOCUSABLE: ReadonlySet<string> = new Set(['button', 'select', 'te
  */
 export const extractJsxA11yFacts = (sourceFile: SourceFile, build: Build): Fact[] => {
     const facts: Fact[] = [];
-    const counters = {img: 0, button: 0, field: 0, link: 0, role: 0, ariaAttr: 0, ariaVal: 0, tabindex: 0, ariaHidden: 0, frame: 0};
+    const counters = {img: 0, button: 0, field: 0, link: 0, role: 0, ariaAttr: 0, ariaVal: 0, tabindex: 0, ariaHidden: 0, frame: 0, contrast: 0};
 
     const elements = sourceFile.getDescendants().filter((node) => JSX_ELEMENT_KINDS.includes(node.getKind())) as Array<JsxOpeningElement | JsxSelfClosingElement>;
     elements.sort((a, b) => a.getStart() - b.getStart());
@@ -110,6 +111,17 @@ export const extractJsxA11yFacts = (sourceFile: SourceFile, build: Build): Fact[
         if ((tag === 'iframe' || tag === 'frame') && !hasSpread && !isHidden(attrs) && !hasFrameName(attrs)) {
             facts.push(build({kind: 'ui.frameMissingTitle', kindOf: 'statement', symbol: `frame#${counters.frame}`, range, value: evidence}));
             counters.frame += 1;
+        }
+
+        // Text/background contrast from a static style={{…}} object literal (the
+        // same rule as HTML inline style; dynamic values skipped, no cascade).
+        if (!isHidden(attrs)) {
+            const style = jsxStyleDeclarations(element);
+            const lowContrast = style === null ? null : contrastViolation(style.declarations, style.vars);
+            if (lowContrast !== null) {
+                facts.push(build({kind: 'ui.lowContrastText', kindOf: 'statement', symbol: `contrast#${counters.contrast}`, range, value: lowContrast}));
+                counters.contrast += 1;
+            }
         }
     }
 
@@ -324,6 +336,85 @@ const hasFrameName = (attrs: Attrs): boolean => {
     return (typeof title === 'string' && title.trim().length > 0)
         || (typeof label === 'string' && label.trim().length > 0)
         || attrs.has('aria-labelledby');
+};
+
+// React style-object property names mapped to the CSS property names the shared
+// contrast utilities expect. Only the ones the contrast check needs are mapped.
+const CSS_PROPERTY: ReadonlyMap<string, string> = new Map([
+    ['color', 'color'], ['background', 'background'], ['backgroundColor', 'background-color'],
+    ['fontSize', 'font-size'], ['fontWeight', 'font-weight']
+]);
+
+// Static declarations + custom properties from a style={{…}} object literal.
+// Returns null when there is no such literal; dynamic/spread/computed entries are
+// simply omitted (treated as not statically known), never guessed.
+const jsxStyleDeclarations = (element: JsxOpeningElement | JsxSelfClosingElement): {declarations: Map<string, string>; vars: Map<string, string>} | null => {
+    const styleAttribute = element.getAttributes().find((attribute): attribute is JsxAttribute => Node.isJsxAttribute(attribute) && attribute.getNameNode().getText() === 'style');
+    if (styleAttribute === undefined) {
+        return null;
+    }
+    const initializer = styleAttribute.getInitializer();
+    if (initializer === undefined || !Node.isJsxExpression(initializer)) {
+        return null;
+    }
+    const expression = initializer.getExpression();
+    if (expression === undefined || !Node.isObjectLiteralExpression(expression)) {
+        return null;
+    }
+    const declarations = new Map<string, string>();
+    const vars = new Map<string, string>();
+    for (const property of expression.getProperties()) {
+        if (!Node.isPropertyAssignment(property)) {
+            continue;
+        }
+        const name = propertyName(property);
+        const value = propertyValue(property, name);
+        if (name === null || value === null) {
+            continue;
+        }
+        if (name.startsWith('--')) {
+            vars.set(name, value);
+            continue;
+        }
+        const cssProperty = CSS_PROPERTY.get(name);
+        if (cssProperty !== undefined) {
+            declarations.set(cssProperty, value);
+        }
+    }
+    return {declarations, vars};
+};
+
+const propertyName = (property: Node): string | null => {
+    if (!Node.isPropertyAssignment(property)) {
+        return null;
+    }
+    const nameNode = property.getNameNode();
+    if (Node.isIdentifier(nameNode)) {
+        return nameNode.getText();
+    }
+    if (Node.isStringLiteral(nameNode)) {
+        return nameNode.getLiteralValue();
+    }
+    return null;
+};
+
+// A static value for a style property: a string literal, or a number which React
+// treats as px for font-size (otherwise ignored). Expressions are not resolved.
+const propertyValue = (property: Node, name: string | null): string | null => {
+    if (!Node.isPropertyAssignment(property)) {
+        return null;
+    }
+    const initializer = property.getInitializer();
+    if (initializer === undefined) {
+        return null;
+    }
+    if (Node.isStringLiteral(initializer) || Node.isNoSubstitutionTemplateLiteral(initializer)) {
+        return initializer.getLiteralText();
+    }
+    if (Node.isNumericLiteral(initializer) && name === 'fontSize') {
+        return `${initializer.getText()}px`;
+    }
+    return null;
 };
 
 const rangeOf = (sourceFile: SourceFile, node: Node): SourceRange => {

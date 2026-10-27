@@ -53,6 +53,15 @@ test('a React component element (<Button/>) is not treated as a DOM intrinsic', 
     assert.equal(findings.filter((f) => f.rule.id.startsWith('R-A11Y-')).length, 7, 'exactly the seven intrinsic-element findings');
 });
 
+test('R-A11Y-CONTRAST-TEXT works on style={{…}} object literals, honouring numeric fontSize and skipping dynamic/unresolvable', () => {
+    const findings = analyzePath(join(corpus, 'Contrast.tsx'));
+    assert.deepEqual(
+        ids(findings, 'R-A11Y-CONTRAST-TEXT'),
+        ['contrast#0', 'contrast#1'],
+        'grey-on-white (normal) and a sub-3:1 large-text pair (fontSize: 24); a passing pair, a 3:1-ok large pair, black, a dynamic background, a colour with no background and a translucent colour are all fine'
+    );
+});
+
 test('a clean JSX component produces no accessibility findings (no false positives)', () => {
     const findings = analyzePath(join(corpus, 'Clean.tsx')).filter((f) => f.rule.id.startsWith('R-A11Y-'));
     assert.deepEqual(findings, []);
@@ -63,12 +72,12 @@ test('JSX golden corpus: precision/recall 100% over the ported a11y rules', () =
     const result = evaluate(findings, loadExpected(join(here, 'fixtures', 'jsx', 'expected.json')), corpus);
     assert.equal(result.overall.precision, 1);
     assert.equal(result.overall.recall, 1);
-    assert.equal(result.overall.truePositives, 12);
+    assert.equal(result.overall.truePositives, 14);
     assert.equal(result.overall.falsePositives, 0);
     assert.equal(result.overall.falseNegatives, 0);
 
     const rules = result.perRule.map((item) => item.rule).sort();
-    assert.deepEqual(rules, ['R-A11Y-ARIA-HIDDEN-FOCUSABLE', 'R-A11Y-ARIA-INVALID-ROLE', 'R-A11Y-ARIA-INVALID-VALUE', 'R-A11Y-ARIA-UNKNOWN-ATTR', 'R-A11Y-CONTROL-NAME', 'R-A11Y-FORM-LABEL', 'R-A11Y-FRAME-TITLE', 'R-A11Y-IMG-ALT', 'R-A11Y-LINK-NAME', 'R-A11Y-POSITIVE-TABINDEX']);
+    assert.deepEqual(rules, ['R-A11Y-ARIA-HIDDEN-FOCUSABLE', 'R-A11Y-ARIA-INVALID-ROLE', 'R-A11Y-ARIA-INVALID-VALUE', 'R-A11Y-ARIA-UNKNOWN-ATTR', 'R-A11Y-CONTRAST-TEXT', 'R-A11Y-CONTROL-NAME', 'R-A11Y-FORM-LABEL', 'R-A11Y-FRAME-TITLE', 'R-A11Y-IMG-ALT', 'R-A11Y-LINK-NAME', 'R-A11Y-POSITIVE-TABINDEX']);
     for (const rule of result.perRule) {
         assert.equal(rule.precision, 1, `${rule.rule} precision`);
         assert.equal(rule.recall, 1, `${rule.rule} recall`);

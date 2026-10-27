@@ -154,3 +154,24 @@ const fontSizePx = (raw: string | undefined): number | null => {
 };
 
 export const formatRatio = (ratio: number): string => `${(Math.round(ratio * 100) / 100).toFixed(2)}:1`;
+
+// A description like `2.85:1 (needs 4.5:1)` when the declarations pair a text
+// colour and a background colour whose contrast is below the WCAG 1.4.3 AA
+// threshold; null when either colour is absent or not statically resolvable. The
+// declarations and vars are surface-neutral: the HTML adapter builds them from an
+// inline style string, the JSX walk from a style={{…}} object literal.
+export const contrastViolation = (declarations: ReadonlyMap<string, string>, vars: ReadonlyMap<string, string>): string | null => {
+    const foregroundValue = declarations.get('color');
+    const backgroundValue = declarations.get('background-color') ?? declarations.get('background');
+    if (foregroundValue === undefined || backgroundValue === undefined) {
+        return null;
+    }
+    const foreground = resolveColor(foregroundValue, vars);
+    const background = resolveColor(backgroundValue, vars);
+    if (foreground === null || background === null) {
+        return null;
+    }
+    const ratio = contrastRatio(foreground, background);
+    const threshold = contrastThreshold(declarations);
+    return ratio < threshold ? `${formatRatio(ratio)} (needs ${formatRatio(threshold)})` : null;
+};

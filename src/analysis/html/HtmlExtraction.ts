@@ -2,7 +2,7 @@ import type {Node} from 'web-tree-sitter';
 import type {Fact, SourceRange} from '../../Types.js';
 import {factBuilder, type AdapterInfo} from '../FactBuilder.js';
 import {ariaValueIsInvalid, hasRoleTokens, hasValidRole, isPositiveTabindexLiteral, isUnknownAriaName} from '../AriaVocabulary.js';
-import {contrastRatio, contrastThreshold, formatRatio, parseStyleDeclarations, resolveColor} from '../Contrast.js';
+import {contrastViolation, parseStyleDeclarations} from '../Contrast.js';
 
 /**
  * Extracts verifiable UI accessibility facts from a static HTML tree
@@ -355,22 +355,7 @@ const inlineContrastViolation = (attrs: Map<string, string>): string | null => {
             vars.set(property, value);
         }
     }
-    const foregroundValue = declarations.get('color');
-    const backgroundValue = declarations.get('background-color') ?? declarations.get('background');
-    if (foregroundValue === undefined || backgroundValue === undefined) {
-        return null;
-    }
-    const foreground = resolveColor(foregroundValue, vars);
-    const background = resolveColor(backgroundValue, vars);
-    if (foreground === null || background === null) {
-        return null;
-    }
-    const ratio = contrastRatio(foreground, background);
-    const threshold = contrastThreshold(declarations);
-    if (ratio < threshold) {
-        return `${formatRatio(ratio)} (needs ${formatRatio(threshold)})`;
-    }
-    return null;
+    return contrastViolation(declarations, vars);
 };
 
 const hasFrameName = (attrs: Map<string, string>): boolean => {

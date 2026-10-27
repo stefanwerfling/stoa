@@ -19,9 +19,10 @@
   Kontrast bleibt out-of-scope (siehe Grenzen). Erster vertikaler Schnitt des
   UI/UX-Bereichs.
 - **UI/UX (React/JSX):** Der TypeScript-Adapter durchläuft zusätzlich JSX-Elemente
-  (ts-morph, derselbe Parse) und erzeugt dieselben `ui.*`-Facts, sodass **10 der
+  (ts-morph, derselbe Parse) und erzeugt dieselben `ui.*`-Facts, sodass **11 der
   A11y-Regeln** auf `.jsx/.tsx`-Intrinsics feuern — inklusive der
-  Namensberechnungs-Regeln (Control-/Link-Name, Formular-Label). Dynamische
+  Namensberechnungs-Regeln (Control-/Link-Name, Formular-Label) und Kontrast aus
+  `style={{…}}`-Objektliteralen. Dynamische
   Attributwerte (`{expr}`) und dynamische Kinder (`{label}`) gelten als
   vorhanden-aber-unbekannt, ein Spread (`{...props}`) sowie eine dynamische
   `id`/`type` unterdrücken die betroffenen Prüfungen, und React-Komponenten
@@ -88,7 +89,7 @@ Deklarative Regeln (`rules/default/*.json`), Default aktiv:
 | R-A11Y-ARIA-DANGLING-IDREF | marcus.purpose | Barrierefreiheit | HTML (statisch, WCAG 1.3.1/4.1.2) |
 | R-A11Y-DUPLICATE-ID | marcus.purpose | Barrierefreiheit | HTML (statisch, WCAG 1.3.1/4.1.2) |
 | R-A11Y-FRAME-TITLE | marcus.purpose | Barrierefreiheit, Bedienbarkeit | HTML, JSX (statisch, WCAG 4.1.2) |
-| R-A11Y-CONTRAST-TEXT | marcus.cooperation | Barrierefreiheit, Bedienbarkeit | HTML (Inline-Farben, WCAG 1.4.3) |
+| R-A11Y-CONTRAST-TEXT | marcus.cooperation | Barrierefreiheit, Bedienbarkeit | HTML, JSX (Inline-Farben, WCAG 1.4.3) |
 
 Prozedurale Regeln (`ProjectRule`, cross-file):
 
@@ -118,7 +119,7 @@ mindestens eine Regel.
 
 ## Qualitätssicherung
 
-- **133 node:test-Fälle** grün (Regeln pos./neg., Extraktion, Schema-Validierung,
+- **134 node:test-Fälle** grün (Regeln pos./neg., Extraktion, Schema-Validierung,
   i18n, Determinismus, SARIF, Eval, Semantik-Groundedness, Datenschutz,
   Finding-Trennung).
 - **Golden-Korpus** (`test/corpus/`, **nur TS+PHP**) mit Ground-Truth; Eval
@@ -130,9 +131,9 @@ mindestens eine Regel.
 - **UI/UX-Korpus** (`test/fixtures/html/`, statisches HTML) mit positiven,
   negativen und legitim-nicht-warnenden Fällen; Eval 100 %/100 % (TP 37) je Regel.
   Semantische (LLM-)Bewertung wird getrennt gehalten und ist hier nicht verlangt.
-- **JSX-Korpus** (`test/fixtures/jsx/`): die zehn portierten A11y-Regeln auf
-  React/JSX-Intrinsics; 100 %/100 % (TP 12), mit Positiv-, Dynamikwert-/-Kinder-,
-  Spread-, Wrapping-Label-, htmlFor-, Komponenten- und Clean-Fällen.
+- **JSX-Korpus** (`test/fixtures/jsx/`): die elf portierten A11y-Regeln auf
+  React/JSX-Intrinsics; 100 %/100 % (TP 14), mit Positiv-, Dynamikwert-/-Kinder-,
+  Spread-, Wrapping-Label-, htmlFor-, Style-Objekt-, Komponenten- und Clean-Fällen.
 - Dogfooding: stoa analysiert den eigenen `src/`.
 
 ## Abweichungen vom Konzept (bewusst, dokumentiert)

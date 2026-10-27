@@ -255,7 +255,8 @@ UI/UX – Barrierefreiheit (HTML, statisch, Default aktiv):
 > (html-lang, viewport, dangling-idref, duplicate-id) sind für JSX nicht portiert
 > (App-Shell-/dynamische-id-Gründe). `R-A11Y-CONTRAST-TEXT` berechnet das
 > WCAG-Kontrastverhältnis deterministisch **nur**, wenn eine Text- und eine
-> Hintergrundfarbe gemeinsam im Inline-`style` des Elements stehen (var() im selben
+> Hintergrundfarbe gemeinsam im Inline-`style` des Elements (HTML) oder im
+> `style={{…}}`-Objektliteral (JSX) stehen (var() im selben
 > Block aufgelöst; 4,5:1, bzw. 3:1 bei inline großer Schrift); Kaskade,
 > vererbte/Stylesheet-Farben, Bilder hinter Text und transluzente Farben werden
 > nicht aufgelöst (solche Fälle werden übersprungen, nicht als bestanden angenommen).
