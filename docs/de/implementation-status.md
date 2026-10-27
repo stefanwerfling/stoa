@@ -14,8 +14,10 @@
   C++ — C hat kein try/catch).
 - **UI/UX-Adapter (HTML):** statische Barrierefreiheits-Analyse via
   tree-sitter-html (WASM, in-process). Rein statisch — kein Rendering, keine
-  CSS-Kaskade, kein Kontrast; solche Prüfungen sind bewusst **nicht** enthalten
-  (siehe Grenzen). Erster vertikaler Schnitt des UI/UX-Bereichs.
+  CSS-Kaskade. Textkontrast wird **nur** aus Farben geprüft, die gemeinsam im
+  Inline-style eines Elements stehen (ein belegbarer Fakt); Kaskaden-/gerenderter
+  Kontrast bleibt out-of-scope (siehe Grenzen). Erster vertikaler Schnitt des
+  UI/UX-Bereichs.
 - **UI/UX (React/JSX):** Der TypeScript-Adapter durchläuft zusätzlich JSX-Elemente
   (ts-morph, derselbe Parse) und erzeugt dieselben `ui.*`-Facts, sodass **10 der
   A11y-Regeln** auf `.jsx/.tsx`-Intrinsics feuern — inklusive der
@@ -48,7 +50,7 @@ stoa eval <pfad> --expected <datei> [--format markdown|json]
 - `knowledge/` und `rules/` werden relativ zum installierten Paket aufgelöst —
   die CLI läuft nach `npm link`/Install aus jedem Verzeichnis.
 
-## Regelkatalog (34)
+## Regelkatalog (35)
 
 Deklarative Regeln (`rules/default/*.json`), Default aktiv:
 
@@ -86,6 +88,7 @@ Deklarative Regeln (`rules/default/*.json`), Default aktiv:
 | R-A11Y-ARIA-DANGLING-IDREF | marcus.purpose | Barrierefreiheit | HTML (statisch, WCAG 1.3.1/4.1.2) |
 | R-A11Y-DUPLICATE-ID | marcus.purpose | Barrierefreiheit | HTML (statisch, WCAG 1.3.1/4.1.2) |
 | R-A11Y-FRAME-TITLE | marcus.purpose | Barrierefreiheit, Bedienbarkeit | HTML, JSX (statisch, WCAG 4.1.2) |
+| R-A11Y-CONTRAST-TEXT | marcus.cooperation | Barrierefreiheit, Bedienbarkeit | HTML (Inline-Farben, WCAG 1.4.3) |
 
 Prozedurale Regeln (`ProjectRule`, cross-file):
 
@@ -110,12 +113,12 @@ mindestens eine Regel.
 `ui.controlMissingLabel`, `ui.linkMissingName`, `ui.ariaHiddenFocusable`,
 `ui.invalidRole`, `ui.unknownAriaAttribute`, `ui.invalidAriaValue`,
 `ui.positiveTabindex`, `ui.documentMissingLang`, `ui.viewportBlocksZoom`,
-`ui.danglingAriaIdref`, `ui.duplicateId`, `ui.frameMissingTitle`, sowie (opt-in)
-`external.tsc` und `external.floatingPromise`.
+`ui.danglingAriaIdref`, `ui.duplicateId`, `ui.frameMissingTitle`,
+`ui.lowContrastText`, sowie (opt-in) `external.tsc` und `external.floatingPromise`.
 
 ## Qualitätssicherung
 
-- **132 node:test-Fälle** grün (Regeln pos./neg., Extraktion, Schema-Validierung,
+- **133 node:test-Fälle** grün (Regeln pos./neg., Extraktion, Schema-Validierung,
   i18n, Determinismus, SARIF, Eval, Semantik-Groundedness, Datenschutz,
   Finding-Trennung).
 - **Golden-Korpus** (`test/corpus/`, **nur TS+PHP**) mit Ground-Truth; Eval
@@ -125,7 +128,7 @@ mindestens eine Regel.
 - **Wichtig:** Diese Werte gelten nur für den kleinen, kuratierten Korpus und
   sind **keine** allgemeine Zuverlässigkeitsgarantie für beliebige Projekte.
 - **UI/UX-Korpus** (`test/fixtures/html/`, statisches HTML) mit positiven,
-  negativen und legitim-nicht-warnenden Fällen; Eval 100 %/100 % (TP 34) je Regel.
+  negativen und legitim-nicht-warnenden Fällen; Eval 100 %/100 % (TP 37) je Regel.
   Semantische (LLM-)Bewertung wird getrennt gehalten und ist hier nicht verlangt.
 - **JSX-Korpus** (`test/fixtures/jsx/`): die zehn portierten A11y-Regeln auf
   React/JSX-Intrinsics; 100 %/100 % (TP 12), mit Positiv-, Dynamikwert-/-Kinder-,
@@ -153,8 +156,11 @@ abdecken; generischer ESLint-Fact-Adapter; Kontext-Facts
 (`flag.generatedCode`, `hasTests`) für reichhaltigere Suppression;
 LLM-Ausgabe-Evaluierung im Maßstab.
 
-**UI/UX — Grenzen und Geplantes:** Rein statische Analyse. **Nicht** statisch
-zuverlässig prüfbar und daher bewusst ausgelassen: Farbkontrast (WCAG 1.4.3),
+**UI/UX — Grenzen und Geplantes:** Rein statische Analyse. Farbkontrast
+(WCAG 1.4.3) wird nur im belegbaren Inline-Fall geprüft (beide Farben am
+Element); der **Kaskaden-/gerenderte** Kontrast — vererbte oder Stylesheet-Farben,
+Bilder/Verläufe hinter Text, transluzente Farben — ist statisch **nicht**
+entscheidbar. Ebenso **nicht** zuverlässig prüfbar und daher ausgelassen:
 sichtbarer Fokus, Fokusreihenfolge/-fallen (über das statische
 positive-tabindex-Signal hinaus), Zielgrößen, dynamische Zustände — sie brauchen
 gerenderte Seiten/Interaktion (geplanter visueller Analyse-Schnitt mit

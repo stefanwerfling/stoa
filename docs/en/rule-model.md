@@ -138,7 +138,7 @@ flowchart TB
 
 ## 5. Rule Set `default@1` (implemented)
 
-> The actually-implemented rule set (34 rules). Overview, facts and opt-in flags:
+> The actually-implemented rule set (35 rules). Overview, facts and opt-in flags:
 > [implementation-status.md](./implementation-status.md).
 
 Declarative rules (`rules/default/*.json`, on by default):
@@ -187,6 +187,7 @@ UI/UX – accessibility (HTML, static, on by default):
 | `R-A11Y-ARIA-DANGLING-IDREF` | `ui.danglingAriaIdref` | `marcus.purpose` | Accessibility | syntactic (WCAG 1.3.1/4.1.2) |
 | `R-A11Y-DUPLICATE-ID` | `ui.duplicateId` | `marcus.purpose` | Accessibility | syntactic (WCAG 1.3.1/4.1.2) |
 | `R-A11Y-FRAME-TITLE` | `ui.frameMissingTitle` | `marcus.purpose` | Accessibility, usability | syntactic (WCAG 4.1.2) |
+| `R-A11Y-CONTRAST-TEXT` | `ui.lowContrastText` | `marcus.cooperation` | Accessibility, usability | syntactic (inline colours, WCAG 1.4.3) |
 
 > **UI/UX (HTML):** static analysis via tree-sitter-html.
 > `R-A11Y-IMG-ALT` reports `<img>` with no `alt` (decorative `alt=""`,
@@ -247,7 +248,12 @@ UI/UX – accessibility (HTML, static, on by default):
 > `<label htmlFor>` by literal id count as a label; spreads and dynamic `id`/`type`
 > suppress the relevant check; components are skipped. The four document/
 > cross-element rules (html-lang, viewport, dangling-idref, duplicate-id) are not
-> ported to JSX (app-shell / dynamic-id reasons).
+> ported to JSX (app-shell / dynamic-id reasons). `R-A11Y-CONTRAST-TEXT` computes
+> the WCAG contrast ratio deterministically **only** when a text colour and a
+> background colour are declared together on the element's inline `style` (var()
+> resolved within the same block; 4.5:1, or 3:1 for an inline large font); the
+> cascade, inherited/stylesheet colours, images behind text and translucent
+> colours are not resolved (those cases are skipped, not assumed to pass).
 
 > `R-MIGRATION-UNGUARDED-DDL` fires only in migration files (a class that
 > `implements MigrationInterface`) and covers two paths: raw SQL

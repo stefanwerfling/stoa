@@ -159,6 +159,16 @@ test('R-A11Y-FRAME-TITLE flags unnamed/empty-title frames, not titled / aria-lab
     assert.equal(findings.find((f) => f.rule.id === 'R-A11Y-FRAME-TITLE')?.severity, 'high');
 });
 
+test('R-A11Y-CONTRAST-TEXT flags inline colour pairs below AA, honouring large text, var() and skipping the unresolvable', () => {
+    const findings = analyzePath(join(corpus, 'contrast.html'));
+    assert.deepEqual(
+        ids(findings, 'R-A11Y-CONTRAST-TEXT'),
+        ['contrast#0', 'contrast#1', 'contrast#2'],
+        'grey-on-white (normal), a sub-3:1 large-text pair, and an in-block var() colour; a 4.54:1 pair, a 3:1-ok large pair, a translucent colour, a colour with no background, an unresolved var and black-on-white are all fine'
+    );
+    assert.equal(findings.find((f) => f.rule.id === 'R-A11Y-CONTRAST-TEXT')?.severity, 'high');
+});
+
 test('a clean page produces no accessibility findings (no false positives)', () => {
     const findings = analyzePath(join(corpus, 'clean.html')).filter((f) => f.rule.id.startsWith('R-A11Y-'));
     assert.deepEqual(findings, []);
@@ -169,15 +179,15 @@ test('UI golden corpus: precision/recall 100% with a per-category breakdown', ()
     const result = evaluate(findings, loadExpected(join(here, 'fixtures', 'html', 'expected.json')), corpus);
     assert.equal(result.overall.precision, 1);
     assert.equal(result.overall.recall, 1);
-    assert.equal(result.overall.truePositives, 34);
+    assert.equal(result.overall.truePositives, 37);
     assert.equal(result.overall.falsePositives, 0);
     assert.equal(result.overall.falseNegatives, 0);
 
     const html = result.byLanguage.find((item) => item.language === 'HTML');
-    assert.equal(html?.truePositives, 34, 'all findings are HTML findings');
+    assert.equal(html?.truePositives, 37, 'all findings are HTML findings');
 
     const rules = result.perRule.map((item) => item.rule).sort();
-    assert.deepEqual(rules, ['R-A11Y-ARIA-DANGLING-IDREF', 'R-A11Y-ARIA-HIDDEN-FOCUSABLE', 'R-A11Y-ARIA-INVALID-ROLE', 'R-A11Y-ARIA-INVALID-VALUE', 'R-A11Y-ARIA-UNKNOWN-ATTR', 'R-A11Y-CONTROL-NAME', 'R-A11Y-DUPLICATE-ID', 'R-A11Y-FORM-LABEL', 'R-A11Y-FRAME-TITLE', 'R-A11Y-HTML-LANG', 'R-A11Y-IMG-ALT', 'R-A11Y-LINK-NAME', 'R-A11Y-META-VIEWPORT-ZOOM', 'R-A11Y-POSITIVE-TABINDEX']);
+    assert.deepEqual(rules, ['R-A11Y-ARIA-DANGLING-IDREF', 'R-A11Y-ARIA-HIDDEN-FOCUSABLE', 'R-A11Y-ARIA-INVALID-ROLE', 'R-A11Y-ARIA-INVALID-VALUE', 'R-A11Y-ARIA-UNKNOWN-ATTR', 'R-A11Y-CONTRAST-TEXT', 'R-A11Y-CONTROL-NAME', 'R-A11Y-DUPLICATE-ID', 'R-A11Y-FORM-LABEL', 'R-A11Y-FRAME-TITLE', 'R-A11Y-HTML-LANG', 'R-A11Y-IMG-ALT', 'R-A11Y-LINK-NAME', 'R-A11Y-META-VIEWPORT-ZOOM', 'R-A11Y-POSITIVE-TABINDEX']);
     for (const rule of result.perRule) {
         assert.equal(rule.precision, 1, `${rule.rule} precision`);
         assert.equal(rule.recall, 1, `${rule.rule} recall`);

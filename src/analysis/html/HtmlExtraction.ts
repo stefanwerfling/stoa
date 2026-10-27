@@ -2,6 +2,7 @@ import type {Node} from 'web-tree-sitter';
 import type {Fact, SourceRange} from '../../Types.js';
 import {factBuilder, type AdapterInfo} from '../FactBuilder.js';
 import {ariaValueIsInvalid, hasRoleTokens, hasValidRole, isPositiveTabindexLiteral, isUnknownAriaName} from '../AriaVocabulary.js';
+import {contrastRatio, contrastThreshold, formatRatio, parseStyleDeclarations, resolveColor} from '../Contrast.js';
 
 /**
  * Extracts verifiable UI accessibility facts from a static HTML tree
@@ -45,6 +46,7 @@ export const extractFacts = (root: Node, content: string, filePath: string, info
     let danglingIdrefIndex = 0;
     let duplicateIdIndex = 0;
     let frameIndex = 0;
+    let contrastIndex = 0;
     for (const element of descendants(root, 'element')) {
         const startTag = startTagOf(element);
         if (startTag === null) {
@@ -166,6 +168,16 @@ export const extractFacts = (root: Node, content: string, filePath: string, info
         if ((tag === 'iframe' || tag === 'frame') && !isHiddenFromA11y(attrs) && !hasFrameName(attrs)) {
             facts.push(build({kind: 'ui.frameMissingTitle', kindOf: 'statement', symbol: `frame#${frameIndex}`, range: rangeOf(startTag), value: evidence(startTag)}));
             frameIndex += 1;
+        }
+
+        // Text/background contrast — only when BOTH colours are provably declared
+        // on this element's inline style (var() resolved within the same block).
+        // The cascade, inheritance and rendered backgrounds are not resolved, so a
+        // low ratio here is a fact about this element's own declarations.
+        const lowContrast = inlineContrastViolation(attrs);
+        if (lowContrast !== null && !isHiddenFromA11y(attrs)) {
+            facts.push(build({kind: 'ui.lowContrastText', kindOf: 'statement', symbol: `contrast#${contrastIndex}`, range: rangeOf(startTag), value: lowContrast}));
+            contrastIndex += 1;
         }
     }
 
@@ -327,6 +339,40 @@ const findDuplicateIds = (root: Node): Set<string> => {
 // A frame's accessible name can only come from its own attributes (its embedded
 // document is a separate context): a non-empty title or aria-label, or an
 // aria-labelledby reference.
+// A description like `2.85:1 (needs 4.5:1)` when this element's inline style
+// declares both a text colour and a background colour whose contrast is below the
+// WCAG 1.4.3 AA threshold; null when either colour is absent or not statically
+// resolvable (unknown name, alpha, var() from a stylesheet, gradient, …).
+const inlineContrastViolation = (attrs: Map<string, string>): string | null => {
+    const style = attrs.get('style');
+    if (style === undefined) {
+        return null;
+    }
+    const declarations = parseStyleDeclarations(style);
+    const vars = new Map<string, string>();
+    for (const [property, value] of declarations) {
+        if (property.startsWith('--')) {
+            vars.set(property, value);
+        }
+    }
+    const foregroundValue = declarations.get('color');
+    const backgroundValue = declarations.get('background-color') ?? declarations.get('background');
+    if (foregroundValue === undefined || backgroundValue === undefined) {
+        return null;
+    }
+    const foreground = resolveColor(foregroundValue, vars);
+    const background = resolveColor(backgroundValue, vars);
+    if (foreground === null || background === null) {
+        return null;
+    }
+    const ratio = contrastRatio(foreground, background);
+    const threshold = contrastThreshold(declarations);
+    if (ratio < threshold) {
+        return `${formatRatio(ratio)} (needs ${formatRatio(threshold)})`;
+    }
+    return null;
+};
+
 const hasFrameName = (attrs: Map<string, string>): boolean => {
     return (attrs.get('title') ?? '').trim().length > 0
         || (attrs.get('aria-label') ?? '').trim().length > 0

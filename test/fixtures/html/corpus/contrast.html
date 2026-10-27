@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en">
+  <body>
+    <p style="color: #999999; background-color: #ffffff">grey on white ~2.85:1, fails</p>
+    <p style="color: #595959; background-color: #ffffff">dark grey on white ~7:1, passes</p>
+    <p style="color: #767676; background: #ffffff">boundary grey ~4.54:1, passes</p>
+    <p style="color: #777777; background-color: #ffffff; font-size: 24px">low ratio but large text ~4.48:1, passes at 3:1</p>
+    <p style="color: #aaaaaa; background-color: #ffffff; font-size: 24px">large text still below 3:1 (~2.32:1), fails</p>
+    <p style="--fg: #888; color: var(--fg); background-color: #fff">var resolved in-block ~3.5:1, fails</p>
+    <p style="color: rgba(0,0,0,0.5); background-color: #fff">translucent fg, not resolvable, skipped</p>
+    <p style="color: #333">only a text colour, no background, skipped</p>
+    <p style="color: var(--unknown); background: #fff">unresolved var, skipped</p>
+    <p style="color: #000000; background-color: #ffffff">black on white 21:1, passes</p>
+  </body>
+</html>

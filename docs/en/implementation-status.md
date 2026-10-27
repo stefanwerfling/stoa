@@ -13,9 +13,10 @@
   WASM, in-process; metric/complexity facts, error-handling for Dart and C++ —
   C has no try/catch).
 - **UI/UX adapter (HTML):** static accessibility analysis via tree-sitter-html
-  (WASM, in-process). Purely static — no rendering, CSS cascade or contrast;
-  those checks are deliberately **out of scope** here (see limitations). The
-  first vertical slice of the UI/UX area.
+  (WASM, in-process). Purely static — no rendering and no CSS cascade. Text
+  contrast is checked **only** from colours declared together on an element's
+  inline style (a provable fact); cascade/rendered contrast stays out of scope
+  (see limitations). The first vertical slice of the UI/UX area.
 - **UI/UX (React/JSX):** the TypeScript adapter additionally walks JSX elements
   (ts-morph, same parse) and emits the same `ui.*` facts, so **10 of the a11y
   rules** fire on `.jsx/.tsx` intrinsic elements — including the name-computation
@@ -47,7 +48,7 @@ stoa eval <path> --expected <file> [--format markdown|json]
 - `knowledge/` and `rules/` resolve relative to the installed package — the CLI
   runs from any directory after `npm link`/install.
 
-## Rule catalog (34)
+## Rule catalog (35)
 
 Declarative rules (`rules/default/*.json`), on by default:
 
@@ -85,6 +86,7 @@ Declarative rules (`rules/default/*.json`), on by default:
 | R-A11Y-ARIA-DANGLING-IDREF | marcus.purpose | accessibility | HTML (static, WCAG 1.3.1/4.1.2) |
 | R-A11Y-DUPLICATE-ID | marcus.purpose | accessibility | HTML (static, WCAG 1.3.1/4.1.2) |
 | R-A11Y-FRAME-TITLE | marcus.purpose | accessibility, usability | HTML, JSX (static, WCAG 4.1.2) |
+| R-A11Y-CONTRAST-TEXT | marcus.cooperation | accessibility, usability | HTML (inline colours, WCAG 1.4.3) |
 
 Procedural rules (`ProjectRule`, cross-file):
 
@@ -108,12 +110,12 @@ All ten quality dimensions (incl. accessibility, usability) have at least one ru
 `ui.controlMissingLabel`, `ui.linkMissingName`, `ui.ariaHiddenFocusable`,
 `ui.invalidRole`, `ui.unknownAriaAttribute`, `ui.invalidAriaValue`,
 `ui.positiveTabindex`, `ui.documentMissingLang`, `ui.viewportBlocksZoom`,
-`ui.danglingAriaIdref`, `ui.duplicateId`, `ui.frameMissingTitle`, plus (opt-in)
-`external.tsc` and `external.floatingPromise`.
+`ui.danglingAriaIdref`, `ui.duplicateId`, `ui.frameMissingTitle`,
+`ui.lowContrastText`, plus (opt-in) `external.tsc` and `external.floatingPromise`.
 
 ## Quality assurance
 
-- **132 node:test cases** green (rules pos./neg., extraction, schema validation,
+- **133 node:test cases** green (rules pos./neg., extraction, schema validation,
   i18n, determinism, SARIF, evaluation, semantic groundedness, privacy,
   finding-model separation).
 - **Golden corpus** (`test/corpus/`, **TS+PHP only**) with ground truth;
@@ -123,7 +125,7 @@ All ten quality dimensions (incl. accessibility, usability) have at least one ru
 - **Important:** these numbers hold only for the small, curated corpus and are
   **not** a general reliability guarantee for arbitrary projects.
 - **UI/UX corpus** (`test/fixtures/html/`, static HTML) with positive, negative
-  and deliberately-no-warning cases; evaluation 100%/100% (TP 34) per rule. The
+  and deliberately-no-warning cases; evaluation 100%/100% (TP 37) per rule. The
   semantic (LLM) assessment is kept separate and is not required here.
 - **JSX corpus** (`test/fixtures/jsx/`): the ten ported a11y rules evaluated on
   React/JSX intrinsics; 100%/100% (TP 12), with positive, dynamic-value/children,
@@ -150,10 +152,13 @@ mode; PSR-4 resolution so R-DEP-CYCLE / R-UNUSED-EXPORT cover PHP; a generic
 ESLint fact adapter; context facts (`flag.generatedCode`, `hasTests`) for richer
 suppression; LLM-output evaluation at scale.
 
-**UI/UX — limits and planned:** static analysis only. **Not** reliably decidable
-statically, and therefore deliberately omitted: colour contrast (WCAG 1.4.3),
-visible focus, focus order/traps (beyond the static positive-tabindex signal),
-target size, dynamic states — these need a rendered page/interaction (a planned
+**UI/UX — limits and planned:** static analysis only. Colour contrast
+(WCAG 1.4.3) is checked only for the provable inline case (both colours on the
+element); the **cascade/rendered** contrast — inherited or stylesheet colours,
+images/gradients behind text, translucent colours — is **not** statically
+decidable. Likewise **not** reliably decidable and therefore omitted: visible
+focus, focus order/traps (beyond the static positive-tabindex signal), target
+size, dynamic states — these need a rendered page/interaction (a planned
 visual-analysis slice with browser automation). **React/JSX** is covered for 10
 of the 14 rules (via the TS adapter's JSX walk), including the name-computation
 rules (control/link name, form label) with dynamic-aware name resolution. The

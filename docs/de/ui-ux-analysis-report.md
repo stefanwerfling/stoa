@@ -42,7 +42,7 @@ Ehrliche Zuordnung des aktuellen **statischen HTML**-Schnitts:
 
 | Bereich | Statische Abdeckung | Anmerkung |
 |---------|---------------------|-----------|
-| A — Lesbarkeit / Kontrast | **Keine (bewusst)** | Farbkontrast (WCAG 1.4.3) braucht die gerenderte Seite + CSS-Kaskade; statisch nicht entscheidbar. Für einen visuellen Schnitt vorgesehen. |
+| A — Lesbarkeit / Kontrast | **Teilweise** | Textkontrast (WCAG 1.4.3) wird deterministisch aus inline deklarierten Farbpaaren berechnet (`R-A11Y-CONTRAST-TEXT`); der Kaskaden-/gerenderte Fall (Vererbung, Stylesheets, Bilder, Transparenz) braucht weiterhin einen visuellen Schnitt. |
 | B — Funktions­verständlich­keit | **Teilweise** | Zugängliche Namen für Controls/Links/Bilder/Frames; Label-Zuordnung; Dokumentsprache. „Ist der Name *gut*?" wird nicht beurteilt. |
 | C — Bedienbarkeit / Zugänglichkeit | **Stark** | Der Großteil der 14 Regeln: Namen, Labels, Rollen, ARIA-Zustand/-Attribut-Gültigkeit, Zoom, ins Leere zeigende Referenzen, doppelte ids. |
 | D — visuelle Hierarchie / Konsistenz | **Keine (bewusst)** | Überschriftenordnung/Abstände/Konsistenz hängen von Rendering und Absicht ab; aus dem Markup nicht ohne Überanspruch belegbar. |
@@ -93,7 +93,7 @@ Berührte WCAG-Prinzipien: Wahrnehmbar (1.1.1, 1.3.1, 1.4.4), Bedienbar (2.4.3,
 
 Statisch **nicht** zuverlässig entscheidbar, daher ausgelassen statt geraten:
 
-- **Farbkontrast** (1.4.3) — braucht Rendering + aufgelöstes CSS.
+- **Kaskaden-/gerenderter Farbkontrast** (1.4.3) — inline Farbpaare werden geprüft; vererbte/Stylesheet-Farben, Bilder hinter Text und transluzente Farben brauchen Rendering.
 - **Sichtbarer Fokus, Fokusreihenfolge/-fallen, dynamische Zustände** (über das positive-tabindex-Signal hinaus) — brauchen Interaktion mit einer gerenderten Seite.
 - **Zielgrößen, Reflow, Bewegung** — brauchen Layout.
 - **Ob ein Name/Label/Titel *aussagekräftig* ist** — menschliches Urteil; stoa prüft Präsenz, nicht Qualität.
@@ -105,7 +105,7 @@ Das ist die ehrliche Grenze: stoa meldet das Belegbare und zeigt, wo ein
 
 ## 8. Vorgeschlagene nächste Schritte
 
-1. **Visueller Analyse-Schnitt** (Browser-Automatisierung) für Kontrast und sichtbaren Fokus — die größte einzelne Abdeckungslücke und statisch wirklich nicht erreichbar.
+1. **Visueller Analyse-Schnitt** (Browser-Automatisierung) für den Kaskaden-/gerenderten Kontrast (über Inline-Paare hinaus) und sichtbaren Fokus — die größte verbleibende Abdeckungslücke und statisch wirklich nicht erreichbar.
 2. **React/JSX** — erfolgt: Der TypeScript-Adapter durchläuft JSX und erzeugt dieselben Facts, sodass 10 der 14 Regeln auf `.jsx/.tsx` feuern, inklusive der Namensberechnungs-Regeln mit dynamikbewusster Namensauflösung (dynamische Werte/Kinder, Spreads, umschließende Labels, htmlFor, Komponenten behandelt). Die vier Dokument-/Cross-Element-Regeln bleiben HTML-only (App-Shell-/dynamische-id-Gründe).
 3. **Tabellensemantik / Überschriftenordnung** nur, falls eine fehlalarmarme, kontextbewusste Formulierung gefunden wird — sonst dem visuellen Schnitt überlassen.
 

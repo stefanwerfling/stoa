@@ -42,7 +42,7 @@ Honest mapping of the current **static HTML** slice:
 
 | Area | Static coverage | Notes |
 |------|-----------------|-------|
-| A — readability / contrast | **None (by design)** | Colour contrast (WCAG 1.4.3) needs the rendered page + CSS cascade; not statically decidable. Deferred to a visual slice. |
+| A — readability / contrast | **Partial** | Text contrast (WCAG 1.4.3) is computed deterministically from inline-declared colour pairs (`R-A11Y-CONTRAST-TEXT`); the cascade/rendered case (inheritance, stylesheets, images, translucency) still needs a visual slice. |
 | B — function comprehensibility | **Partial** | Accessible names for controls/links/images/frames; label association; language of the document. "Is the name *good*?" is not judged. |
 | C — operability / accessibility | **Strong** | The bulk of the 14 rules: names, labels, roles, ARIA state/attribute validity, zoom, dangling references, duplicate ids. |
 | D — visual hierarchy / consistency | **None (by design)** | Heading-order/spacing/consistency depend on rendering and intent; not provable from markup without overreach. |
@@ -93,7 +93,7 @@ WCAG principles touched: Perceivable (1.1.1, 1.3.1, 1.4.4), Operable (2.4.3,
 
 Statically **not** reliably decidable, therefore omitted rather than guessed:
 
-- **Colour contrast** (1.4.3) — needs rendering + resolved CSS.
+- **Cascade/rendered colour contrast** (1.4.3) — inline colour pairs are checked; inherited/stylesheet colours, images behind text and translucent colours need rendering.
 - **Visible focus, focus order/traps, dynamic states** (beyond the positive-tabindex signal) — need interaction with a rendered page.
 - **Target size, reflow, motion** — need layout.
 - **Whether a name/label/title is *meaningful*** — a human judgement; stoa checks presence, not quality.
@@ -104,7 +104,7 @@ These are the honest boundary: stoa reports the provable and points at where a
 
 ## 8. Suggested next steps
 
-1. **Visual-analysis slice** (browser automation) for contrast and visible focus — the single biggest coverage gap, and genuinely out of static reach.
+1. **Visual-analysis slice** (browser automation) for the cascade/rendered contrast (beyond inline pairs) and visible focus — the biggest remaining coverage gap, and genuinely out of static reach.
 2. **React/JSX** — landed: the TypeScript adapter walks JSX and emits the same facts, so 10 of the 14 rules fire on `.jsx/.tsx`, including the name-computation rules with dynamic-aware name resolution (dynamic values/children, spreads, wrapping labels, htmlFor, components all handled). The four document/cross-element rules stay HTML-only (app-shell / dynamic-id reasons).
 3. **Table semantics / heading order** only if a low-false-positive, context-aware formulation is found — otherwise leave to the visual slice.
 

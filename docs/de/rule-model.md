@@ -138,7 +138,7 @@ flowchart TB
 
 ## 5. Regelsatz `default@1` (umgesetzt)
 
-> Der tatsächlich implementierte Regelsatz (34 Regeln). Gesamtüberblick, Facts
+> Der tatsächlich implementierte Regelsatz (35 Regeln). Gesamtüberblick, Facts
 > und Opt-in-Flags: [implementation-status.md](./implementation-status.md).
 
 Deklarative Regeln (`rules/default/*.json`, Default aktiv):
@@ -187,6 +187,7 @@ UI/UX – Barrierefreiheit (HTML, statisch, Default aktiv):
 | `R-A11Y-ARIA-DANGLING-IDREF` | `ui.danglingAriaIdref` | `marcus.purpose` | Barrierefreiheit | syntaktisch (WCAG 1.3.1/4.1.2) |
 | `R-A11Y-DUPLICATE-ID` | `ui.duplicateId` | `marcus.purpose` | Barrierefreiheit | syntaktisch (WCAG 1.3.1/4.1.2) |
 | `R-A11Y-FRAME-TITLE` | `ui.frameMissingTitle` | `marcus.purpose` | Barrierefreiheit, Bedienbarkeit | syntaktisch (WCAG 4.1.2) |
+| `R-A11Y-CONTRAST-TEXT` | `ui.lowContrastText` | `marcus.cooperation` | Barrierefreiheit, Bedienbarkeit | syntaktisch (Inline-Farben, WCAG 1.4.3) |
 
 > **UI/UX (HTML):** rein statische Analyse via tree-sitter-html.
 > `R-A11Y-IMG-ALT` meldet `<img>` ohne `alt` (dekoratives `alt=""`,
@@ -252,7 +253,12 @@ UI/UX – Barrierefreiheit (HTML, statisch, Default aktiv):
 > gelten als Label; Spreads und dynamische `id`/`type` unterdrücken die jeweilige
 > Prüfung; Komponenten werden übersprungen. Die vier Dokument-/Cross-Element-Regeln
 > (html-lang, viewport, dangling-idref, duplicate-id) sind für JSX nicht portiert
-> (App-Shell-/dynamische-id-Gründe).
+> (App-Shell-/dynamische-id-Gründe). `R-A11Y-CONTRAST-TEXT` berechnet das
+> WCAG-Kontrastverhältnis deterministisch **nur**, wenn eine Text- und eine
+> Hintergrundfarbe gemeinsam im Inline-`style` des Elements stehen (var() im selben
+> Block aufgelöst; 4,5:1, bzw. 3:1 bei inline großer Schrift); Kaskade,
+> vererbte/Stylesheet-Farben, Bilder hinter Text und transluzente Farben werden
+> nicht aufgelöst (solche Fälle werden übersprungen, nicht als bestanden angenommen).
 
 > `R-MIGRATION-UNGUARDED-DDL` greift nur in Migrationsdateien (Klasse
 > `implements MigrationInterface`) und erfasst zwei Wege: Roh-SQL
