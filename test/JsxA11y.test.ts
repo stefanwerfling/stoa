@@ -32,6 +32,21 @@ test('the same ui.* a11y rules fire on JSX intrinsics, honouring dynamic values 
     assert.deepEqual(ids(findings, 'R-A11Y-FRAME-TITLE'), ['frame#0'], 'the untitled iframe; a titled one is fine');
 });
 
+test('JSX name rules: accessible name from text/aria/nested img, dynamic content and wrapping labels honoured', () => {
+    const findings = analyzePath(join(corpus, 'Names.tsx'));
+    assert.deepEqual(
+        ids(findings, 'R-A11Y-CONTROL-NAME'),
+        ['button#0', 'button#1'],
+        'the empty button and the decorative-img-only button; text / {dynamic} / aria-label / nested span / component child / img[alt] are names'
+    );
+    assert.deepEqual(ids(findings, 'R-A11Y-LINK-NAME'), ['link#0'], 'the empty link; text, aria-label and a bare <a> without href are fine');
+    assert.deepEqual(
+        ids(findings, 'R-A11Y-FORM-LABEL'),
+        ['field#0', 'field#1'],
+        'the bare input and the bare select; aria-label, <label htmlFor> by literal id, a wrapping <label>, a submit input and a dynamic id are all not flagged'
+    );
+});
+
 test('a React component element (<Button/>) is not treated as a DOM intrinsic', () => {
     const findings = analyzePath(join(corpus, 'Widgets.tsx'));
     // The <Button/> usage and the Button definition must not add a11y findings.
@@ -48,12 +63,12 @@ test('JSX golden corpus: precision/recall 100% over the ported a11y rules', () =
     const result = evaluate(findings, loadExpected(join(here, 'fixtures', 'jsx', 'expected.json')), corpus);
     assert.equal(result.overall.precision, 1);
     assert.equal(result.overall.recall, 1);
-    assert.equal(result.overall.truePositives, 7);
+    assert.equal(result.overall.truePositives, 12);
     assert.equal(result.overall.falsePositives, 0);
     assert.equal(result.overall.falseNegatives, 0);
 
     const rules = result.perRule.map((item) => item.rule).sort();
-    assert.deepEqual(rules, ['R-A11Y-ARIA-HIDDEN-FOCUSABLE', 'R-A11Y-ARIA-INVALID-ROLE', 'R-A11Y-ARIA-INVALID-VALUE', 'R-A11Y-ARIA-UNKNOWN-ATTR', 'R-A11Y-FRAME-TITLE', 'R-A11Y-IMG-ALT', 'R-A11Y-POSITIVE-TABINDEX']);
+    assert.deepEqual(rules, ['R-A11Y-ARIA-HIDDEN-FOCUSABLE', 'R-A11Y-ARIA-INVALID-ROLE', 'R-A11Y-ARIA-INVALID-VALUE', 'R-A11Y-ARIA-UNKNOWN-ATTR', 'R-A11Y-CONTROL-NAME', 'R-A11Y-FORM-LABEL', 'R-A11Y-FRAME-TITLE', 'R-A11Y-IMG-ALT', 'R-A11Y-LINK-NAME', 'R-A11Y-POSITIVE-TABINDEX']);
     for (const rule of result.perRule) {
         assert.equal(rule.precision, 1, `${rule.rule} precision`);
         assert.equal(rule.recall, 1, `${rule.rule} recall`);

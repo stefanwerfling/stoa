@@ -106,7 +106,7 @@ Das ist die ehrliche Grenze: stoa meldet das Belegbare und zeigt, wo ein
 ## 8. Vorgeschlagene nächste Schritte
 
 1. **Visueller Analyse-Schnitt** (Browser-Automatisierung) für Kontrast und sichtbaren Fokus — die größte einzelne Abdeckungslücke und statisch wirklich nicht erreichbar.
-2. **React/JSX** — ein erster Schnitt ist erfolgt: Der TypeScript-Adapter durchläuft JSX und erzeugt die attributbasierten Facts, sodass 7 der 14 Regeln auf `.jsx/.tsx` feuern (dynamische Werte/Spreads/Komponenten behandelt). Als Nächstes: die Namensberechnungs-Regeln mit dynamikbewusster Namensauflösung portieren.
+2. **React/JSX** — erfolgt: Der TypeScript-Adapter durchläuft JSX und erzeugt dieselben Facts, sodass 10 der 14 Regeln auf `.jsx/.tsx` feuern, inklusive der Namensberechnungs-Regeln mit dynamikbewusster Namensauflösung (dynamische Werte/Kinder, Spreads, umschließende Labels, htmlFor, Komponenten behandelt). Die vier Dokument-/Cross-Element-Regeln bleiben HTML-only (App-Shell-/dynamische-id-Gründe).
 3. **Tabellensemantik / Überschriftenordnung** nur, falls eine fehlalarmarme, kontextbewusste Formulierung gefunden wird — sonst dem visuellen Schnitt überlassen.
 
 Nichts davon ändert stoas Haltung: Es benennt, was es beweisen kann, schätzt

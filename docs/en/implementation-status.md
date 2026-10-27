@@ -17,11 +17,12 @@
   those checks are deliberately **out of scope** here (see limitations). The
   first vertical slice of the UI/UX area.
 - **UI/UX (React/JSX):** the TypeScript adapter additionally walks JSX elements
-  (ts-morph, same parse) and emits the same `ui.*` facts, so **7 of the a11y
-  rules** fire on `.jsx/.tsx` intrinsic elements. Dynamic attribute values
-  (`{expr}`) are treated as present-but-unknown, a spread (`{...props}`)
-  suppresses the missing-attribute checks, and React components (`<Button/>`) are
-  skipped.
+  (ts-morph, same parse) and emits the same `ui.*` facts, so **10 of the a11y
+  rules** fire on `.jsx/.tsx` intrinsic elements — including the name-computation
+  rules (control/link name, form label). Dynamic attribute values (`{expr}`) and
+  dynamic children (`{label}`) are treated as present-but-unknown, a spread
+  (`{...props}`) and a dynamic `id`/`type` suppress the relevant checks, and React
+  components (`<Button/>`) are skipped — all to avoid false positives.
 - **Pipeline:** ingestion → fact extraction → rule engine → findings → reporter.
   No clock/randomness/network in the core; same input + versions + language ⇒
   byte-identical findings.
@@ -71,9 +72,9 @@ Declarative rules (`rules/default/*.json`), on by default:
 | R-MIGRATION-NO-DOWN | marcus.judgment | robustness, decision-evidence | TS/JS, PHP (migration files only) |
 | R-MIGRATION-DATA-LOSS | marcus.judgment | robustness, decision-evidence | TS/JS, PHP (drops in `up()`) |
 | R-A11Y-IMG-ALT | marcus.purpose | accessibility | HTML, JSX (static, WCAG 1.1.1) |
-| R-A11Y-CONTROL-NAME | marcus.purpose | accessibility, usability | HTML (static, WCAG 4.1.2) |
-| R-A11Y-FORM-LABEL | marcus.purpose | accessibility, usability | HTML (static, WCAG 1.3.1/4.1.2) |
-| R-A11Y-LINK-NAME | marcus.purpose | accessibility, usability | HTML (static, WCAG 2.4.4/4.1.2) |
+| R-A11Y-CONTROL-NAME | marcus.purpose | accessibility, usability | HTML, JSX (static, WCAG 4.1.2) |
+| R-A11Y-FORM-LABEL | marcus.purpose | accessibility, usability | HTML, JSX (static, WCAG 1.3.1/4.1.2) |
+| R-A11Y-LINK-NAME | marcus.purpose | accessibility, usability | HTML, JSX (static, WCAG 2.4.4/4.1.2) |
 | R-A11Y-ARIA-HIDDEN-FOCUSABLE | marcus.cooperation | accessibility, usability | HTML, JSX (static, WCAG 4.1.2) |
 | R-A11Y-ARIA-INVALID-ROLE | marcus.purpose | accessibility | HTML, JSX (static, WCAG 4.1.2) |
 | R-A11Y-ARIA-UNKNOWN-ATTR | marcus.purpose | accessibility | HTML, JSX (static, WCAG 4.1.2) |
@@ -112,7 +113,7 @@ All ten quality dimensions (incl. accessibility, usability) have at least one ru
 
 ## Quality assurance
 
-- **131 node:test cases** green (rules pos./neg., extraction, schema validation,
+- **132 node:test cases** green (rules pos./neg., extraction, schema validation,
   i18n, determinism, SARIF, evaluation, semantic groundedness, privacy,
   finding-model separation).
 - **Golden corpus** (`test/corpus/`, **TS+PHP only**) with ground truth;
@@ -124,9 +125,9 @@ All ten quality dimensions (incl. accessibility, usability) have at least one ru
 - **UI/UX corpus** (`test/fixtures/html/`, static HTML) with positive, negative
   and deliberately-no-warning cases; evaluation 100%/100% (TP 34) per rule. The
   semantic (LLM) assessment is kept separate and is not required here.
-- **JSX corpus** (`test/fixtures/jsx/`): the seven ported a11y rules evaluated on
-  React/JSX intrinsics; 100%/100% (TP 7), with positive, dynamic-value, spread,
-  component and clean cases.
+- **JSX corpus** (`test/fixtures/jsx/`): the ten ported a11y rules evaluated on
+  React/JSX intrinsics; 100%/100% (TP 12), with positive, dynamic-value/children,
+  spread, wrapping-label, htmlFor, component and clean cases.
 - Dogfooding: stoa analyzes its own `src/`.
 
 ## Deviations from the concept (deliberate, documented)
@@ -153,15 +154,16 @@ suppression; LLM-output evaluation at scale.
 statically, and therefore deliberately omitted: colour contrast (WCAG 1.4.3),
 visible focus, focus order/traps (beyond the static positive-tabindex signal),
 target size, dynamic states — these need a rendered page/interaction (a planned
-visual-analysis slice with browser automation). **React/JSX** is covered for the
-attribute-based rules (7 of 14, via the TS adapter's JSX walk); the
-name-computation rules (`R-A11Y-CONTROL-NAME`, `-FORM-LABEL`, `-LINK-NAME`) and
-the document/cross-element rules (`-HTML-LANG`, `-META-VIEWPORT-ZOOM`,
-`-ARIA-DANGLING-IDREF`, `-DUPLICATE-ID`) are **not yet** ported to JSX because
-JSX children, labels and ids are frequently dynamic (false-positive risk). Next
-static steps: port the name-based rules to JSX with dynamic-aware name
-computation; further ARIA checks (e.g. `aria-*` attributes invalid for the
-element's role); further platforms (Vue, Angular) behind their own adapters.
+visual-analysis slice with browser automation). **React/JSX** is covered for 10
+of the 14 rules (via the TS adapter's JSX walk), including the name-computation
+rules (control/link name, form label) with dynamic-aware name resolution. The
+four document/cross-element rules (`-HTML-LANG`, `-META-VIEWPORT-ZOOM`,
+`-ARIA-DANGLING-IDREF`, `-DUPLICATE-ID`) are **not** ported to JSX: `<html lang>`
+and `<meta viewport>` live in the app shell (e.g. a Next.js `_document`/`Head`,
+not component JSX), and id/idref resolution across components with dynamic ids is
+not statically sound. Next static steps: further ARIA checks (e.g. `aria-*`
+attributes invalid for the element's role); further platforms (Vue, Angular)
+behind their own adapters.
 (Implemented: `R-A11Y-FORM-LABEL`,
 `R-A11Y-LINK-NAME`, `R-A11Y-ARIA-HIDDEN-FOCUSABLE`, `R-A11Y-ARIA-INVALID-ROLE`,
 `R-A11Y-ARIA-UNKNOWN-ATTR`, `R-A11Y-ARIA-INVALID-VALUE`,

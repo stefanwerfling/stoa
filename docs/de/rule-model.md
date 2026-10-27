@@ -242,13 +242,17 @@ UI/UX – Barrierefreiheit (HTML, statisch, Default aktiv):
 > (WCAG 4.1.2). Die Kategorie
 > (Accessibility) wird auf die Dimension `Barrierefreiheit` abgebildet. Kontrast,
 > sichtbarer Fokus und gerenderte Zustände sind **nicht** statisch prüfbar und
-> bewusst ausgelassen. Die attributbasierte Teilmenge dieser Facts
-> (`ui.imageMissingAlt`, `ui.invalidRole`, `ui.unknownAriaAttribute`,
-> `ui.invalidAriaValue`, `ui.positiveTabindex`, `ui.ariaHiddenFocusable`,
-> `ui.frameMissingTitle`) wird vom TypeScript-Adapter (ts-morph) auch aus **JSX**
-> erzeugt, sodass dieselben sieben Regeln auf React-`.jsx/.tsx` feuern —
-> dynamische Werte (`{expr}`) gelten als vorhanden-unbekannt, Spreads unterdrücken
-> die Fehlt-Attribut-Prüfungen, Komponenten werden übersprungen.
+> bewusst ausgelassen. Zehn dieser Facts (die sieben attributbasierten plus
+> `ui.controlMissingName`, `ui.linkMissingName`, `ui.controlMissingLabel`) werden
+> vom TypeScript-Adapter (ts-morph) auch aus **JSX** erzeugt, sodass dieselben
+> zehn Regeln auf React-`.jsx/.tsx` feuern. Die JSX-Namensberechnung ist
+> konservativ: ein dynamischer Wert (`{expr}`), dynamische Kinder (`{label}`), ein
+> Komponenten-Kind (`<Icon/>`) oder ein verschachteltes `img[alt]`/`svg` gelten
+> als Name; ein umschließendes `<label>` und ein `<label htmlFor>` per literaler id
+> gelten als Label; Spreads und dynamische `id`/`type` unterdrücken die jeweilige
+> Prüfung; Komponenten werden übersprungen. Die vier Dokument-/Cross-Element-Regeln
+> (html-lang, viewport, dangling-idref, duplicate-id) sind für JSX nicht portiert
+> (App-Shell-/dynamische-id-Gründe).
 
 > `R-MIGRATION-UNGUARDED-DDL` greift nur in Migrationsdateien (Klasse
 > `implements MigrationInterface`) und erfasst zwei Wege: Roh-SQL

@@ -237,13 +237,17 @@ UI/UX – accessibility (HTML, static, on by default):
 > `aria-hidden` is exempt (WCAG 4.1.2).
 > The category (accessibility) maps to the
 > `accessibility` dimension. Contrast, visible focus and rendered states are
-> **not** statically decidable and are deliberately omitted. The attribute-based
-> subset of these facts (`ui.imageMissingAlt`, `ui.invalidRole`,
-> `ui.unknownAriaAttribute`, `ui.invalidAriaValue`, `ui.positiveTabindex`,
-> `ui.ariaHiddenFocusable`, `ui.frameMissingTitle`) is also emitted from **JSX**
-> by the TypeScript adapter (ts-morph), so the same seven rules fire on React
-> `.jsx/.tsx` — dynamic values (`{expr}`) count as present-unknown, spreads
-> suppress the missing-attribute checks, and components are skipped.
+> **not** statically decidable and are deliberately omitted. Ten of these facts
+> (the seven attribute-based ones plus `ui.controlMissingName`,
+> `ui.linkMissingName`, `ui.controlMissingLabel`) are also emitted from **JSX** by
+> the TypeScript adapter (ts-morph), so the same ten rules fire on React
+> `.jsx/.tsx`. The JSX accessible-name computation is conservative: a dynamic
+> value (`{expr}`), dynamic children (`{label}`), a component child (`<Icon/>`),
+> or a nested `img[alt]`/`svg` all count as a name; a wrapping `<label>` and a
+> `<label htmlFor>` by literal id count as a label; spreads and dynamic `id`/`type`
+> suppress the relevant check; components are skipped. The four document/
+> cross-element rules (html-lang, viewport, dangling-idref, duplicate-id) are not
+> ported to JSX (app-shell / dynamic-id reasons).
 
 > `R-MIGRATION-UNGUARDED-DDL` fires only in migration files (a class that
 > `implements MigrationInterface`) and covers two paths: raw SQL

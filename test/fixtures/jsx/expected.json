@@ -6,6 +6,11 @@
     { "file": "Widgets.tsx", "rule": "R-A11Y-ARIA-INVALID-VALUE", "symbol": "aria-val#0" },
     { "file": "Widgets.tsx", "rule": "R-A11Y-POSITIVE-TABINDEX", "symbol": "tabindex#0" },
     { "file": "Widgets.tsx", "rule": "R-A11Y-ARIA-HIDDEN-FOCUSABLE", "symbol": "aria-hidden#0" },
-    { "file": "Widgets.tsx", "rule": "R-A11Y-FRAME-TITLE", "symbol": "frame#0" }
+    { "file": "Widgets.tsx", "rule": "R-A11Y-FRAME-TITLE", "symbol": "frame#0" },
+    { "file": "Names.tsx", "rule": "R-A11Y-CONTROL-NAME", "symbol": "button#0" },
+    { "file": "Names.tsx", "rule": "R-A11Y-CONTROL-NAME", "symbol": "button#1" },
+    { "file": "Names.tsx", "rule": "R-A11Y-LINK-NAME", "symbol": "link#0" },
+    { "file": "Names.tsx", "rule": "R-A11Y-FORM-LABEL", "symbol": "field#0" },
+    { "file": "Names.tsx", "rule": "R-A11Y-FORM-LABEL", "symbol": "field#1" }
   ]
 }

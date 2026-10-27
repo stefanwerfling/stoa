@@ -1,5 +1,5 @@
 import {Node, SyntaxKind} from 'ts-morph';
-import type {JsxAttribute, JsxOpeningElement, JsxSelfClosingElement, SourceFile} from 'ts-morph';
+import type {JsxAttribute, JsxElement, JsxOpeningElement, JsxSelfClosingElement, SourceFile} from 'ts-morph';
 import type {Fact, SourceRange} from '../../Types.js';
 import type {FactSpec} from '../FactBuilder.js';
 import {ariaValueIsInvalid, hasRoleTokens, hasValidRole, isPositiveTabindexLiteral, isUnknownAriaName} from '../AriaVocabulary.js';
@@ -30,10 +30,14 @@ const NATIVELY_FOCUSABLE: ReadonlySet<string> = new Set(['button', 'select', 'te
  */
 export const extractJsxA11yFacts = (sourceFile: SourceFile, build: Build): Fact[] => {
     const facts: Fact[] = [];
-    const counters = {img: 0, role: 0, ariaAttr: 0, ariaVal: 0, tabindex: 0, ariaHidden: 0, frame: 0};
+    const counters = {img: 0, button: 0, field: 0, link: 0, role: 0, ariaAttr: 0, ariaVal: 0, tabindex: 0, ariaHidden: 0, frame: 0};
 
     const elements = sourceFile.getDescendants().filter((node) => JSX_ELEMENT_KINDS.includes(node.getKind())) as Array<JsxOpeningElement | JsxSelfClosingElement>;
     elements.sort((a, b) => a.getStart() - b.getStart());
+
+    // Literal htmlFor targets anywhere in the file; a control whose literal id is
+    // referenced by a <label htmlFor> is labelled. Dynamic htmlFor is not matched.
+    const labelForIds = collectHtmlForLiterals(elements);
 
     for (const element of elements) {
         const tag = element.getTagNameNode().getText();
@@ -47,6 +51,21 @@ export const extractJsxA11yFacts = (sourceFile: SourceFile, build: Build): Fact[
         if (tag === 'img' && !hasSpread && !isHidden(attrs) && !attrs.has('alt')) {
             facts.push(build({kind: 'ui.imageMissingAlt', kindOf: 'statement', symbol: `img#${counters.img}`, range, value: evidence}));
             counters.img += 1;
+        }
+
+        if (tag === 'button' && !hasSpread && !isHidden(attrs) && !hasAccessibleName(element, attrs)) {
+            facts.push(build({kind: 'ui.controlMissingName', kindOf: 'statement', symbol: `button#${counters.button}`, range, value: evidence}));
+            counters.button += 1;
+        }
+
+        if (tag === 'a' && attrs.has('href') && !hasSpread && !isHidden(attrs) && !hasAccessibleName(element, attrs)) {
+            facts.push(build({kind: 'ui.linkMissingName', kindOf: 'statement', symbol: `link#${counters.link}`, range, value: evidence}));
+            counters.link += 1;
+        }
+
+        if (isLabelableControl(tag, attrs) && !hasSpread && !isHidden(attrs) && !hasLabel(element, attrs, labelForIds)) {
+            facts.push(build({kind: 'ui.controlMissingLabel', kindOf: 'statement', symbol: `field#${counters.field}`, range, value: evidence}));
+            counters.field += 1;
         }
 
         const role = attrs.get('role');
@@ -169,6 +188,134 @@ const isFocusable = (tag: string, attrs: Attrs): boolean => {
         return (attrs.get('type') ?? 'text') !== 'hidden';
     }
     return NATIVELY_FOCUSABLE.has(tag);
+};
+
+// Literal htmlFor values across the file (a <label htmlFor="x">). Dynamic
+// htmlFor ({expr}) is not collected — it cannot be matched to a literal id.
+const collectHtmlForLiterals = (elements: Array<JsxOpeningElement | JsxSelfClosingElement>): Set<string> => {
+    const ids = new Set<string>();
+    for (const element of elements) {
+        const value = readAttributes(element).attrs.get('htmlFor');
+        if (typeof value === 'string' && value.trim().length > 0) {
+            ids.add(value);
+        }
+    }
+    return ids;
+};
+
+// Whether an attribute contributes text: a non-empty literal, or a dynamic value
+// ({expr}) which is assumed to provide text (conservative — avoids false positives).
+const attributeProvidesText = (attrs: Attrs, name: string): boolean => {
+    const value = attrs.get(name);
+    if (value === null) {
+        return true;
+    }
+    return typeof value === 'string' && value.trim().length > 0;
+};
+
+// Accessible name for a button/link: aria-label(ledby)/title, or naming content.
+const hasAccessibleName = (element: JsxOpeningElement | JsxSelfClosingElement, attrs: Attrs): boolean => {
+    if (attributeProvidesText(attrs, 'aria-label') || attrs.has('aria-labelledby') || attributeProvidesText(attrs, 'title')) {
+        return true;
+    }
+    if (Node.isJsxSelfClosingElement(element)) {
+        return false;
+    }
+    const jsxElement = element.getParentIfKind(SyntaxKind.JsxElement);
+    return jsxElement !== undefined && childrenProvideName(jsxElement.getJsxChildren());
+};
+
+const childrenProvideName = (children: Node[]): boolean => children.some(childProvidesName);
+
+// Whether a single JSX child contributes an accessible name. A dynamic expression
+// ({label}) or a component child could render text, so both are treated as naming.
+const childProvidesName = (child: Node): boolean => {
+    if (Node.isJsxText(child)) {
+        return child.getText().trim().length > 0;
+    }
+    if (Node.isJsxExpression(child)) {
+        return child.getExpression() !== undefined;
+    }
+    if (Node.isJsxSelfClosingElement(child)) {
+        return elementProvidesName(child, undefined);
+    }
+    if (Node.isJsxElement(child)) {
+        return elementProvidesName(child.getOpeningElement(), child);
+    }
+    if (Node.isJsxFragment(child)) {
+        return childrenProvideName(child.getJsxChildren());
+    }
+    return false;
+};
+
+// Whether a nested element contributes a name: a component (may render text), an
+// aria-label(ledby)/title, a named image (img/area with alt), an svg (may hold a
+// <title>), or — for any other intrinsic — its own naming content.
+const elementProvidesName = (opening: JsxOpeningElement | JsxSelfClosingElement, jsxElement: JsxElement | undefined): boolean => {
+    const tag = opening.getTagNameNode().getText();
+    if (!isIntrinsic(tag)) {
+        return true;
+    }
+    const {attrs} = readAttributes(opening);
+    if (attributeProvidesText(attrs, 'aria-label') || attrs.has('aria-labelledby') || attributeProvidesText(attrs, 'title')) {
+        return true;
+    }
+    if (tag === 'img' || tag === 'area') {
+        const alt = attrs.get('alt');
+        return alt === null || (typeof alt === 'string' && alt.trim().length > 0);
+    }
+    if (tag === 'svg') {
+        return true;
+    }
+    return jsxElement !== undefined && childrenProvideName(jsxElement.getJsxChildren());
+};
+
+// <input> types that are not labelable form fields (name comes from value/alt or
+// they are not perceivable). A dynamic type is not provably labelable → skipped.
+const NON_LABELABLE_INPUT_TYPES: ReadonlySet<string> = new Set(['hidden', 'submit', 'button', 'reset', 'image']);
+
+const isLabelableControl = (tag: string, attrs: Attrs): boolean => {
+    if (tag === 'select' || tag === 'textarea') {
+        return true;
+    }
+    if (tag !== 'input') {
+        return false;
+    }
+    const type = attrs.get('type');
+    if (type === null) {
+        return false;
+    }
+    return !NON_LABELABLE_INPUT_TYPES.has(type ?? 'text');
+};
+
+// A form control is labelled by aria-label(ledby)/title, a wrapping <label>
+// ancestor, or a <label htmlFor> pointing at its literal id. A placeholder is
+// deliberately not a label. A dynamic id is not matched (so not falsely flagged).
+const hasLabel = (element: JsxOpeningElement | JsxSelfClosingElement, attrs: Attrs, labelForIds: ReadonlySet<string>): boolean => {
+    if (attributeProvidesText(attrs, 'aria-label') || attrs.has('aria-labelledby') || attributeProvidesText(attrs, 'title')) {
+        return true;
+    }
+    const id = attrs.get('id');
+    if (id === null) {
+        // A dynamic id ({id}) may be the target of a dynamic <label htmlFor={id}>
+        // that cannot be matched statically — treat as possibly labelled, not flagged.
+        return true;
+    }
+    if (typeof id === 'string' && labelForIds.has(id)) {
+        return true;
+    }
+    return isWrappedInLabel(element);
+};
+
+const isWrappedInLabel = (element: Node): boolean => {
+    let node = element.getParent();
+    while (node !== undefined) {
+        if (Node.isJsxElement(node) && node.getOpeningElement().getTagNameNode().getText() === 'label') {
+            return true;
+        }
+        node = node.getParent();
+    }
+    return false;
 };
 
 const hasFrameName = (attrs: Attrs): boolean => {
