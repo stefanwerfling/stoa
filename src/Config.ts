@@ -2,7 +2,7 @@ import {existsSync, readFileSync} from 'node:fs';
 import type {StoaConfig} from './Types.js';
 
 export const DEFAULT_CONFIG: StoaConfig = {
-    include: ['**/*.ts', '**/*.tsx', '**/*.js', '**/*.jsx', '**/*.mjs', '**/*.cjs', '**/*.php', '**/*.dart'],
+    include: ['**/*.ts', '**/*.tsx', '**/*.js', '**/*.jsx', '**/*.mjs', '**/*.cjs', '**/*.php', '**/*.dart', '**/*.c', '**/*.h', '**/*.cpp', '**/*.cc', '**/*.cxx', '**/*.hpp', '**/*.hh'],
     exclude: ['**/*.d.ts', 'dist/**', 'coverage/**', '.stoa/**'],
     ruleSet: 'default@1',
     knowledgeBase: 'marcus@1',

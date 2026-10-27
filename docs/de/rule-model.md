@@ -13,9 +13,9 @@
   identische Findings. Keine Uhr, kein Zufall, keine Netzabhängigkeit.
 - **Facts statt AST.** Regeln sehen nur das neutrale Fact-Schema, nie den
   rohen sprach­spezifischen AST → Sprachunabhängigkeit, leichte Testbarkeit.
-  Adapter für TS/JS (ts-morph), PHP (glayzzle) und Dart/Flutter (tree-sitter/WASM)
-  liefern dieselben Facts; die Metrik-/Fehlerbehandlungsregeln gelten dadurch
-  sprachübergreifend unverändert.
+  Adapter für TS/JS (ts-morph), PHP (glayzzle) sowie Dart/Flutter und C/C++
+  (tree-sitter/WASM) liefern dieselben Facts; die Metrik-/Fehlerbehandlungsregeln
+  gelten dadurch sprachübergreifend unverändert.
 - **Kontext vor Schwelle.** Eine Regel darf eine Metrik nie allein als Mangel
   werten; sie muss Kontext-/Ausnahmesignale berücksichtigen (Leitprinzip L4).
 - **Kein Stil als Mangel.** Regeln, die nur subjektive Stilpräferenz abbilden,

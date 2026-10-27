@@ -9,8 +9,9 @@
 - **TypeScript core** (variant B), deterministic, runnable without an LLM.
 - **Language adapters:** TypeScript/JavaScript (via `ts-morph` / the TS compiler
   API), **PHP** (via `php-parser`/glayzzle, fully in-process — no subprocess) and
-  **Dart/Flutter** (via tree-sitter / `web-tree-sitter`, WASM, in-process; pilot:
-  metric/complexity and error-handling facts).
+  **Dart/Flutter** and **C/C++** (both via tree-sitter / `web-tree-sitter`,
+  WASM, in-process; metric/complexity facts, error-handling for Dart and C++ —
+  C has no try/catch).
 - **Pipeline:** ingestion → fact extraction → rule engine → findings → reporter.
   No clock/randomness/network in the core; same input + versions + language ⇒
   byte-identical findings.
@@ -41,12 +42,12 @@ Declarative rules (`rules/default/*.json`), on by default:
 
 | Rule | Principle | Dimension | Languages |
 |------|-----------|-----------|-----------|
-| R-COMPLEXITY-COGNITIVE | marcus.simplicity | complexity | TS, PHP, Dart |
-| R-DEEP-NESTING | marcus.simplicity | complexity | TS, PHP, Dart |
-| R-FN-TOO-MANY-PARAMS | marcus.purpose | responsibility-boundaries | TS, PHP, Dart |
+| R-COMPLEXITY-COGNITIVE | marcus.simplicity | complexity | TS, PHP, Dart, C/C++ |
+| R-DEEP-NESTING | marcus.simplicity | complexity | TS, PHP, Dart, C/C++ |
+| R-FN-TOO-MANY-PARAMS | marcus.purpose | responsibility-boundaries | TS, PHP, Dart, C/C++ |
 | R-WIDE-PUBLIC-SURFACE | marcus.purpose | responsibility-boundaries | TS/JS |
-| R-ERR-SWALLOWED | marcus.obstacle | error-handling | TS, PHP, Dart |
-| R-SIDEEFFECT-NONDETERMINISM | marcus.control | side-effect-control | TS, PHP, Dart |
+| R-ERR-SWALLOWED | marcus.obstacle | error-handling | TS, PHP, Dart, C++ |
+| R-SIDEEFFECT-NONDETERMINISM | marcus.control | side-effect-control | TS, PHP, Dart, C/C++ |
 | R-DEP-UNUSED | marcus.cooperation | dependencies | TS, PHP |
 | R-DEEP-IMPORT | marcus.cooperation | dependencies | TS, PHP |
 | R-TYPE-UNSOUND | marcus.judgment | decision-evidence, robustness | TS (opt-in `--typecheck`) |
@@ -83,7 +84,7 @@ All eight quality dimensions have at least one rule.
 
 ## Quality assurance
 
-- **74 node:test cases** green (rules pos./neg., extraction, schema validation,
+- **77 node:test cases** green (rules pos./neg., extraction, schema validation,
   i18n, determinism, SARIF, evaluation, semantic groundedness).
 - **Golden corpus** (`test/corpus/`, TS+PHP) with ground truth; evaluation
   currently **precision 100% · recall 100%**. Per-rule precision gate (AC-5).
@@ -97,14 +98,14 @@ All eight quality dimensions have at least one rule.
   than an ESLint subprocess — the same check, no fragile external process.
 - **Localization:** `LocalizedText` fields on rules/principles + an i18n table.
 - **include/exclude:** now effective (simplified in M1).
-- **Dart via tree-sitter:** `web-tree-sitter` (WASM, in-process, deterministic)
-  rather than a native binding/subprocess — consistent with the glayzzle choice;
-  the prebuilt `tree-sitter-dart.wasm` avoids an emscripten build.
+- **Dart/C/C++ via tree-sitter:** `web-tree-sitter` (WASM, in-process,
+  deterministic) rather than native bindings/subprocesses — consistent with the
+  glayzzle choice; the prebuilt `tree-sitter-{dart,c,cpp}.wasm` avoid an
+  emscripten build.
 
 ## Not yet done
 
-A C/C++ adapter (also tree-sitter) as the next step; further Dart facts
-(imports/deps); baseline/suppression workflow; diff/PR mode; PSR-4 resolution so
+Further Dart/C/C++ facts (imports/deps); baseline/suppression workflow; diff/PR mode; PSR-4 resolution so
 R-DEP-CYCLE / R-UNUSED-EXPORT cover PHP; a generic ESLint fact adapter; context
 facts (`flag.generatedCode`, `hasTests`) for richer suppression; LLM-output
 evaluation at scale.
