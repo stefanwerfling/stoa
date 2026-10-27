@@ -16,6 +16,12 @@
   (WASM, in-process). Purely static — no rendering, CSS cascade or contrast;
   those checks are deliberately **out of scope** here (see limitations). The
   first vertical slice of the UI/UX area.
+- **UI/UX (React/JSX):** the TypeScript adapter additionally walks JSX elements
+  (ts-morph, same parse) and emits the same `ui.*` facts, so **7 of the a11y
+  rules** fire on `.jsx/.tsx` intrinsic elements. Dynamic attribute values
+  (`{expr}`) are treated as present-but-unknown, a spread (`{...props}`)
+  suppresses the missing-attribute checks, and React components (`<Button/>`) are
+  skipped.
 - **Pipeline:** ingestion → fact extraction → rule engine → findings → reporter.
   No clock/randomness/network in the core; same input + versions + language ⇒
   byte-identical findings.
@@ -64,20 +70,20 @@ Declarative rules (`rules/default/*.json`), on by default:
 | R-MIGRATION-UNGUARDED-DDL | marcus.obstacle | robustness, error-handling | TS/JS, PHP (migration files only) |
 | R-MIGRATION-NO-DOWN | marcus.judgment | robustness, decision-evidence | TS/JS, PHP (migration files only) |
 | R-MIGRATION-DATA-LOSS | marcus.judgment | robustness, decision-evidence | TS/JS, PHP (drops in `up()`) |
-| R-A11Y-IMG-ALT | marcus.purpose | accessibility | HTML (static, WCAG 1.1.1) |
+| R-A11Y-IMG-ALT | marcus.purpose | accessibility | HTML, JSX (static, WCAG 1.1.1) |
 | R-A11Y-CONTROL-NAME | marcus.purpose | accessibility, usability | HTML (static, WCAG 4.1.2) |
 | R-A11Y-FORM-LABEL | marcus.purpose | accessibility, usability | HTML (static, WCAG 1.3.1/4.1.2) |
 | R-A11Y-LINK-NAME | marcus.purpose | accessibility, usability | HTML (static, WCAG 2.4.4/4.1.2) |
-| R-A11Y-ARIA-HIDDEN-FOCUSABLE | marcus.cooperation | accessibility, usability | HTML (static, WCAG 4.1.2) |
-| R-A11Y-ARIA-INVALID-ROLE | marcus.purpose | accessibility | HTML (static, WCAG 4.1.2) |
-| R-A11Y-ARIA-UNKNOWN-ATTR | marcus.purpose | accessibility | HTML (static, WCAG 4.1.2) |
-| R-A11Y-ARIA-INVALID-VALUE | marcus.purpose | accessibility | HTML (static, WCAG 4.1.2) |
-| R-A11Y-POSITIVE-TABINDEX | marcus.cooperation | accessibility, usability | HTML (static, WCAG 2.4.3) |
+| R-A11Y-ARIA-HIDDEN-FOCUSABLE | marcus.cooperation | accessibility, usability | HTML, JSX (static, WCAG 4.1.2) |
+| R-A11Y-ARIA-INVALID-ROLE | marcus.purpose | accessibility | HTML, JSX (static, WCAG 4.1.2) |
+| R-A11Y-ARIA-UNKNOWN-ATTR | marcus.purpose | accessibility | HTML, JSX (static, WCAG 4.1.2) |
+| R-A11Y-ARIA-INVALID-VALUE | marcus.purpose | accessibility | HTML, JSX (static, WCAG 4.1.2) |
+| R-A11Y-POSITIVE-TABINDEX | marcus.cooperation | accessibility, usability | HTML, JSX (static, WCAG 2.4.3) |
 | R-A11Y-HTML-LANG | marcus.purpose | accessibility | HTML (static, WCAG 3.1.1) |
 | R-A11Y-META-VIEWPORT-ZOOM | marcus.cooperation | accessibility, usability | HTML (static, WCAG 1.4.4) |
 | R-A11Y-ARIA-DANGLING-IDREF | marcus.purpose | accessibility | HTML (static, WCAG 1.3.1/4.1.2) |
 | R-A11Y-DUPLICATE-ID | marcus.purpose | accessibility | HTML (static, WCAG 1.3.1/4.1.2) |
-| R-A11Y-FRAME-TITLE | marcus.purpose | accessibility, usability | HTML (static, WCAG 4.1.2) |
+| R-A11Y-FRAME-TITLE | marcus.purpose | accessibility, usability | HTML, JSX (static, WCAG 4.1.2) |
 
 Procedural rules (`ProjectRule`, cross-file):
 
@@ -106,7 +112,7 @@ All ten quality dimensions (incl. accessibility, usability) have at least one ru
 
 ## Quality assurance
 
-- **127 node:test cases** green (rules pos./neg., extraction, schema validation,
+- **131 node:test cases** green (rules pos./neg., extraction, schema validation,
   i18n, determinism, SARIF, evaluation, semantic groundedness, privacy,
   finding-model separation).
 - **Golden corpus** (`test/corpus/`, **TS+PHP only**) with ground truth;
@@ -118,6 +124,9 @@ All ten quality dimensions (incl. accessibility, usability) have at least one ru
 - **UI/UX corpus** (`test/fixtures/html/`, static HTML) with positive, negative
   and deliberately-no-warning cases; evaluation 100%/100% (TP 34) per rule. The
   semantic (LLM) assessment is kept separate and is not required here.
+- **JSX corpus** (`test/fixtures/jsx/`): the seven ported a11y rules evaluated on
+  React/JSX intrinsics; 100%/100% (TP 7), with positive, dynamic-value, spread,
+  component and clean cases.
 - Dogfooding: stoa analyzes its own `src/`.
 
 ## Deviations from the concept (deliberate, documented)
@@ -144,10 +153,16 @@ suppression; LLM-output evaluation at scale.
 statically, and therefore deliberately omitted: colour contrast (WCAG 1.4.3),
 visible focus, focus order/traps (beyond the static positive-tabindex signal),
 target size, dynamic states — these need a rendered page/interaction (a planned
-visual-analysis slice with browser automation). Next static steps: further ARIA
-checks (e.g. `aria-*` attributes that are invalid for the element's role, or
-required-but-missing for it); further platforms (React/JSX via ts-morph, Vue,
-Angular) behind their own adapters. (Implemented: `R-A11Y-FORM-LABEL`,
+visual-analysis slice with browser automation). **React/JSX** is covered for the
+attribute-based rules (7 of 14, via the TS adapter's JSX walk); the
+name-computation rules (`R-A11Y-CONTROL-NAME`, `-FORM-LABEL`, `-LINK-NAME`) and
+the document/cross-element rules (`-HTML-LANG`, `-META-VIEWPORT-ZOOM`,
+`-ARIA-DANGLING-IDREF`, `-DUPLICATE-ID`) are **not yet** ported to JSX because
+JSX children, labels and ids are frequently dynamic (false-positive risk). Next
+static steps: port the name-based rules to JSX with dynamic-aware name
+computation; further ARIA checks (e.g. `aria-*` attributes invalid for the
+element's role); further platforms (Vue, Angular) behind their own adapters.
+(Implemented: `R-A11Y-FORM-LABEL`,
 `R-A11Y-LINK-NAME`, `R-A11Y-ARIA-HIDDEN-FOCUSABLE`, `R-A11Y-ARIA-INVALID-ROLE`,
 `R-A11Y-ARIA-UNKNOWN-ATTR`, `R-A11Y-ARIA-INVALID-VALUE`,
 `R-A11Y-POSITIVE-TABINDEX`, `R-A11Y-HTML-LANG`, `R-A11Y-META-VIEWPORT-ZOOM`,

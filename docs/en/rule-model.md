@@ -237,7 +237,13 @@ UI/UX – accessibility (HTML, static, on by default):
 > `aria-hidden` is exempt (WCAG 4.1.2).
 > The category (accessibility) maps to the
 > `accessibility` dimension. Contrast, visible focus and rendered states are
-> **not** statically decidable and are deliberately omitted.
+> **not** statically decidable and are deliberately omitted. The attribute-based
+> subset of these facts (`ui.imageMissingAlt`, `ui.invalidRole`,
+> `ui.unknownAriaAttribute`, `ui.invalidAriaValue`, `ui.positiveTabindex`,
+> `ui.ariaHiddenFocusable`, `ui.frameMissingTitle`) is also emitted from **JSX**
+> by the TypeScript adapter (ts-morph), so the same seven rules fire on React
+> `.jsx/.tsx` — dynamic values (`{expr}`) count as present-unknown, spreads
+> suppress the missing-attribute checks, and components are skipped.
 
 > `R-MIGRATION-UNGUARDED-DDL` fires only in migration files (a class that
 > `implements MigrationInterface`) and covers two paths: raw SQL

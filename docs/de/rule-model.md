@@ -242,7 +242,13 @@ UI/UX – Barrierefreiheit (HTML, statisch, Default aktiv):
 > (WCAG 4.1.2). Die Kategorie
 > (Accessibility) wird auf die Dimension `Barrierefreiheit` abgebildet. Kontrast,
 > sichtbarer Fokus und gerenderte Zustände sind **nicht** statisch prüfbar und
-> bewusst ausgelassen.
+> bewusst ausgelassen. Die attributbasierte Teilmenge dieser Facts
+> (`ui.imageMissingAlt`, `ui.invalidRole`, `ui.unknownAriaAttribute`,
+> `ui.invalidAriaValue`, `ui.positiveTabindex`, `ui.ariaHiddenFocusable`,
+> `ui.frameMissingTitle`) wird vom TypeScript-Adapter (ts-morph) auch aus **JSX**
+> erzeugt, sodass dieselben sieben Regeln auf React-`.jsx/.tsx` feuern —
+> dynamische Werte (`{expr}`) gelten als vorhanden-unbekannt, Spreads unterdrücken
+> die Fehlt-Attribut-Prüfungen, Komponenten werden übersprungen.
 
 > `R-MIGRATION-UNGUARDED-DDL` greift nur in Migrationsdateien (Klasse
 > `implements MigrationInterface`) und erfasst zwei Wege: Roh-SQL

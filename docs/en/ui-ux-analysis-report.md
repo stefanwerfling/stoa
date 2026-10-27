@@ -105,7 +105,7 @@ These are the honest boundary: stoa reports the provable and points at where a
 ## 8. Suggested next steps
 
 1. **Visual-analysis slice** (browser automation) for contrast and visible focus — the single biggest coverage gap, and genuinely out of static reach.
-2. **React/JSX adapter** (ts-morph) to carry the same a11y facts into component source.
+2. **React/JSX** — an initial slice has landed: the TypeScript adapter walks JSX and emits the attribute-based facts, so 7 of the 14 rules fire on `.jsx/.tsx` (dynamic values/spreads/components handled). Next: port the name-computation rules with dynamic-aware name resolution.
 3. **Table semantics / heading order** only if a low-false-positive, context-aware formulation is found — otherwise leave to the visual slice.
 
 Nothing here changes stoa's stance: it states what it can prove, estimates

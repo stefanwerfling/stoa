@@ -1,0 +1,61 @@
+import assert from 'node:assert/strict';
+import {dirname, join} from 'node:path';
+import {test} from 'node:test';
+import {fileURLToPath} from 'node:url';
+import {loadExpected} from '../src/evaluation/Corpus.js';
+import {evaluate} from '../src/evaluation/Evaluator.js';
+import {DEFAULT_CONFIG} from '../src/Config.js';
+import {analyze} from '../src/Pipeline.js';
+import type {Finding} from '../src/Types.js';
+
+const here = dirname(fileURLToPath(import.meta.url));
+const root = join(here, '..');
+const knowledgeDir = join(root, 'knowledge', 'marcus');
+const ruleSetDir = join(root, 'rules', 'default');
+const corpus = join(here, 'fixtures', 'jsx', 'corpus');
+
+// The TypeScript adapter parses JSX synchronously (ts-morph), so — unlike the
+// tree-sitter HTML adapter — no async init is needed.
+const analyzePath = (path: string): Finding[] => {
+    return analyze({rootPath: path, knowledgeDir, ruleSetDir, config: DEFAULT_CONFIG}).report.findings;
+};
+const ids = (findings: Finding[], rule: string): string[] => findings.filter((f) => f.rule.id === rule).map((f) => f.location.symbol ?? '').sort();
+
+test('the same ui.* a11y rules fire on JSX intrinsics, honouring dynamic values and spreads', () => {
+    const findings = analyzePath(join(corpus, 'Widgets.tsx'));
+    assert.deepEqual(ids(findings, 'R-A11Y-IMG-ALT'), ['img#0'], 'only the img with no alt; alt="…", alt={expr} and {...spread} are fine');
+    assert.deepEqual(ids(findings, 'R-A11Y-ARIA-INVALID-ROLE'), ['role#0'], 'the typo role; a valid role is fine');
+    assert.deepEqual(ids(findings, 'R-A11Y-ARIA-UNKNOWN-ATTR'), ['aria-attr#0'], 'the misspelled aria-* name');
+    assert.deepEqual(ids(findings, 'R-A11Y-ARIA-INVALID-VALUE'), ['aria-val#0'], 'the out-of-range enumerated value');
+    assert.deepEqual(ids(findings, 'R-A11Y-POSITIVE-TABINDEX'), ['tabindex#0'], 'the literal tabIndex={5}');
+    assert.deepEqual(ids(findings, 'R-A11Y-ARIA-HIDDEN-FOCUSABLE'), ['aria-hidden#0'], 'the focusable aria-hidden control');
+    assert.deepEqual(ids(findings, 'R-A11Y-FRAME-TITLE'), ['frame#0'], 'the untitled iframe; a titled one is fine');
+});
+
+test('a React component element (<Button/>) is not treated as a DOM intrinsic', () => {
+    const findings = analyzePath(join(corpus, 'Widgets.tsx'));
+    // The <Button/> usage and the Button definition must not add a11y findings.
+    assert.equal(findings.filter((f) => f.rule.id.startsWith('R-A11Y-')).length, 7, 'exactly the seven intrinsic-element findings');
+});
+
+test('a clean JSX component produces no accessibility findings (no false positives)', () => {
+    const findings = analyzePath(join(corpus, 'Clean.tsx')).filter((f) => f.rule.id.startsWith('R-A11Y-'));
+    assert.deepEqual(findings, []);
+});
+
+test('JSX golden corpus: precision/recall 100% over the ported a11y rules', () => {
+    const findings = analyzePath(corpus);
+    const result = evaluate(findings, loadExpected(join(here, 'fixtures', 'jsx', 'expected.json')), corpus);
+    assert.equal(result.overall.precision, 1);
+    assert.equal(result.overall.recall, 1);
+    assert.equal(result.overall.truePositives, 7);
+    assert.equal(result.overall.falsePositives, 0);
+    assert.equal(result.overall.falseNegatives, 0);
+
+    const rules = result.perRule.map((item) => item.rule).sort();
+    assert.deepEqual(rules, ['R-A11Y-ARIA-HIDDEN-FOCUSABLE', 'R-A11Y-ARIA-INVALID-ROLE', 'R-A11Y-ARIA-INVALID-VALUE', 'R-A11Y-ARIA-UNKNOWN-ATTR', 'R-A11Y-FRAME-TITLE', 'R-A11Y-IMG-ALT', 'R-A11Y-POSITIVE-TABINDEX']);
+    for (const rule of result.perRule) {
+        assert.equal(rule.precision, 1, `${rule.rule} precision`);
+        assert.equal(rule.recall, 1, `${rule.rule} recall`);
+    }
+});

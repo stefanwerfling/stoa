@@ -3,6 +3,7 @@ import type {CallExpression, ClassDeclaration, Decorator, ImportDeclaration, Met
 import type {Fact, SourceRange, SubjectKind} from '../../Types.js';
 import {factBuilder, type AdapterInfo} from '../FactBuilder.js';
 import {isDeepImport} from '../ImportPath.js';
+import {extractJsxA11yFacts} from '../jsx/JsxA11y.js';
 import {destructiveDdl, nullableNoDefault, unguardedDdl} from '../MigrationSql.js';
 
 interface FunctionMetrics {
@@ -269,6 +270,10 @@ export const extractFacts = (sourceFile: SourceFile, info: AdapterInfo): Fact[] 
         }
         facts.push(build({kind: 'orm.entityNoPrimaryKey', kindOf: 'class', symbol: cls.getName() ?? '(anonymous)', range: rangeOf(sourceFile, cls.getNameNode() ?? cls), value: 'entity has no primary key column'}));
     }
+
+    // UI/UX accessibility facts from JSX elements (same ui.* facts the HTML
+    // adapter emits, so the a11y rules fire on React/JSX too).
+    facts.push(...extractJsxA11yFacts(sourceFile, build));
 
     return facts;
 };
