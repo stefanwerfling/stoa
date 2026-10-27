@@ -152,6 +152,16 @@ assumed. The layer receives only what the engine provides
 statement. It must **not** invent missing facts; outputs are
 validated (see [evaluation.md](./evaluation.md#5-llm-evaluation)).
 
+**Grounding** is by **stable fact id**: the runner keeps a verdict only if its
+confidence is in range and every `citation` is the id of a fact from this
+request (which is scoped to the finding's code unit). A single invented or
+out-of-context id rejects the verdict; mentioning a fact kind or symbol name in
+prose is not evidence. The model response is validated against the verdict shape
+before use; a malformed response is a failed assessment and leaves the finding
+untouched. **Limitation:** a valid id reference proves only that the citation
+points at real, in-context evidence — not that the conclusion drawn from it is
+correct. Grounding bounds hallucinated *references*, not flawed *reasoning*.
+
 ```ts
 interface SemanticAdapter {
   readonly id: string;             // "noop" | "local-llm" | "api-xyz"

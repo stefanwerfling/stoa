@@ -152,6 +152,17 @@ vorausgesetzt. Die Schicht erhält nur das, was die Engine bereitstellt
 belegen. Sie darf **keine** fehlenden Tatsachen erfinden; Ausgaben werden
 validiert (siehe [evaluation.md](./evaluation.md#5-llm-evaluierung)).
 
+**Grounding** erfolgt über **stabile Fakt-IDs**: Der Runner behält ein Verdikt
+nur, wenn die Konfidenz im Bereich liegt und jede `citation` die ID eines Fakts
+aus dieser Anfrage ist (gescoped auf die Code-Einheit des Findings). Eine einzige
+erfundene oder kontextfremde ID verwirft das Verdikt; die bloße Erwähnung einer
+Fakt-Art oder eines Symbolnamens in Prosa ist kein Beleg. Die Modellantwort wird
+vor Nutzung gegen das Verdikt-Schema validiert; eine fehlerhafte Antwort gilt als
+gescheiterte Bewertung und lässt das Finding unangetastet. **Grenze:** Eine
+gültige ID-Referenz beweist nur, dass die Citation auf echte, kontextbezogene
+Evidenz zeigt — nicht, dass die daraus gezogene Schlussfolgerung korrekt ist.
+Grounding begrenzt halluzinierte *Referenzen*, nicht fehlerhafte *Schlüsse*.
+
 ```ts
 interface SemanticAdapter {
   readonly id: string;             // "noop" | "local-llm" | "api-xyz"

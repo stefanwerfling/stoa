@@ -5,6 +5,7 @@ import {fileURLToPath} from 'node:url';
 import {DEFAULT_CONFIG} from '../src/Config.js';
 import {analyze} from '../src/Pipeline.js';
 import {isGrounded} from '../src/semantic/Groundedness.js';
+import {parseVerdictText} from '../src/semantic/AnthropicSemanticAdapter.js';
 import {NoopSemanticAdapter} from '../src/semantic/NoopSemanticAdapter.js';
 import {augmentWithSemantics} from '../src/semantic/SemanticRunner.js';
 import type {SemanticAdapter, SemanticRequest, SemanticVerdict} from '../src/semantic/SemanticAdapter.js';
@@ -21,13 +22,33 @@ const analyzeCatch = (): AnalysisResult =>
         config: DEFAULT_CONFIG
     });
 
-// Deterministic mock that grounds its verdict in a real provided fact kind.
+// Deterministic mock that grounds its verdict in a real provided fact id.
 class GroundedMockAdapter implements SemanticAdapter {
     public readonly id = 'mock-grounded';
     public readonly deterministic = true;
     public assess(input: SemanticRequest): Promise<SemanticVerdict> {
+        const id = input.facts[0]?.id ?? '';
+        return Promise.resolve({verdict: 'confirmed', rationale: 'Grounded in the swallow fact.', citations: [id], confidence: 0.8});
+    }
+}
+
+// Deterministic mock whose citation is a fact KIND name, not a stable id — a
+// plausible-looking but ungrounded reference that must be rejected.
+class NameDroppingMockAdapter implements SemanticAdapter {
+    public readonly id = 'mock-namedrop';
+    public readonly deterministic = true;
+    public assess(input: SemanticRequest): Promise<SemanticVerdict> {
         const kind = input.facts[0]?.kind ?? '';
-        return Promise.resolve({verdict: 'confirmed', rationale: 'Grounded in the swallow fact.', citations: [kind], confidence: 0.8});
+        return Promise.resolve({verdict: 'confirmed', rationale: `Looks like ${kind}.`, citations: [kind], confidence: 0.9});
+    }
+}
+
+// Deterministic mock whose adapter fails (e.g. no network / credentials).
+class ErroringMockAdapter implements SemanticAdapter {
+    public readonly id = 'mock-error';
+    public readonly deterministic = true;
+    public assess(_input: SemanticRequest): Promise<SemanticVerdict> {
+        return Promise.reject(new Error('adapter unavailable'));
     }
 }
 
@@ -85,8 +106,40 @@ test('isGrounded enforces citations and confidence range', () => {
         observation: 'catch swallows error',
         projectContext: ''
     };
-    assert.equal(isGrounded({verdict: 'confirmed', rationale: '', citations: ['ast.catchSwallowsError'], confidence: 0.8}, request), true);
-    assert.equal(isGrounded({verdict: 'confirmed', rationale: '', citations: ['made.up'], confidence: 0.8}, request), false);
-    assert.equal(isGrounded({verdict: 'confirmed', rationale: '', citations: [], confidence: 0.8}, request), false);
-    assert.equal(isGrounded({verdict: 'confirmed', rationale: '', citations: ['ast.catchSwallowsError'], confidence: 2}, request), false);
+    // Grounding is by stable fact id (here 'f1'), not by fact kind or prose.
+    assert.equal(isGrounded({verdict: 'confirmed', rationale: '', citations: ['f1'], confidence: 0.8}, request), true, 'valid fact-id reference');
+    assert.equal(isGrounded({verdict: 'confirmed', rationale: '', citations: ['ast.catchSwallowsError'], confidence: 0.8}, request), false, 'a fact KIND name is not a valid evidence reference');
+    assert.equal(isGrounded({verdict: 'confirmed', rationale: '', citations: ['fact:other.ts:x:y:9'], confidence: 0.8}, request), false, 'a non-existent / out-of-context fact id');
+    assert.equal(isGrounded({verdict: 'confirmed', rationale: '', citations: ['f1', 'fact:made.up'], confidence: 0.8}, request), false, 'one invented reference invalidates the grounding');
+    assert.equal(isGrounded({verdict: 'confirmed', rationale: '', citations: [], confidence: 0.8}, request), false, 'no citations');
+    assert.equal(isGrounded({verdict: 'confirmed', rationale: '', citations: ['f1'], confidence: 2}, request), false, 'confidence out of range');
+});
+
+test('a verdict that only name-drops a fact kind is discarded, not attached', async () => {
+    const result = analyzeCatch();
+    const augmented = await augmentWithSemantics(result, new NameDroppingMockAdapter());
+    for (const finding of augmented.report.findings) {
+        assert.equal(finding.semantic, undefined, 'a kind-name citation is not grounded');
+    }
+});
+
+test('a failing semantic adapter leaves findings untouched', async () => {
+    const result = analyzeCatch();
+    const augmented = await augmentWithSemantics(result, new ErroringMockAdapter());
+    for (const finding of augmented.report.findings) {
+        assert.equal(finding.semantic, undefined);
+    }
+});
+
+test('parseVerdictText accepts a well-formed response and rejects malformed ones', () => {
+    const ok = parseVerdictText('{"verdict":"confirmed","rationale":"r","citations":["f1"],"confidence":0.7}');
+    assert.equal(ok.verdict, 'confirmed');
+    assert.deepEqual(ok.citations, ['f1']);
+
+    assert.throws(() => parseVerdictText('not json'), /not valid JSON/);
+    assert.throws(() => parseVerdictText('{"verdict":"maybe","rationale":"r","citations":[],"confidence":0.5}'), /invalid verdict/);
+    assert.throws(() => parseVerdictText('{"verdict":"confirmed","citations":[],"confidence":0.5}'), /rationale/);
+    assert.throws(() => parseVerdictText('{"verdict":"confirmed","rationale":"r","citations":"f1","confidence":0.5}'), /citations/);
+    assert.throws(() => parseVerdictText('{"verdict":"confirmed","rationale":"r","citations":[],"confidence":2}'), /confidence/);
+    assert.throws(() => parseVerdictText('{"verdict":"confirmed","rationale":"r","citations":[1],"confidence":0.5}'), /citations/);
 });

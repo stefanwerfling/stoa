@@ -10,7 +10,8 @@ const SYSTEM_PROMPT = [
     'Ground every statement strictly in the provided code snippet and facts.',
     'Do NOT invent facts, APIs, call sites, or project details that are not shown.',
     'If the provided context is insufficient, answer "uncertain" with low confidence.',
-    'In "citations", quote the exact fact kind(s) or snippet text you relied on.'
+    'In "citations", list ONLY the exact fact id(s) (the "id:" value of each fact) you relied on;',
+    'do not put prose, snippet text, or fact kinds there. If you relied on no provided fact, return an empty citations array.'
 ].join(' ');
 
 const VERDICT_SCHEMA = {
@@ -70,7 +71,7 @@ export class AnthropicSemanticAdapter implements SemanticAdapter {
 }
 
 const buildPrompt = (input: SemanticRequest): string => {
-    const facts = input.facts.map((fact) => `- ${fact.kind} = ${JSON.stringify(fact.value)} (${fact.certainty})`).join('\n');
+    const facts = input.facts.map((fact) => `- id: ${fact.id} | ${fact.kind} = ${JSON.stringify(fact.value)} (${fact.certainty})`).join('\n');
     return [
         `Principle under consideration: ${input.principleName} (${input.principleId}).`,
         `Deterministic observation: ${input.observation}`,
@@ -84,23 +85,53 @@ const buildPrompt = (input: SemanticRequest): string => {
         input.codeSnippet,
         '```',
         '',
-        'Is the observation a real concern here for this principle? Answer in the required JSON shape.'
+        'Cite facts by their exact id. Is the observation a real concern here for this principle?',
+        'Answer in the required JSON shape.'
     ]
         .filter((line) => line.length > 0 || line === '')
         .join('\n');
 };
 
+const VALID_VERDICTS: ReadonlySet<string> = new Set(['confirmed', 'refuted', 'uncertain']);
+
+/**
+ * Parses and strictly validates the model's JSON text against the verdict shape.
+ * Throws on any structural violation (invalid JSON, missing/mistyped field,
+ * unknown verdict, out-of-range confidence, non-string citations) so the runner
+ * treats a malformed response as a failed assessment and leaves the finding
+ * untouched — a malformed response is never coerced into a usable verdict.
+ */
+export const parseVerdictText = (text: string): SemanticVerdict => {
+    let parsed: unknown;
+    try {
+        parsed = JSON.parse(text);
+    } catch (error) {
+        throw new Error(`semantic: model response is not valid JSON: ${(error as Error).message}`);
+    }
+    if (typeof parsed !== 'object' || parsed === null) {
+        throw new Error('semantic: model response is not a JSON object');
+    }
+    const record = parsed as Record<string, unknown>;
+    const {verdict, rationale, citations, confidence} = record;
+    if (typeof verdict !== 'string' || !VALID_VERDICTS.has(verdict)) {
+        throw new Error(`semantic: invalid verdict "${String(verdict)}"`);
+    }
+    if (typeof rationale !== 'string') {
+        throw new Error('semantic: rationale must be a string');
+    }
+    if (!Array.isArray(citations) || !citations.every((item) => typeof item === 'string')) {
+        throw new Error('semantic: citations must be an array of strings');
+    }
+    if (typeof confidence !== 'number' || Number.isNaN(confidence) || confidence < 0 || confidence > 1) {
+        throw new Error(`semantic: confidence must be a number in [0, 1], got ${String(confidence)}`);
+    }
+    return {verdict, rationale, citations: citations as string[], confidence};
+};
+
 const parseVerdict = (response: Anthropic.Message): SemanticVerdict => {
     const textBlock = response.content.find((block) => block.type === 'text');
     if (textBlock === undefined || textBlock.type !== 'text') {
-        return {verdict: 'uncertain', rationale: 'No textual response.', citations: [], confidence: 0};
+        throw new Error('semantic: model response contained no text block');
     }
-
-    const parsed = JSON.parse(textBlock.text) as Partial<SemanticVerdict>;
-    return {
-        verdict: typeof parsed.verdict === 'string' ? parsed.verdict : 'uncertain',
-        rationale: typeof parsed.rationale === 'string' ? parsed.rationale : '',
-        citations: Array.isArray(parsed.citations) ? parsed.citations.filter((item): item is string => typeof item === 'string') : [],
-        confidence: typeof parsed.confidence === 'number' ? parsed.confidence : 0
-    };
+    return parseVerdictText(textBlock.text);
 };
