@@ -140,6 +140,15 @@ test('R-A11Y-ARIA-DANGLING-IDREF flags references to absent ids, not resolvable 
     assert.equal(findings.find((f) => f.rule.id === 'R-A11Y-ARIA-DANGLING-IDREF')?.severity, 'high');
 });
 
+test('R-A11Y-DUPLICATE-ID flags every occurrence of a repeated id, not unique ones', () => {
+    const findings = analyzePath(join(corpus, 'dupids.html'));
+    assert.deepEqual(
+        ids(findings, 'R-A11Y-DUPLICATE-ID'),
+        ['dupid#0', 'dupid#1', 'dupid#2', 'dupid#3'],
+        'both uses of id="main" and both of id="dup2"; a unique id and an element with no id are fine'
+    );
+});
+
 test('a clean page produces no accessibility findings (no false positives)', () => {
     const findings = analyzePath(join(corpus, 'clean.html')).filter((f) => f.rule.id.startsWith('R-A11Y-'));
     assert.deepEqual(findings, []);
@@ -150,15 +159,15 @@ test('UI golden corpus: precision/recall 100% with a per-category breakdown', ()
     const result = evaluate(findings, loadExpected(join(here, 'fixtures', 'html', 'expected.json')), corpus);
     assert.equal(result.overall.precision, 1);
     assert.equal(result.overall.recall, 1);
-    assert.equal(result.overall.truePositives, 28);
+    assert.equal(result.overall.truePositives, 32);
     assert.equal(result.overall.falsePositives, 0);
     assert.equal(result.overall.falseNegatives, 0);
 
     const html = result.byLanguage.find((item) => item.language === 'HTML');
-    assert.equal(html?.truePositives, 28, 'all findings are HTML findings');
+    assert.equal(html?.truePositives, 32, 'all findings are HTML findings');
 
     const rules = result.perRule.map((item) => item.rule).sort();
-    assert.deepEqual(rules, ['R-A11Y-ARIA-DANGLING-IDREF', 'R-A11Y-ARIA-HIDDEN-FOCUSABLE', 'R-A11Y-ARIA-INVALID-ROLE', 'R-A11Y-ARIA-INVALID-VALUE', 'R-A11Y-ARIA-UNKNOWN-ATTR', 'R-A11Y-CONTROL-NAME', 'R-A11Y-FORM-LABEL', 'R-A11Y-HTML-LANG', 'R-A11Y-IMG-ALT', 'R-A11Y-LINK-NAME', 'R-A11Y-META-VIEWPORT-ZOOM', 'R-A11Y-POSITIVE-TABINDEX']);
+    assert.deepEqual(rules, ['R-A11Y-ARIA-DANGLING-IDREF', 'R-A11Y-ARIA-HIDDEN-FOCUSABLE', 'R-A11Y-ARIA-INVALID-ROLE', 'R-A11Y-ARIA-INVALID-VALUE', 'R-A11Y-ARIA-UNKNOWN-ATTR', 'R-A11Y-CONTROL-NAME', 'R-A11Y-DUPLICATE-ID', 'R-A11Y-FORM-LABEL', 'R-A11Y-HTML-LANG', 'R-A11Y-IMG-ALT', 'R-A11Y-LINK-NAME', 'R-A11Y-META-VIEWPORT-ZOOM', 'R-A11Y-POSITIVE-TABINDEX']);
     for (const rule of result.perRule) {
         assert.equal(rule.precision, 1, `${rule.rule} precision`);
         assert.equal(rule.recall, 1, `${rule.rule} recall`);

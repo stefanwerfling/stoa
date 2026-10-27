@@ -1,0 +1,40 @@
+{
+  "id": "R-A11Y-DUPLICATE-ID",
+  "version": "1.0.0",
+  "title": "Duplicate id in the document",
+  "feature": "ui.duplicateId",
+  "appliesTo": ["statement"],
+  "principles": ["marcus.purpose"],
+  "dimensions": ["accessibility"],
+  "trigger": {
+    "all": [{ "fact": "ui.duplicateId", "op": "!=", "value": "" }]
+  },
+  "requiredEvidence": ["ui.duplicateId"],
+  "severity": { "base": "medium" },
+  "confidence": { "base": 0.9, "capBy": "certainty" },
+  "message": {
+    "en": "id is used more than once in the document (WCAG 2.2 · 1.3.1 / 4.1.2): {value}.",
+    "de": "id wird im Dokument mehrfach verwendet (WCAG 2.2 · 1.3.1 / 4.1.2): {value}."
+  },
+  "rationale": {
+    "en": "An id must be unique per the HTML standard. When two elements share one, a label-for or aria-labelledby/-describedby reference resolves to whichever the user agent picks first — not necessarily the intended one — so the relationship the author meant is ambiguous (marcus.purpose).",
+    "de": "Eine id muss laut HTML-Standard eindeutig sein. Teilen sich zwei Elemente eine id, löst sich eine label-for- oder aria-labelledby/-describedby-Referenz auf das vom User-Agent zuerst gewählte Element auf — nicht zwangsläufig das gemeinte — die beabsichtigte Beziehung ist mehrdeutig (marcus.purpose)."
+  },
+  "remediation": {
+    "suggestion": {
+      "en": "Give each element a unique id; update any label-for / aria reference to the intended target.",
+      "de": "Jedem Element eine eindeutige id geben; betroffene label-for-/aria-Referenzen auf das gemeinte Ziel aktualisieren."
+    },
+    "drawbacks": {
+      "en": "None of note; ids are expected to be unique.",
+      "de": "Keine nennenswerten; ids sollen eindeutig sein."
+    }
+  },
+  "missingContext": [
+    {
+      "en": "Reported at every occurrence of the shared id, within one file; whether the duplicate actually breaks a reference or only fragment navigation is not distinguished, and ids spread across separately-included documents are not compared.",
+      "de": "Gemeldet an jedem Vorkommen der geteilten id, innerhalb einer Datei; ob das Duplikat tatsächlich eine Referenz oder nur die Fragmentnavigation bricht, wird nicht unterschieden, und über getrennt eingebundene Dokumente verteilte ids werden nicht verglichen."
+    }
+  ],
+  "tests": "test/HtmlA11y.test.ts"
+}

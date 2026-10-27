@@ -40,7 +40,7 @@ stoa eval <path> --expected <file> [--format markdown|json]
 - `knowledge/` and `rules/` resolve relative to the installed package — the CLI
   runs from any directory after `npm link`/install.
 
-## Rule catalog (32)
+## Rule catalog (33)
 
 Declarative rules (`rules/default/*.json`), on by default:
 
@@ -103,7 +103,7 @@ All ten quality dimensions (incl. accessibility, usability) have at least one ru
 
 ## Quality assurance
 
-- **125 node:test cases** green (rules pos./neg., extraction, schema validation,
+- **126 node:test cases** green (rules pos./neg., extraction, schema validation,
   i18n, determinism, SARIF, evaluation, semantic groundedness, privacy,
   finding-model separation).
 - **Golden corpus** (`test/corpus/`, **TS+PHP only**) with ground truth;
@@ -113,7 +113,7 @@ All ten quality dimensions (incl. accessibility, usability) have at least one ru
 - **Important:** these numbers hold only for the small, curated corpus and are
   **not** a general reliability guarantee for arbitrary projects.
 - **UI/UX corpus** (`test/fixtures/html/`, static HTML) with positive, negative
-  and deliberately-no-warning cases; evaluation 100%/100% (TP 28) per rule. The
+  and deliberately-no-warning cases; evaluation 100%/100% (TP 32) per rule. The
   semantic (LLM) assessment is kept separate and is not required here.
 - Dogfooding: stoa analyzes its own `src/`.
 
@@ -148,4 +148,4 @@ Angular) behind their own adapters. (Implemented: `R-A11Y-FORM-LABEL`,
 `R-A11Y-LINK-NAME`, `R-A11Y-ARIA-HIDDEN-FOCUSABLE`, `R-A11Y-ARIA-INVALID-ROLE`,
 `R-A11Y-ARIA-UNKNOWN-ATTR`, `R-A11Y-ARIA-INVALID-VALUE`,
 `R-A11Y-POSITIVE-TABINDEX`, `R-A11Y-HTML-LANG`, `R-A11Y-META-VIEWPORT-ZOOM`,
-`R-A11Y-ARIA-DANGLING-IDREF`.)
+`R-A11Y-ARIA-DANGLING-IDREF`, `R-A11Y-DUPLICATE-ID`.)

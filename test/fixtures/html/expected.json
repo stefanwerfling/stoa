@@ -28,6 +28,10 @@
     { "file": "viewport.html", "rule": "R-A11Y-META-VIEWPORT-ZOOM", "symbol": "viewport#1" },
     { "file": "idref.html", "rule": "R-A11Y-ARIA-DANGLING-IDREF", "symbol": "idref#0" },
     { "file": "idref.html", "rule": "R-A11Y-ARIA-DANGLING-IDREF", "symbol": "idref#1" },
-    { "file": "idref.html", "rule": "R-A11Y-ARIA-DANGLING-IDREF", "symbol": "idref#2" }
+    { "file": "idref.html", "rule": "R-A11Y-ARIA-DANGLING-IDREF", "symbol": "idref#2" },
+    { "file": "dupids.html", "rule": "R-A11Y-DUPLICATE-ID", "symbol": "dupid#0" },
+    { "file": "dupids.html", "rule": "R-A11Y-DUPLICATE-ID", "symbol": "dupid#1" },
+    { "file": "dupids.html", "rule": "R-A11Y-DUPLICATE-ID", "symbol": "dupid#2" },
+    { "file": "dupids.html", "rule": "R-A11Y-DUPLICATE-ID", "symbol": "dupid#3" }
   ]
 }

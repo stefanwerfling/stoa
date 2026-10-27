@@ -26,6 +26,10 @@ export const extractFacts = (root: Node, content: string, filePath: string, info
     // aria-describedby references (a reference to an absent id is dangling).
     const documentIds = collectIds(root);
 
+    // id values that occur on more than one element — an id must be unique per
+    // the HTML standard, and a duplicate makes reference targets ambiguous.
+    const duplicatedIds = findDuplicateIds(root);
+
     let imageIndex = 0;
     let buttonIndex = 0;
     let fieldIndex = 0;
@@ -38,6 +42,7 @@ export const extractFacts = (root: Node, content: string, filePath: string, info
     let htmlIndex = 0;
     let viewportIndex = 0;
     let danglingIdrefIndex = 0;
+    let duplicateIdIndex = 0;
     for (const element of descendants(root, 'element')) {
         const startTag = startTagOf(element);
         if (startTag === null) {
@@ -146,6 +151,14 @@ export const extractFacts = (root: Node, content: string, filePath: string, info
         if (dangling.length > 0) {
             facts.push(build({kind: 'ui.danglingAriaIdref', kindOf: 'statement', symbol: `idref#${danglingIdrefIndex}`, range: rangeOf(startTag), value: dangling.join(', ')}));
             danglingIdrefIndex += 1;
+        }
+
+        // Each element carrying an id that is used more than once in the document;
+        // the shared id is reported at every occurrence so all sites are visible.
+        const elementId = attrs.get('id');
+        if (elementId !== undefined && duplicatedIds.has(elementId.trim())) {
+            facts.push(build({kind: 'ui.duplicateId', kindOf: 'statement', symbol: `dupid#${duplicateIdIndex}`, range: rangeOf(startTag), value: `id="${elementId}"`}));
+            duplicateIdIndex += 1;
         }
     }
 
@@ -355,6 +368,29 @@ const collectIds = (root: Node): Set<string> => {
         }
     }
     return ids;
+};
+
+// id values that appear on more than one element in the document.
+const findDuplicateIds = (root: Node): Set<string> => {
+    const counts = new Map<string, number>();
+    for (const element of descendants(root, 'element')) {
+        const startTag = startTagOf(element);
+        if (startTag === null) {
+            continue;
+        }
+        const id = attributes(startTag).get('id');
+        if (id !== undefined && id.trim().length > 0) {
+            const key = id.trim();
+            counts.set(key, (counts.get(key) ?? 0) + 1);
+        }
+    }
+    const duplicated = new Set<string>();
+    for (const [id, count] of counts) {
+        if (count > 1) {
+            duplicated.add(id);
+        }
+    }
+    return duplicated;
 };
 
 // `name="id"` for each aria-labelledby / aria-describedby token that names an id
