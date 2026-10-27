@@ -18,7 +18,12 @@ An LLM is an optional, switchable adapter.
 > **Maturity, honestly tiered:**
 > - *Implemented and unit-tested:* TypeScript/JavaScript (`ts-morph`), PHP
 >   (`php-parser`/glayzzle), Dart and C/C++ (tree-sitter / `web-tree-sitter`,
->   in-process WASM); all 20 rules; the evaluator; the grounded semantic layer.
+>   in-process WASM), and static **HTML accessibility** (tree-sitter-html:
+>   `<img>` alt and control accessible-name, WCAG-anchored); 22 rules; the
+>   evaluator (with a per-language/category breakdown); the grounded semantic layer.
+> - *UI/UX scope:* static HTML only, with its own test corpus. Rendering-dependent
+>   checks (contrast, visible focus, dynamic states) are deliberately out of scope
+>   for the static analyser and flagged as needing a future visual slice.
 > - *In the golden corpus (precision/recall measured):* **TypeScript and PHP
 >   only.** Dart and C/C++ are covered by adapter tests, not yet by the corpus.
 > - *Evaluated on independent external projects:* **not yet** — `stoa eval` works

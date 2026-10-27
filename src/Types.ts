@@ -25,7 +25,9 @@ export type QualityDimension =
     | 'error-handling'
     | 'side-effect-control'
     | 'decision-evidence'
-    | 'robustness';
+    | 'robustness'
+    | 'accessibility'
+    | 'usability';
 
 export const QUALITY_DIMENSIONS: readonly QualityDimension[] = [
     'complexity',

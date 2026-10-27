@@ -1,0 +1,8 @@
+{
+  "description": "UI/UX golden corpus (static HTML accessibility). Positives are flagged; decorative/hidden/labelled cases and clean.html are deliberate negatives that must NOT warn.",
+  "findings": [
+    { "file": "images.html", "rule": "R-A11Y-IMG-ALT", "symbol": "img#0" },
+    { "file": "buttons.html", "rule": "R-A11Y-CONTROL-NAME", "symbol": "button#0" },
+    { "file": "buttons.html", "rule": "R-A11Y-CONTROL-NAME", "symbol": "button#5" }
+  ]
+}

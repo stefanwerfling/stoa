@@ -1,0 +1,70 @@
+import assert from 'node:assert/strict';
+import {dirname, join} from 'node:path';
+import {before, test} from 'node:test';
+import {fileURLToPath} from 'node:url';
+import {initHtml} from '../src/analysis/HtmlAdapter.js';
+import {loadExpected} from '../src/evaluation/Corpus.js';
+import {evaluate} from '../src/evaluation/Evaluator.js';
+import {DEFAULT_CONFIG} from '../src/Config.js';
+import {analyze} from '../src/Pipeline.js';
+import type {Finding} from '../src/Types.js';
+
+const here = dirname(fileURLToPath(import.meta.url));
+const root = join(here, '..');
+const knowledgeDir = join(root, 'knowledge', 'marcus');
+const ruleSetDir = join(root, 'rules', 'default');
+const corpus = join(here, 'fixtures', 'html', 'corpus');
+
+// The HTML grammar (tree-sitter/WASM) loads asynchronously; afterwards the
+// pipeline parses HTML synchronously like the other adapters.
+before(async () => {
+    await initHtml();
+});
+
+const analyzePath = (path: string): Finding[] => {
+    return analyze({rootPath: path, knowledgeDir, ruleSetDir, config: DEFAULT_CONFIG}).report.findings;
+};
+const ids = (findings: Finding[], rule: string): string[] => findings.filter((f) => f.rule.id === rule).map((f) => f.location.symbol ?? '').sort();
+
+test('R-A11Y-IMG-ALT flags a missing alt, but not alt="" / a real alt / aria-hidden', () => {
+    const findings = analyzePath(join(corpus, 'images.html')).filter((f) => f.rule.id === 'R-A11Y-IMG-ALT');
+    assert.deepEqual(
+        findings.map((f) => f.location.symbol),
+        ['img#0'],
+        'only the image with no alt attribute is flagged'
+    );
+    assert.equal(findings[0]?.interpretation.principles[0]?.id, 'marcus.purpose');
+    assert.ok(findings[0]?.interpretation.dimensions.includes('accessibility'));
+    assert.equal(findings[0]?.severity, 'high');
+    assert.ok((findings[0]?.observation.evidence[0]?.fact ?? '') === 'ui.imageMissingAlt', 'observation cites the UI fact');
+});
+
+test('R-A11Y-CONTROL-NAME flags unnamed buttons, not text/aria-label/svg-title/img-alt ones', () => {
+    const findings = analyzePath(join(corpus, 'buttons.html'));
+    assert.deepEqual(ids(findings, 'R-A11Y-CONTROL-NAME'), ['button#0', 'button#5'], 'the empty button and the unlabeled icon-only button');
+});
+
+test('a clean page produces no accessibility findings (no false positives)', () => {
+    const findings = analyzePath(join(corpus, 'clean.html')).filter((f) => f.rule.id.startsWith('R-A11Y-'));
+    assert.deepEqual(findings, []);
+});
+
+test('UI golden corpus: precision/recall 100% with a per-category breakdown', () => {
+    const findings = analyzePath(corpus);
+    const result = evaluate(findings, loadExpected(join(here, 'fixtures', 'html', 'expected.json')), corpus);
+    assert.equal(result.overall.precision, 1);
+    assert.equal(result.overall.recall, 1);
+    assert.equal(result.overall.truePositives, 3);
+    assert.equal(result.overall.falsePositives, 0);
+    assert.equal(result.overall.falseNegatives, 0);
+
+    const html = result.byLanguage.find((item) => item.language === 'HTML');
+    assert.equal(html?.truePositives, 3, 'all three are HTML findings');
+
+    const rules = result.perRule.map((item) => item.rule).sort();
+    assert.deepEqual(rules, ['R-A11Y-CONTROL-NAME', 'R-A11Y-IMG-ALT']);
+    for (const rule of result.perRule) {
+        assert.equal(rule.precision, 1, `${rule.rule} precision`);
+        assert.equal(rule.recall, 1, `${rule.rule} recall`);
+    }
+});

@@ -138,7 +138,7 @@ flowchart TB
 
 ## 5. Rule Set `default@1` (implemented)
 
-> The actually-implemented rule set (20 rules). Overview, facts and opt-in flags:
+> The actually-implemented rule set (22 rules). Overview, facts and opt-in flags:
 > [implementation-status.md](./implementation-status.md).
 
 Declarative rules (`rules/default/*.json`, on by default):
@@ -168,6 +168,21 @@ Persistence / ORM (TypeORM, TS/JS only, on by default):
 | `R-MIGRATION-UNGUARDED-DDL` | `migration.unguardedDdl` | `marcus.obstacle` | Robustness, error handling | heuristic (migration files only) |
 | `R-MIGRATION-NO-DOWN` | `migration.noDown` | `marcus.judgment` | Robustness, decision-evidence | syntactic (migration files only) |
 | `R-MIGRATION-DATA-LOSS` | `migration.dataLoss` | `marcus.judgment` | Robustness, decision-evidence | heuristic (drops in `up()`) |
+
+UI/UX – accessibility (HTML, static, on by default):
+
+| Rule ID | Feature (Fact) | Principle | Dimension | Character |
+|---------|----------------|-----------|-----------|-----------|
+| `R-A11Y-IMG-ALT` | `ui.imageMissingAlt` | `marcus.purpose` | Accessibility | syntactic (WCAG 1.1.1) |
+| `R-A11Y-CONTROL-NAME` | `ui.controlMissingName` | `marcus.purpose` | Accessibility, usability | syntactic (WCAG 4.1.2) |
+
+> **UI/UX (HTML):** static analysis via tree-sitter-html.
+> `R-A11Y-IMG-ALT` reports `<img>` with no `alt` (decorative `alt=""`,
+> `aria-hidden`, `role=presentation` count as correct). `R-A11Y-CONTROL-NAME`
+> reports a `<button>` with no accessible name (text, `aria-label(ledby)`,
+> `title`, or a named child `img[alt]`/`svg>title`). The category (accessibility)
+> maps to the `accessibility` dimension. Contrast, visible focus and rendered
+> states are **not** statically decidable and are deliberately omitted.
 
 > `R-MIGRATION-UNGUARDED-DDL` fires only in migration files (a class that
 > `implements MigrationInterface`) and covers two paths: raw SQL

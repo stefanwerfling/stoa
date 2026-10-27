@@ -12,6 +12,10 @@
   **Dart/Flutter** und **C/C++** (beide via tree-sitter / `web-tree-sitter`,
   WASM, in-process; Metrik-/Komplexitäts-Facts, Fehlerbehandlung bei Dart und
   C++ — C hat kein try/catch).
+- **UI/UX-Adapter (HTML):** statische Barrierefreiheits-Analyse via
+  tree-sitter-html (WASM, in-process). Rein statisch — kein Rendering, keine
+  CSS-Kaskade, kein Kontrast; solche Prüfungen sind bewusst **nicht** enthalten
+  (siehe Grenzen). Erster vertikaler Schnitt des UI/UX-Bereichs.
 - **Pipeline:** Ingestion → Fact-Extraktion → Regel-Engine → Befunde → Reporter.
   Keine Uhr/kein Zufall/kein Netz im Kern; gleiche Eingabe + Versionen + Sprache ⇒
   byte-identische Befunde.
@@ -36,7 +40,7 @@ stoa eval <pfad> --expected <datei> [--format markdown|json]
 - `knowledge/` und `rules/` werden relativ zum installierten Paket aufgelöst —
   die CLI läuft nach `npm link`/Install aus jedem Verzeichnis.
 
-## Regelkatalog (20)
+## Regelkatalog (22)
 
 Deklarative Regeln (`rules/default/*.json`), Default aktiv:
 
@@ -60,6 +64,8 @@ Deklarative Regeln (`rules/default/*.json`), Default aktiv:
 | R-MIGRATION-UNGUARDED-DDL | marcus.obstacle | Robustheit, Fehlerbehandlung | TS/JS, PHP (nur Migrationsdateien) |
 | R-MIGRATION-NO-DOWN | marcus.judgment | Robustheit, Belegbarkeit | TS/JS, PHP (nur Migrationsdateien) |
 | R-MIGRATION-DATA-LOSS | marcus.judgment | Robustheit, Belegbarkeit | TS/JS, PHP (Drops im `up()`) |
+| R-A11Y-IMG-ALT | marcus.purpose | Barrierefreiheit | HTML (statisch, WCAG 1.1.1) |
+| R-A11Y-CONTROL-NAME | marcus.purpose | Barrierefreiheit, Bedienbarkeit | HTML (statisch, WCAG 4.1.2) |
 
 Prozedurale Regeln (`ProjectRule`, cross-file):
 
@@ -68,7 +74,8 @@ Prozedurale Regeln (`ProjectRule`, cross-file):
 | R-DEP-CYCLE | marcus.cooperation | Abhängigkeiten | Tarjan-SCC über relative Importe; type-only-Importe übersprungen |
 | R-UNUSED-EXPORT | marcus.cooperation | Abhängigkeiten | opt-in `--dead-exports`; nur bei Ganzprojekt-Scans sinnvoll |
 
-Alle acht Qualitätsdimensionen haben mindestens eine Regel.
+Alle zehn Qualitätsdimensionen (inkl. Barrierefreiheit, Bedienbarkeit) haben
+mindestens eine Regel.
 
 ## Erzeugte Facts
 
@@ -79,12 +86,12 @@ Alle acht Qualitätsdimensionen haben mindestens eine Regel.
 `deps.importDeep`, `deps.export`, `deps.importName`, `orm.synchronizeEnabled`,
 `orm.syncWithMigrations`, `orm.entityNoPrimaryKey`, `orm.eagerRelation`,
 `migration.unguardedDdl`, `migration.noDown`, `migration.dataLoss`,
-`migration.nullableNoDefault`, sowie (opt-in) `external.tsc` und
-`external.floatingPromise`.
+`migration.nullableNoDefault`, `ui.imageMissingAlt`, `ui.controlMissingName`,
+sowie (opt-in) `external.tsc` und `external.floatingPromise`.
 
 ## Qualitätssicherung
 
-- **111 node:test-Fälle** grün (Regeln pos./neg., Extraktion, Schema-Validierung,
+- **115 node:test-Fälle** grün (Regeln pos./neg., Extraktion, Schema-Validierung,
   i18n, Determinismus, SARIF, Eval, Semantik-Groundedness, Datenschutz,
   Finding-Trennung).
 - **Golden-Korpus** (`test/corpus/`, **nur TS+PHP**) mit Ground-Truth; Eval
@@ -93,6 +100,9 @@ Alle acht Qualitätsdimensionen haben mindestens eine Regel.
   werden durch **Adaptertests** abgedeckt, noch **nicht** durch den Golden-Korpus.
 - **Wichtig:** Diese Werte gelten nur für den kleinen, kuratierten Korpus und
   sind **keine** allgemeine Zuverlässigkeitsgarantie für beliebige Projekte.
+- **UI/UX-Korpus** (`test/fixtures/html/`, statisches HTML) mit positiven,
+  negativen und legitim-nicht-warnenden Fällen; Eval 100 %/100 % (TP 3) je Regel.
+  Semantische (LLM-)Bewertung wird getrennt gehalten und ist hier nicht verlangt.
 - Dogfooding: stoa analysiert den eigenen `src/`.
 
 ## Abweichungen vom Konzept (bewusst, dokumentiert)
@@ -110,7 +120,16 @@ Alle acht Qualitätsdimensionen haben mindestens eine Regel.
 
 ## Noch offen
 
-Weitere Dart-/C-/C++-Facts (Imports/Deps); Baseline-/Suppression-Workflow; Diff-/PR-Modus; PSR-4-Auflösung,
-damit R-DEP-CYCLE/R-UNUSED-EXPORT auch PHP abdecken; generischer
-ESLint-Fact-Adapter; Kontext-Facts (`flag.generatedCode`, `hasTests`) für
-reichhaltigere Suppression; LLM-Ausgabe-Evaluierung im Maßstab.
+Weitere Dart-/C-/C++-Facts (Imports/Deps); Baseline-/Suppression-Workflow;
+Diff-/PR-Modus; PSR-4-Auflösung, damit R-DEP-CYCLE/R-UNUSED-EXPORT auch PHP
+abdecken; generischer ESLint-Fact-Adapter; Kontext-Facts
+(`flag.generatedCode`, `hasTests`) für reichhaltigere Suppression;
+LLM-Ausgabe-Evaluierung im Maßstab.
+
+**UI/UX — Grenzen und Geplantes:** Rein statische Analyse. **Nicht** statisch
+zuverlässig prüfbar und daher bewusst ausgelassen: Farbkontrast (WCAG 1.4.3),
+sichtbarer Fokus, Fokusreihenfolge/-fallen, Zielgrößen, dynamische Zustände —
+sie brauchen gerenderte Seiten/Interaktion (geplanter visueller Analyse-Schnitt
+mit Browser-Automatisierung). Nächste statische Schritte: Formular-Label-
+Zuordnung (`<label for>`/Wrapping), `<a href>`-ohne-Namen, grobe ARIA-Prüfungen;
+weitere Plattformen (React/JSX via ts-morph, Vue, Angular) über eigene Adapter.

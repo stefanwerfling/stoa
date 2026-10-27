@@ -12,6 +12,10 @@
   **Dart/Flutter** and **C/C++** (both via tree-sitter / `web-tree-sitter`,
   WASM, in-process; metric/complexity facts, error-handling for Dart and C++ —
   C has no try/catch).
+- **UI/UX adapter (HTML):** static accessibility analysis via tree-sitter-html
+  (WASM, in-process). Purely static — no rendering, CSS cascade or contrast;
+  those checks are deliberately **out of scope** here (see limitations). The
+  first vertical slice of the UI/UX area.
 - **Pipeline:** ingestion → fact extraction → rule engine → findings → reporter.
   No clock/randomness/network in the core; same input + versions + language ⇒
   byte-identical findings.
@@ -36,7 +40,7 @@ stoa eval <path> --expected <file> [--format markdown|json]
 - `knowledge/` and `rules/` resolve relative to the installed package — the CLI
   runs from any directory after `npm link`/install.
 
-## Rule catalog (20)
+## Rule catalog (22)
 
 Declarative rules (`rules/default/*.json`), on by default:
 
@@ -60,6 +64,8 @@ Declarative rules (`rules/default/*.json`), on by default:
 | R-MIGRATION-UNGUARDED-DDL | marcus.obstacle | robustness, error-handling | TS/JS, PHP (migration files only) |
 | R-MIGRATION-NO-DOWN | marcus.judgment | robustness, decision-evidence | TS/JS, PHP (migration files only) |
 | R-MIGRATION-DATA-LOSS | marcus.judgment | robustness, decision-evidence | TS/JS, PHP (drops in `up()`) |
+| R-A11Y-IMG-ALT | marcus.purpose | accessibility | HTML (static, WCAG 1.1.1) |
+| R-A11Y-CONTROL-NAME | marcus.purpose | accessibility, usability | HTML (static, WCAG 4.1.2) |
 
 Procedural rules (`ProjectRule`, cross-file):
 
@@ -68,7 +74,7 @@ Procedural rules (`ProjectRule`, cross-file):
 | R-DEP-CYCLE | marcus.cooperation | dependencies | Tarjan SCC over relative imports; type-only imports skipped |
 | R-UNUSED-EXPORT | marcus.cooperation | dependencies | opt-in `--dead-exports`; only sound for whole-project scans |
 
-All eight quality dimensions have at least one rule.
+All ten quality dimensions (incl. accessibility, usability) have at least one rule.
 
 ## Facts produced
 
@@ -79,12 +85,12 @@ All eight quality dimensions have at least one rule.
 `deps.importDeep`, `deps.export`, `deps.importName`, `orm.synchronizeEnabled`,
 `orm.syncWithMigrations`, `orm.entityNoPrimaryKey`, `orm.eagerRelation`,
 `migration.unguardedDdl`, `migration.noDown`, `migration.dataLoss`,
-`migration.nullableNoDefault`, plus (opt-in) `external.tsc` and
-`external.floatingPromise`.
+`migration.nullableNoDefault`, `ui.imageMissingAlt`, `ui.controlMissingName`,
+plus (opt-in) `external.tsc` and `external.floatingPromise`.
 
 ## Quality assurance
 
-- **111 node:test cases** green (rules pos./neg., extraction, schema validation,
+- **115 node:test cases** green (rules pos./neg., extraction, schema validation,
   i18n, determinism, SARIF, evaluation, semantic groundedness, privacy,
   finding-model separation).
 - **Golden corpus** (`test/corpus/`, **TS+PHP only**) with ground truth;
@@ -93,6 +99,9 @@ All eight quality dimensions have at least one rule.
   C/C++ are covered by **adapter tests**, **not yet** by the golden corpus.
 - **Important:** these numbers hold only for the small, curated corpus and are
   **not** a general reliability guarantee for arbitrary projects.
+- **UI/UX corpus** (`test/fixtures/html/`, static HTML) with positive, negative
+  and deliberately-no-warning cases; evaluation 100%/100% (TP 3) per rule. The
+  semantic (LLM) assessment is kept separate and is not required here.
 - Dogfooding: stoa analyzes its own `src/`.
 
 ## Deviations from the concept (deliberate, documented)
@@ -110,7 +119,15 @@ All eight quality dimensions have at least one rule.
 
 ## Not yet done
 
-Further Dart/C/C++ facts (imports/deps); baseline/suppression workflow; diff/PR mode; PSR-4 resolution so
-R-DEP-CYCLE / R-UNUSED-EXPORT cover PHP; a generic ESLint fact adapter; context
-facts (`flag.generatedCode`, `hasTests`) for richer suppression; LLM-output
-evaluation at scale.
+Further Dart/C/C++ facts (imports/deps); baseline/suppression workflow; diff/PR
+mode; PSR-4 resolution so R-DEP-CYCLE / R-UNUSED-EXPORT cover PHP; a generic
+ESLint fact adapter; context facts (`flag.generatedCode`, `hasTests`) for richer
+suppression; LLM-output evaluation at scale.
+
+**UI/UX — limits and planned:** static analysis only. **Not** reliably decidable
+statically, and therefore deliberately omitted: colour contrast (WCAG 1.4.3),
+visible focus, focus order/traps, target size, dynamic states — these need a
+rendered page/interaction (a planned visual-analysis slice with browser
+automation). Next static steps: form label association (`<label for>`/wrapping),
+`<a href>` without a name, basic ARIA checks; further platforms (React/JSX via
+ts-morph, Vue, Angular) behind their own adapters.

@@ -42,6 +42,7 @@
     "tree-sitter-c": "^0.24.1",
     "tree-sitter-cpp": "^0.23.4",
     "tree-sitter-dart": "^1.0.0",
+    "tree-sitter-html": "^0.23.2",
     "ts-morph": "^24.0.0",
     "web-tree-sitter": "^0.25.10"
   }

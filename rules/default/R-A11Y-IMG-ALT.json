@@ -1,0 +1,40 @@
+{
+  "id": "R-A11Y-IMG-ALT",
+  "version": "1.0.0",
+  "title": "Image without a text alternative",
+  "feature": "ui.imageMissingAlt",
+  "appliesTo": ["statement"],
+  "principles": ["marcus.purpose"],
+  "dimensions": ["accessibility"],
+  "trigger": {
+    "all": [{ "fact": "ui.imageMissingAlt", "op": "!=", "value": "" }]
+  },
+  "requiredEvidence": ["ui.imageMissingAlt"],
+  "severity": { "base": "high" },
+  "confidence": { "base": 0.9, "capBy": "certainty" },
+  "message": {
+    "en": "<img> has no alt attribute (WCAG 2.2 · 1.1.1): {value}.",
+    "de": "<img> ohne alt-Attribut (WCAG 2.2 · 1.1.1): {value}."
+  },
+  "rationale": {
+    "en": "An image with no text alternative conveys nothing to screen-reader and non-visual users; the element fails the purpose it was placed for (marcus.purpose). This is a verifiable markup fact, not a design opinion.",
+    "de": "Ein Bild ohne Textalternative übermittelt Screenreader- und nicht-visuellen Nutzern nichts; das Element verfehlt den Zweck, für den es gesetzt wurde (marcus.purpose). Das ist eine überprüfbare Markup-Tatsache, keine Designmeinung."
+  },
+  "remediation": {
+    "suggestion": {
+      "en": "Add a meaningful alt describing the image's purpose; for a purely decorative image use alt=\"\" (or role=\"presentation\"/aria-hidden) so it is skipped deliberately.",
+      "de": "Ein aussagekräftiges alt ergänzen, das den Zweck des Bildes beschreibt; für rein dekorative Bilder alt=\"\" (oder role=\"presentation\"/aria-hidden) setzen, damit es bewusst übersprungen wird."
+    },
+    "drawbacks": {
+      "en": "Writing good alt text takes judgement; an empty alt is only correct when the image is truly decorative.",
+      "de": "Guter Alt-Text erfordert Urteilsvermögen; ein leeres alt ist nur korrekt, wenn das Bild wirklich dekorativ ist."
+    }
+  },
+  "missingContext": [
+    {
+      "en": "A text alternative supplied via aria-labelledby is not resolved here; such an image may be a false positive.",
+      "de": "Eine über aria-labelledby bereitgestellte Textalternative wird hier nicht aufgelöst; ein solches Bild kann ein Fehlalarm sein."
+    }
+  ],
+  "tests": "test/HtmlA11y.test.ts"
+}

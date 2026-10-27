@@ -1,6 +1,7 @@
 import {AdapterRegistry} from './analysis/AdapterRegistry.js';
 import {CppAdapter} from './analysis/CppAdapter.js';
 import {DartAdapter} from './analysis/DartAdapter.js';
+import {HtmlAdapter} from './analysis/HtmlAdapter.js';
 import {PhpAdapter} from './analysis/PhpAdapter.js';
 import {TypeScriptAdapter} from './analysis/TypeScriptAdapter.js';
 import {TypeDiagnosticsExtractor} from './analysis/typescript/TypeDiagnostics.js';
@@ -37,7 +38,12 @@ const TS_EXTENSIONS: readonly string[] = ['.ts', '.tsx'] as const;
  * given input and set of versions (see docs architecture §6).
  */
 export const analyze = (options: AnalyzeOptions): AnalysisResult => {
-    const registry = new AdapterRegistry().register(new TypeScriptAdapter()).register(new PhpAdapter()).register(new DartAdapter()).register(new CppAdapter());
+    const registry = new AdapterRegistry()
+        .register(new TypeScriptAdapter())
+        .register(new PhpAdapter())
+        .register(new DartAdapter())
+        .register(new CppAdapter())
+        .register(new HtmlAdapter());
     const knowledgeBase = KnowledgeBase.loadFromDirectory(options.knowledgeDir, options.config.knowledgeBase);
     const ruleSet = RuleSet.loadFromDirectory(options.ruleSetDir, options.config.ruleSet);
     const projectRules: ProjectRule[] = [new DependencyCycleRule()];

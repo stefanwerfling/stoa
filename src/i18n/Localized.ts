@@ -86,7 +86,9 @@ const DIMENSION_LABELS: Record<string, Record<QualityDimension, string>> = {
         'error-handling': 'Fehlerbehandlung',
         'side-effect-control': 'Seiteneffekt-Kontrolle',
         'decision-evidence': 'Belegbarkeit',
-        robustness: 'Robustheit'
+        robustness: 'Robustheit',
+        accessibility: 'Barrierefreiheit',
+        usability: 'Bedienbarkeit'
     }
 };
 

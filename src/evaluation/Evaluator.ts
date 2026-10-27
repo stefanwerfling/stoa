@@ -150,5 +150,8 @@ const languageOf = (file: string): string => {
     if (/\.(c|h|cpp|cc|cxx|hpp|hh|hxx)$/.test(lower)) {
         return 'C/C++';
     }
+    if (/\.html?$/.test(lower)) {
+        return 'HTML';
+    }
     return 'other';
 };

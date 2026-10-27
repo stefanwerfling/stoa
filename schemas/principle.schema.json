@@ -101,7 +101,9 @@
         "error-handling",
         "side-effect-control",
         "decision-evidence",
-        "robustness"
+        "robustness",
+        "accessibility",
+        "usability"
       ]
     },
     "analysisKind": {

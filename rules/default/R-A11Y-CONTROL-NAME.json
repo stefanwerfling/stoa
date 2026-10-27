@@ -1,0 +1,40 @@
+{
+  "id": "R-A11Y-CONTROL-NAME",
+  "version": "1.0.0",
+  "title": "Control without an accessible name",
+  "feature": "ui.controlMissingName",
+  "appliesTo": ["statement"],
+  "principles": ["marcus.purpose"],
+  "dimensions": ["accessibility", "usability"],
+  "trigger": {
+    "all": [{ "fact": "ui.controlMissingName", "op": "!=", "value": "" }]
+  },
+  "requiredEvidence": ["ui.controlMissingName"],
+  "severity": { "base": "high" },
+  "confidence": { "base": 0.85, "capBy": "certainty" },
+  "message": {
+    "en": "<button> has no accessible name (WCAG 2.2 · 4.1.2): {value}.",
+    "de": "<button> ohne zugänglichen Namen (WCAG 2.2 · 4.1.2): {value}."
+  },
+  "rationale": {
+    "en": "A control with no accessible name — no text, aria-label(ledby), title, or a named child (img[alt] / svg>title) — is announced to assistive tech as an unlabeled button, so its function cannot be understood or targeted (marcus.purpose).",
+    "de": "Ein Bedienelement ohne zugänglichen Namen — kein Text, kein aria-label(ledby), kein title und kein benanntes Kind (img[alt] / svg>title) — wird assistiver Technik als unbeschrifteter Button angesagt; seine Funktion ist weder verständlich noch ansteuerbar (marcus.purpose)."
+  },
+  "remediation": {
+    "suggestion": {
+      "en": "Give the button visible text, or an aria-label/title; for an icon-only button, label the control or give the nested icon a name (img alt / svg <title>).",
+      "de": "Dem Button sichtbaren Text oder ein aria-label/title geben; bei reinen Icon-Buttons das Element beschriften oder dem Icon einen Namen geben (img alt / svg <title>)."
+    },
+    "drawbacks": {
+      "en": "An established icon in a clear context may be understood by sighted users even unlabeled — but it still needs a name for assistive tech.",
+      "de": "Ein etabliertes Icon in klarem Kontext mag sehenden Nutzern auch unbeschriftet verständlich sein — assistive Technik braucht dennoch einen Namen."
+    }
+  },
+  "missingContext": [
+    {
+      "en": "A name supplied via aria-labelledby pointing at another element is treated as present but not resolved; the surrounding visual context is not assessed statically.",
+      "de": "Ein über aria-labelledby auf ein anderes Element verweisender Name gilt als vorhanden, wird aber nicht aufgelöst; der umgebende visuelle Kontext wird statisch nicht bewertet."
+    }
+  ],
+  "tests": "test/HtmlA11y.test.ts"
+}

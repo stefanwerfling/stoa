@@ -4,6 +4,7 @@ import {fileURLToPath} from 'node:url';
 import {parseArgs} from 'node:util';
 import {initCpp} from './analysis/CppAdapter.js';
 import {initDart} from './analysis/DartAdapter.js';
+import {initHtml} from './analysis/HtmlAdapter.js';
 import {loadConfig} from './Config.js';
 import {loadExpected} from './evaluation/Corpus.js';
 import {evaluate} from './evaluation/Evaluator.js';
@@ -76,6 +77,7 @@ const runAnalyze = async (values: CliValues, target: string): Promise<number> =>
     // Parser.init(), which is not safe to race. On failure those files are skipped.
     await initDart().catch(() => undefined);
     await initCpp().catch(() => undefined);
+    await initHtml().catch(() => undefined);
     let result = analyze({
         rootPath: resolve(target),
         knowledgeDir: knowledgeDirOf(values),
@@ -107,6 +109,7 @@ const runEval = async (values: CliValues, target: string): Promise<number> => {
     // safe to race); on failure those files are skipped.
     await initDart().catch(() => undefined);
     await initCpp().catch(() => undefined);
+    await initHtml().catch(() => undefined);
     const root = resolve(target);
     let expected;
     try {
