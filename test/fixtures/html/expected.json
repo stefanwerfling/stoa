@@ -32,6 +32,8 @@
     { "file": "dupids.html", "rule": "R-A11Y-DUPLICATE-ID", "symbol": "dupid#0" },
     { "file": "dupids.html", "rule": "R-A11Y-DUPLICATE-ID", "symbol": "dupid#1" },
     { "file": "dupids.html", "rule": "R-A11Y-DUPLICATE-ID", "symbol": "dupid#2" },
-    { "file": "dupids.html", "rule": "R-A11Y-DUPLICATE-ID", "symbol": "dupid#3" }
+    { "file": "dupids.html", "rule": "R-A11Y-DUPLICATE-ID", "symbol": "dupid#3" },
+    { "file": "frames.html", "rule": "R-A11Y-FRAME-TITLE", "symbol": "frame#0" },
+    { "file": "frames.html", "rule": "R-A11Y-FRAME-TITLE", "symbol": "frame#1" }
   ]
 }

@@ -138,7 +138,7 @@ flowchart TB
 
 ## 5. Regelsatz `default@1` (umgesetzt)
 
-> Der tatsächlich implementierte Regelsatz (33 Regeln). Gesamtüberblick, Facts
+> Der tatsächlich implementierte Regelsatz (34 Regeln). Gesamtüberblick, Facts
 > und Opt-in-Flags: [implementation-status.md](./implementation-status.md).
 
 Deklarative Regeln (`rules/default/*.json`, Default aktiv):
@@ -186,6 +186,7 @@ UI/UX – Barrierefreiheit (HTML, statisch, Default aktiv):
 | `R-A11Y-META-VIEWPORT-ZOOM` | `ui.viewportBlocksZoom` | `marcus.cooperation` | Barrierefreiheit, Bedienbarkeit | syntaktisch (WCAG 1.4.4) |
 | `R-A11Y-ARIA-DANGLING-IDREF` | `ui.danglingAriaIdref` | `marcus.purpose` | Barrierefreiheit | syntaktisch (WCAG 1.3.1/4.1.2) |
 | `R-A11Y-DUPLICATE-ID` | `ui.duplicateId` | `marcus.purpose` | Barrierefreiheit | syntaktisch (WCAG 1.3.1/4.1.2) |
+| `R-A11Y-FRAME-TITLE` | `ui.frameMissingTitle` | `marcus.purpose` | Barrierefreiheit, Bedienbarkeit | syntaktisch (WCAG 4.1.2) |
 
 > **UI/UX (HTML):** rein statische Analyse via tree-sitter-html.
 > `R-A11Y-IMG-ALT` meldet `<img>` ohne `alt` (dekoratives `alt=""`,
@@ -235,7 +236,10 @@ UI/UX – Barrierefreiheit (HTML, statisch, Default aktiv):
 > dessen `id` im Dokument mehrfach vorkommt — eine id muss eindeutig sein, und ein
 > Duplikat lässt eine label-for-/aria-Referenz auf das vom User-Agent zuerst
 > gewählte Element auflösen; eindeutige ids und ids über getrennt eingebundene
-> Dokumente sind ausgenommen. Die Kategorie
+> Dokumente sind ausgenommen. `R-A11Y-FRAME-TITLE` meldet ein `<iframe>`/`<frame>`
+> ohne eigenen zugänglichen Namen (nicht-leeres `title`, `aria-label` oder
+> `aria-labelledby`); ein als `aria-hidden` markierter Frame ist ausgenommen
+> (WCAG 4.1.2). Die Kategorie
 > (Accessibility) wird auf die Dimension `Barrierefreiheit` abgebildet. Kontrast,
 > sichtbarer Fokus und gerenderte Zustände sind **nicht** statisch prüfbar und
 > bewusst ausgelassen.

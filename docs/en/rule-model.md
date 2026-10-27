@@ -138,7 +138,7 @@ flowchart TB
 
 ## 5. Rule Set `default@1` (implemented)
 
-> The actually-implemented rule set (33 rules). Overview, facts and opt-in flags:
+> The actually-implemented rule set (34 rules). Overview, facts and opt-in flags:
 > [implementation-status.md](./implementation-status.md).
 
 Declarative rules (`rules/default/*.json`, on by default):
@@ -186,6 +186,7 @@ UI/UX – accessibility (HTML, static, on by default):
 | `R-A11Y-META-VIEWPORT-ZOOM` | `ui.viewportBlocksZoom` | `marcus.cooperation` | Accessibility, usability | syntactic (WCAG 1.4.4) |
 | `R-A11Y-ARIA-DANGLING-IDREF` | `ui.danglingAriaIdref` | `marcus.purpose` | Accessibility | syntactic (WCAG 1.3.1/4.1.2) |
 | `R-A11Y-DUPLICATE-ID` | `ui.duplicateId` | `marcus.purpose` | Accessibility | syntactic (WCAG 1.3.1/4.1.2) |
+| `R-A11Y-FRAME-TITLE` | `ui.frameMissingTitle` | `marcus.purpose` | Accessibility, usability | syntactic (WCAG 4.1.2) |
 
 > **UI/UX (HTML):** static analysis via tree-sitter-html.
 > `R-A11Y-IMG-ALT` reports `<img>` with no `alt` (decorative `alt=""`,
@@ -231,6 +232,9 @@ UI/UX – accessibility (HTML, static, on by default):
 > the document — an id must be unique, and a duplicate makes a label-for / aria
 > reference resolve to whichever element the user agent picks first; unique ids and
 > ids across separately-included documents are out of scope.
+> `R-A11Y-FRAME-TITLE` reports an `<iframe>`/`<frame>` with no accessible name of
+> its own (a non-empty `title`, `aria-label` or `aria-labelledby`); a frame marked
+> `aria-hidden` is exempt (WCAG 4.1.2).
 > The category (accessibility) maps to the
 > `accessibility` dimension. Contrast, visible focus and rendered states are
 > **not** statically decidable and are deliberately omitted.

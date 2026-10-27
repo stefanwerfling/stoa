@@ -43,6 +43,7 @@ export const extractFacts = (root: Node, content: string, filePath: string, info
     let viewportIndex = 0;
     let danglingIdrefIndex = 0;
     let duplicateIdIndex = 0;
+    let frameIndex = 0;
     for (const element of descendants(root, 'element')) {
         const startTag = startTagOf(element);
         if (startTag === null) {
@@ -159,6 +160,14 @@ export const extractFacts = (root: Node, content: string, filePath: string, info
         if (elementId !== undefined && duplicatedIds.has(elementId.trim())) {
             facts.push(build({kind: 'ui.duplicateId', kindOf: 'statement', symbol: `dupid#${duplicateIdIndex}`, range: rangeOf(startTag), value: `id="${elementId}"`}));
             duplicateIdIndex += 1;
+        }
+
+        // An iframe/frame needs its own accessible name (title or aria-label[ledby])
+        // — its embedded document cannot supply one across the boundary, so without
+        // it the frame is announced only as "frame". A hidden frame is exempt.
+        if ((tag === 'iframe' || tag === 'frame') && !isHiddenFromA11y(attrs) && !hasFrameName(attrs)) {
+            facts.push(build({kind: 'ui.frameMissingTitle', kindOf: 'statement', symbol: `frame#${frameIndex}`, range: rangeOf(startTag), value: evidence(startTag)}));
+            frameIndex += 1;
         }
     }
 
@@ -391,6 +400,15 @@ const findDuplicateIds = (root: Node): Set<string> => {
         }
     }
     return duplicated;
+};
+
+// A frame's accessible name can only come from its own attributes (its embedded
+// document is a separate context): a non-empty title or aria-label, or an
+// aria-labelledby reference.
+const hasFrameName = (attrs: Map<string, string>): boolean => {
+    return (attrs.get('title') ?? '').trim().length > 0
+        || (attrs.get('aria-label') ?? '').trim().length > 0
+        || (attrs.get('aria-labelledby') ?? '').trim().length > 0;
 };
 
 // `name="id"` for each aria-labelledby / aria-describedby token that names an id

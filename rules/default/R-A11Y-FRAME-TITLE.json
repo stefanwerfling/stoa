@@ -1,0 +1,40 @@
+{
+  "id": "R-A11Y-FRAME-TITLE",
+  "version": "1.0.0",
+  "title": "Frame has no accessible name",
+  "feature": "ui.frameMissingTitle",
+  "appliesTo": ["statement"],
+  "principles": ["marcus.purpose"],
+  "dimensions": ["accessibility", "usability"],
+  "trigger": {
+    "all": [{ "fact": "ui.frameMissingTitle", "op": "!=", "value": "" }]
+  },
+  "requiredEvidence": ["ui.frameMissingTitle"],
+  "severity": { "base": "high" },
+  "confidence": { "base": 0.9, "capBy": "certainty" },
+  "message": {
+    "en": "Frame has no accessible name (WCAG 2.2 · 4.1.2): {value}.",
+    "de": "Frame ohne zugänglichen Namen (WCAG 2.2 · 4.1.2): {value}."
+  },
+  "rationale": {
+    "en": "An <iframe>/<frame> is announced only as \"frame\" unless it carries its own name; the embedded document cannot supply one across the boundary, so without a title or aria-label(ledby) a screen-reader user cannot tell what the frame contains before entering it (marcus.purpose).",
+    "de": "Ein <iframe>/<frame> wird nur als \"Frame\" angesagt, sofern er keinen eigenen Namen trägt; das eingebettete Dokument kann über die Grenze hinweg keinen liefern, daher kann ein Screenreader-Nutzer ohne title oder aria-label(ledby) nicht erkennen, was der Frame enthält, bevor er ihn betritt (marcus.purpose)."
+  },
+  "remediation": {
+    "suggestion": {
+      "en": "Add a concise title that names the frame's purpose, e.g. <iframe title=\"Location map\"> (or an aria-label / aria-labelledby).",
+      "de": "Einen knappen title ergänzen, der den Zweck des Frames benennt, z. B. <iframe title=\"Standortkarte\"> (oder aria-label / aria-labelledby)."
+    },
+    "drawbacks": {
+      "en": "None of note.",
+      "de": "Keine nennenswerten."
+    }
+  },
+  "missingContext": [
+    {
+      "en": "A frame marked aria-hidden is exempt (not in the accessibility tree); aria-labelledby is treated as present but its target text is not resolved, and whether an existing title is actually descriptive is not judged.",
+      "de": "Ein als aria-hidden markierter Frame ist ausgenommen (nicht im Accessibility-Baum); aria-labelledby gilt als vorhanden, ohne den Zieltext aufzulösen, und ob ein vorhandener title tatsächlich beschreibend ist, wird nicht beurteilt."
+    }
+  ],
+  "tests": "test/HtmlA11y.test.ts"
+}
