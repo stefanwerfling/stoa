@@ -107,23 +107,48 @@ export const extractFacts = (program: PhpNode, content: string, filePath: string
     }
 
     for (const cls of collect(program, isDoctrineMigration)) {
-        // Collect every addSql('...') literal with the method it sits in, in
-        // document order, so the same migration rules fire for Doctrine as for
-        // TypeORM (shared SQL checks in MigrationSql).
-        const statements: {sql: string; node: PhpNode; method: string}[] = [];
+        // Two Doctrine migration styles: raw SQL via $this->addSql('...') and the
+        // DBAL Schema API ($schema->dropTable(), $table->addColumn(...)). Raw SQL
+        // runs through the shared MigrationSql checks; the Schema API has no
+        // IF [NOT] EXISTS concept, so only data-loss and nullable apply there.
+        const sqlStatements: {sql: string; node: PhpNode}[] = [];
+        const losses: {node: PhpNode; descriptor: string}[] = [];
+        const nullables: {node: PhpNode; descriptor: string}[] = [];
+
         for (const method of collect(cls, (node) => node.kind === 'method')) {
-            const name = functionName(method);
-            for (const call of collect(method, isAddSqlCall)) {
-                const sql = addSqlArgument(call);
-                if (sql !== null) {
-                    statements.push({sql, node: call, method: name});
+            const inUp = functionName(method) === 'up';
+            for (const call of collect(method, (node) => node.kind === 'call')) {
+                const name = callMethodName(call);
+                if (name === null) {
+                    continue;
+                }
+                if (name === 'addSql') {
+                    const sql = firstStringArgument(call);
+                    if (sql === null) {
+                        continue;
+                    }
+                    sqlStatements.push({sql, node: call});
+                    if (inUp) {
+                        const loss = destructiveDdl(sql);
+                        if (loss !== null) {
+                            losses.push({node: call, descriptor: loss});
+                        }
+                        const nullable = nullableNoDefault(sql);
+                        if (nullable !== null) {
+                            nullables.push({node: call, descriptor: nullable});
+                        }
+                    }
+                } else if (inUp && (name === 'dropTable' || name === 'dropColumn')) {
+                    losses.push({node: call, descriptor: `${name}() in up() destroys data`});
+                } else if (inUp && name === 'addColumn' && schemaAddColumnNotNullNoDefault(call)) {
+                    nullables.push({node: call, descriptor: 'addColumn() with notnull:true and no default'});
                 }
             }
         }
-        statements.sort(byPosition);
 
+        sqlStatements.sort(byPosition);
         let ddlIndex = 0;
-        for (const statement of statements) {
+        for (const statement of sqlStatements) {
             const descriptor = unguardedDdl(statement.sql);
             if (descriptor !== null) {
                 facts.push(build({kind: 'migration.unguardedDdl', kindOf: 'statement', symbol: `ddl#${ddlIndex}`, range: rangeOf(statement.node), value: descriptor}));
@@ -131,29 +156,15 @@ export const extractFacts = (program: PhpNode, content: string, filePath: string
             }
         }
 
-        let lossIndex = 0;
-        for (const statement of statements) {
-            if (statement.method !== 'up') {
-                continue;
-            }
-            const descriptor = destructiveDdl(statement.sql);
-            if (descriptor !== null) {
-                facts.push(build({kind: 'migration.dataLoss', kindOf: 'statement', symbol: `loss#${lossIndex}`, range: rangeOf(statement.node), value: descriptor}));
-                lossIndex += 1;
-            }
-        }
+        losses.sort(byPosition);
+        losses.forEach((loss, index) => {
+            facts.push(build({kind: 'migration.dataLoss', kindOf: 'statement', symbol: `loss#${index}`, range: rangeOf(loss.node), value: loss.descriptor}));
+        });
 
-        let nullableIndex = 0;
-        for (const statement of statements) {
-            if (statement.method !== 'up') {
-                continue;
-            }
-            const descriptor = nullableNoDefault(statement.sql);
-            if (descriptor !== null) {
-                facts.push(build({kind: 'migration.nullableNoDefault', kindOf: 'statement', symbol: `nullable#${nullableIndex}`, range: rangeOf(statement.node), value: descriptor}));
-                nullableIndex += 1;
-            }
-        }
+        nullables.sort(byPosition);
+        nullables.forEach((nullable, index) => {
+            facts.push(build({kind: 'migration.nullableNoDefault', kindOf: 'statement', symbol: `nullable#${index}`, range: rangeOf(nullable.node), value: nullable.descriptor}));
+        });
 
         const descriptor = migrationMissingDown(cls);
         if (descriptor !== null) {
@@ -271,24 +282,54 @@ const isDoctrineMigration = (node: PhpNode): boolean => {
     return isPhpNode(extended) && typeof extended.name === 'string' && lastSegment(extended.name) === 'AbstractMigration';
 };
 
-const isAddSqlCall = (node: PhpNode): boolean => {
-    if (node.kind !== 'call') {
-        return false;
-    }
-    const what = node.what;
+// The method name of an instance call ($obj->method(...)): addSql, dropTable, …
+const callMethodName = (call: PhpNode): string | null => {
+    const what = call.what;
     if (!isPhpNode(what) || what.kind !== 'propertylookup') {
-        return false;
+        return null;
     }
     const offset = what.offset;
-    return isPhpNode(offset) && offset.name === 'addSql';
+    return isPhpNode(offset) && typeof offset.name === 'string' ? offset.name : null;
 };
 
-const addSqlArgument = (call: PhpNode): string | null => {
+const firstStringArgument = (call: PhpNode): string | null => {
     const first = (call.arguments as PhpNode[] | undefined)?.[0];
     if (isPhpNode(first) && first.kind === 'string' && typeof first.value === 'string') {
         return first.value;
     }
     return null;
+};
+
+// A Schema-API $table->addColumn(name, type, ['notnull' => true]) with no
+// 'default' (and not auto-incrementing) — the DBAL equivalent of a raw NOT NULL
+// add with no default. Only an explicit notnull:true counts (conservative).
+const schemaAddColumnNotNullNoDefault = (call: PhpNode): boolean => {
+    const options = (call.arguments as PhpNode[] | undefined)?.[2];
+    if (!isPhpNode(options) || options.kind !== 'array') {
+        return false;
+    }
+    let notNull = false;
+    let hasDefault = false;
+    let autoFilled = false;
+    for (const item of (options.items as PhpNode[] | undefined) ?? []) {
+        if (!isPhpNode(item) || item.kind !== 'entry') {
+            continue;
+        }
+        const key = item.key;
+        const keyName = isPhpNode(key) && typeof key.value === 'string' ? key.value : '';
+        if (keyName === 'notnull') {
+            notNull = isTrue(item.value);
+        } else if (keyName === 'default') {
+            hasDefault = true;
+        } else if (keyName === 'autoincrement') {
+            autoFilled = isTrue(item.value);
+        }
+    }
+    return notNull && !hasDefault && !autoFilled;
+};
+
+const isTrue = (value: unknown): boolean => {
+    return isPhpNode(value) && value.kind === 'boolean' && value.value === true;
 };
 
 // A migration is reversible only if its down() undoes something; a missing or

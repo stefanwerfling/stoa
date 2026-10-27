@@ -196,7 +196,11 @@ Persistence / ORM (TypeORM, TS/JS only, on by default):
 > `R-MIGRATION-DATA-LOSS`, `R-MIGRATION-NO-DOWN`, `R-ORM-NULLABLE-NO-DEFAULT`)
 > also fire for Doctrine migrations (`extends AbstractMigration`). The raw SQL is
 > read from `$this->addSql('…')`; the SQL checks are language-neutral (shared
-> `MigrationSql` module). `R-ORM-ENTITY-NO-PK` (`@Entity` without `@Id`) and
+> `MigrationSql` module). The **DBAL Schema API** is covered too
+> (`$schema->dropTable()`/`$table->dropColumn()` in `up()` → data-loss;
+> `$table->addColumn(…, ['notnull' => true])` with no `default` → nullable);
+> it has no `IF [NOT] EXISTS` concept, so the unguarded rule applies to raw SQL
+> only. `R-ORM-ENTITY-NO-PK` (`@Entity` without `@Id`) and
 > `R-ORM-EAGER-RELATION` (a relation with `fetch EAGER`) also fire — via both
 > **PHP 8 attributes** (`#[ORM\Entity]`, `#[ORM\ManyToOne(fetch: 'EAGER')]`) and
 > **annotation docblocks** (`@ORM\Entity`, the older style; `fetch="EAGER"`). The

@@ -243,6 +243,21 @@ test('the migration rules fire for Doctrine (PHP) via addSql, scoped to up() and
     assert.equal(noDown[0]?.location.symbol, 'Version20260102');
 });
 
+test('the migration rules fire for the Doctrine DBAL Schema API (no addSql)', () => {
+    const schema = analyzePath(join(root, 'test', 'corpus', 'project', 'MigrationDoctrineSchema.php'));
+    const loss = schema.filter((f) => f.rule.id === 'R-MIGRATION-DATA-LOSS');
+    const nullable = schema.filter((f) => f.rule.id === 'R-ORM-NULLABLE-NO-DEFAULT');
+    assert.equal(loss.length, 1, 'dropTable() in up()');
+    assert.ok(loss[0]?.observation.statement.includes('dropTable()'));
+    assert.equal(nullable.length, 1, 'addColumn notnull:true without default; the autoincrement id is not flagged');
+    assert.equal(schema.filter((f) => f.rule.id === 'R-MIGRATION-UNGUARDED-DDL').length, 0, 'the Schema API has no IF [NOT] EXISTS concept');
+
+    const ok = analyzePath(join(root, 'test', 'fixtures', 'migration', 'SchemaOk.php')).filter(
+        (f) => f.rule.id === 'R-ORM-NULLABLE-NO-DEFAULT' || f.rule.id === 'R-MIGRATION-DATA-LOSS'
+    );
+    assert.equal(ok.length, 0, 'nullable / NOT NULL+default / autoincrement adds and a down() drop are all fine');
+});
+
 test('the @Entity rules fire for Doctrine (PHP) via #[ORM] attributes', () => {
     const noPk = analyzePath(join(root, 'test', 'corpus', 'project', 'DoctrineEntityNoPk.php')).filter(
         (f) => f.rule.id === 'R-ORM-ENTITY-NO-PK'
