@@ -49,6 +49,10 @@ For what is **actually built** (rule catalog, CLI flags, facts, deviations from
 the concept), see `implementation-status` ([en](docs/en/implementation-status.md) ·
 [de](docs/de/implementation-status.md)).
 
+For the **UI/UX analysis** work (static HTML accessibility pack — scope, honest
+limits, where human/user testing is needed), see `ui-ux-analysis-report`
+([en](docs/en/ui-ux-analysis-report.md) · [de](docs/de/ui-ux-analysis-report.md)).
+
 ## Quick start
 
 ```bash
