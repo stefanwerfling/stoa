@@ -2,6 +2,7 @@
 import {dirname, join, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {parseArgs} from 'node:util';
+import {initDart} from './analysis/DartAdapter.js';
 import {loadConfig} from './Config.js';
 import {loadExpected} from './evaluation/Corpus.js';
 import {evaluate} from './evaluation/Evaluator.js';
@@ -69,6 +70,9 @@ const render = (format: string | undefined, report: AnalysisReport, lang: string
 
 const runAnalyze = async (values: CliValues, target: string): Promise<number> => {
     const lang = values.lang ?? 'en';
+    // Load the Dart (tree-sitter/WASM) grammar once before the synchronous
+    // pipeline runs; on failure Dart files are simply skipped.
+    await initDart().catch(() => undefined);
     let result = analyze({
         rootPath: resolve(target),
         knowledgeDir: knowledgeDirOf(values),

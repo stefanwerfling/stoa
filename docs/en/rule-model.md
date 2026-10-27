@@ -12,7 +12,10 @@
 - **Determinism.** Same facts + same rule version + same config ⇒
   identical findings. No clock, no randomness, no network dependency.
 - **Facts instead of AST.** Rules only see the neutral fact schema, never the
-  raw language-specific AST → language independence, easy testability.
+  raw language-specific AST → language independence, easy testability. Adapters
+  for TS/JS (ts-morph), PHP (glayzzle) and Dart/Flutter (tree-sitter/WASM) emit
+  the same facts, so the metric and error-handling rules apply across languages
+  unchanged.
 - **Context beats threshold.** A rule must never evaluate a metric on its own as a
   deficiency; it must take context/exception signals into account (guiding principle L4).
 - **No style as deficiency.** Rules that merely reflect subjective style preference

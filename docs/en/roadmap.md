@@ -4,7 +4,7 @@
 > acceptance criteria and the subsequent stages.
 >
 > **Implementation status:** the MVP and several expansion stages are now
-> implemented (two languages, 20 rules, three output formats, i18n, optional
+> implemented (three languages, 20 rules, three output formats, i18n, optional
 > layers) — the current state is in [implementation-status.md](./implementation-status.md).
 
 ## 1. MVP Guiding Idea
