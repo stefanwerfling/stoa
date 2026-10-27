@@ -253,22 +253,36 @@ const annotationPresent = (doc: string, shortName: string): boolean => {
 // A relation annotation (@ORM\ManyToOne etc.) carrying fetch="EAGER" in the same
 // docblock; returns the relation short name or null.
 const annotationEagerRelation = (doc: string): string | null => {
-    if (!/fetch\s*=\s*["']EAGER["']/i.test(doc)) {
+    if (!/fetch\s*=\s*(?:["']EAGER["']|[\w\\]*::FETCH_EAGER)/i.test(doc)) {
         return null;
     }
     return annotationShortNames(doc).find((name) => RELATION_ATTRIBUTES.has(name)) ?? null;
 };
 
-// A Doctrine relation is eager when it carries a `fetch: 'EAGER'` argument.
+// A Doctrine relation is eager when its `fetch` argument is 'EAGER' — either the
+// string form (fetch: 'EAGER') or the constant form (fetch: …::FETCH_EAGER).
 const relationIsEager = (attribute: PhpNode): boolean => {
     for (const argument of (attribute.args as PhpNode[] | undefined) ?? []) {
         if (!isPhpNode(argument) || argument.kind !== 'namedargument' || argument.name !== 'fetch') {
             continue;
         }
-        const value = argument.value;
-        if (isPhpNode(value) && value.kind === 'string' && value.value === 'EAGER') {
+        if (isEagerValue(argument.value)) {
             return true;
         }
+    }
+    return false;
+};
+
+const isEagerValue = (value: unknown): boolean => {
+    if (!isPhpNode(value)) {
+        return false;
+    }
+    if (value.kind === 'string') {
+        return value.value === 'EAGER';
+    }
+    if (value.kind === 'staticlookup') {
+        const offset = value.offset;
+        return isPhpNode(offset) && offset.name === 'FETCH_EAGER';
     }
     return false;
 };

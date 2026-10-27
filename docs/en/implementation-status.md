@@ -81,7 +81,7 @@ All eight quality dimensions have at least one rule.
 
 ## Quality assurance
 
-- **70 node:test cases** green (rules pos./neg., extraction, schema validation,
+- **71 node:test cases** green (rules pos./neg., extraction, schema validation,
   i18n, determinism, SARIF, evaluation, semantic groundedness).
 - **Golden corpus** (`test/corpus/`, TS+PHP) with ground truth; evaluation
   currently **precision 100% · recall 100%**. Per-rule precision gate (AC-5).

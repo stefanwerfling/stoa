@@ -42,6 +42,8 @@
     { "file": "DoctrineAnnotatedNoPk.php", "rule": "R-ORM-ENTITY-NO-PK", "symbol": "Account" },
     { "file": "DoctrineAnnotatedEager.php", "rule": "R-ORM-EAGER-RELATION", "symbol": "customer" },
     { "file": "MigrationDoctrineSchema.php", "rule": "R-MIGRATION-DATA-LOSS", "symbol": "loss#0" },
-    { "file": "MigrationDoctrineSchema.php", "rule": "R-ORM-NULLABLE-NO-DEFAULT", "symbol": "nullable#0" }
+    { "file": "MigrationDoctrineSchema.php", "rule": "R-ORM-NULLABLE-NO-DEFAULT", "symbol": "nullable#0" },
+    { "file": "DoctrineEntityEagerConst.php", "rule": "R-ORM-EAGER-RELATION", "symbol": "parent" },
+    { "file": "DoctrineAnnotatedEagerConst.php", "rule": "R-ORM-EAGER-RELATION", "symbol": "source" }
   ]
 }

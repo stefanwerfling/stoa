@@ -258,6 +258,20 @@ test('the migration rules fire for the Doctrine DBAL Schema API (no addSql)', ()
     assert.equal(ok.length, 0, 'nullable / NOT NULL+default / autoincrement adds and a down() drop are all fine');
 });
 
+test('R-ORM-EAGER-RELATION catches the constant fetch form (…::FETCH_EAGER), attribute and annotation', () => {
+    const attr = analyzePath(join(root, 'test', 'corpus', 'project', 'DoctrineEntityEagerConst.php')).filter(
+        (f) => f.rule.id === 'R-ORM-EAGER-RELATION'
+    );
+    assert.equal(attr.length, 1);
+    assert.equal(attr[0]?.location.symbol, 'parent');
+
+    const anno = analyzePath(join(root, 'test', 'corpus', 'project', 'DoctrineAnnotatedEagerConst.php')).filter(
+        (f) => f.rule.id === 'R-ORM-EAGER-RELATION'
+    );
+    assert.equal(anno.length, 1);
+    assert.equal(anno[0]?.location.symbol, 'source');
+});
+
 test('the @Entity rules fire for Doctrine (PHP) via #[ORM] attributes', () => {
     const noPk = analyzePath(join(root, 'test', 'corpus', 'project', 'DoctrineEntityNoPk.php')).filter(
         (f) => f.rule.id === 'R-ORM-ENTITY-NO-PK'

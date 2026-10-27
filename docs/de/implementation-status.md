@@ -81,7 +81,7 @@ Alle acht Qualitätsdimensionen haben mindestens eine Regel.
 
 ## Qualitätssicherung
 
-- **70 node:test-Fälle** grün (Regeln pos./neg., Extraktion, Schema-Validierung,
+- **71 node:test-Fälle** grün (Regeln pos./neg., Extraktion, Schema-Validierung,
   i18n, Determinismus, SARIF, Eval, Semantik-Groundedness).
 - **Golden-Korpus** (`test/corpus/`, TS+PHP) mit Ground-Truth; Eval derzeit
   **Precision 100 % · Recall 100 %**. Precision-Gate je Regel (AC-5).
