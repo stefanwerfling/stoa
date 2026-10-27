@@ -1,6 +1,7 @@
 import {readdirSync, readFileSync} from 'node:fs';
 import {join} from 'node:path';
 import type {Principle} from '../Types.js';
+import {assertValidPrinciple} from './KnowledgeValidation.js';
 
 /**
  * The philosophical knowledge base. It is read-only for the rule and semantic
@@ -20,11 +21,34 @@ export class KnowledgeBase {
             .sort();
 
         const principles = new Map<string, Principle>();
+        const sourceFile = new Map<string, string>();
         for (const file of files) {
             const raw = readFileSync(join(principlesDir, file), 'utf8');
-            const principle = JSON.parse(raw) as Principle;
+            let parsed: unknown;
+            try {
+                parsed = JSON.parse(raw);
+            } catch (error) {
+                throw new Error(`knowledge: ${file} is not valid JSON: ${(error as Error).message}`);
+            }
+            const principle = assertValidPrinciple(parsed, file);
+            const existing = sourceFile.get(principle.id);
+            if (existing !== undefined) {
+                throw new Error(`knowledge: duplicate principle id "${principle.id}" in ${file} (already defined in ${existing})`);
+            }
             principles.set(principle.id, principle);
+            sourceFile.set(principle.id, file);
         }
+
+        // Reference integrity: relatedPrinciples must point at principles that
+        // actually exist in this base (a dangling id is a knowledge-base error).
+        for (const principle of principles.values()) {
+            for (const related of principle.relatedPrinciples ?? []) {
+                if (!principles.has(related)) {
+                    throw new Error(`knowledge: principle "${principle.id}" (${sourceFile.get(principle.id) ?? '?'}) references unknown related principle "${related}"`);
+                }
+            }
+        }
+
         return new KnowledgeBase(id, principles);
     }
 
