@@ -39,12 +39,14 @@
   not covered yet.
 - **UI/UX (Flutter/Dart):** Flutter has no HTML/ARIA — accessibility is carried by
   widget properties. The Dart adapter therefore also walks the widget tree (the same
-  tree-sitter parse) and emits two deliberately conservative, low-false-positive
+  tree-sitter parse) and emits three deliberately conservative, low-false-positive
   facts: an `Image*` built with neither `semanticLabel:` **nor**
-  `excludeFromSemantics: true`, and an `IconButton` built without `tooltip:`. Only the
-  widget's **own** constructor arguments are inspected — an ancestor `Semantics(...)`
-  wrapper or a label on a child widget is not resolved (noted in `missingContext`),
-  so the checks stay conservative.
+  `excludeFromSemantics: true`, an `IconButton` built without `tooltip:`, and a
+  `TextField`/`TextFormField` whose `InputDecoration` carries no label/hint (or which
+  has no `decoration:` at all). Only the widget's **own** constructor arguments are
+  inspected — an ancestor `Semantics(...)` wrapper, a label on a child widget, or a
+  decoration built elsewhere (variable, `copyWith`) is not resolved (noted in
+  `missingContext`), so the checks stay conservative.
 - **Pipeline:** ingestion → fact extraction → rule engine → findings → reporter.
   No clock/randomness/network in the core; same input + versions + language ⇒
   byte-identical findings.
@@ -69,7 +71,7 @@ stoa eval <path> --expected <file> [--format markdown|json]
 - `knowledge/` and `rules/` resolve relative to the installed package — the CLI
   runs from any directory after `npm link`/install.
 
-## Rule catalog (37)
+## Rule catalog (38)
 
 Declarative rules (`rules/default/*.json`), on by default:
 
@@ -110,6 +112,7 @@ Declarative rules (`rules/default/*.json`), on by default:
 | R-A11Y-CONTRAST-TEXT | marcus.cooperation | accessibility, usability | HTML, JSX, Vue, Angular (inline colours, WCAG 1.4.3) |
 | R-A11Y-FLUTTER-IMAGE-LABEL | marcus.purpose | accessibility | Flutter/Dart (widget, `semanticLabel`/`excludeFromSemantics`) |
 | R-A11Y-FLUTTER-ICONBUTTON-LABEL | marcus.purpose | accessibility, usability | Flutter/Dart (widget, `tooltip`) |
+| R-A11Y-FLUTTER-TEXTFIELD-LABEL | marcus.purpose | accessibility, usability | Flutter/Dart (widget, `InputDecoration.labelText`) |
 
 Procedural rules (`ProjectRule`, cross-file):
 
@@ -135,12 +138,12 @@ All ten quality dimensions (incl. accessibility, usability) have at least one ru
 `ui.positiveTabindex`, `ui.documentMissingLang`, `ui.viewportBlocksZoom`,
 `ui.danglingAriaIdref`, `ui.duplicateId`, `ui.frameMissingTitle`,
 `ui.lowContrastText`, `ui.flutterImageNoSemanticLabel`,
-`ui.flutterIconButtonNoTooltip`, plus (opt-in) `external.tsc` and
-`external.floatingPromise`.
+`ui.flutterIconButtonNoTooltip`, `ui.flutterTextFieldNoLabel`, plus (opt-in)
+`external.tsc` and `external.floatingPromise`.
 
 ## Quality assurance
 
-- **146 node:test cases** green (rules pos./neg., extraction, schema validation,
+- **147 node:test cases** green (rules pos./neg., extraction, schema validation,
   i18n, determinism, SARIF, evaluation, semantic groundedness, privacy,
   finding-model separation).
 - **Golden corpus** (`test/corpus/`, **TS+PHP only**) with ground truth;
@@ -162,10 +165,12 @@ All ten quality dimensions (incl. accessibility, usability) have at least one ru
   `*.component.html`; 100%/100% (TP 8), with `[x]`/`[attr.x]`/`(event)`/`*ngIf`
   bindings and a dynamic `[style.color]`, plus a clean template — and a test that
   the Angular dialect (not plain HTML) ran.
-- **Flutter corpus** (`test/fixtures/flutter/`): the two widget a11y rules on a Dart
-  widget tree; 100%/100% (TP 3), with `Image.network`/`Image(...)` lacking a label,
-  an `IconButton` without `tooltip`, plus negative cases (present `semanticLabel`,
-  `excludeFromSemantics: true`, `tooltip`) and a clean widget.
+- **Flutter corpus** (`test/fixtures/flutter/`): the three widget a11y rules on a Dart
+  widget tree; 100%/100% (TP 5), with `Image.network`/`Image(...)` lacking a label,
+  an `IconButton` without `tooltip`, a `TextField()` with no decoration and one with a
+  label-less `InputDecoration`, plus negative cases (present `semanticLabel`,
+  `excludeFromSemantics: true`, `tooltip`, `labelText`, `hintText`, a variable
+  decoration) and a clean widget.
 - Dogfooding: stoa analyzes its own `src/`.
 
 ## Deviations from the concept (deliberate, documented)
@@ -206,9 +211,10 @@ not statically sound. **Vue SFC** is covered for the 8 attribute/contrast rules
 (shared template extraction with a Vue binding dialect); **Angular** external
 `*.component.html` templates reuse it with an Angular dialect
 (`[x]`/`[attr.x]`/`(x)`/`*ngX`). **Flutter/Dart** is checked not through markup but
-through the widget tree (two widget-own checks: `Image` `semanticLabel`/
-`excludeFromSemantics`, `IconButton` `tooltip`) — without resolving ancestor
-`Semantics(...)` wrappers. Next static steps: inline Angular `template:`
+through the widget tree (three widget-own checks: `Image` `semanticLabel`/
+`excludeFromSemantics`, `IconButton` `tooltip`, `TextField`/`TextFormField`
+`InputDecoration.labelText`) — without resolving ancestor `Semantics(...)` wrappers.
+Next static steps: inline Angular `template:`
 strings and Vue/Angular name-computation rules; further ARIA checks (e.g. `aria-*`
 attributes invalid for the element's role).
 (Implemented: `R-A11Y-FORM-LABEL`,

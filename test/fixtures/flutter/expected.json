@@ -2,6 +2,8 @@
   "findings": [
     { "file": "widget.dart", "rule": "R-A11Y-FLUTTER-IMAGE-LABEL", "symbol": "image#0" },
     { "file": "widget.dart", "rule": "R-A11Y-FLUTTER-IMAGE-LABEL", "symbol": "image#1" },
-    { "file": "widget.dart", "rule": "R-A11Y-FLUTTER-ICONBUTTON-LABEL", "symbol": "iconButton#0" }
+    { "file": "widget.dart", "rule": "R-A11Y-FLUTTER-ICONBUTTON-LABEL", "symbol": "iconButton#0" },
+    { "file": "widget.dart", "rule": "R-A11Y-FLUTTER-TEXTFIELD-LABEL", "symbol": "textField#0" },
+    { "file": "widget.dart", "rule": "R-A11Y-FLUTTER-TEXTFIELD-LABEL", "symbol": "textField#1" }
   ]
 }

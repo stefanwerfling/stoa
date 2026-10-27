@@ -4,7 +4,7 @@
 > Abnahmekriterien und die nachfolgenden Stufen.
 >
 > **Umsetzungsstand:** MVP und mehrere Ausbaustufen sind inzwischen implementiert
-> (vier Sprachen + HTML, 37 Regeln, drei Ausgabeformate, i18n, optionale Schichten) —
+> (vier Sprachen + HTML, 38 Regeln, drei Ausgabeformate, i18n, optionale Schichten) —
 > der aktuelle Ist-Stand steht in [implementation-status.md](./implementation-status.md).
 
 ## 1. MVP-Leitidee

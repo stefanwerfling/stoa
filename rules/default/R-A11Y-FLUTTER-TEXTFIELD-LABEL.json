@@ -1,0 +1,40 @@
+{
+  "id": "R-A11Y-FLUTTER-TEXTFIELD-LABEL",
+  "version": "1.0.0",
+  "title": "Flutter text field has no label",
+  "feature": "ui.flutterTextFieldNoLabel",
+  "appliesTo": ["statement"],
+  "principles": ["marcus.purpose"],
+  "dimensions": ["accessibility", "usability"],
+  "trigger": {
+    "all": [{ "fact": "ui.flutterTextFieldNoLabel", "op": "!=", "value": "" }]
+  },
+  "requiredEvidence": ["ui.flutterTextFieldNoLabel"],
+  "severity": { "base": "medium" },
+  "confidence": { "base": 0.8, "capBy": "certainty" },
+  "message": {
+    "en": "Flutter text field has no label (no InputDecoration labelText/label/hintText): {value}.",
+    "de": "Flutter-Textfeld ohne Label (kein InputDecoration-labelText/label/hintText): {value}."
+  },
+  "rationale": {
+    "en": "A TextField with no decoration — or an InputDecoration carrying no labelText, label or hintText — is announced by TalkBack/VoiceOver as an unlabelled edit field; a screen-reader user cannot tell what to type, and sighted users lose the on-field prompt too. The accessible name comes from InputDecoration (marcus.purpose).",
+    "de": "Ein TextField ohne decoration — oder eine InputDecoration ohne labelText, label oder hintText — wird von TalkBack/VoiceOver als unbeschriftetes Eingabefeld angesagt; ein Screenreader-Nutzer weiß nicht, was einzugeben ist, und sehende Nutzer verlieren zudem den Prompt im Feld. Der zugängliche Name stammt aus der InputDecoration (marcus.purpose)."
+  },
+  "remediation": {
+    "suggestion": {
+      "en": "Add an InputDecoration with a labelText (or label), e.g. TextField(decoration: InputDecoration(labelText: 'Email'), …), or wrap the field in a Semantics(label: …).",
+      "de": "Eine InputDecoration mit labelText (oder label) ergänzen, z. B. TextField(decoration: InputDecoration(labelText: 'E-Mail'), …), oder das Feld in ein Semantics(label: …) einbetten."
+    },
+    "drawbacks": {
+      "en": "None of note; prefer labelText over hintText alone, as a hint disappears once the user types.",
+      "de": "Keine nennenswerten; labelText ist einem alleinigen hintText vorzuziehen, da der Hinweis beim Tippen verschwindet."
+    }
+  },
+  "missingContext": [
+    {
+      "en": "Only this field's own decoration: argument is inspected, and only when it is a literal InputDecoration(...). An ancestor Semantics(...) wrapper, a decoration held in a variable or built via copyWith/merge, or a label supplied elsewhere is not resolved and may make this a false positive.",
+      "de": "Geprüft wird nur das eigene decoration:-Argument dieses Feldes, und nur wenn es ein literales InputDecoration(...) ist. Ein umschließendes Semantics(...), eine in einer Variable gehaltene oder per copyWith/merge gebaute decoration oder ein anderswo gesetztes Label wird nicht aufgelöst und kann einen Fehlalarm bedeuten."
+    }
+  ],
+  "tests": "test/FlutterA11y.test.ts"
+}

@@ -6,22 +6,25 @@ type Build = (spec: FactSpec) => Fact;
 
 /**
  * Widget-aware accessibility facts for Flutter (Dart). Flutter has no HTML/ARIA;
- * accessibility is carried by widget properties (`semanticLabel`, `tooltip`) and
- * the `Semantics` widget. This emits only the two cleanest, low-false-positive
- * static checks: an `Image*` built with neither `semanticLabel:` nor
- * `excludeFromSemantics: true`, and an `IconButton` built without `tooltip:`.
- * Each is a fact about that widget's own constructor arguments — an ancestor
- * `Semantics(...)` wrapper or a label on a child widget is not resolved (noted in
- * the rules' missingContext), so the checks stay conservative.
+ * accessibility is carried by widget properties (`semanticLabel`, `tooltip`,
+ * `InputDecoration.labelText`) and the `Semantics` widget. This emits only the
+ * cleanest, low-false-positive static checks: an `Image*` built with neither
+ * `semanticLabel:` nor `excludeFromSemantics: true`, an `IconButton` built without
+ * `tooltip:`, and a `TextField`/`TextFormField` whose `InputDecoration` carries no
+ * label/hint (or which has no `decoration:` at all). Each is a fact about that
+ * widget's own constructor arguments — an ancestor `Semantics(...)` wrapper, a label
+ * on a child widget, or a decoration built elsewhere (variable, `copyWith`) is not
+ * resolved (noted in the rules' missingContext), so the checks stay conservative.
  */
 export const extractFlutterA11yFacts = (root: Node, build: Build): Fact[] => {
     const facts: Fact[] = [];
     let imageIndex = 0;
     let iconButtonIndex = 0;
+    let textFieldIndex = 0;
 
     for (const identifier of descendants(root, 'identifier')) {
         const widget = identifier.text;
-        if (widget !== 'Image' && widget !== 'IconButton') {
+        if (widget !== 'Image' && widget !== 'IconButton' && widget !== 'TextField' && widget !== 'TextFormField') {
             continue;
         }
         const args = constructorArguments(identifier);
@@ -37,6 +40,10 @@ export const extractFlutterA11yFacts = (root: Node, build: Build): Fact[] => {
         if (widget === 'IconButton' && !named.has('tooltip')) {
             facts.push(build({kind: 'ui.flutterIconButtonNoTooltip', kindOf: 'statement', symbol: `iconButton#${iconButtonIndex}`, range: rangeOf(identifier), value: evidence(identifier)}));
             iconButtonIndex += 1;
+        }
+        if ((widget === 'TextField' || widget === 'TextFormField') && isTextFieldUnlabelled(named)) {
+            facts.push(build({kind: 'ui.flutterTextFieldNoLabel', kindOf: 'statement', symbol: `textField#${textFieldIndex}`, range: rangeOf(identifier), value: evidence(identifier)}));
+            textFieldIndex += 1;
         }
     }
 
@@ -86,6 +93,45 @@ const isExcludedFromSemantics = (named: Map<string, Node>): boolean => {
     }
     const value = namedChildren(argument).filter((node) => node.type !== 'label').pop();
     return value !== undefined && value.text.trim() === 'true';
+};
+
+// The InputDecoration labelled-input keys: any of these gives the field an
+// accessible name (labelText/label are proper labels; hintText is weaker but
+// still announced, so its presence makes the field not provably nameless).
+const DECORATION_LABEL_KEYS = ['labelText', 'label', 'hintText'];
+
+// Whether this text field provably has no accessible label. A field with no
+// `decoration:` at all has no label/hint; a `decoration: InputDecoration(...)`
+// literal is inspected for a label key. A decoration that is a variable or a
+// chained/computed expression (e.g. `.copyWith(...)`) is present-but-unknown and
+// does NOT flag, so the check never invents a false positive.
+const isTextFieldUnlabelled = (named: Map<string, Node>): boolean => {
+    const decoration = named.get('decoration');
+    if (decoration === undefined) {
+        return true;
+    }
+    const inputDecoration = inputDecorationArguments(decoration);
+    if (inputDecoration === null) {
+        return false;
+    }
+    const decorationNamed = directNamedArguments(inputDecoration);
+    return !DECORATION_LABEL_KEYS.some((key) => decorationNamed.has(key));
+};
+
+// The argument list of a `decoration: InputDecoration(...)` literal, or null when the
+// decoration value is not a direct InputDecoration call (a variable, or a chained
+// expression such as InputDecoration(...).copyWith(...) whose final labels we cannot
+// resolve statically) — in which case the field is left unflagged.
+const inputDecorationArguments = (decoration: Node): Node | null => {
+    const value = namedChildren(decoration).find((node) => node.type !== 'label');
+    if (value === undefined) {
+        return null;
+    }
+    const head = firstDescendant(value, 'identifier');
+    if (head === null || head.text !== 'InputDecoration' || /\.(copyWith|merge)\b/.test(value.text)) {
+        return null;
+    }
+    return constructorArguments(head);
 };
 
 const descendants = (node: Node, type: string): Node[] => {

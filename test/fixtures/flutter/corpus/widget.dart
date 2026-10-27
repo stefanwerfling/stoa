@@ -8,5 +8,10 @@ Widget build() {
     Image(image: q, excludeFromSemantics: false),
     IconButton(icon: Icon(Icons.add), onPressed: f),
     IconButton(icon: Icon(Icons.close), tooltip: 'Close', onPressed: f),
+    TextField(),
+    TextField(decoration: InputDecoration(labelText: 'Name')),
+    TextFormField(decoration: InputDecoration(hintText: 'Search')),
+    TextField(decoration: InputDecoration(border: OutlineInputBorder())),
+    TextField(decoration: myDecoration),
   ]);
 }
