@@ -52,6 +52,9 @@ the concept), see `implementation-status` ([en](docs/en/implementation-status.md
 For the **UI/UX analysis** work (static HTML accessibility pack — scope, honest
 limits, where human/user testing is needed), see `ui-ux-analysis-report`
 ([en](docs/en/ui-ux-analysis-report.md) · [de](docs/de/ui-ux-analysis-report.md)).
+The design concept for the optional, browser-backed checks (cascade/rendered
+contrast, visible focus — not yet built) is in `visual-analysis-layer`
+([en](docs/en/visual-analysis-layer.md) · [de](docs/de/visual-analysis-layer.md)).
 
 ## Quick start
 
