@@ -102,6 +102,18 @@ test('R-A11Y-ARIA-INVALID-VALUE flags out-of-range enumerated values, not valid 
     );
 });
 
+test('R-A11Y-POSITIVE-TABINDEX flags tabindex > 0, not 0 / negative / non-numeric / dynamic', () => {
+    const findings = analyzePath(join(corpus, 'tabindex.html'));
+    assert.deepEqual(
+        ids(findings, 'R-A11Y-POSITIVE-TABINDEX'),
+        ['tabindex#0', 'tabindex#1'],
+        'tabindex="1" and tabindex="3"; 0, -1, "abc" and {{n}} are fine'
+    );
+    const first = findings.find((f) => f.rule.id === 'R-A11Y-POSITIVE-TABINDEX');
+    assert.equal(first?.interpretation.principles[0]?.id, 'marcus.cooperation');
+    assert.ok(first?.interpretation.dimensions.includes('usability'));
+});
+
 test('a clean page produces no accessibility findings (no false positives)', () => {
     const findings = analyzePath(join(corpus, 'clean.html')).filter((f) => f.rule.id.startsWith('R-A11Y-'));
     assert.deepEqual(findings, []);
@@ -112,15 +124,15 @@ test('UI golden corpus: precision/recall 100% with a per-category breakdown', ()
     const result = evaluate(findings, loadExpected(join(here, 'fixtures', 'html', 'expected.json')), corpus);
     assert.equal(result.overall.precision, 1);
     assert.equal(result.overall.recall, 1);
-    assert.equal(result.overall.truePositives, 20);
+    assert.equal(result.overall.truePositives, 22);
     assert.equal(result.overall.falsePositives, 0);
     assert.equal(result.overall.falseNegatives, 0);
 
     const html = result.byLanguage.find((item) => item.language === 'HTML');
-    assert.equal(html?.truePositives, 20, 'all findings are HTML findings');
+    assert.equal(html?.truePositives, 22, 'all findings are HTML findings');
 
     const rules = result.perRule.map((item) => item.rule).sort();
-    assert.deepEqual(rules, ['R-A11Y-ARIA-HIDDEN-FOCUSABLE', 'R-A11Y-ARIA-INVALID-ROLE', 'R-A11Y-ARIA-INVALID-VALUE', 'R-A11Y-ARIA-UNKNOWN-ATTR', 'R-A11Y-CONTROL-NAME', 'R-A11Y-FORM-LABEL', 'R-A11Y-IMG-ALT', 'R-A11Y-LINK-NAME']);
+    assert.deepEqual(rules, ['R-A11Y-ARIA-HIDDEN-FOCUSABLE', 'R-A11Y-ARIA-INVALID-ROLE', 'R-A11Y-ARIA-INVALID-VALUE', 'R-A11Y-ARIA-UNKNOWN-ATTR', 'R-A11Y-CONTROL-NAME', 'R-A11Y-FORM-LABEL', 'R-A11Y-IMG-ALT', 'R-A11Y-LINK-NAME', 'R-A11Y-POSITIVE-TABINDEX']);
     for (const rule of result.perRule) {
         assert.equal(rule.precision, 1, `${rule.rule} precision`);
         assert.equal(rule.recall, 1, `${rule.rule} recall`);

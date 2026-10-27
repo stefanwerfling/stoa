@@ -1,0 +1,40 @@
+{
+  "id": "R-A11Y-POSITIVE-TABINDEX",
+  "version": "1.0.0",
+  "title": "Positive tabindex overrides focus order",
+  "feature": "ui.positiveTabindex",
+  "appliesTo": ["statement"],
+  "principles": ["marcus.cooperation"],
+  "dimensions": ["accessibility", "usability"],
+  "trigger": {
+    "all": [{ "fact": "ui.positiveTabindex", "op": "!=", "value": "" }]
+  },
+  "requiredEvidence": ["ui.positiveTabindex"],
+  "severity": { "base": "medium" },
+  "confidence": { "base": 0.9, "capBy": "certainty" },
+  "message": {
+    "en": "Positive tabindex overrides the natural focus order (WCAG 2.2 · 2.4.3): {value}.",
+    "de": "Positiver tabindex überschreibt die natürliche Fokusreihenfolge (WCAG 2.2 · 2.4.3): {value}."
+  },
+  "rationale": {
+    "en": "A tabindex greater than 0 pulls the element ahead of the document's natural tab order, producing a focus sequence that disagrees with the reading order and is fragile to maintain as the page changes — it fights the user agent instead of cooperating with it (marcus.cooperation).",
+    "de": "Ein tabindex größer als 0 zieht das Element vor die natürliche Tab-Reihenfolge des Dokuments; die Fokusfolge weicht von der Lesereihenfolge ab und ist bei Änderungen schwer konsistent zu halten — das arbeitet gegen den User-Agent statt mit ihm (marcus.cooperation)."
+  },
+  "remediation": {
+    "suggestion": {
+      "en": "Use tabindex=\"0\" (focusable in natural order) or tabindex=\"-1\" (focusable only programmatically), and order the DOM so the reading order is the focus order.",
+      "de": "tabindex=\"0\" (fokussierbar in natürlicher Reihenfolge) oder tabindex=\"-1\" (nur programmatisch fokussierbar) verwenden und das DOM so ordnen, dass die Lesereihenfolge die Fokusreihenfolge ist."
+    },
+    "drawbacks": {
+      "en": "Reordering the DOM may require layout adjustments (CSS) to keep the visual arrangement.",
+      "de": "Das Umordnen des DOM kann Layout-Anpassungen (CSS) erfordern, um die visuelle Anordnung zu erhalten."
+    }
+  },
+  "missingContext": [
+    {
+      "en": "Only clean positive-integer literals are flagged; tabindex=\"0\"/negative values, non-integer and dynamic values are not. Whether the focus order is actually wrong depends on the rendered layout, which is not statically decidable.",
+      "de": "Gemeldet werden nur saubere positive Ganzzahl-Literale; tabindex=\"0\"/negative Werte, nicht-ganzzahlige und dynamische Werte nicht. Ob die Fokusreihenfolge tatsächlich falsch ist, hängt vom gerenderten Layout ab und ist statisch nicht entscheidbar."
+    }
+  ],
+  "tests": "test/HtmlA11y.test.ts"
+}

@@ -30,6 +30,7 @@ export const extractFacts = (root: Node, content: string, filePath: string, info
     let roleIndex = 0;
     let ariaAttrIndex = 0;
     let ariaValueIndex = 0;
+    let tabindexIndex = 0;
     for (const element of descendants(root, 'element')) {
         const startTag = startTagOf(element);
         if (startTag === null) {
@@ -100,6 +101,19 @@ export const extractFacts = (root: Node, content: string, filePath: string, info
         if (invalidValues.length > 0) {
             facts.push(build({kind: 'ui.invalidAriaValue', kindOf: 'statement', symbol: `aria-val#${ariaValueIndex}`, range: rangeOf(startTag), value: invalidValues.join(', ')}));
             ariaValueIndex += 1;
+        }
+
+        // A positive tabindex (> 0) forces the element ahead of the natural DOM
+        // order, producing a focus sequence that disagrees with the reading order
+        // and is hard to keep consistent. 0 (focusable, natural order) and negative
+        // (programmatically focusable only) are both legitimate.
+        const tabindex = attrs.get('tabindex');
+        if (tabindex !== undefined) {
+            const value = Number.parseInt(tabindex.trim(), 10);
+            if (!Number.isNaN(value) && value > 0 && String(value) === tabindex.trim()) {
+                facts.push(build({kind: 'ui.positiveTabindex', kindOf: 'statement', symbol: `tabindex#${tabindexIndex}`, range: rangeOf(startTag), value: `tabindex="${tabindex}"`}));
+                tabindexIndex += 1;
+            }
         }
     }
 

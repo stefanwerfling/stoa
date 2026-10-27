@@ -20,6 +20,8 @@
     { "file": "aria-values.html", "rule": "R-A11Y-ARIA-INVALID-VALUE", "symbol": "aria-val#0" },
     { "file": "aria-values.html", "rule": "R-A11Y-ARIA-INVALID-VALUE", "symbol": "aria-val#1" },
     { "file": "aria-values.html", "rule": "R-A11Y-ARIA-INVALID-VALUE", "symbol": "aria-val#2" },
-    { "file": "aria-values.html", "rule": "R-A11Y-ARIA-INVALID-VALUE", "symbol": "aria-val#3" }
+    { "file": "aria-values.html", "rule": "R-A11Y-ARIA-INVALID-VALUE", "symbol": "aria-val#3" },
+    { "file": "tabindex.html", "rule": "R-A11Y-POSITIVE-TABINDEX", "symbol": "tabindex#0" },
+    { "file": "tabindex.html", "rule": "R-A11Y-POSITIVE-TABINDEX", "symbol": "tabindex#1" }
   ]
 }

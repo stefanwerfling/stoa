@@ -138,7 +138,7 @@ flowchart TB
 
 ## 5. Regelsatz `default@1` (umgesetzt)
 
-> Der tatsächlich implementierte Regelsatz (28 Regeln). Gesamtüberblick, Facts
+> Der tatsächlich implementierte Regelsatz (29 Regeln). Gesamtüberblick, Facts
 > und Opt-in-Flags: [implementation-status.md](./implementation-status.md).
 
 Deklarative Regeln (`rules/default/*.json`, Default aktiv):
@@ -181,6 +181,7 @@ UI/UX – Barrierefreiheit (HTML, statisch, Default aktiv):
 | `R-A11Y-ARIA-INVALID-ROLE` | `ui.invalidRole` | `marcus.purpose` | Barrierefreiheit | syntaktisch (WCAG 4.1.2) |
 | `R-A11Y-ARIA-UNKNOWN-ATTR` | `ui.unknownAriaAttribute` | `marcus.purpose` | Barrierefreiheit | syntaktisch (WCAG 4.1.2) |
 | `R-A11Y-ARIA-INVALID-VALUE` | `ui.invalidAriaValue` | `marcus.purpose` | Barrierefreiheit | syntaktisch (WCAG 4.1.2) |
+| `R-A11Y-POSITIVE-TABINDEX` | `ui.positiveTabindex` | `marcus.cooperation` | Barrierefreiheit, Bedienbarkeit | syntaktisch (WCAG 2.4.3) |
 
 > **UI/UX (HTML):** rein statische Analyse via tree-sitter-html.
 > `R-A11Y-IMG-ALT` meldet `<img>` ohne `alt` (dekoratives `alt=""`,
@@ -211,7 +212,10 @@ UI/UX – Barrierefreiheit (HTML, statisch, Default aktiv):
 > Token-Menge (`aria-hidden="yes"`, `aria-live="rude"`); frei formbare Werttypen
 > (IDREF/String/Zahl) werden nicht geprüft, und leere Werte (Default-Fallback)
 > sowie Werte mit Interpolationsmarkern (`{ } < $`, vermutlich Template-Ausgabe)
-> werden übersprungen, um Fehlalarme zu vermeiden. Die Kategorie
+> werden übersprungen, um Fehlalarme zu vermeiden. `R-A11Y-POSITIVE-TABINDEX`
+> meldet einen sauberen positiven Ganzzahl-`tabindex` (> 0), der das Element vor
+> die natürliche DOM-Fokusreihenfolge zieht; `tabindex="0"`/negative,
+> nicht-ganzzahlige und dynamische Werte bleiben unberührt (WCAG 2.4.3). Die Kategorie
 > (Accessibility) wird auf die Dimension `Barrierefreiheit` abgebildet. Kontrast,
 > sichtbarer Fokus und gerenderte Zustände sind **nicht** statisch prüfbar und
 > bewusst ausgelassen.

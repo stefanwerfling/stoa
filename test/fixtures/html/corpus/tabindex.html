@@ -1,0 +1,12 @@
+<!doctype html>
+<html>
+  <body>
+    <div tabindex="1">forced to the front of the tab order</div>
+    <button tabindex="0">natural order, fine</button>
+    <a href="#main" tabindex="-1">programmatic focus target, fine</a>
+    <a href="/go" tabindex="3">Go</a>
+    <span tabindex="abc">non-numeric, skipped</span>
+    <div tabindex="{{n}}">dynamic value, skipped</div>
+    <section>no tabindex at all</section>
+  </body>
+</html>
