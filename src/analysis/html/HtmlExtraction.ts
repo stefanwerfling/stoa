@@ -18,8 +18,13 @@ export const extractFacts = (root: Node, content: string, filePath: string, info
 
     facts.push(build({kind: 'file.lineCount', kindOf: 'file', range: fileRange(lines), value: lineCount(content)}));
 
+    // The ids referenced by <label for="..."> anywhere in the document; needed to
+    // decide whether a form control has an associated label.
+    const labelForIds = labelTargets(root);
+
     let imageIndex = 0;
     let buttonIndex = 0;
+    let fieldIndex = 0;
     for (const element of descendants(root, 'element')) {
         const startTag = startTagOf(element);
         if (startTag === null) {
@@ -42,10 +47,74 @@ export const extractFacts = (root: Node, content: string, filePath: string, info
             if (!isHiddenFromA11y(attrs) && !hasAccessibleName(element, attrs)) {
                 facts.push(build({kind: 'ui.controlMissingName', kindOf: 'statement', symbol, range: rangeOf(startTag), value: evidence(startTag)}));
             }
+        } else if (isLabelableControl(tag, attrs)) {
+            const symbol = `field#${fieldIndex}`;
+            fieldIndex += 1;
+            if (!isHiddenFromA11y(attrs) && !hasLabel(element, attrs, labelForIds)) {
+                facts.push(build({kind: 'ui.controlMissingLabel', kindOf: 'statement', symbol, range: rangeOf(startTag), value: evidence(startTag)}));
+            }
         }
     }
 
     return facts;
+};
+
+// <input> types that are NOT labelable form fields (their name comes from value
+// or alt, or they are not perceivable), so the label rule does not apply.
+const NON_LABELABLE_INPUT_TYPES: ReadonlySet<string> = new Set(['hidden', 'submit', 'button', 'reset', 'image']);
+
+const isLabelableControl = (tag: string, attrs: Map<string, string>): boolean => {
+    if (tag === 'select' || tag === 'textarea') {
+        return true;
+    }
+    if (tag !== 'input') {
+        return false;
+    }
+    return !NON_LABELABLE_INPUT_TYPES.has((attrs.get('type') ?? 'text').toLowerCase());
+};
+
+// A form control is labelled if it has an aria-label(ledby)/title, an id that a
+// <label for> points at, or a wrapping <label> ancestor. A placeholder is
+// deliberately NOT accepted — it is not a label (WCAG). aria-labelledby is
+// treated as present but its target is not resolved (documented limitation).
+const hasLabel = (element: Node, attrs: Map<string, string>, labelForIds: ReadonlySet<string>): boolean => {
+    if ((attrs.get('aria-label') ?? '').trim().length > 0 || attrs.has('aria-labelledby') || (attrs.get('title') ?? '').trim().length > 0) {
+        return true;
+    }
+    const id = attrs.get('id');
+    if (id !== undefined && labelForIds.has(id)) {
+        return true;
+    }
+    return hasAncestorTag(element, 'label');
+};
+
+const labelTargets = (root: Node): Set<string> => {
+    const ids = new Set<string>();
+    for (const element of descendants(root, 'element')) {
+        const startTag = startTagOf(element);
+        if (startTag === null || tagName(startTag) !== 'label') {
+            continue;
+        }
+        const forId = attributes(startTag).get('for');
+        if (forId !== undefined && forId.length > 0) {
+            ids.add(forId);
+        }
+    }
+    return ids;
+};
+
+const hasAncestorTag = (element: Node, wanted: string): boolean => {
+    let current = element.parent;
+    while (current !== null) {
+        if (current.type === 'element') {
+            const startTag = startTagOf(current);
+            if (startTag !== null && tagName(startTag) === wanted) {
+                return true;
+            }
+        }
+        current = current.parent;
+    }
+    return false;
 };
 
 const descendants = (node: Node, types: string | string[]): Node[] => {

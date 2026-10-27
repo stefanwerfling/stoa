@@ -1,0 +1,40 @@
+{
+  "id": "R-A11Y-FORM-LABEL",
+  "version": "1.0.0",
+  "title": "Form control without an associated label",
+  "feature": "ui.controlMissingLabel",
+  "appliesTo": ["statement"],
+  "principles": ["marcus.purpose"],
+  "dimensions": ["accessibility", "usability"],
+  "trigger": {
+    "all": [{ "fact": "ui.controlMissingLabel", "op": "!=", "value": "" }]
+  },
+  "requiredEvidence": ["ui.controlMissingLabel"],
+  "severity": { "base": "high" },
+  "confidence": { "base": 0.85, "capBy": "certainty" },
+  "message": {
+    "en": "Form control has no associated label (WCAG 2.2 · 1.3.1 / 4.1.2): {value}.",
+    "de": "Formularfeld ohne zugeordnetes Label (WCAG 2.2 · 1.3.1 / 4.1.2): {value}."
+  },
+  "rationale": {
+    "en": "A labelable control (input/select/textarea) with no label — no <label for>, no wrapping <label>, and no aria-label(ledby)/title — is announced without a name, so users cannot tell what to enter (marcus.purpose). A placeholder is not a label.",
+    "de": "Ein beschriftbares Feld (input/select/textarea) ohne Label — kein <label for>, kein umschließendes <label>, kein aria-label(ledby)/title — wird ohne Namen angesagt; Nutzer wissen nicht, was einzugeben ist (marcus.purpose). Ein Placeholder ist kein Label."
+  },
+  "remediation": {
+    "suggestion": {
+      "en": "Associate a <label for> with the control's id, wrap it in a <label>, or set an aria-label; do not rely on placeholder text.",
+      "de": "Ein <label for> mit der id des Feldes verknüpfen, das Feld in ein <label> fassen oder ein aria-label setzen; nicht auf Placeholder-Text verlassen."
+    },
+    "drawbacks": {
+      "en": "None of note; a visible label also helps all users, not only assistive tech.",
+      "de": "Keine nennenswerten; ein sichtbares Label hilft allen Nutzern, nicht nur assistiver Technik."
+    }
+  },
+  "missingContext": [
+    {
+      "en": "aria-labelledby is treated as present but its target is not resolved; a control labelled only by a far-away element may be a false positive or negative.",
+      "de": "aria-labelledby gilt als vorhanden, das Ziel wird aber nicht aufgelöst; ein nur durch ein entferntes Element beschriftetes Feld kann ein Fehlalarm oder -negativ sein."
+    }
+  ],
+  "tests": "test/HtmlA11y.test.ts"
+}

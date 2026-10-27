@@ -44,6 +44,17 @@ test('R-A11Y-CONTROL-NAME flags unnamed buttons, not text/aria-label/svg-title/i
     assert.deepEqual(ids(findings, 'R-A11Y-CONTROL-NAME'), ['button#0', 'button#5'], 'the empty button and the unlabeled icon-only button');
 });
 
+test('R-A11Y-FORM-LABEL flags unlabelled fields, not label-for / wrapping-label / aria / hidden / submit', () => {
+    const findings = analyzePath(join(corpus, 'forms.html'));
+    assert.deepEqual(
+        ids(findings, 'R-A11Y-FORM-LABEL'),
+        ['field#0', 'field#4', 'field#6'],
+        'bare input, bare select and placeholder-only input; a placeholder is not a label'
+    );
+    const first = findings.find((f) => f.rule.id === 'R-A11Y-FORM-LABEL');
+    assert.ok(first?.interpretation.dimensions.includes('accessibility'));
+});
+
 test('a clean page produces no accessibility findings (no false positives)', () => {
     const findings = analyzePath(join(corpus, 'clean.html')).filter((f) => f.rule.id.startsWith('R-A11Y-'));
     assert.deepEqual(findings, []);
@@ -54,15 +65,15 @@ test('UI golden corpus: precision/recall 100% with a per-category breakdown', ()
     const result = evaluate(findings, loadExpected(join(here, 'fixtures', 'html', 'expected.json')), corpus);
     assert.equal(result.overall.precision, 1);
     assert.equal(result.overall.recall, 1);
-    assert.equal(result.overall.truePositives, 3);
+    assert.equal(result.overall.truePositives, 6);
     assert.equal(result.overall.falsePositives, 0);
     assert.equal(result.overall.falseNegatives, 0);
 
     const html = result.byLanguage.find((item) => item.language === 'HTML');
-    assert.equal(html?.truePositives, 3, 'all three are HTML findings');
+    assert.equal(html?.truePositives, 6, 'all findings are HTML findings');
 
     const rules = result.perRule.map((item) => item.rule).sort();
-    assert.deepEqual(rules, ['R-A11Y-CONTROL-NAME', 'R-A11Y-IMG-ALT']);
+    assert.deepEqual(rules, ['R-A11Y-CONTROL-NAME', 'R-A11Y-FORM-LABEL', 'R-A11Y-IMG-ALT']);
     for (const rule of result.perRule) {
         assert.equal(rule.precision, 1, `${rule.rule} precision`);
         assert.equal(rule.recall, 1, `${rule.rule} recall`);

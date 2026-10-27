@@ -3,6 +3,9 @@
   "findings": [
     { "file": "images.html", "rule": "R-A11Y-IMG-ALT", "symbol": "img#0" },
     { "file": "buttons.html", "rule": "R-A11Y-CONTROL-NAME", "symbol": "button#0" },
-    { "file": "buttons.html", "rule": "R-A11Y-CONTROL-NAME", "symbol": "button#5" }
+    { "file": "buttons.html", "rule": "R-A11Y-CONTROL-NAME", "symbol": "button#5" },
+    { "file": "forms.html", "rule": "R-A11Y-FORM-LABEL", "symbol": "field#0" },
+    { "file": "forms.html", "rule": "R-A11Y-FORM-LABEL", "symbol": "field#4" },
+    { "file": "forms.html", "rule": "R-A11Y-FORM-LABEL", "symbol": "field#6" }
   ]
 }

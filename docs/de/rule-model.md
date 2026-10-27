@@ -138,7 +138,7 @@ flowchart TB
 
 ## 5. Regelsatz `default@1` (umgesetzt)
 
-> Der tatsächlich implementierte Regelsatz (22 Regeln). Gesamtüberblick, Facts
+> Der tatsächlich implementierte Regelsatz (23 Regeln). Gesamtüberblick, Facts
 > und Opt-in-Flags: [implementation-status.md](./implementation-status.md).
 
 Deklarative Regeln (`rules/default/*.json`, Default aktiv):
@@ -175,13 +175,18 @@ UI/UX – Barrierefreiheit (HTML, statisch, Default aktiv):
 |----------|----------------|---------|-----------|-----------|
 | `R-A11Y-IMG-ALT` | `ui.imageMissingAlt` | `marcus.purpose` | Barrierefreiheit | syntaktisch (WCAG 1.1.1) |
 | `R-A11Y-CONTROL-NAME` | `ui.controlMissingName` | `marcus.purpose` | Barrierefreiheit, Bedienbarkeit | syntaktisch (WCAG 4.1.2) |
+| `R-A11Y-FORM-LABEL` | `ui.controlMissingLabel` | `marcus.purpose` | Barrierefreiheit, Bedienbarkeit | syntaktisch (WCAG 1.3.1/4.1.2) |
 
 > **UI/UX (HTML):** rein statische Analyse via tree-sitter-html.
 > `R-A11Y-IMG-ALT` meldet `<img>` ohne `alt` (dekoratives `alt=""`,
 > `aria-hidden`, `role=presentation` gelten als korrekt). `R-A11Y-CONTROL-NAME`
 > meldet `<button>` ohne zugänglichen Namen (Text, `aria-label(ledby)`, `title`
-> oder benanntes Kind `img[alt]`/`svg>title`). Die Kategorie (Accessibility) wird
-> auf die Dimension `Barrierefreiheit` abgebildet. Kontrast, sichtbarer Fokus und
+> oder benanntes Kind `img[alt]`/`svg>title`). `R-A11Y-FORM-LABEL` meldet
+> beschriftbare Felder (`input`/`select`/`textarea`) ohne zugeordnetes Label
+> (`<label for>` via id, umschließendes `<label>`, `aria-label(ledby)`/`title`);
+> ein Placeholder zählt **nicht**; `hidden`/`submit`/`button`/`reset`/`image`
+> sind nicht beschriftbar und ausgenommen. Die Kategorie (Accessibility) wird auf
+> die Dimension `Barrierefreiheit` abgebildet. Kontrast, sichtbarer Fokus und
 > gerenderte Zustände sind **nicht** statisch prüfbar und bewusst ausgelassen.
 
 > `R-MIGRATION-UNGUARDED-DDL` greift nur in Migrationsdateien (Klasse

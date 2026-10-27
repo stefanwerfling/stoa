@@ -138,7 +138,7 @@ flowchart TB
 
 ## 5. Rule Set `default@1` (implemented)
 
-> The actually-implemented rule set (22 rules). Overview, facts and opt-in flags:
+> The actually-implemented rule set (23 rules). Overview, facts and opt-in flags:
 > [implementation-status.md](./implementation-status.md).
 
 Declarative rules (`rules/default/*.json`, on by default):
@@ -175,14 +175,19 @@ UI/UX – accessibility (HTML, static, on by default):
 |---------|----------------|-----------|-----------|-----------|
 | `R-A11Y-IMG-ALT` | `ui.imageMissingAlt` | `marcus.purpose` | Accessibility | syntactic (WCAG 1.1.1) |
 | `R-A11Y-CONTROL-NAME` | `ui.controlMissingName` | `marcus.purpose` | Accessibility, usability | syntactic (WCAG 4.1.2) |
+| `R-A11Y-FORM-LABEL` | `ui.controlMissingLabel` | `marcus.purpose` | Accessibility, usability | syntactic (WCAG 1.3.1/4.1.2) |
 
 > **UI/UX (HTML):** static analysis via tree-sitter-html.
 > `R-A11Y-IMG-ALT` reports `<img>` with no `alt` (decorative `alt=""`,
 > `aria-hidden`, `role=presentation` count as correct). `R-A11Y-CONTROL-NAME`
 > reports a `<button>` with no accessible name (text, `aria-label(ledby)`,
-> `title`, or a named child `img[alt]`/`svg>title`). The category (accessibility)
-> maps to the `accessibility` dimension. Contrast, visible focus and rendered
-> states are **not** statically decidable and are deliberately omitted.
+> `title`, or a named child `img[alt]`/`svg>title`). `R-A11Y-FORM-LABEL` reports
+> labelable fields (`input`/`select`/`textarea`) with no associated label
+> (`<label for>` by id, a wrapping `<label>`, `aria-label(ledby)`/`title`); a
+> placeholder does **not** count; `hidden`/`submit`/`button`/`reset`/`image` are
+> not labelable and are excluded. The category (accessibility) maps to the
+> `accessibility` dimension. Contrast, visible focus and rendered states are
+> **not** statically decidable and are deliberately omitted.
 
 > `R-MIGRATION-UNGUARDED-DDL` fires only in migration files (a class that
 > `implements MigrationInterface`) and covers two paths: raw SQL
