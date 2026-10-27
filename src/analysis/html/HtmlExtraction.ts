@@ -31,6 +31,7 @@ export const extractFacts = (root: Node, content: string, filePath: string, info
     let ariaAttrIndex = 0;
     let ariaValueIndex = 0;
     let tabindexIndex = 0;
+    let htmlIndex = 0;
     for (const element of descendants(root, 'element')) {
         const startTag = startTagOf(element);
         if (startTag === null) {
@@ -114,6 +115,15 @@ export const extractFacts = (root: Node, content: string, filePath: string, info
                 facts.push(build({kind: 'ui.positiveTabindex', kindOf: 'statement', symbol: `tabindex#${tabindexIndex}`, range: rangeOf(startTag), value: `tabindex="${tabindex}"`}));
                 tabindexIndex += 1;
             }
+        }
+
+        // The document's <html> element needs a non-empty lang so assistive tech
+        // can pick the right pronunciation/voice. Only flagged when an <html>
+        // element is present: a fragment without one may be included into a page
+        // that carries the language on its root.
+        if (tag === 'html' && (attrs.get('lang') ?? attrs.get('xml:lang') ?? '').trim().length === 0) {
+            facts.push(build({kind: 'ui.documentMissingLang', kindOf: 'statement', symbol: `html#${htmlIndex}`, range: rangeOf(startTag), value: evidence(startTag)}));
+            htmlIndex += 1;
         }
     }
 

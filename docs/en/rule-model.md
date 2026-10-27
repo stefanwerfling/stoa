@@ -138,7 +138,7 @@ flowchart TB
 
 ## 5. Rule Set `default@1` (implemented)
 
-> The actually-implemented rule set (29 rules). Overview, facts and opt-in flags:
+> The actually-implemented rule set (30 rules). Overview, facts and opt-in flags:
 > [implementation-status.md](./implementation-status.md).
 
 Declarative rules (`rules/default/*.json`, on by default):
@@ -182,6 +182,7 @@ UI/UX – accessibility (HTML, static, on by default):
 | `R-A11Y-ARIA-UNKNOWN-ATTR` | `ui.unknownAriaAttribute` | `marcus.purpose` | Accessibility | syntactic (WCAG 4.1.2) |
 | `R-A11Y-ARIA-INVALID-VALUE` | `ui.invalidAriaValue` | `marcus.purpose` | Accessibility | syntactic (WCAG 4.1.2) |
 | `R-A11Y-POSITIVE-TABINDEX` | `ui.positiveTabindex` | `marcus.cooperation` | Accessibility, usability | syntactic (WCAG 2.4.3) |
+| `R-A11Y-HTML-LANG` | `ui.documentMissingLang` | `marcus.purpose` | Accessibility | syntactic (WCAG 3.1.1) |
 
 > **UI/UX (HTML):** static analysis via tree-sitter-html.
 > `R-A11Y-IMG-ALT` reports `<img>` with no `alt` (decorative `alt=""`,
@@ -212,7 +213,10 @@ UI/UX – accessibility (HTML, static, on by default):
 > template output) are skipped to avoid false positives. `R-A11Y-POSITIVE-TABINDEX`
 > reports a clean positive-integer `tabindex` (> 0), which forces the element ahead
 > of the natural DOM focus order; `tabindex="0"`/negative, non-integer and dynamic
-> values are left alone (WCAG 2.4.3). The category (accessibility) maps to the
+> values are left alone (WCAG 2.4.3). `R-A11Y-HTML-LANG` reports an `<html>`
+> element with no (or empty) `lang`/`xml:lang` so assistive tech cannot choose the
+> pronunciation; fragments without an `<html>` element are not flagged and the tag
+> value is not validated against BCP 47 (WCAG 3.1.1). The category (accessibility) maps to the
 > `accessibility` dimension. Contrast, visible focus and rendered states are
 > **not** statically decidable and are deliberately omitted.
 

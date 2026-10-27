@@ -138,7 +138,7 @@ flowchart TB
 
 ## 5. Regelsatz `default@1` (umgesetzt)
 
-> Der tatsächlich implementierte Regelsatz (29 Regeln). Gesamtüberblick, Facts
+> Der tatsächlich implementierte Regelsatz (30 Regeln). Gesamtüberblick, Facts
 > und Opt-in-Flags: [implementation-status.md](./implementation-status.md).
 
 Deklarative Regeln (`rules/default/*.json`, Default aktiv):
@@ -182,6 +182,7 @@ UI/UX – Barrierefreiheit (HTML, statisch, Default aktiv):
 | `R-A11Y-ARIA-UNKNOWN-ATTR` | `ui.unknownAriaAttribute` | `marcus.purpose` | Barrierefreiheit | syntaktisch (WCAG 4.1.2) |
 | `R-A11Y-ARIA-INVALID-VALUE` | `ui.invalidAriaValue` | `marcus.purpose` | Barrierefreiheit | syntaktisch (WCAG 4.1.2) |
 | `R-A11Y-POSITIVE-TABINDEX` | `ui.positiveTabindex` | `marcus.cooperation` | Barrierefreiheit, Bedienbarkeit | syntaktisch (WCAG 2.4.3) |
+| `R-A11Y-HTML-LANG` | `ui.documentMissingLang` | `marcus.purpose` | Barrierefreiheit | syntaktisch (WCAG 3.1.1) |
 
 > **UI/UX (HTML):** rein statische Analyse via tree-sitter-html.
 > `R-A11Y-IMG-ALT` meldet `<img>` ohne `alt` (dekoratives `alt=""`,
@@ -215,7 +216,11 @@ UI/UX – Barrierefreiheit (HTML, statisch, Default aktiv):
 > werden übersprungen, um Fehlalarme zu vermeiden. `R-A11Y-POSITIVE-TABINDEX`
 > meldet einen sauberen positiven Ganzzahl-`tabindex` (> 0), der das Element vor
 > die natürliche DOM-Fokusreihenfolge zieht; `tabindex="0"`/negative,
-> nicht-ganzzahlige und dynamische Werte bleiben unberührt (WCAG 2.4.3). Die Kategorie
+> nicht-ganzzahlige und dynamische Werte bleiben unberührt (WCAG 2.4.3).
+> `R-A11Y-HTML-LANG` meldet ein `<html>`-Element ohne (oder mit leerem)
+> `lang`/`xml:lang`, sodass assistive Technik die Aussprache nicht wählen kann;
+> Fragmente ohne `<html>`-Element werden nicht gemeldet, und der Tag-Wert wird
+> nicht gegen BCP 47 geprüft (WCAG 3.1.1). Die Kategorie
 > (Accessibility) wird auf die Dimension `Barrierefreiheit` abgebildet. Kontrast,
 > sichtbarer Fokus und gerenderte Zustände sind **nicht** statisch prüfbar und
 > bewusst ausgelassen.

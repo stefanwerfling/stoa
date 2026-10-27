@@ -1,0 +1,40 @@
+{
+  "id": "R-A11Y-HTML-LANG",
+  "version": "1.0.0",
+  "title": "Document is missing a language",
+  "feature": "ui.documentMissingLang",
+  "appliesTo": ["statement"],
+  "principles": ["marcus.purpose"],
+  "dimensions": ["accessibility"],
+  "trigger": {
+    "all": [{ "fact": "ui.documentMissingLang", "op": "!=", "value": "" }]
+  },
+  "requiredEvidence": ["ui.documentMissingLang"],
+  "severity": { "base": "medium" },
+  "confidence": { "base": 0.9, "capBy": "certainty" },
+  "message": {
+    "en": "The <html> element has no lang attribute (WCAG 2.2 · 3.1.1).",
+    "de": "Das <html>-Element hat kein lang-Attribut (WCAG 2.2 · 3.1.1)."
+  },
+  "rationale": {
+    "en": "Without a document language, assistive tech cannot choose the correct pronunciation, voice or braille table, so the content is spoken with the wrong phonetics — the page does not state what it plainly is (marcus.purpose).",
+    "de": "Ohne Dokumentsprache kann assistive Technik keine korrekte Aussprache, Stimme oder Braille-Tabelle wählen; der Inhalt wird mit falscher Phonetik vorgelesen — die Seite benennt nicht, was sie schlicht ist (marcus.purpose)."
+  },
+  "remediation": {
+    "suggestion": {
+      "en": "Add a valid BCP 47 language tag to the root element, e.g. <html lang=\"en\"> or <html lang=\"de\">.",
+      "de": "Ein gültiges BCP-47-Sprach-Tag am Wurzelelement ergänzen, z. B. <html lang=\"en\"> oder <html lang=\"de\">."
+    },
+    "drawbacks": {
+      "en": "None of note.",
+      "de": "Keine nennenswerten."
+    }
+  },
+  "missingContext": [
+    {
+      "en": "Only flagged when an <html> element is present and its lang (or xml:lang) is empty/absent; HTML fragments without an <html> element are not flagged, and the value is not checked against the BCP 47 registry.",
+      "de": "Nur gemeldet, wenn ein <html>-Element vorhanden ist und dessen lang (bzw. xml:lang) leer/fehlend ist; HTML-Fragmente ohne <html>-Element werden nicht gemeldet, und der Wert wird nicht gegen das BCP-47-Register geprüft."
+    }
+  ],
+  "tests": "test/HtmlA11y.test.ts"
+}
