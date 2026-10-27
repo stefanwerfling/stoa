@@ -105,7 +105,7 @@ These are the honest boundary: stoa reports the provable and points at where a
 ## 8. Suggested next steps
 
 1. **Visual-analysis slice** (browser automation) for the cascade/rendered contrast (beyond inline pairs) and visible focus — the biggest remaining coverage gap, and genuinely out of static reach. Designed as a concept in [visual-analysis-layer.md](./visual-analysis-layer.md) (optional, environment-dependent, separated from the deterministic core); not yet built.
-2. **React/JSX** — landed: the TypeScript adapter walks JSX and emits the same facts, so 11 of the 14 rules fire on `.jsx/.tsx`, including name computation (dynamic-aware) and contrast from style={{…}} object literals. The four document/cross-element rules stay HTML-only (app-shell / dynamic-id reasons). **Vue SFC** templates are also covered for the 8 attribute/contrast rules (shared template extraction); **Angular** is next.
+2. **React/JSX** — landed: the TypeScript adapter walks JSX and emits the same facts, so 11 of the 14 rules fire on `.jsx/.tsx`, including name computation (dynamic-aware) and contrast from style={{…}} object literals. The four document/cross-element rules stay HTML-only (app-shell / dynamic-id reasons). **Vue SFC** templates are also covered for the 8 attribute/contrast rules (shared template extraction with a binding dialect); **Angular** `*.component.html` too.
 3. **Table semantics / heading order** only if a low-false-positive, context-aware formulation is found — otherwise leave to the visual slice.
 
 Nothing here changes stoa's stance: it states what it can prove, estimates

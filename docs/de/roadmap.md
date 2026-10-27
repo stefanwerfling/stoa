@@ -86,8 +86,8 @@ flowchart LR
 3. **Optionale Semantik** (LLM) — erst mit belastbarem Eval-Rahmen.
 4. **Wissensbasis-Breite** (weitere Werke/Prinzipien, Experten-Review-Pipeline).
 5. **Trend/History** (Qualitätsprofil über Zeit, ohne Single-Score-Fehlanreiz).
-6. **UI/UX-Breite** — statische A11y ist für HTML, React/JSX und Vue-SFC-Templates
-   umgesetzt (Angular als Nächstes; siehe implementation-status). Die gerenderten Prüfungen (Kaskaden-Kontrast,
+6. **UI/UX-Breite** — statische A11y ist für HTML, React/JSX, Vue-SFC- und Angular-Templates
+   umgesetzt (siehe implementation-status). Die gerenderten Prüfungen (Kaskaden-Kontrast,
    sichtbarer Fokus) sind als optionaler, umgebungsabhängiger Browser-Layer in
    [visual-analysis-layer.md](./visual-analysis-layer.md) entworfen, bewusst
    außerhalb des deterministischen Kerns; noch nicht gebaut.

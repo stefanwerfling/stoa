@@ -251,7 +251,8 @@ UI/UX – accessibility (HTML, static, on by default):
 > ported to JSX (app-shell / dynamic-id reasons). The 8 attribute/contrast rules
 > also run on **Vue SFC** `<template>` markup via a shared template extraction with
 > a Vue binding dialect (`:x`/`v-bind` dynamic, `@x`/`v-` dropped, `{{…}}`
-> dynamic); Angular templates will reuse it with an Angular dialect.
+> dynamic) and on **Angular** `*.component.html` templates with an Angular dialect
+> (`[x]`/`[attr.x]`/`bind-` dynamic, `(x)`/`[(…)]`/`*ngX`/`#ref` dropped).
 > `R-A11Y-CONTRAST-TEXT` computes
 > the WCAG contrast ratio deterministically **only** when a text colour and a
 > background colour are declared together on the element's inline `style` (HTML) or

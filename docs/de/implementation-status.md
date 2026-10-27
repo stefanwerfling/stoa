@@ -34,6 +34,12 @@
   `@x`/`v-on`/andere `v-`-Direktiven werden verworfen, Komponenten und
   `<script>`/`<style>` nicht analysiert. Die Namensberechnungs-Regeln sind für
   Templates noch nicht portiert.
+- **UI/UX (Angular):** externe `*.component.html`-Templates nutzen dieselbe
+  Template-Extraktion mit Angular-Binding-Dialekt — `[alt]`/`[attr.aria-label]`
+  (und `bind-`) gelten als vorhanden-aber-unbekannt, `(event)`/`[(two-way)]`/`*ngIf`/`#ref`
+  werden verworfen. Der Angular-Adapter wird vor dem HTML-Adapter registriert,
+  damit `.component.html` nicht als Plain-HTML behandelt wird. Inline-`template:`-Strings
+  sind noch nicht abgedeckt.
 - **Pipeline:** Ingestion → Fact-Extraktion → Regel-Engine → Befunde → Reporter.
   Keine Uhr/kein Zufall/kein Netz im Kern; gleiche Eingabe + Versionen + Sprache ⇒
   byte-identische Befunde.
@@ -82,21 +88,21 @@ Deklarative Regeln (`rules/default/*.json`), Default aktiv:
 | R-MIGRATION-UNGUARDED-DDL | marcus.obstacle | Robustheit, Fehlerbehandlung | TS/JS, PHP (nur Migrationsdateien) |
 | R-MIGRATION-NO-DOWN | marcus.judgment | Robustheit, Belegbarkeit | TS/JS, PHP (nur Migrationsdateien) |
 | R-MIGRATION-DATA-LOSS | marcus.judgment | Robustheit, Belegbarkeit | TS/JS, PHP (Drops im `up()`) |
-| R-A11Y-IMG-ALT | marcus.purpose | Barrierefreiheit | HTML, JSX, Vue (statisch, WCAG 1.1.1) |
+| R-A11Y-IMG-ALT | marcus.purpose | Barrierefreiheit | HTML, JSX, Vue, Angular (statisch, WCAG 1.1.1) |
 | R-A11Y-CONTROL-NAME | marcus.purpose | Barrierefreiheit, Bedienbarkeit | HTML, JSX (statisch, WCAG 4.1.2) |
 | R-A11Y-FORM-LABEL | marcus.purpose | Barrierefreiheit, Bedienbarkeit | HTML, JSX (statisch, WCAG 1.3.1/4.1.2) |
 | R-A11Y-LINK-NAME | marcus.purpose | Barrierefreiheit, Bedienbarkeit | HTML, JSX (statisch, WCAG 2.4.4/4.1.2) |
-| R-A11Y-ARIA-HIDDEN-FOCUSABLE | marcus.cooperation | Barrierefreiheit, Bedienbarkeit | HTML, JSX, Vue (statisch, WCAG 4.1.2) |
-| R-A11Y-ARIA-INVALID-ROLE | marcus.purpose | Barrierefreiheit | HTML, JSX, Vue (statisch, WCAG 4.1.2) |
-| R-A11Y-ARIA-UNKNOWN-ATTR | marcus.purpose | Barrierefreiheit | HTML, JSX, Vue (statisch, WCAG 4.1.2) |
-| R-A11Y-ARIA-INVALID-VALUE | marcus.purpose | Barrierefreiheit | HTML, JSX, Vue (statisch, WCAG 4.1.2) |
-| R-A11Y-POSITIVE-TABINDEX | marcus.cooperation | Barrierefreiheit, Bedienbarkeit | HTML, JSX, Vue (statisch, WCAG 2.4.3) |
+| R-A11Y-ARIA-HIDDEN-FOCUSABLE | marcus.cooperation | Barrierefreiheit, Bedienbarkeit | HTML, JSX, Vue, Angular (statisch, WCAG 4.1.2) |
+| R-A11Y-ARIA-INVALID-ROLE | marcus.purpose | Barrierefreiheit | HTML, JSX, Vue, Angular (statisch, WCAG 4.1.2) |
+| R-A11Y-ARIA-UNKNOWN-ATTR | marcus.purpose | Barrierefreiheit | HTML, JSX, Vue, Angular (statisch, WCAG 4.1.2) |
+| R-A11Y-ARIA-INVALID-VALUE | marcus.purpose | Barrierefreiheit | HTML, JSX, Vue, Angular (statisch, WCAG 4.1.2) |
+| R-A11Y-POSITIVE-TABINDEX | marcus.cooperation | Barrierefreiheit, Bedienbarkeit | HTML, JSX, Vue, Angular (statisch, WCAG 2.4.3) |
 | R-A11Y-HTML-LANG | marcus.purpose | Barrierefreiheit | HTML (statisch, WCAG 3.1.1) |
 | R-A11Y-META-VIEWPORT-ZOOM | marcus.cooperation | Barrierefreiheit, Bedienbarkeit | HTML (statisch, WCAG 1.4.4) |
 | R-A11Y-ARIA-DANGLING-IDREF | marcus.purpose | Barrierefreiheit | HTML (statisch, WCAG 1.3.1/4.1.2) |
 | R-A11Y-DUPLICATE-ID | marcus.purpose | Barrierefreiheit | HTML (statisch, WCAG 1.3.1/4.1.2) |
-| R-A11Y-FRAME-TITLE | marcus.purpose | Barrierefreiheit, Bedienbarkeit | HTML, JSX, Vue (statisch, WCAG 4.1.2) |
-| R-A11Y-CONTRAST-TEXT | marcus.cooperation | Barrierefreiheit, Bedienbarkeit | HTML, JSX, Vue (Inline-Farben, WCAG 1.4.3) |
+| R-A11Y-FRAME-TITLE | marcus.purpose | Barrierefreiheit, Bedienbarkeit | HTML, JSX, Vue, Angular (statisch, WCAG 4.1.2) |
+| R-A11Y-CONTRAST-TEXT | marcus.cooperation | Barrierefreiheit, Bedienbarkeit | HTML, JSX, Vue, Angular (Inline-Farben, WCAG 1.4.3) |
 
 Prozedurale Regeln (`ProjectRule`, cross-file):
 
@@ -126,7 +132,7 @@ mindestens eine Regel.
 
 ## Qualitätssicherung
 
-- **138 node:test-Fälle** grün (Regeln pos./neg., Extraktion, Schema-Validierung,
+- **142 node:test-Fälle** grün (Regeln pos./neg., Extraktion, Schema-Validierung,
   i18n, Determinismus, SARIF, Eval, Semantik-Groundedness, Datenschutz,
   Finding-Trennung).
 - **Golden-Korpus** (`test/corpus/`, **nur TS+PHP**) mit Ground-Truth; Eval
@@ -145,6 +151,10 @@ mindestens eine Regel.
   `.vue`-Template; 100 %/100 % (TP 8), mit Bindings (`:`/`v-bind`/`@`), `{{…}}`,
   einem dynamischen `:style`, einem `<style>`-Block und einer Komponente, plus
   einer Clean-Komponente.
+- **Angular-Korpus** (`test/fixtures/angular/`): die acht portierten A11y-Regeln auf
+  einer `*.component.html`; 100 %/100 % (TP 8), mit `[x]`/`[attr.x]`/`(event)`/`*ngIf`-Bindings
+  und einem dynamischen `[style.color]`, plus einem Clean-Template — und einem Test,
+  dass der Angular-Dialekt (nicht Plain-HTML) lief.
 - Dogfooding: stoa analysiert den eigenen `src/`.
 
 ## Abweichungen vom Konzept (bewusst, dokumentiert)
@@ -185,10 +195,11 @@ vier Dokument-/Cross-Element-Regeln (`-HTML-LANG`, `-META-VIEWPORT-ZOOM`,
 Next.js-`_document`/`Head`, nicht im Komponenten-JSX), und id/idref-Auflösung über
 Komponenten mit dynamischen ids ist statisch nicht zuverlässig. **Vue SFC** ist
 für die 8 Attribut-/Kontrast-Regeln abgedeckt (geteilte Template-Extraktion mit
-Vue-Binding-Dialekt); **Angular**-Templates folgen (dieselbe Extraktion mit
-Angular-Dialekt — `[x]`/`[attr.x]`/`(x)`/`*ngX`). Nächste statische Schritte: die
-Template-Namensberechnungs-Regeln portieren; weitere ARIA-Prüfungen (z. B.
-`aria-*`-Attribute, die für die Rolle des Elements ungültig sind). (Umgesetzt: `R-A11Y-FORM-LABEL`, `R-A11Y-LINK-NAME`,
+Vue-Binding-Dialekt); **Angular** externe `*.component.html`-Templates nutzen sie
+mit einem Angular-Dialekt (`[x]`/`[attr.x]`/`(x)`/`*ngX`). Nächste statische
+Schritte: Inline-Angular-`template:`-Strings und Vue/Angular-Namensberechnungs-Regeln;
+weitere ARIA-Prüfungen (z. B. `aria-*`-Attribute, die für die Rolle des Elements
+ungültig sind). (Umgesetzt: `R-A11Y-FORM-LABEL`, `R-A11Y-LINK-NAME`,
 `R-A11Y-ARIA-HIDDEN-FOCUSABLE`, `R-A11Y-ARIA-INVALID-ROLE`,
 `R-A11Y-ARIA-UNKNOWN-ATTR`, `R-A11Y-ARIA-INVALID-VALUE`,
 `R-A11Y-POSITIVE-TABINDEX`, `R-A11Y-HTML-LANG`, `R-A11Y-META-VIEWPORT-ZOOM`,

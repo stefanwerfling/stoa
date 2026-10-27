@@ -256,7 +256,8 @@ UI/UX – Barrierefreiheit (HTML, statisch, Default aktiv):
 > (App-Shell-/dynamische-id-Gründe). Die 8 Attribut-/Kontrast-Regeln laufen auch
 > auf **Vue-SFC**-`<template>`-Markup über eine geteilte Template-Extraktion mit
 > Vue-Binding-Dialekt (`:x`/`v-bind` dynamisch, `@x`/`v-` verworfen, `{{…}}`
-> dynamisch); Angular-Templates nutzen sie künftig mit einem Angular-Dialekt.
+> dynamisch) sowie auf **Angular**-`*.component.html`-Templates mit einem
+> Angular-Dialekt (`[x]`/`[attr.x]`/`bind-` dynamisch, `(x)`/`[(…)]`/`*ngX`/`#ref` verworfen).
 > `R-A11Y-CONTRAST-TEXT` berechnet das
 > WCAG-Kontrastverhältnis deterministisch **nur**, wenn eine Text- und eine
 > Hintergrundfarbe gemeinsam im Inline-`style` des Elements (HTML) oder im

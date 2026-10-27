@@ -1,6 +1,7 @@
 import {AdapterRegistry} from './analysis/AdapterRegistry.js';
 import {CppAdapter} from './analysis/CppAdapter.js';
 import {DartAdapter} from './analysis/DartAdapter.js';
+import {AngularAdapter} from './analysis/AngularAdapter.js';
 import {HtmlAdapter} from './analysis/HtmlAdapter.js';
 import {VueAdapter} from './analysis/VueAdapter.js';
 import {PhpAdapter} from './analysis/PhpAdapter.js';
@@ -44,6 +45,7 @@ export const analyze = (options: AnalyzeOptions): AnalysisResult => {
         .register(new PhpAdapter())
         .register(new DartAdapter())
         .register(new CppAdapter())
+        .register(new AngularAdapter())
         .register(new HtmlAdapter())
         .register(new VueAdapter());
     const knowledgeBase = KnowledgeBase.loadFromDirectory(options.knowledgeDir, options.config.knowledgeBase);

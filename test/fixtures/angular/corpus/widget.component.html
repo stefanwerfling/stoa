@@ -1,0 +1,18 @@
+<div>
+  <img src="/a.png" />
+  <img src="/b.png" alt="A described image" />
+  <img [alt]="caption" src="/c.png" />
+  <img [attr.alt]="label" src="/d.png" />
+  <div role="buton">typo role</div>
+  <div [attr.role]="dynamicRole">dynamic role, skipped</div>
+  <span aria-labeledby="x">unknown aria attr</span>
+  <span aria-hidden="yes">invalid aria value</span>
+  <button tabindex="5">Jump</button>
+  <button aria-hidden="true" tabindex="0">hidden but focusable</button>
+  <iframe src="/map"></iframe>
+  <iframe src="/v" title="Intro"></iframe>
+  <p style="color: #999; background: #fff">low contrast</p>
+  <p [style.color]="c">dynamic style, skipped</p>
+  <button (click)="save()" aria-label="Save">x</button>
+  <input *ngIf="show" [attr.aria-label]="l" />
+</div>
