@@ -27,6 +27,7 @@ export const extractFacts = (root: Node, content: string, filePath: string, info
     let fieldIndex = 0;
     let linkIndex = 0;
     let ariaHiddenIndex = 0;
+    let roleIndex = 0;
     for (const element of descendants(root, 'element')) {
         const startTag = startTagOf(element);
         if (startTag === null) {
@@ -72,9 +73,40 @@ export const extractFacts = (root: Node, content: string, filePath: string, info
             facts.push(build({kind: 'ui.ariaHiddenFocusable', kindOf: 'statement', symbol: `aria-hidden#${ariaHiddenIndex}`, range: rangeOf(startTag), value: evidence(startTag)}));
             ariaHiddenIndex += 1;
         }
+
+        // A non-empty role whose tokens include no valid WAI-ARIA role (a typo or
+        // an author-forbidden abstract role) conveys no role at all.
+        const role = attrs.get('role');
+        if (role !== undefined && hasRoleTokens(role) && !hasValidRole(role)) {
+            facts.push(build({kind: 'ui.invalidRole', kindOf: 'statement', symbol: `role#${roleIndex}`, range: rangeOf(startTag), value: `role="${role}"`}));
+            roleIndex += 1;
+        }
     }
 
     return facts;
+};
+
+// WAI-ARIA 1.2 concrete (non-abstract) roles. Abstract roles (widget, landmark,
+// input, …) are intentionally absent: authors must not use them, so they count
+// as invalid. doc-* (DPUB-ARIA) and graphics-* (Graphics-ARIA) module roles are
+// accepted by prefix rather than enumerated.
+const ARIA_ROLES: ReadonlySet<string> = new Set([
+    'alert', 'alertdialog', 'application', 'article', 'banner', 'blockquote', 'button', 'caption', 'cell', 'checkbox', 'code',
+    'columnheader', 'combobox', 'complementary', 'contentinfo', 'definition', 'deletion', 'dialog', 'directory', 'document',
+    'emphasis', 'feed', 'figure', 'form', 'generic', 'grid', 'gridcell', 'group', 'heading', 'img', 'insertion', 'link', 'list',
+    'listbox', 'listitem', 'log', 'main', 'mark', 'marquee', 'math', 'menu', 'menubar', 'menuitem', 'menuitemcheckbox',
+    'menuitemradio', 'meter', 'navigation', 'none', 'note', 'option', 'paragraph', 'presentation', 'progressbar', 'radio',
+    'radiogroup', 'region', 'row', 'rowgroup', 'rowheader', 'scrollbar', 'search', 'searchbox', 'separator', 'slider',
+    'spinbutton', 'status', 'strong', 'subscript', 'superscript', 'switch', 'tab', 'table', 'tablist', 'tabpanel', 'term',
+    'textbox', 'time', 'timer', 'toolbar', 'tooltip', 'tree', 'treegrid', 'treeitem'
+]);
+
+const roleTokens = (role: string): string[] => role.trim().split(/\s+/).filter((token) => token.length > 0);
+
+const hasRoleTokens = (role: string): boolean => roleTokens(role).length > 0;
+
+const hasValidRole = (role: string): boolean => {
+    return roleTokens(role).some((token) => ARIA_ROLES.has(token.toLowerCase()) || token.startsWith('doc-') || token.startsWith('graphics-'));
 };
 
 const NATIVELY_FOCUSABLE: ReadonlySet<string> = new Set(['button', 'select', 'textarea', 'input']);

@@ -1,0 +1,40 @@
+{
+  "id": "R-A11Y-ARIA-INVALID-ROLE",
+  "version": "1.0.0",
+  "title": "Invalid ARIA role",
+  "feature": "ui.invalidRole",
+  "appliesTo": ["statement"],
+  "principles": ["marcus.purpose"],
+  "dimensions": ["accessibility"],
+  "trigger": {
+    "all": [{ "fact": "ui.invalidRole", "op": "!=", "value": "" }]
+  },
+  "requiredEvidence": ["ui.invalidRole"],
+  "severity": { "base": "medium" },
+  "confidence": { "base": 0.9, "capBy": "certainty" },
+  "message": {
+    "en": "Element has an invalid ARIA role (WCAG 2.2 · 4.1.2): {value}.",
+    "de": "Element mit ungültiger ARIA-Rolle (WCAG 2.2 · 4.1.2): {value}."
+  },
+  "rationale": {
+    "en": "A role whose tokens include no defined WAI-ARIA role — a typo (role=\"buton\") or an author-forbidden abstract role (role=\"widget\") — is ignored by assistive tech, so the element's intended role is not conveyed (marcus.purpose).",
+    "de": "Eine Rolle, deren Tokens keine definierte WAI-ARIA-Rolle enthalten — ein Tippfehler (role=\"buton\") oder eine für Autoren verbotene abstrakte Rolle (role=\"widget\") — wird von assistiver Technik ignoriert; die beabsichtigte Rolle des Elements wird nicht vermittelt (marcus.purpose)."
+  },
+  "remediation": {
+    "suggestion": {
+      "en": "Use a valid WAI-ARIA role, or rely on the correct native HTML element whose implicit role already fits; remove the role if it adds nothing.",
+      "de": "Eine gültige WAI-ARIA-Rolle verwenden oder das passende native HTML-Element nutzen, dessen implizite Rolle bereits stimmt; die Rolle entfernen, wenn sie nichts beiträgt."
+    },
+    "drawbacks": {
+      "en": "None of note; an unrecognized role never has an effect.",
+      "de": "Keine nennenswerten; eine nicht erkannte Rolle hat ohnehin keine Wirkung."
+    }
+  },
+  "missingContext": [
+    {
+      "en": "A role token list is treated as valid if any token is a known role (first-valid-wins, per ARIA); doc-* and graphics-* module roles are accepted by prefix, not fully resolved.",
+      "de": "Eine Rollen-Tokenliste gilt als gültig, wenn ein Token eine bekannte Rolle ist (erster gültiger gewinnt, gemäß ARIA); doc-*- und graphics-*-Modulrollen werden per Präfix akzeptiert, nicht vollständig aufgelöst."
+    }
+  ],
+  "tests": "test/HtmlA11y.test.ts"
+}

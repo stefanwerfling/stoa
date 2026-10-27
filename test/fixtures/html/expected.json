@@ -11,6 +11,8 @@
     { "file": "links.html", "rule": "R-A11Y-LINK-NAME", "symbol": "link#3" },
     { "file": "aria-hidden.html", "rule": "R-A11Y-ARIA-HIDDEN-FOCUSABLE", "symbol": "aria-hidden#0" },
     { "file": "aria-hidden.html", "rule": "R-A11Y-ARIA-HIDDEN-FOCUSABLE", "symbol": "aria-hidden#1" },
-    { "file": "aria-hidden.html", "rule": "R-A11Y-ARIA-HIDDEN-FOCUSABLE", "symbol": "aria-hidden#2" }
+    { "file": "aria-hidden.html", "rule": "R-A11Y-ARIA-HIDDEN-FOCUSABLE", "symbol": "aria-hidden#2" },
+    { "file": "roles.html", "rule": "R-A11Y-ARIA-INVALID-ROLE", "symbol": "role#0" },
+    { "file": "roles.html", "rule": "R-A11Y-ARIA-INVALID-ROLE", "symbol": "role#1" }
   ]
 }

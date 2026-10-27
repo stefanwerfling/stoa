@@ -75,6 +75,15 @@ test('R-A11Y-ARIA-HIDDEN-FOCUSABLE flags focusable aria-hidden elements, not dec
     assert.equal(first?.interpretation.principles[0]?.id, 'marcus.cooperation');
 });
 
+test('R-A11Y-ARIA-INVALID-ROLE flags typos/abstract roles, not valid roles / first-valid-token / doc-* / empty', () => {
+    const findings = analyzePath(join(corpus, 'roles.html'));
+    assert.deepEqual(
+        ids(findings, 'R-A11Y-ARIA-INVALID-ROLE'),
+        ['role#0', 'role#1'],
+        'the typo and the abstract role; a valid role, a first-valid token list, a doc-* role and an empty role are fine'
+    );
+});
+
 test('a clean page produces no accessibility findings (no false positives)', () => {
     const findings = analyzePath(join(corpus, 'clean.html')).filter((f) => f.rule.id.startsWith('R-A11Y-'));
     assert.deepEqual(findings, []);
@@ -85,15 +94,15 @@ test('UI golden corpus: precision/recall 100% with a per-category breakdown', ()
     const result = evaluate(findings, loadExpected(join(here, 'fixtures', 'html', 'expected.json')), corpus);
     assert.equal(result.overall.precision, 1);
     assert.equal(result.overall.recall, 1);
-    assert.equal(result.overall.truePositives, 11);
+    assert.equal(result.overall.truePositives, 13);
     assert.equal(result.overall.falsePositives, 0);
     assert.equal(result.overall.falseNegatives, 0);
 
     const html = result.byLanguage.find((item) => item.language === 'HTML');
-    assert.equal(html?.truePositives, 11, 'all findings are HTML findings');
+    assert.equal(html?.truePositives, 13, 'all findings are HTML findings');
 
     const rules = result.perRule.map((item) => item.rule).sort();
-    assert.deepEqual(rules, ['R-A11Y-ARIA-HIDDEN-FOCUSABLE', 'R-A11Y-CONTROL-NAME', 'R-A11Y-FORM-LABEL', 'R-A11Y-IMG-ALT', 'R-A11Y-LINK-NAME']);
+    assert.deepEqual(rules, ['R-A11Y-ARIA-HIDDEN-FOCUSABLE', 'R-A11Y-ARIA-INVALID-ROLE', 'R-A11Y-CONTROL-NAME', 'R-A11Y-FORM-LABEL', 'R-A11Y-IMG-ALT', 'R-A11Y-LINK-NAME']);
     for (const rule of result.perRule) {
         assert.equal(rule.precision, 1, `${rule.rule} precision`);
         assert.equal(rule.recall, 1, `${rule.rule} recall`);
