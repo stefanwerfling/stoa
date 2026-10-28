@@ -71,6 +71,24 @@ test('JSX accessible name & focusability: same semantics as HTML (hidden text, e
     );
 });
 
+test('HTML image: aria-label / resolving aria-labelledby is a text alternative; empty/dangling is not', () => {
+    const findings = analyzeFixture('html-img.html');
+    assert.deepEqual(
+        ids(findings, 'R-A11Y-IMG-ALT'),
+        ['img#2', 'img#3', 'img#4'],
+        'bare img, empty aria-label and dangling aria-labelledby are flagged; a real aria-label and a resolving aria-labelledby are fine'
+    );
+});
+
+test('JSX image: a non-empty aria-label(ledby) is a text alternative, an empty aria-label is not', () => {
+    const findings = analyzeFixture('jsx-img.tsx');
+    assert.deepEqual(
+        ids(findings, 'R-A11Y-IMG-ALT'),
+        ['img#0', 'img#1'],
+        'the bare img and the empty-aria-label img are flagged; aria-label and non-empty aria-labelledby are fine'
+    );
+});
+
 test('Vue template: the HTML correctness changes apply consistently (contrast under aria-hidden, empty aria-labelledby frame)', () => {
     const findings = analyzeFixture('vue-hidden.vue');
     assert.deepEqual(ids(findings, 'R-A11Y-CONTRAST-TEXT'), ['contrast#0'], 'low contrast under aria-hidden is flagged');

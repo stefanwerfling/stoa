@@ -62,8 +62,9 @@ export const extractFacts = (root: Node, content: string, filePath: string, info
             imageIndex += 1;
             // alt="" is a valid decorative image; aria-hidden, or role=presentation/
             // none on this non-focusable element, removes it from the accessibility
-            // tree — none of these is a violation.
-            if (!attrs.has('alt') && !isDecorative(tag, attrs)) {
+            // tree; a non-empty aria-label or a resolving aria-labelledby is also a
+            // text alternative (WCAG 1.1.1) — none of these is a violation.
+            if (!attrs.has('alt') && !isDecorative(tag, attrs) && !imgHasTextAlternative(attrs, idToElement)) {
                 facts.push(build({kind: 'ui.imageMissingAlt', kindOf: 'statement', symbol, range: rangeOf(startTag), value: evidence(startTag)}));
             }
         } else if (tag === 'button') {
@@ -472,6 +473,13 @@ const attributes = (startTag: Node): Map<string, string> => {
 // element — so controls still need a name. Use isDecorative for the image case.
 const isAriaHidden = (attrs: Map<string, string>): boolean => {
     return attrs.get('aria-hidden') === 'true';
+};
+
+// Whether an image carries a text alternative other than alt: a non-empty
+// aria-label, or an aria-labelledby that resolves to non-empty text. Both satisfy
+// WCAG 1.1.1 just as alt does, so such an image is not missing its alternative.
+const imgHasTextAlternative = (attrs: Map<string, string>, idToElement: ReadonlyMap<string, Node>): boolean => {
+    return (attrs.get('aria-label') ?? '').trim().length > 0 || labelledbyResolvesToName(attrs, idToElement);
 };
 
 // Whether an image is exempt from needing alt text: aria-hidden, or a

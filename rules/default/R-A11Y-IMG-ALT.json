@@ -32,8 +32,8 @@
   },
   "missingContext": [
     {
-      "en": "A text alternative supplied via aria-labelledby is not resolved here; such an image may be a false positive.",
-      "de": "Eine über aria-labelledby bereitgestellte Textalternative wird hier nicht aufgelöst; ein solches Bild kann ein Fehlalarm sein."
+      "en": "An image with a non-empty aria-label — or, in HTML, an aria-labelledby that resolves to text — is treated as having a text alternative and is not flagged; in JSX/Vue/Angular aria-labelledby targets are not resolved, so a non-empty value is assumed to name it.",
+      "de": "Ein Bild mit nicht-leerem aria-label — oder, in HTML, einem aria-labelledby, das auf Text auflöst — gilt als mit Textalternative versehen und wird nicht gemeldet; in JSX/Vue/Angular werden aria-labelledby-Ziele nicht aufgelöst, ein nicht-leerer Wert gilt daher als Name."
     }
   ],
   "tests": "test/HtmlA11y.test.ts"

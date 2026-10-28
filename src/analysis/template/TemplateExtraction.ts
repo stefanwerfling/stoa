@@ -51,7 +51,7 @@ export const extractTemplateA11yFacts = (root: Node, content: string, filePath: 
         const range = rangeOf(startTag);
         const evidenceText = evidence(startTag);
 
-        if (tag === 'img' && !isDecorative(tag, attrs) && !attrs.has('alt')) {
+        if (tag === 'img' && !isDecorative(tag, attrs) && !attrs.has('alt') && !imgHasTextAlternative(attrs)) {
             facts.push(build({kind: 'ui.imageMissingAlt', kindOf: 'statement', symbol: `img#${counters.img}`, range, value: evidenceText}));
             counters.img += 1;
         }
@@ -164,6 +164,14 @@ const readAttributes = (startTag: Node, dialect: BindingDialect): Attrs => {
 // role=presentation/none is NOT treated as hidden (it only strips semantics and is
 // ignored on a focusable element); use isDecorative for the image case.
 const isAriaHidden = (attrs: Attrs): boolean => attrs.get('aria-hidden') === 'true';
+
+// Whether an image carries a text alternative other than alt: a bound or non-empty
+// aria-label, or a non-empty aria-labelledby — both satisfy WCAG 1.1.1.
+const imgHasTextAlternative = (attrs: Attrs): boolean => {
+    const label = attrs.get('aria-label');
+    const hasAriaLabel = label === null || (typeof label === 'string' && label.trim().length > 0);
+    return hasAriaLabel || hasLabelledbyName(attrs);
+};
 
 // Whether an image is exempt from needing alt: aria-hidden, or presentation/none on
 // this non-focusable element (the ARIA decorative marker, equivalent to alt="").

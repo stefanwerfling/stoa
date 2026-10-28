@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en">
+  <body>
+    <!-- fine: a non-empty aria-label is a text alternative (WCAG 1.1.1) -->
+    <img src="a.png" aria-label="Quarterly sales chart">
+    <!-- fine: aria-labelledby resolves to real text -->
+    <span id="imgcap">Team photo 2026</span>
+    <img src="b.png" aria-labelledby="imgcap">
+    <!-- flagged (img#2): no alt, no name -->
+    <img src="c.png">
+    <!-- flagged (img#3): an empty aria-label is not a text alternative -->
+    <img src="d.png" aria-label="">
+    <!-- flagged (img#4): aria-labelledby points at a missing id -->
+    <img src="e.png" aria-labelledby="ghost">
+  </body>
+</html>

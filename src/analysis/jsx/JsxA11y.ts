@@ -49,7 +49,7 @@ export const extractJsxA11yFacts = (sourceFile: SourceFile, build: Build): Fact[
         const range = rangeOf(sourceFile, element);
         const evidence = `<${tag}>`;
 
-        if (tag === 'img' && !hasSpread && !isDecorative(tag, attrs) && !attrs.has('alt')) {
+        if (tag === 'img' && !hasSpread && !isDecorative(tag, attrs) && !attrs.has('alt') && !imgHasTextAlternative(attrs)) {
             facts.push(build({kind: 'ui.imageMissingAlt', kindOf: 'statement', symbol: `img#${counters.img}`, range, value: evidence}));
             counters.img += 1;
         }
@@ -182,6 +182,12 @@ const attributeValue = (attribute: JsxAttribute): string | null => {
 // role=presentation/none is NOT treated as hidden (it only strips semantics and is
 // ignored on a focusable element); use isDecorative for the image case.
 const isAriaHidden = (attrs: Attrs): boolean => attrs.get('aria-hidden') === 'true';
+
+// Whether an image carries a text alternative other than alt: a non-empty (or
+// dynamic) aria-label, or a non-empty aria-labelledby — both satisfy WCAG 1.1.1.
+const imgHasTextAlternative = (attrs: Attrs): boolean => {
+    return attributeProvidesText(attrs, 'aria-label') || hasLabelledbyName(attrs);
+};
 
 // Whether an image is exempt from needing alt: aria-hidden, or presentation/none on
 // this non-focusable element (the ARIA decorative marker, equivalent to alt="").
