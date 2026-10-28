@@ -98,6 +98,7 @@ Statisch **nicht** zuverlässig entscheidbar, daher ausgelassen statt geraten:
 - **Zielgrößen, Reflow, Bewegung** — brauchen Layout.
 - **Ob ein Name/Label/Titel *aussagekräftig* ist** — menschliches Urteil; stoa prüft Präsenz, nicht Qualität.
 - **Überschriftenhierarchie / visuelle Konsistenz** — absichtsabhängig; wäre Meinung, nicht Tatsache.
+- **Hersteller-Designrichtlinien** (z. B. Apple HIG) — überwiegend ästhetische, herstellerspezifische Vorgaben (Farbe, Typografie, Motion, Materialien); subjektiv, nicht herstellerneutral und zudem urheberrechtlich gebundener Richtlinientext, daher außerhalb des deterministischen Kerns. Einzelne *messbare* Punkte (Touch-Target-Größe, Dynamic Type) könnten höchstens den künftigen visuellen Schnitt informieren; eine interpretierende Review höchstens die optionale, abschaltbare semantische (LLM-)Schicht — klar als Meinung markiert, nie als deterministischer Befund.
 
 **Zugänglicher Name — was statisch gewertet wird:** Die Namensberechnung ist eine
 konservative Annäherung, keine Nachbildung des Browser-Accessibility-Trees. Als Name

@@ -98,6 +98,7 @@ Statically **not** reliably decidable, therefore omitted rather than guessed:
 - **Target size, reflow, motion** — need layout.
 - **Whether a name/label/title is *meaningful*** — a human judgement; stoa checks presence, not quality.
 - **Heading hierarchy / visual consistency** — intent-dependent; would be opinion, not fact.
+- **Vendor design guidelines** (e.g. Apple HIG) — largely aesthetic, vendor-specific guidance (colour, typography, motion, materials); subjective, not vendor-neutral, and copyright-bound guideline text, so out of scope for the deterministic core. A few *measurable* items (tap-target size, Dynamic Type) could at most inform the future visual slice; an interpretive review could at most inform the optional, switchable semantic (LLM) layer — clearly marked as opinion, never a deterministic finding.
 
 **Accessible name — what is judged statically:** name computation is a conservative
 approximation, not a reproduction of the browser accessibility tree. A name counts
