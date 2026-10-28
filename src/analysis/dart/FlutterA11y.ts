@@ -27,6 +27,14 @@ export const extractFlutterA11yFacts = (root: Node, build: Build): Fact[] => {
         if (widget !== 'Image' && widget !== 'IconButton' && widget !== 'TextField' && widget !== 'TextFormField') {
             continue;
         }
+        // `IconButton.styleFrom(...)` and friends are static ButtonStyle factories,
+        // not widget constructors — they carry no tooltip/label and must not be
+        // flagged (e.g. inside an IconButtonThemeData). A widget is a bare
+        // `Widget(...)` or a widget named constructor (Image.network, IconButton.filled).
+        const invoked = invokedConstructorName(identifier);
+        if (invoked !== null && NON_WIDGET_FACTORIES.has(invoked)) {
+            continue;
+        }
         const args = constructorArguments(identifier);
         if (args === null) {
             continue;
@@ -48,6 +56,34 @@ export const extractFlutterA11yFacts = (root: Node, build: Build): Fact[] => {
     }
 
     return facts;
+};
+
+// Static helper methods on the widget classes that return a value (a ButtonStyle),
+// not a widget — so a call like IconButton.styleFrom(...) must not be treated as a
+// widget constructor. Shared by the button widgets (ElevatedButton.styleFrom, …);
+// only IconButton is in our widget set, but the name is the same across them.
+const NON_WIDGET_FACTORIES: ReadonlySet<string> = new Set(['styleFrom']);
+
+// The name invoked on `identifier` right before its argument list: a named
+// constructor or static method (e.g. 'network' for Image.network(...), 'styleFrom'
+// for IconButton.styleFrom(...)), or null for a bare `Widget(...)` call. It is the
+// last name-selector seen before the first `arguments`-bearing selector.
+const invokedConstructorName = (identifier: Node): string | null => {
+    let sibling = identifier.nextNamedSibling;
+    let lastName: string | null = null;
+    while (sibling !== null) {
+        if (sibling.type === 'selector') {
+            if (firstDescendant(sibling, 'arguments') !== null) {
+                return lastName;
+            }
+            const selector = firstDescendant(sibling, 'unconditional_assignable_selector');
+            if (selector !== null) {
+                lastName = namedChildren(selector).find((node) => node.type === 'identifier')?.text ?? lastName;
+            }
+        }
+        sibling = sibling.nextNamedSibling;
+    }
+    return lastName;
 };
 
 // The argument list of the constructor call headed by `identifier` (handling

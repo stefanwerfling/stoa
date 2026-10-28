@@ -56,6 +56,13 @@ test('a clean Flutter widget tree produces no accessibility findings (no false p
     assert.deepEqual(findings, []);
 });
 
+test('IconButton.styleFrom (a static ButtonStyle factory) is not treated as an unlabelled IconButton widget', () => {
+    // Regression for a real-world false positive: IconButton.styleFrom(...) inside an
+    // IconButtonThemeData is a ButtonStyle factory, not a widget, so it needs no tooltip.
+    const findings = analyzePath(join(corpus, 'clean.dart'));
+    assert.deepEqual(ids(findings, 'R-A11Y-FLUTTER-ICONBUTTON-LABEL'), [], 'no IconButton-label finding on the clean tree that contains IconButton.styleFrom');
+});
+
 test('Flutter golden corpus: precision/recall 100% over the widget a11y rules', () => {
     const findings = analyzePath(corpus);
     const result = evaluate(findings, loadExpected(join(here, 'fixtures', 'flutter', 'expected.json')), corpus);
