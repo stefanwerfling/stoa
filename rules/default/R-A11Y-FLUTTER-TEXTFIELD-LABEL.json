@@ -32,8 +32,8 @@
   },
   "missingContext": [
     {
-      "en": "Only this field's own decoration: argument is inspected, and only when it is a literal InputDecoration(...). An ancestor Semantics(...) wrapper, a decoration held in a variable or built via copyWith/merge, or a label supplied elsewhere is not resolved and may make this a false positive.",
-      "de": "Geprüft wird nur das eigene decoration:-Argument dieses Feldes, und nur wenn es ein literales InputDecoration(...) ist. Ein umschließendes Semantics(...), eine in einer Variable gehaltene oder per copyWith/merge gebaute decoration oder ein anderswo gesetztes Label wird nicht aufgelöst und kann einen Fehlalarm bedeuten."
+      "en": "This field's own decoration: argument is inspected (only when it is a literal InputDecoration(...)), plus a wrapping Semantics(label: …) which names it. A name via Semantics(value:/hint:), a MergeSemantics, a decoration held in a variable or built via copyWith/merge, or a label supplied elsewhere is not resolved and may make this a false positive.",
+      "de": "Geprüft wird das eigene decoration:-Argument dieses Feldes (nur wenn es ein literales InputDecoration(...) ist) sowie ein umschließendes Semantics(label: …), das es benennt. Ein Name über Semantics(value:/hint:), ein MergeSemantics, eine in einer Variable gehaltene oder per copyWith/merge gebaute decoration oder ein anderswo gesetztes Label wird nicht aufgelöst und kann einen Fehlalarm bedeuten."
     }
   ],
   "tests": "test/FlutterA11y.test.ts"

@@ -11,10 +11,12 @@ type Build = (spec: FactSpec) => Fact;
  * cleanest, low-false-positive static checks: an `Image*` built with neither
  * `semanticLabel:` nor `excludeFromSemantics: true`, an `IconButton` built without
  * `tooltip:`, and a `TextField`/`TextFormField` whose `InputDecoration` carries no
- * label/hint (or which has no `decoration:` at all). Each is a fact about that
- * widget's own constructor arguments — an ancestor `Semantics(...)` wrapper, a label
- * on a child widget, or a decoration built elsewhere (variable, `copyWith`) is not
- * resolved (noted in the rules' missingContext), so the checks stay conservative.
+ * label/hint (or which has no `decoration:` at all). Each check reads the widget's
+ * own constructor arguments, plus one ancestor relationship: a wrapping
+ * `Semantics(label: …)` names the whole subtree, so a widget inside it is treated
+ * as named and not flagged. A label on a child widget, a decoration built elsewhere
+ * (variable, `copyWith`), or a name via `Semantics(value:/hint:)` or `MergeSemantics`
+ * is not resolved (noted in the rules' missingContext), so the checks stay conservative.
  */
 export const extractFlutterA11yFacts = (root: Node, build: Build): Fact[] => {
     const facts: Fact[] = [];
@@ -33,6 +35,13 @@ export const extractFlutterA11yFacts = (root: Node, build: Build): Fact[] => {
         // `Widget(...)` or a widget named constructor (Image.network, IconButton.filled).
         const invoked = invokedConstructorName(identifier);
         if (invoked !== null && NON_WIDGET_FACTORIES.has(invoked)) {
+            continue;
+        }
+        // An ancestor Semantics(label: …) gives the whole subtree an accessible
+        // name, so a widget inside it is already named — do not flag any of the
+        // three checks. An empty label does not count; a dynamic label is assumed
+        // to name it (conservative). A Semantics without a label is not a name.
+        if (hasLabelledSemanticsAncestor(identifier)) {
             continue;
         }
         const args = constructorArguments(identifier);
@@ -84,6 +93,50 @@ const invokedConstructorName = (identifier: Node): string | null => {
         sibling = sibling.nextNamedSibling;
     }
     return lastName;
+};
+
+// Whether `identifier` sits inside a `Semantics(label: …)` call that gives its
+// subtree an accessible name. Walks the ancestors looking for an `arguments` node
+// whose call head is `Semantics` and which carries a meaningful `label:` argument.
+const hasLabelledSemanticsAncestor = (identifier: Node): boolean => {
+    let node: Node | null = identifier.parent;
+    while (node !== null) {
+        if (node.type === 'arguments' && argumentsCallHead(node) === 'Semantics') {
+            const label = directNamedArguments(node).get('label');
+            if (label !== undefined && labelIsMeaningful(label)) {
+                return true;
+            }
+        }
+        node = node.parent;
+    }
+    return false;
+};
+
+// The head identifier of the call whose argument list is `args` (the name before
+// the `(`), or null. `args` → argument_part → selector; the head is the first
+// non-selector named sibling before that selector.
+const argumentsCallHead = (args: Node): string | null => {
+    const selector = args.parent?.parent ?? null;
+    if (selector === null || selector.type !== 'selector') {
+        return null;
+    }
+    let previous = selector.previousNamedSibling;
+    while (previous !== null && previous.type === 'selector') {
+        previous = previous.previousNamedSibling;
+    }
+    return previous !== null && previous.type === 'identifier' ? previous.text : null;
+};
+
+// Whether a Semantics `label:` argument actually provides a name: a non-empty
+// value. An empty string literal does not; a dynamic/computed value is assumed to
+// (conservative — avoids a false positive on a genuinely labelled widget).
+const labelIsMeaningful = (label: Node): boolean => {
+    const value = namedChildren(label).filter((node) => node.type !== 'label').pop();
+    if (value === undefined) {
+        return false;
+    }
+    const text = value.text.trim();
+    return text.length > 0 && text !== "''" && text !== '""';
 };
 
 // The argument list of the constructor call headed by `identifier` (handling

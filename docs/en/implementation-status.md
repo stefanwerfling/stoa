@@ -43,10 +43,12 @@
   facts: an `Image*` built with neither `semanticLabel:` **nor**
   `excludeFromSemantics: true`, an `IconButton` built without `tooltip:`, and a
   `TextField`/`TextFormField` whose `InputDecoration` carries no label/hint (or which
-  has no `decoration:` at all). Only the widget's **own** constructor arguments are
-  inspected — an ancestor `Semantics(...)` wrapper, a label on a child widget, or a
-  decoration built elsewhere (variable, `copyWith`) is not resolved (noted in
-  `missingContext`), so the checks stay conservative.
+  has no `decoration:` at all). The widget's **own** constructor arguments are
+  inspected **plus** a wrapping `Semantics(label: …)` that names the subtree (a widget
+  inside it is not flagged). A label on a child widget, a name via
+  `Semantics(value:/hint:)`/`MergeSemantics`, or a decoration built elsewhere
+  (variable, `copyWith`) is not resolved (noted in `missingContext`), so the checks
+  stay conservative.
 - **Pipeline:** ingestion → fact extraction → rule engine → findings → reporter.
   No clock/randomness/network in the core; same input + versions + language ⇒
   byte-identical findings.
@@ -143,7 +145,7 @@ All ten quality dimensions (incl. accessibility, usability) have at least one ru
 
 ## Quality assurance
 
-- **158 node:test cases** green (rules pos./neg., extraction, schema validation,
+- **159 node:test cases** green (rules pos./neg., extraction, schema validation,
   i18n, determinism, SARIF, evaluation, semantic groundedness, privacy,
   finding-model separation).
 - **Golden corpus** (`test/corpus/`, **TS+PHP only**) with ground truth;
@@ -166,11 +168,13 @@ All ten quality dimensions (incl. accessibility, usability) have at least one ru
   bindings and a dynamic `[style.color]`, plus a clean template — and a test that
   the Angular dialect (not plain HTML) ran.
 - **Flutter corpus** (`test/fixtures/flutter/`): the three widget a11y rules on a Dart
-  widget tree; 100%/100% (TP 5), with `Image.network`/`Image(...)` lacking a label,
-  an `IconButton` without `tooltip`, a `TextField()` with no decoration and one with a
-  label-less `InputDecoration`, plus negative cases (present `semanticLabel`,
-  `excludeFromSemantics: true`, `tooltip`, `labelText`, `hintText`, a variable
-  decoration) and a clean widget.
+  widget tree; 100%/100% (TP 6), with `Image.network`/`Image(...)` lacking a label,
+  an `IconButton` without `tooltip`, a `TextField()` with no decoration, one with a
+  label-less `InputDecoration`, and an IconButton inside a label-less `Semantics`,
+  plus negative cases (present `semanticLabel`, `excludeFromSemantics: true`,
+  `tooltip`, `labelText`, `hintText`, a variable decoration, `IconButton.styleFrom`,
+  and an Image/IconButton/TextField each named by a `Semantics(label: …)`) and a
+  clean widget.
 - **A11y correctness corpus** (`test/fixtures/a11y-correctness/`): regression tests
   for the name/focus/ARIA correctness pass, exercised through the real analysis path
   (HTML, JSX, Vue). Pinned: text inside an `aria-hidden` subtree is not a name;

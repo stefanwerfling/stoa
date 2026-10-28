@@ -46,10 +46,12 @@
   Facts: ein `Image*` ohne `semanticLabel:` **und** ohne `excludeFromSemantics: true`,
   ein `IconButton` ohne `tooltip:`, sowie ein `TextField`/`TextFormField`, dessen
   `InputDecoration` kein Label/Hint trägt (oder das gar kein `decoration:` hat).
-  Geprüft werden nur die **eigenen** Konstruktor-Argumente des Widgets — ein
-  umschließendes `Semantics(...)`, ein Label auf einem Kind-Widget oder eine anderswo
-  (Variable, `copyWith`) gebaute Decoration wird nicht aufgelöst (im `missingContext`
-  vermerkt), damit die Prüfungen konservativ bleiben.
+  Geprüft werden die **eigenen** Konstruktor-Argumente des Widgets **plus** ein
+  umschließendes `Semantics(label: …)`, das den Teilbaum benennt (ein Widget darin
+  wird nicht gemeldet). Ein Label auf einem Kind-Widget, ein Name via
+  `Semantics(value:/hint:)`/`MergeSemantics` oder eine anderswo (Variable,
+  `copyWith`) gebaute Decoration wird nicht aufgelöst (im `missingContext` vermerkt),
+  damit die Prüfungen konservativ bleiben.
 - **Pipeline:** Ingestion → Fact-Extraktion → Regel-Engine → Befunde → Reporter.
   Keine Uhr/kein Zufall/kein Netz im Kern; gleiche Eingabe + Versionen + Sprache ⇒
   byte-identische Befunde.
@@ -147,7 +149,7 @@ mindestens eine Regel.
 
 ## Qualitätssicherung
 
-- **158 node:test-Fälle** grün (Regeln pos./neg., Extraktion, Schema-Validierung,
+- **159 node:test-Fälle** grün (Regeln pos./neg., Extraktion, Schema-Validierung,
   i18n, Determinismus, SARIF, Eval, Semantik-Groundedness, Datenschutz,
   Finding-Trennung).
 - **Golden-Korpus** (`test/corpus/`, **nur TS+PHP**) mit Ground-Truth; Eval
@@ -171,11 +173,13 @@ mindestens eine Regel.
   und einem dynamischen `[style.color]`, plus einem Clean-Template — und einem Test,
   dass der Angular-Dialekt (nicht Plain-HTML) lief.
 - **Flutter-Korpus** (`test/fixtures/flutter/`): die drei Widget-A11y-Regeln auf
-  einem Dart-Widget-Baum; 100 %/100 % (TP 5), mit `Image.network`/`Image(...)` ohne
-  Label, einem `IconButton` ohne `tooltip`, einem `TextField()` ohne Decoration und
-  einem mit label-loser `InputDecoration`, sowie Negativfällen (vorhandenes
-  `semanticLabel`, `excludeFromSemantics: true`, `tooltip`, `labelText`, `hintText`,
-  Variablen-Decoration) und einem Clean-Widget.
+  einem Dart-Widget-Baum; 100 %/100 % (TP 6), mit `Image.network`/`Image(...)` ohne
+  Label, einem `IconButton` ohne `tooltip`, einem `TextField()` ohne Decoration, einem
+  mit label-loser `InputDecoration` und einem IconButton in label-losem `Semantics`,
+  sowie Negativfällen (vorhandenes `semanticLabel`, `excludeFromSemantics: true`,
+  `tooltip`, `labelText`, `hintText`, Variablen-Decoration, `IconButton.styleFrom` und
+  je ein in `Semantics(label: …)` benanntes Image/IconButton/TextField) und einem
+  Clean-Widget.
 - **A11y-Korrektheits-Korpus** (`test/fixtures/a11y-correctness/`): Regressionstests
   für die Korrektheitsprüfung der Namens-/Fokus-/ARIA-Semantik über den echten
   Analysepfad (HTML, JSX, Vue). Fixiert: Text in `aria-hidden`-Subbäumen zählt nicht

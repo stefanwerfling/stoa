@@ -32,8 +32,8 @@
   },
   "missingContext": [
     {
-      "en": "Only this IconButton's own arguments are inspected; an ancestor Semantics(...) wrapper or a semanticLabel on the child Icon is not resolved and may make this a false positive.",
-      "de": "Geprüft werden nur die eigenen Argumente dieses IconButton; ein umschließendes Semantics(...) oder ein semanticLabel am Kind-Icon wird nicht aufgelöst und kann einen Fehlalarm bedeuten."
+      "en": "This IconButton's own arguments are inspected, plus a wrapping Semantics(label: …) which names it. A name via Semantics(value:/hint:), a MergeSemantics, or a semanticLabel on the child Icon is not resolved and may make this a false positive.",
+      "de": "Geprüft werden die eigenen Argumente dieses IconButton sowie ein umschließendes Semantics(label: …), das es benennt. Ein Name über Semantics(value:/hint:), ein MergeSemantics oder ein semanticLabel am Kind-Icon wird nicht aufgelöst und kann einen Fehlalarm bedeuten."
     }
   ],
   "tests": "test/FlutterA11y.test.ts"

@@ -32,8 +32,8 @@
   },
   "missingContext": [
     {
-      "en": "Only this Image's own constructor arguments are inspected; an ancestor Semantics(...) wrapper, a forwarded/const label, or a label computed at runtime is not resolved and may make this a false positive.",
-      "de": "Geprüft werden nur die eigenen Konstruktor-Argumente dieses Image; ein umschließendes Semantics(...), ein weitergereichtes/const Label oder ein zur Laufzeit berechnetes Label wird nicht aufgelöst und kann einen Fehlalarm bedeuten."
+      "en": "This Image's own constructor arguments are inspected, plus a wrapping Semantics(label: …) which names it (so a widget inside such a wrapper is not flagged). A name via Semantics(value:/hint:), a MergeSemantics, a forwarded/const label, or a label computed at runtime is not resolved and may make this a false positive.",
+      "de": "Geprüft werden die eigenen Konstruktor-Argumente dieses Image sowie ein umschließendes Semantics(label: …), das es benennt (ein Widget darin wird dann nicht gemeldet). Ein Name über Semantics(value:/hint:), ein MergeSemantics, ein weitergereichtes/const Label oder ein zur Laufzeit berechnetes Label wird nicht aufgelöst und kann einen Fehlalarm bedeuten."
     }
   ],
   "tests": "test/FlutterA11y.test.ts"

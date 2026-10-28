@@ -58,6 +58,16 @@ test('a clean Flutter widget tree produces no accessibility findings (no false p
     assert.deepEqual(findings, []);
 });
 
+test('an ancestor Semantics(label: …) names the subtree, so a wrapped Image/IconButton/TextField is not flagged', () => {
+    const findings = analyzePath(join(corpus, 'semantics.dart')).filter((f) => f.rule.id.startsWith('R-A11Y-'));
+    // Only the IconButton in a label-less Semantics(container: true) is flagged; the
+    // three widgets wrapped in Semantics(label: …) are treated as named.
+    assert.deepEqual(
+        findings.map((f) => `${f.rule.id}:${f.location.symbol}`),
+        ['R-A11Y-FLUTTER-ICONBUTTON-LABEL:iconButton#0']
+    );
+});
+
 test('IconButton.styleFrom (a static ButtonStyle factory) is not treated as an unlabelled IconButton widget', () => {
     // Regression for a real-world false positive: IconButton.styleFrom(...) inside an
     // IconButtonThemeData is a ButtonStyle factory, not a widget, so it needs no tooltip.
@@ -70,7 +80,7 @@ test('Flutter golden corpus: precision/recall 100% over the widget a11y rules', 
     const result = evaluate(findings, loadExpected(join(here, 'fixtures', 'flutter', 'expected.json')), corpus);
     assert.equal(result.overall.precision, 1);
     assert.equal(result.overall.recall, 1);
-    assert.equal(result.overall.truePositives, 5);
+    assert.equal(result.overall.truePositives, 6);
     assert.equal(result.overall.falsePositives, 0);
     assert.equal(result.overall.falseNegatives, 0);
 
