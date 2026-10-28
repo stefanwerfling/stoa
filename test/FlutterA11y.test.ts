@@ -35,6 +35,8 @@ test('R-A11Y-FLUTTER-IMAGE-LABEL flags Image with no semanticLabel, honouring ex
     const first = findings.find((f) => f.rule.id === 'R-A11Y-FLUTTER-IMAGE-LABEL');
     assert.equal(first?.interpretation.principles[0]?.id, 'marcus.purpose');
     assert.ok(first?.interpretation.dimensions.includes('accessibility'));
+    // Evidence is the widget call itself (Image...), not the enclosing expression.
+    assert.ok(String(first?.observation.evidence[0]?.value ?? '').startsWith('Image'), 'evidence shows the widget call');
 });
 
 test('R-A11Y-FLUTTER-ICONBUTTON-LABEL flags IconButton with no tooltip', () => {

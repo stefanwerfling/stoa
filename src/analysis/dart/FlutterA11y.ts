@@ -189,10 +189,22 @@ const namedChildren = (node: Node): Node[] => {
     return children;
 };
 
+// The widget call itself as evidence — the head identifier plus its following
+// selectors up to and including the argument list (e.g. `Image.asset('logo.png')`,
+// `IconButton(onPressed: f, icon: Icon(...))`). Using identifier.parent.text would
+// capture the whole enclosing expression (a Row/list/ternary), which is misleading.
 const evidence = (identifier: Node): string => {
-    const call = identifier.parent ?? identifier;
-    const text = call.text.replace(/\s+/g, ' ').trim();
-    return text.length > 80 ? `${text.slice(0, 77)}...` : text;
+    let text = identifier.text;
+    let sibling = identifier.nextNamedSibling;
+    while (sibling !== null && sibling.type === 'selector') {
+        text += sibling.text;
+        if (firstDescendant(sibling, 'arguments') !== null) {
+            break;
+        }
+        sibling = sibling.nextNamedSibling;
+    }
+    const flattened = text.replace(/\s+/g, ' ').trim();
+    return flattened.length > 80 ? `${flattened.slice(0, 77)}...` : flattened;
 };
 
 const rangeOf = (node: Node): SourceRange => {
