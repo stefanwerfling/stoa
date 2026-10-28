@@ -32,8 +32,8 @@
   },
   "missingContext": [
     {
-      "en": "An <a> with no href is treated as a non-link and skipped; a name via aria-labelledby is counted as present but its target is not resolved.",
-      "de": "Ein <a> ohne href gilt als Nicht-Link und wird übersprungen; ein Name via aria-labelledby gilt als vorhanden, das Ziel wird aber nicht aufgelöst."
+      "en": "An <a> with no href is treated as a non-link and skipped. In HTML, aria-labelledby is resolved against its targets; in JSX/Vue/Angular the targets are not resolved, so a non-empty value is assumed to name the link.",
+      "de": "Ein <a> ohne href gilt als Nicht-Link und wird übersprungen. In HTML wird aria-labelledby gegen seine Ziele aufgelöst; in JSX/Vue/Angular werden die Ziele nicht aufgelöst, ein nicht-leerer Wert gilt daher als Name."
     }
   ],
   "tests": "test/HtmlA11y.test.ts"

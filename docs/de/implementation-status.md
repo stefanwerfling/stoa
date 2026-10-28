@@ -1,6 +1,6 @@
 # Umsetzungsstand
 
-> Stand: 2026-10-27. Diese Seite beschreibt, was **tatsächlich implementiert** ist.
+> Stand: 2026-10-28. Diese Seite beschreibt, was **tatsächlich implementiert** ist.
 > Die übrigen `docs/`-Dokumente beschreiben die **Entwurfsabsicht** (Konzeptphase)
 > und bleiben als Begründung gültig; wo die Umsetzung abweicht, zählt diese Seite.
 
@@ -147,7 +147,7 @@ mindestens eine Regel.
 
 ## Qualitätssicherung
 
-- **152 node:test-Fälle** grün (Regeln pos./neg., Extraktion, Schema-Validierung,
+- **158 node:test-Fälle** grün (Regeln pos./neg., Extraktion, Schema-Validierung,
   i18n, Determinismus, SARIF, Eval, Semantik-Groundedness, Datenschutz,
   Finding-Trennung).
 - **Golden-Korpus** (`test/corpus/`, **nur TS+PHP**) mit Ground-Truth; Eval

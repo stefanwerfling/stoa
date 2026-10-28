@@ -1,6 +1,6 @@
 # Implementation Status
 
-> As of 2026-10-27. This page describes what is **actually implemented**. The
+> As of 2026-10-28. This page describes what is **actually implemented**. The
 > other `docs/` documents describe the **design intent** (concept phase) and
 > remain valid as rationale; where the implementation deviates, this page wins.
 
@@ -143,7 +143,7 @@ All ten quality dimensions (incl. accessibility, usability) have at least one ru
 
 ## Quality assurance
 
-- **152 node:test cases** green (rules pos./neg., extraction, schema validation,
+- **158 node:test cases** green (rules pos./neg., extraction, schema validation,
   i18n, determinism, SARIF, evaluation, semantic groundedness, privacy,
   finding-model separation).
 - **Golden corpus** (`test/corpus/`, **TS+PHP only**) with ground truth;

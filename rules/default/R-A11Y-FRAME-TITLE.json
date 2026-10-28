@@ -32,8 +32,8 @@
   },
   "missingContext": [
     {
-      "en": "A frame marked aria-hidden is exempt (not in the accessibility tree); aria-labelledby is treated as present but its target text is not resolved, and whether an existing title is actually descriptive is not judged.",
-      "de": "Ein als aria-hidden markierter Frame ist ausgenommen (nicht im Accessibility-Baum); aria-labelledby gilt als vorhanden, ohne den Zieltext aufzulösen, und ob ein vorhandener title tatsächlich beschreibend ist, wird nicht beurteilt."
+      "en": "A frame marked aria-hidden is exempt (not in the accessibility tree). In HTML, aria-labelledby is resolved against its targets; in JSX/Vue/Angular the targets are not resolved, so a non-empty value is assumed to name the frame. Whether an existing title is actually descriptive is not judged.",
+      "de": "Ein als aria-hidden markierter Frame ist ausgenommen (nicht im Accessibility-Baum). In HTML wird aria-labelledby gegen seine Ziele aufgelöst; in JSX/Vue/Angular werden die Ziele nicht aufgelöst, ein nicht-leerer Wert gilt daher als Name. Ob ein vorhandener title tatsächlich beschreibend ist, wird nicht beurteilt."
     }
   ],
   "tests": "test/HtmlA11y.test.ts"

@@ -32,8 +32,8 @@
   },
   "missingContext": [
     {
-      "en": "A name supplied via aria-labelledby pointing at another element is treated as present but not resolved; the surrounding visual context is not assessed statically.",
-      "de": "Ein über aria-labelledby auf ein anderes Element verweisender Name gilt als vorhanden, wird aber nicht aufgelöst; der umgebende visuelle Kontext wird statisch nicht bewertet."
+      "en": "In HTML, aria-labelledby is resolved against its targets (an empty value, missing targets or empty target text do not count as a name); in JSX/Vue/Angular its targets are not resolved, so a non-empty value is assumed to name the control. The surrounding visual context is not assessed statically.",
+      "de": "In HTML wird aria-labelledby gegen seine Ziele aufgelöst (leerer Wert, fehlende Ziele oder leerer Zielinhalt zählen nicht als Name); in JSX/Vue/Angular werden die Ziele nicht aufgelöst, ein nicht-leerer Wert gilt daher als Name. Der umgebende visuelle Kontext wird statisch nicht bewertet."
     }
   ],
   "tests": "test/HtmlA11y.test.ts"

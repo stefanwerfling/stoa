@@ -32,8 +32,8 @@
   },
   "missingContext": [
     {
-      "en": "aria-labelledby is treated as present but its target is not resolved; a control labelled only by a far-away element may be a false positive or negative.",
-      "de": "aria-labelledby gilt als vorhanden, das Ziel wird aber nicht aufgelöst; ein nur durch ein entferntes Element beschriftetes Feld kann ein Fehlalarm oder -negativ sein."
+      "en": "In HTML, aria-labelledby is resolved against its targets (empty value, missing targets or empty target text do not count as a label); in JSX/Vue/Angular the targets are not resolved, so a non-empty value is assumed to label the control.",
+      "de": "In HTML wird aria-labelledby gegen seine Ziele aufgelöst (leerer Wert, fehlende Ziele oder leerer Zielinhalt zählen nicht als Label); in JSX/Vue/Angular werden die Ziele nicht aufgelöst, ein nicht-leerer Wert gilt daher als Label."
     }
   ],
   "tests": "test/HtmlA11y.test.ts"
