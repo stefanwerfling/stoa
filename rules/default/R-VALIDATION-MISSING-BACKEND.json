@@ -1,0 +1,40 @@
+{
+  "id": "R-VALIDATION-MISSING-BACKEND",
+  "version": "1.0.0",
+  "title": "Backend reads client input without recognized validation",
+  "feature": "validation.backendInputUnvalidated",
+  "appliesTo": ["function"],
+  "principles": ["marcus.judgment"],
+  "dimensions": ["robustness"],
+  "trigger": {
+    "all": [{ "fact": "validation.backendInputUnvalidated", "op": "!=", "value": "" }]
+  },
+  "requiredEvidence": ["validation.backendInputUnvalidated"],
+  "severity": { "base": "medium" },
+  "confidence": { "base": 0.6, "capBy": "certainty" },
+  "message": {
+    "en": "Server handler reads client input ({value}) with no recognized validation of it in the handler.",
+    "de": "Server-Handler liest Client-Input ({value}) ohne erkennbare Validierung im Handler."
+  },
+  "rationale": {
+    "en": "The backend is the trust boundary: a client can disable front-end checks and craft requests directly, so every security-relevant input must be validated server-side. A handler that reads req/request body/query/params without parsing it through a schema (Zod .parse/.safeParse, a vts schema.validate, or a validator wrapper) or a framework route-schema leaves manipulated values — ids, prices, roles, quantities, status — unchecked. Withholding assent until the input is verified is marcus.judgment.",
+    "de": "Das Backend ist die Vertrauensgrenze: Ein Client kann Frontend-Prüfungen abschalten und Requests direkt bauen, daher muss jeder sicherheitsrelevante Input serverseitig validiert werden. Ein Handler, der req/request body/query/params liest, ohne ihn über ein Schema (Zod .parse/.safeParse, ein vts schema.validate oder einen Validator-Wrapper) oder ein Framework-Routen-Schema zu prüfen, lässt manipulierte Werte — IDs, Preise, Rollen, Mengen, Status — ungeprüft. Die Zustimmung zurückzuhalten, bis der Input geprüft ist, ist marcus.judgment."
+  },
+  "remediation": {
+    "suggestion": {
+      "en": "Validate the request input against a schema at the start of the handler — e.g. schema.parse(req.body) (Zod), schema.validate(body, errors) (vts), a validator wrapper, or a framework route schema — and use the narrowed result, not the raw request.",
+      "de": "Den Request-Input am Handler-Anfang gegen ein Schema prüfen — z. B. schema.parse(req.body) (Zod), schema.validate(body, errors) (vts), einen Validator-Wrapper oder ein Framework-Routen-Schema — und das geprüfte Ergebnis verwenden, nicht den rohen Request."
+    },
+    "drawbacks": {
+      "en": "A shared schema between layers avoids duplicated rules; keep the backend schema authoritative even if the frontend validates too.",
+      "de": "Ein zwischen den Schichten geteiltes Schema vermeidet doppelte Regeln; das Backend-Schema bleibt maßgeblich, auch wenn das Frontend ebenfalls prüft."
+    }
+  },
+  "missingContext": [
+    {
+      "en": "A heuristic risk signal, not a proven defect, and TypeScript/JavaScript only. Validation is recognized only inside the handler (a validator call fed a request-derived value) or a route-schema option on the registration. Validation that lives elsewhere — a preValidation hook, global middleware, or a cross-file wrapper that hides the request argument — is not resolved and may make this a false positive; conversely a handler validating only some fields is still treated as validated (possible false negative).",
+      "de": "Ein heuristisches Risiko-Signal, kein bewiesener Fehler, und nur TypeScript/JavaScript. Validierung wird nur im Handler erkannt (ein Validator-Aufruf mit request-abgeleitetem Wert) oder als Routen-Schema-Option bei der Registrierung. Validierung an anderer Stelle — ein preValidation-Hook, globale Middleware oder ein cross-file Wrapper, der das Request-Argument verbirgt — wird nicht aufgelöst und kann einen Fehlalarm bedeuten; umgekehrt gilt ein Handler, der nur einzelne Felder prüft, als validiert (möglicher Fehlalarm-Negativ)."
+    }
+  ],
+  "tests": "test/BackendValidation.test.ts"
+}

@@ -4,6 +4,7 @@ import type {Fact, SourceRange, SubjectKind} from '../../Types.js';
 import {factBuilder, type AdapterInfo} from '../FactBuilder.js';
 import {isDeepImport} from '../ImportPath.js';
 import {extractJsxA11yFacts} from '../jsx/JsxA11y.js';
+import {extractBackendValidationFacts} from './BackendValidation.js';
 import {destructiveDdl, nullableNoDefault, unguardedDdl} from '../MigrationSql.js';
 
 interface FunctionMetrics {
@@ -274,6 +275,10 @@ export const extractFacts = (sourceFile: SourceFile, info: AdapterInfo): Fact[] 
     // UI/UX accessibility facts from JSX elements (same ui.* facts the HTML
     // adapter emits, so the a11y rules fire on React/JSX too).
     facts.push(...extractJsxA11yFacts(sourceFile, build));
+
+    // Trust-boundary facts: server request handlers that read client input
+    // (req/request .body/.query/.params) without recognized validation.
+    facts.push(...extractBackendValidationFacts(sourceFile, build));
 
     return facts;
 };
