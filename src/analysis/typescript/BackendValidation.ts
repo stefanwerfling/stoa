@@ -77,10 +77,33 @@ const nearestFunction = (node: Node): Node | undefined => {
 };
 
 // The request-input property accesses whose nearest enclosing function is `handler`
-// (so a nested callback's accesses are attributed to that callback, not this one).
+// (so a nested callback's accesses are attributed to that callback, not this one),
+// restricted to uses of the WHOLE payload — a single-field pluck (`req.query['id']`,
+// `req.body.sessionId`) is a narrow lookup (an id controlled by authorization), not
+// the structured-payload trust concern this rule targets, so it is not counted.
 const ownRequestInputs = (handler: Node): Node[] => {
     return handler.getDescendantsOfKind(SyntaxKind.PropertyAccessExpression)
-        .filter((access) => isRequestInput(access) && nearestFunction(access) === handler);
+        .filter((access) => isRequestInput(access) && nearestFunction(access) === handler && isWholeObjectUse(access));
+};
+
+// Whether the request access is consumed as a whole object (assigned, spread, cast
+// and passed, saved …) rather than immediately indexed for one field. Unwraps `as`,
+// parentheses and `!` first, then rejects when the result is the object of a
+// property/element access (`req.query['id']`, `(req.body as T).sessionId`).
+const isWholeObjectUse = (access: Node): boolean => {
+    let current = access;
+    let parent = current.getParent();
+    while (parent !== undefined && (Node.isAsExpression(parent) || Node.isParenthesizedExpression(parent) || Node.isNonNullExpression(parent))) {
+        current = parent;
+        parent = parent.getParent();
+    }
+    if (parent === undefined) {
+        return true;
+    }
+    if ((Node.isPropertyAccessExpression(parent) || Node.isElementAccessExpression(parent)) && parent.getExpression() === current) {
+        return false;
+    }
+    return true;
 };
 
 // `req.body` / `request.query` / `request.params` — a property access whose object
@@ -175,15 +198,29 @@ const referencesRequest = (text: string, derived: ReadonlySet<string>): boolean 
 };
 
 // A handler passed as an argument to a route registration whose options object
-// carries a `schema` property (e.g. Fastify) is validated by the framework before
-// it runs, so its request access is not unvalidated.
+// declares an input schema is validated by the framework/wrapper before it runs,
+// so its request access is not unvalidated. Recognizes the common option names —
+// Fastify `schema`, and wrapper conventions like `bodySchema`/`querySchema`/
+// `validation` — while ignoring `responseBodySchema`/`responseSchema` (those shape
+// the response, not the input).
+const INPUT_SCHEMA_OPTIONS: ReadonlySet<string> = new Set(['body', 'query', 'validation', 'validate']);
+
+const isInputSchemaOption = (name: string): boolean => {
+    const lower = name.toLowerCase();
+    if (lower.endsWith('schema')) {
+        return !lower.startsWith('response');
+    }
+    return INPUT_SCHEMA_OPTIONS.has(lower);
+};
+
 const hasRouteSchemaOption = (handler: Node): boolean => {
     const call = handler.getParentIfKind(SyntaxKind.CallExpression);
     if (call === undefined) {
         return false;
     }
     return call.getArguments().some((argument) =>
-        Node.isObjectLiteralExpression(argument) && argument.getProperty('schema') !== undefined);
+        Node.isObjectLiteralExpression(argument)
+        && argument.getProperties().some((property) => Node.hasName(property) && isInputSchemaOption(property.getName())));
 };
 
 const rangeOf = (sourceFile: SourceFile, node: Node): SourceRange => {
