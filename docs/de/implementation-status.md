@@ -1,6 +1,6 @@
 # Umsetzungsstand
 
-> Stand: 2026-10-28. Diese Seite beschreibt, was **tatsächlich implementiert** ist.
+> Stand: 2026-10-29. Diese Seite beschreibt, was **tatsächlich implementiert** ist.
 > Die übrigen `docs/`-Dokumente beschreiben die **Entwurfsabsicht** (Konzeptphase)
 > und bleiben als Begründung gültig; wo die Umsetzung abweicht, zählt diese Seite.
 
@@ -76,7 +76,7 @@ stoa eval <pfad> --expected <datei> [--format markdown|json]
 - `knowledge/` und `rules/` werden relativ zum installierten Paket aufgelöst —
   die CLI läuft nach `npm link`/Install aus jedem Verzeichnis.
 
-## Regelkatalog (38)
+## Regelkatalog (39)
 
 Deklarative Regeln (`rules/default/*.json`), Default aktiv:
 
@@ -100,6 +100,7 @@ Deklarative Regeln (`rules/default/*.json`), Default aktiv:
 | R-MIGRATION-UNGUARDED-DDL | marcus.obstacle | Robustheit, Fehlerbehandlung | TS/JS, PHP (nur Migrationsdateien) |
 | R-MIGRATION-NO-DOWN | marcus.judgment | Robustheit, Belegbarkeit | TS/JS, PHP (nur Migrationsdateien) |
 | R-MIGRATION-DATA-LOSS | marcus.judgment | Robustheit, Belegbarkeit | TS/JS, PHP (Drops im `up()`) |
+| R-VALIDATION-MISSING-BACKEND | marcus.judgment | Robustheit | TS/JS (Server-Handler liest `req`/`request` `.body`/`.query` ohne erkennbare Validierung; Risiko-Signal) |
 | R-A11Y-IMG-ALT | marcus.purpose | Barrierefreiheit | HTML, JSX, Vue, Angular (statisch, WCAG 1.1.1) |
 | R-A11Y-CONTROL-NAME | marcus.purpose | Barrierefreiheit, Bedienbarkeit | HTML, JSX (statisch, WCAG 4.1.2) |
 | R-A11Y-FORM-LABEL | marcus.purpose | Barrierefreiheit, Bedienbarkeit | HTML, JSX (statisch, WCAG 1.3.1/4.1.2) |
@@ -144,12 +145,13 @@ mindestens eine Regel.
 `ui.positiveTabindex`, `ui.documentMissingLang`, `ui.viewportBlocksZoom`,
 `ui.danglingAriaIdref`, `ui.duplicateId`, `ui.frameMissingTitle`,
 `ui.lowContrastText`, `ui.flutterImageNoSemanticLabel`,
-`ui.flutterIconButtonNoTooltip`, `ui.flutterTextFieldNoLabel`, sowie (opt-in)
-`external.tsc` und `external.floatingPromise`.
+`ui.flutterIconButtonNoTooltip`, `ui.flutterTextFieldNoLabel`,
+`validation.backendInputUnvalidated`, sowie (opt-in) `external.tsc` und
+`external.floatingPromise`.
 
 ## Qualitätssicherung
 
-- **159 node:test-Fälle** grün (Regeln pos./neg., Extraktion, Schema-Validierung,
+- **161 node:test-Fälle** grün (Regeln pos./neg., Extraktion, Schema-Validierung,
   i18n, Determinismus, SARIF, Eval, Semantik-Groundedness, Datenschutz,
   Finding-Trennung).
 - **Golden-Korpus** (`test/corpus/`, **nur TS+PHP**) mit Ground-Truth; Eval
@@ -188,6 +190,12 @@ mindestens eine Regel.
   nimmt ein fokussierbares Control nicht von der Namenspflicht aus; strikte
   tabindex-Prüfung und `contenteditable`-Fokus; Kontrast wird auch unter `aria-hidden`/
   `role=presentation` geprüft (Text bleibt visuell sichtbar).
+- **Backend-Validierungs-Korpus** (`test/fixtures/backend-validation/`): Positiv-
+  (Handler liest `req.body`/`req.query` ohne Validierung) und Negativfälle (Zod
+  `.parse`, vts-Wrapper + `schema.validate`, manuelle 400-Prüfung, Fastify-Routen-
+  Schema, nur-`params`). Zusätzlich manuell gegen zwei echte TS-Backends geprüft
+  (helionet_pro = vts, kapalium = Zod): je **0 Befunde** — beide validieren, nichts
+  wurde fälschlich beanstandet (Zero-FP-Signal).
 - Dogfooding: stoa analysiert den eigenen `src/`.
 
 ## Abweichungen vom Konzept (bewusst, dokumentiert)
@@ -210,6 +218,18 @@ Diff-/PR-Modus; PSR-4-Auflösung, damit R-DEP-CYCLE/R-UNUSED-EXPORT auch PHP
 abdecken; generischer ESLint-Fact-Adapter; Kontext-Facts
 (`flag.generatedCode`, `hasTests`) für reichhaltigere Suppression;
 LLM-Ausgabe-Evaluierung im Maßstab.
+
+**Cross-Layer-Validierung — Grenzen (erster vertikaler Schnitt):**
+`R-VALIDATION-MISSING-BACKEND` prüft bewusst nur **eine** Schicht (Backend-
+Vertrauensgrenze), nicht die volle in der Analysevision skizzierte Kette
+Frontend → API → Backend → Persistenz. Es gibt **keine** Fakten zu Frontend-
+Formular-Constraints, API-Contracts/DTOs, Zod-/vts-Schema-Wertebereichen oder
+Endpunkt-Datenfluss — ein echter Frontend/Backend-*Constraint-Mismatch*
+(unterschiedliche Wertebereiche/Pflichtfelder zwischen den Schichten) ist mit dem
+heutigen Faktenmodell **nicht** belastbar erkennbar und wird nicht behauptet. Nur
+TypeScript/JavaScript; PHP/Dart-Backends sind nicht abgedeckt. Siehe
+`missingContext` der Regel für die Erkennungsgrenzen innerhalb der einen Schicht
+(z. B. `preValidation`-Hooks, globale Middleware).
 
 **UI/UX — Grenzen und Geplantes:** Rein statische Analyse. Farbkontrast
 (WCAG 1.4.3) wird nur im belegbaren Inline-Fall geprüft (beide Farben am
