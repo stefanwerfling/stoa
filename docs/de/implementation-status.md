@@ -165,7 +165,7 @@ zu liefern.
   `VC-ITEM-QUANTITY-001`; Format `^[A-Z][A-Z0-9]*(-[A-Z0-9]+)+-[0-9]{3}$`,
   siehe `schemas/validation-contract.schema.json`). Sie ist ein Analysehinweis,
   **kein** Sicherheitsmechanismus, und **nicht** mit Stoas eigenen `R-*`-Regel-,
-  `finding:`- oder `fact:`-IDs zu verwechseln — deshalb tragen alle acht neuen
+  `finding:`- oder `fact:`-IDs zu verwechseln — deshalb tragen alle zwölf neuen
   Stoa-Regeln bewusst das Präfix `R-VALIDATION-CONTRACT-*` statt `R-VC-*`.
 - **Annotation:** `// stoa:validation <ID>` als führender Kommentar auf einer
   `const x = …`-Anweisung (`src/analysis/typescript/ValidationAnnotations.ts`,
@@ -382,14 +382,19 @@ zu liefern.
   False-Positive-Kosten zu ergänzen. Ein einzelnes herausgegriffenes Feld
   über eine direkte Zuweisung bleibt außerhalb des Umfangs, ebenso wie die
   bestehende Einzelfeld-Einschränkung anderswo in dieser Regel.
-- **Bewusst nicht in diesem Schnitt** (dokumentiert, nicht vorgetäuscht):
-  Mehrfeld-Objekt-Schemas; cross-file-Nutzungsnachweis; API-Endpunkt-/
-  Alternative-Endpunkt-Bypass-Erkennung; Schicht-Heuristik (Frontend/Backend)
-  für den Konflikt-Check; strukturierte, maschinell geprüfte
-  Backend-only-Sicherheitsanforderungen (`securityRequirements` bleibt
-  Freitext, rein informativ — bewusst **nicht** als verifizierte
-  Sicherheitsregel ausgegeben, siehe `ui-ux-analysis-report`-artige
-  Zurückhaltung); andere Sprachen als TypeScript.
+- **Bewusst nicht in diesem Schnitt** (dokumentiert, nicht vorgetäuscht): mehr
+  als das EINE vom Vertrag benannte Feld eines `z.object()`-Schemas zu prüfen
+  (der Rest seiner Form wird nie untersucht, selbst wenn auflösbar); ein
+  verschachteltes `z.object()`-Feld, eine Spread-/Shorthand-/berechnete
+  Property, oder `z.array(z.object({...}))`; die Nachverfolgung eines
+  validierten Werts über ein `return` hinaus zu den Aufrufern der Funktion;
+  cross-file-Nutzungsnachweis; API-Endpunkt-/Alternative-Endpunkt-Bypass-
+  Erkennung; Schicht-Heuristik (Frontend/Backend) für den Konflikt-Check;
+  strukturierte, maschinell geprüfte Backend-only-Sicherheitsanforderungen
+  (`securityRequirements` bleibt Freitext, rein informativ — bewusst
+  **nicht** als verifizierte Sicherheitsregel ausgegeben, siehe
+  `ui-ux-analysis-report`-artige Zurückhaltung); andere Sprachen als
+  TypeScript.
 - Mit echtem Code geprüft: `stoa:validation` kommt in keinem der bisher
   verwendeten realen Repos vor (erwartungsgemäß, da projektspezifisch neu) —
   die Nutzungs-Tracing-Regeln konnten deshalb nur an eigens erstellten
@@ -490,7 +495,7 @@ zu liefern.
 - **Validierungs-/Datenfluss-Golden-Korpus** (`test/fixtures/validation-dataflow-corpus/`,
   `ValidationDataflowCorpus.test.ts`): ein eigenständiger, in sich
   geschlossener Korpus nach dem bestehenden `test/corpus/`-Precision/Recall-Muster
-  (kein zweiter Ground-Truth-Mechanismus), der alle 16 explizit geforderten
+  (kein zweiter Ground-Truth-Mechanismus), der 20 explizit geforderte
   Testgruppen an einer Stelle abdeckt — korrekte Validierung, fehlende
   Validierung, ein unbenutzter Validator, ein aufgerufener, aber ignorierter
   Validator (rohe Wiederverwendung nach Validierung), eine in einer nie
@@ -500,8 +505,17 @@ zu liefern.
   ein nicht auflösbarer Zod-Modifier, ein AST-verifizierter `.bind()`-Alias,
   eine vom Request unabhängige generische Exception, Mass Assignment über
   Spread, Security-Anforderungen, die Stoa nicht prüfen kann (geprüft, dass
-  NICHTS erzeugt wird), sowie widersprüchliche FE/BE-Implementierungen unter
-  einer Trace-ID. 100 %/100 % (TP 20). Der Bau dieses Korpus deckte einen
+  NICHTS erzeugt wird), widersprüchliche FE/BE-Implementierungen unter einer
+  Trace-ID, symbolbasierte Verschattung (ein in einem verschachtelten Block
+  verschattetes `result` erzeugt korrekt NICHTS und belegt
+  `SymbolResolution.ts` damit end-to-end, nicht nur in dessen eigenen
+  Unit-Tests), eine `.safeParse()`-Nutzung ohne nachgewiesene
+  Erfolgsprüfung (`R-VALIDATION-CONTRACT-SAFEPARSE-UNGUARDED`), ein
+  Object-Field-Konflikt zwischen zwei `z.object()`-Schemas unter einer
+  Trace-ID, ein Feld, das buchstäblich `constructor` heißt (erzeugt korrekt
+  NICHTS und belegt die Prototype-Safety-Korrektur end-to-end), sowie ein
+  verschachteltes `z.object()`-Feld (bleibt unaufgelöst statt erraten zu
+  werden). 100 %/100 % (TP 20). Der Bau dieses Korpus deckte einen
   echten Bug auf, bevor er sich weiter ausbreitete: Die Unused-Validator- und
   Raw-After-Validation-Prüfungen (`ValidatorUsage.ts`) teilten sich dasselbe,
   beim Datenfluss-Tracer bereits andernorts korrigierte Gate, das eine
@@ -550,6 +564,61 @@ Schlüssel durchlässt (z. B. Zod `.passthrough()`), wird nicht geprüft. Nur
 TypeScript/JavaScript; PHP/Dart-Backends sind nicht abgedeckt. Siehe
 `missingContext` der jeweiligen Regel für die Erkennungsgrenzen innerhalb der
 einen Schicht (z. B. `preValidation`-Hooks, globale Middleware).
+
+**Cross-Layer-Analyse — Reifegrad für eine Ende-zu-Ende-Kette (Bestandsaufnahme,
+kein neues Feature):** Das langfristige Ziel ist eine belegbare Kette
+Frontend-Eingabe → Frontend-Validierung → API-Request → Backend-Request →
+Backend-Validierung → Validierte Daten → Service → Repository → Datenbank.
+Heute ist nur **ein Ring** dieser Kette tatsächlich im Evidence Graph belegt:
+Backend-Request → Backend-Validierung → Validierte Daten → (dateiintern, oder
+einen dateiinternen Schritt weit in einen) Service-/Repository-Aufruf
+(`ValidationDataflow.ts`/`OneHopResolution.ts`/`SafeParseGuard.ts`,
+symbolbasiert, mit ehrlichem `verified`/`heuristic`/`unresolved`-Status je
+Edge — siehe oben). Alles auf beiden Seiten dieses Rings ist entweder gar
+nicht modelliert oder nur eine menschlich behauptete Angabe, nie unabhängig
+beobachtet:
+- **Frontend-Eingabe / Frontend-Validierung:** Es gibt überhaupt keine
+  frontend-spezifischen Facts. Ein Vertrag mit `layers: ["frontend"]` wird
+  akzeptiert und schema-validiert, aber — anders als die `backend`-Behauptung,
+  die Stoa tatsächlich über Datenfluss-Evidenz bestätigt — gibt es keinen
+  analogen Beleg für die Frontend-Seite; eine `frontend`-Behauptung erzeugt
+  keinen Befund, weder positiv noch negativ (siehe oben, Schicht- &
+  Security-Zuordnung).
+- **API-Request:** Es gibt keine Facts für die Request-Schicht selbst
+  (HTTP-Methode, Route, Request-/Response-DTO-Form). Nichts verknüpft „diese
+  Frontend-Datei ruft `fetch('/api/users')` auf" mit „diese Backend-Datei
+  routet `router.post('/users', handler)`" — das ist der größte fehlende
+  Baustein für eine echte Ende-zu-Ende-Verknüpfung, und nichts in der
+  aktuellen Implementierung behauptet etwas anderes.
+- **Service → Repository → Datenbank:** Der One-Hop-Resolver arbeitet nur
+  dateiintern; ein validierter Wert, der an einen aus einer anderen Datei
+  importierten Service übergeben wird, wird gar nicht nachverfolgt. Selbst wo
+  nachverfolgt wird, beweist Stoa nur, dass der Wert einen Aufruf erreicht,
+  der dem NAMEN nach wie ein Persistenz-Verb aussieht
+  (`save`/`create`/`repository.*`/…) — Stoa hat kein Modell dafür, was dieser
+  Aufruf tatsächlich schreibt, in welche Tabelle oder Spalte; über die
+  Datenbank selbst wird nichts belegt, nur bis zur Grenze des
+  Repository-Aufrufs.
+- **FE/BE-Konflikterkennung** (`R-VALIDATION-CONTRACT-CONFLICT`) vergleicht
+  zwei Schemas, die eine menschlich gewählte Validation Trace ID teilen — das
+  ist ein Beleg dafür, dass zwei *annotierte* Implementierungen voneinander
+  abweichen, kein Beweis, dass diese beiden Schemas tatsächlich denselben
+  realen API-Request beschreiben. Die Trace-ID ist eine bewusste, explizite
+  Opt-in-Annotation, genau damit **Frontend und Backend niemals allein
+  deshalb als verbunden gelten, weil sie ein gleichnamiges Feld validieren**
+  — übereinstimmende Feldnamen allein sind kein Ersatz für eine echte
+  Request-/Response-Verknüpfung und dürfen das nicht werden.
+
+Kurz: tatsächlich verbunden (Backend-Request → Backend-Validierung →
+Persistenz, innerhalb der obigen Grenzen), plausibel-aber-unbewiesen (eine
+`frontend`-Schicht-Behauptung, die übrigen `security`-Flags), nicht
+vorhanden (API-Request-/DTO-Facts, dateiübergreifende Service-Auflösung,
+jedes Modell der Datenbank selbst) und mit dem aktuellen Faktenmodell nicht
+analysierbar (ob zwei Trace-ID-gleiche Schemas wirklich denselben Endpunkt
+beschreiben) sind heute vier unterschiedliche Zustände, und Stoas eigene
+Befunde unterscheiden bereits den ersten von den übrigen — aber eine volle,
+belegbare Ende-zu-Ende-Kette ist nicht implementiert, und nichts hier
+behauptet das Gegenteil.
 
 **UI/UX — Grenzen und Geplantes:** Rein statische Analyse. Farbkontrast
 (WCAG 1.4.3) wird nur im belegbaren Inline-Fall geprüft (beide Farben am

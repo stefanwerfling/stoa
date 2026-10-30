@@ -158,7 +158,7 @@ fails fast (exit 1, concrete errors) instead of silently yielding 0 findings.
   `VC-ITEM-QUANTITY-001`; format `^[A-Z][A-Z0-9]*(-[A-Z0-9]+)+-[0-9]{3}$`, see
   `schemas/validation-contract.schema.json`). It is an analysis hint, **not**
   a security mechanism, and must **not** be confused with Stoa's own `R-*`
-  rule, `finding:` or `fact:` ids — which is exactly why all eight new Stoa
+  rule, `finding:` or `fact:` ids — which is exactly why all twelve new Stoa
   rules deliberately use the `R-VALIDATION-CONTRACT-*` prefix, not `R-VC-*`.
 - **Annotation:** `// stoa:validation <ID>` as a leading comment on a
   `const x = …` statement (`src/analysis/typescript/ValidationAnnotations.ts`,
@@ -353,13 +353,17 @@ fails fast (exit 1, concrete errors) instead of silently yielding 0 findings.
   too generic (cache/Map/etc.) to add without a real false-positive cost. A
   single plucked field through a direct assignment stays out of scope, same
   as the existing single-field restriction elsewhere in this rule.
-- **Deliberately out of this slice** (documented, not faked): multi-field
-  object schemas; cross-file usage proof; API-endpoint/alternate-endpoint
-  bypass detection; a frontend/backend layer heuristic for the conflict
-  check; structured, machine-verified backend-only security requirements
-  (`securityRequirements` stays free-text and purely informational —
-  deliberately never surfaced as a verified security rule); languages other
-  than TypeScript.
+- **Deliberately out of this slice** (documented, not faked): verifying more
+  than the ONE contract-named field of a `z.object()` schema (the rest of
+  its shape is never inspected, even when resolvable); a nested `z.object()`
+  field, a spread/shorthand/computed property name, or
+  `z.array(z.object({...}))`; tracing a validated value across a `return`
+  into the function's own callers; cross-file usage proof; API-endpoint/
+  alternate-endpoint bypass detection; a frontend/backend layer heuristic
+  for the conflict check; structured, machine-verified backend-only
+  security requirements (`securityRequirements` stays free-text and purely
+  informational — deliberately never surfaced as a verified security rule);
+  languages other than TypeScript.
 - Checked against real code: `stoa:validation` appears in none of the real
   repos used so far (expected — it is a project-specific marker that is new
   here), so the usage-tracing rules could only be verified against
@@ -458,7 +462,7 @@ fails fast (exit 1, concrete errors) instead of silently yielding 0 findings.
 - **Validation/dataflow golden corpus** (`test/fixtures/validation-dataflow-corpus/`,
   `ValidationDataflowCorpus.test.ts`): a dedicated, self-contained corpus
   mirroring the existing `test/corpus/` precision/recall pattern (not a
-  second ground-truth mechanism), covering all 16 explicitly required test
+  second ground-truth mechanism), covering 20 explicitly required test
   groups in one place — correct validation, missing validation, an unused
   validator, a validator called but its result ignored (raw reused after
   validation), validation declared in a function that is never called,
@@ -466,8 +470,16 @@ fails fast (exit 1, concrete errors) instead of silently yielding 0 findings.
   unvalidated bad path), `.max()` merging, format AND-merging, an
   unresolvable Zod modifier, an AST-verified `.bind()` alias, a generic
   exception unrelated to the request, mass assignment via spread, security
-  requirements Stoa cannot verify (asserted to produce NOTHING), and
-  conflicting FE/BE implementations under one trace ID. 100%/100% (TP 20).
+  requirements Stoa cannot verify (asserted to produce NOTHING), conflicting
+  FE/BE implementations under one trace ID, symbol-based shadowing (a
+  shadowed `result` in a nested block correctly produces NOTHING, proving
+  `SymbolResolution.ts` end-to-end rather than only in its unit tests),
+  `.safeParse()` used without a proven success check
+  (`R-VALIDATION-CONTRACT-SAFEPARSE-UNGUARDED`), an object-field conflict
+  between two `z.object()` schemas sharing a trace ID, a field literally
+  named `constructor` (correctly produces NOTHING, proving the
+  prototype-safety fix end-to-end), and a nested `z.object()` field (stays
+  unresolved rather than guessed at). 100%/100% (TP 20).
   Building this corpus caught one real bug before it shipped further: the
   unused-validator and raw-after-validation checks (`ValidatorUsage.ts`)
   shared the dataflow tracer's now-fixed-elsewhere gate requiring a
@@ -513,6 +525,56 @@ allow-list itself permits extra keys (e.g. Zod `.passthrough()`) is not checked.
 TypeScript/JavaScript only; PHP/Dart backends are not covered. See each rule's
 `missingContext` for the detection limits within the one layer (e.g.
 `preValidation` hooks, global middleware).
+
+**Cross-layer analysis — readiness for an end-to-end chain (assessment, not a
+new feature):** the long-term goal is a provable Frontend Input → Frontend
+Validation → API Request → Backend Request → Backend Validation → Validated
+Data → Service → Repository → Database chain. Today, only **one ring** of
+that chain is actually evidence-graph-proven: Backend Request → Backend
+Validation → Validated Data → (same-file, or one same-file hop into a)
+Service/Repository call (`ValidationDataflow.ts`/`OneHopResolution.ts`/
+`SafeParseGuard.ts`, symbol-based, with an honest `verified`/`heuristic`/
+`unresolved` status on every edge — see above). Everything on either side of
+that ring is either unmodeled or only a human-asserted claim, never
+independently observed:
+- **Frontend Input / Frontend Validation:** no frontend-specific facts exist
+  at all. A contract's `layers: ["frontend"]` is accepted and
+  schema-validated, but — unlike the `backend` claim, which Stoa actually
+  confirms via dataflow evidence that the invocation was fed by request
+  data — there is no analogous frontend-side proof; a `frontend` claim
+  produces no finding either way (documented above, under Layer & security
+  attribution).
+- **API Request:** there are no facts for the request layer itself (HTTP
+  method, route, request/response DTO shape). Nothing links "this frontend
+  file calls `fetch('/api/users')`" to "this backend file routes
+  `router.post('/users', handler)`" — this is the single largest missing
+  building block for a real end-to-end link, and nothing in the current
+  implementation claims otherwise.
+- **Service → Repository → Database:** the one-hop resolver is same-file
+  only; a validated value handed to a service imported from another file is
+  not traced at all. Even where it is traced, Stoa only proves the value
+  reaches a call that *looks like* a persistence verb by name
+  (`save`/`create`/`repository.*`/…) — it has no model of what that call
+  actually writes, to which table or column, so nothing is proven about the
+  Database itself, only up to the repository-call boundary.
+- **FE/BE conflict detection** (`R-VALIDATION-CONTRACT-CONFLICT`) compares
+  two schemas that share a human-chosen Validation Trace ID — it is evidence
+  that two *annotated* implementations disagree, not proof that those two
+  schemas correspond to the same real API request. The trace ID is a
+  deliberate, explicit, opt-in annotation precisely so that **frontend and
+  backend are never considered linked merely because they validate a
+  field with the same name** — matching field names alone is not, and must
+  not become, a substitute for a real request/response link.
+
+In short: actually-linked (backend request → backend validation →
+persistence, within the limits above), plausible-but-unproven (a `frontend`
+layer claim, the other `security` flags), non-existent (API-request/DTO
+facts, cross-file service resolution, any model of the database itself), and
+non-analyzable with the current fact model (whether two trace-ID-matched
+schemas really describe the same endpoint) are four genuinely different
+states today, and Stoa's own findings already distinguish the first from the
+rest — but a full, provable end-to-end chain is not implemented, and nothing
+here claims it is.
 
 **UI/UX — limits and planned:** static analysis only. Colour contrast
 (WCAG 1.4.3) is checked only for the provable inline case (both colours on the

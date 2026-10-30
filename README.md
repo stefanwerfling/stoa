@@ -40,9 +40,16 @@ An LLM is an optional, switchable adapter.
 > - *Evaluated on independent external projects:* **not yet** — `stoa eval` works
 >   on any project, but no externally-validated corpus ships here.
 > - *Validation Trace IDs / cross-layer contracts:* opt-in (`--contracts <file>`),
->   TypeScript-only, first vertical slice — six procedural checks comparing
->   `// stoa:validation <ID>`-annotated scalar Zod schemas against an external,
->   schema-validated contract (see implementation-status for exact scope).
+>   TypeScript-only — 12 procedural checks comparing `// stoa:validation <ID>`-annotated
+>   Zod schemas (scalar chains and field-by-field `z.object()`, including
+>   `.strict()`/`.partial()`/`.extend()`/`.merge()`) against an external,
+>   schema-validated contract. Cross-function dataflow to a persistence sink is
+>   resolved by real ts-morph symbol identity (not name text), so shadowed/aliased/
+>   reassigned variables cannot be mistaken for the validated one; `.safeParse()`
+>   is only treated as a proven guard when control-flow analysis can show the
+>   failure path is actually rejected (see implementation-status for exact scope
+>   and the `heuristic`/`unresolved` evidence statuses this produces instead of a
+>   false `verified`).
 > - *Planned / not yet validated:* baseline & diff/PR mode, richer context facts,
 >   PSR-4 PHP import resolution, Dart/C/C++ dependency facts.
 >
