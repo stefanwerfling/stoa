@@ -96,3 +96,34 @@ test('AST relationship, not a name heuristic: a .bind() validator alias whose ow
     const findings = rule(analyzeFixture('validated.ts'));
     assert.deepEqual(findings, [], '/boundAlias (and every other handler in this fixture) is correctly recognized as validated');
 });
+
+test('mass assignment extension: a direct property assignment (not a const alias) still taints the object it writes into', () => {
+    // /direct-assignment: entity.data = req.body; repo.save(entity) — entity
+    // was never declared as `= req.body`, only ONE of its properties was
+    // assigned from it, yet the whole object is later saved.
+    const findings = massAssignment(analyzeFixture('mass-assignment-extended.ts'));
+    const hit = findings.find((f) => f.location.range.startLine === 31);
+    assert.ok(hit, '/direct-assignment: save(entity) is flagged even though entity was never a `const x = req.body` alias');
+    assert.equal(hit?.observation.evidence[0]?.value, 'save(entity)');
+});
+
+test('mass assignment extension: a raw payload passed through one cross-function hop to a persistence call is still flagged', () => {
+    // /one-hop: userService.register(req.body) — register's own name gives
+    // no hint, but resolving one hop into its body shows it ultimately calls
+    // this.repository.save(data), the raw-value mirror of
+    // ValidationDataflow.ts's one-hop trace for a VALIDATED value.
+    const findings = massAssignment(analyzeFixture('mass-assignment-extended.ts'));
+    const hit = findings.find((f) => f.location.range.startLine === 39);
+    assert.ok(hit, '/one-hop: the raw payload reaching a sink through UserService.register is flagged');
+    assert.equal(hit?.observation.evidence[0]?.value, 'userService.register(req.body) → this.repository.save(data) inside UserService.register');
+});
+
+test('mass assignment extension: the narrow ORM "merge" verb addition is recognized, but a single plucked field through a direct assignment is still out of scope', () => {
+    // /merge: repo.merge(entity, req.body) — TypeORM-style merge copying the
+    // raw payload onto entity. /single-field-assignment: entity.data = a
+    // SINGLE plucked field (not the whole raw payload) — the existing
+    // single-field scope restriction still applies; no finding.
+    const findings = massAssignment(analyzeFixture('mass-assignment-extended.ts'));
+    assert.ok(findings.some((f) => f.location.range.startLine === 47 && f.observation.evidence[0]?.value === 'merge(req.body)'));
+    assert.ok(!findings.some((f) => f.location.range.startLine >= 54 && f.location.range.startLine <= 58), '/single-field-assignment: a single plucked field is not a mass-assignment risk');
+});

@@ -135,6 +135,9 @@ Prozedurale Regeln (`ProjectRule`, cross-file):
 | R-VALIDATION-CONTRACT-NOT-IMPLEMENTED | marcus.judgment | Robustheit, Belegbarkeit | opt-in `--contracts`; Vertragseintrag ohne jede Annotation (niedrige Konfidenz, kein Abwesenheitsbeweis) |
 | R-VALIDATION-CONTRACT-UNUSED-VALIDATOR | marcus.obstacle | Robustheit | opt-in `--contracts`; annotierter, auflösbarer Validator wird nirgends in der Datei aufgerufen |
 | R-VALIDATION-CONTRACT-RAW-AFTER-VALIDATION | marcus.judgment | Robustheit | opt-in `--contracts`; Validator mit Request-Daten aufgerufen, aber eine rohe Kopie der Payload erreicht trotzdem eine Persistenz-Senke in derselben Funktion |
+| R-VALIDATION-CONTRACT-DATAFLOW-UNRESOLVED | marcus.judgment | Robustheit, Belegbarkeit | opt-in `--contracts`; der validierte Wert wird an einen business-/persistenz-klingenden Aufruf übergeben, den Stoa innerhalb der Datei nicht auflösen kann |
+| R-VALIDATION-CONTRACT-LAYER-UNRESOLVED | marcus.judgment | Robustheit, Belegbarkeit | opt-in `--contracts`; der Vertrag behauptet die Backend-Schicht, doch keine Implementierung wurde nachweislich mit Request-Daten gefüttert |
+| R-VALIDATION-CONTRACT-SECURITY-UNVERIFIED | marcus.judgment | Robustheit, Belegbarkeit | opt-in `--contracts`; der Vertrag verlangt `security.serverSideValidation`, doch keine Implementierung wurde nachweislich mit Request-Daten gefüttert |
 
 Alle zehn Qualitätsdimensionen (inkl. Barrierefreiheit, Bedienbarkeit) haben
 mindestens eine Regel.
@@ -254,6 +257,36 @@ zu liefern.
   Auflösung, keine destrukturierten/Rest-Parameter, keine Spread-Argumente,
   keine Rekursion über einen Schritt hinaus, nur der ERSTE Aufruf, der den
   verfolgten Wert erhält, wird nachverfolgt.
+- **Schicht- & Security-Zuordnung** (`ValidationContractRule.ts`): Die
+  `layers`/`security`-Felder eines Vertrags sind eine BEHAUPTUNG, kein
+  Beweis. Behauptet eine Regel die `backend`-Schicht, oder deklariert sie
+  das eine strukturierte Security-Flag, das Stoa tatsächlich prüfen kann
+  (`security.serverSideValidation`), nutzt Stoa denselben Beleg wie die
+  Validator-Datenflussanalyse (ein `validation.dataflowGraph`-Fact existiert
+  nur für einen nachweislich mit Request-Daten gefütterten Aufruf), um die
+  Behauptung zu bestätigen; eine annotierte Implementierung, die nie
+  nachweislich im Backend lief, ist `R-VALIDATION-CONTRACT-LAYER-UNRESOLVED`
+  / `-SECURITY-UNVERIFIED` (niedrige Konfidenz). Eine reine
+  `frontend`-Behauptung und die übrigen fünf `security`-Flags
+  (`authenticationRequired`, `authorizationRequired`, `ownershipRequired`,
+  `tenantIsolation`, `massAssignmentProtection`) werden akzeptiert und
+  schema-validiert, erzeugen aber absichtlich KEINEN Befund — Stoa hat keine
+  Session-/Auth-/Tenant-Modellierung, um sie zu prüfen, und ihr Fehlen in
+  einer Befundliste darf niemals als „bestätigt erfüllt" gelesen werden.
+- **Mass-Assignment-Erweiterungen** (`BackendValidation.ts`):
+  `R-VALIDATION-MASS-ASSIGNMENT` erkennt nun auch eine DIREKTE
+  Eigenschaftszuweisung, die ein Objekt tainted (`entity.data = req.body`,
+  nicht nur ein `const x = req.body`-Alias — ein späteres `repo.save(entity)`
+  wird genauso markiert), eine rohe Payload, die EINEN
+  funktionsübergreifenden Schritt bis zu einem Persistenz-Verb-Aufruf
+  durchläuft (nutzt denselben One-Hop-Resolver wie der Datenfluss-Tracer, in
+  `OneHopResolution.ts`, geteilt, um dieselbe Mechanik nicht doppelt zu
+  implementieren), sowie eine schmale ORM-spezifische Verb-Ergänzung,
+  `merge` (TypeORM `repository.merge(entity, req.body)`) — nicht
+  `preload`/`set`, zu generisch (Cache/Map/etc.), um sie ohne echte
+  False-Positive-Kosten zu ergänzen. Ein einzelnes herausgegriffenes Feld
+  über eine direkte Zuweisung bleibt außerhalb des Umfangs, ebenso wie die
+  bestehende Einzelfeld-Einschränkung anderswo in dieser Regel.
 - **Bewusst nicht in diesem Schnitt** (dokumentiert, nicht vorgetäuscht):
   Mehrfeld-Objekt-Schemas; cross-file-Nutzungsnachweis; API-Endpunkt-/
   Alternative-Endpunkt-Bypass-Erkennung; Schicht-Heuristik (Frontend/Backend)
@@ -295,7 +328,7 @@ zu liefern.
 
 ## Qualitätssicherung
 
-- **190 node:test-Fälle** grün (Regeln pos./neg., Extraktion, Schema-Validierung,
+- **194 node:test-Fälle** grün (Regeln pos./neg., Extraktion, Schema-Validierung,
   i18n, Determinismus, SARIF, Eval, Semantik-Groundedness, Datenschutz,
   Finding-Trennung).
 - **Golden-Korpus** (`test/corpus/`, **nur TS+PHP**) mit Ground-Truth; Eval

@@ -30,7 +30,7 @@ const key = (f: Finding): string => `${f.rule.id}|${f.location.file.split('/').p
 test('loadValidationContract parses a well-formed contract, rejects a malformed one, and rejects a duplicate id', () => {
     const contract = loadValidationContract(contractPath);
     assert.equal(contract.version, '1.1.0');
-    assert.equal(contract.rules.length, 19);
+    assert.equal(contract.rules.length, 23);
     assert.ok(contract.rules.some((rule) => rule.id === 'VC-ITEM-QUANTITY-001'));
 
     assert.throws(() => loadValidationContract(join(fixtures, 'does-not-exist.json')));
@@ -204,9 +204,38 @@ test('dataflow tracing: a same-function and a one-hop cross-function persist pro
     assert.ok(unresolved?.missingContext?.[0]?.includes('ONE hop'));
 });
 
+test('layer/security attribution: backend attribution confirmed via dataflow evidence silences the claim; unattributed claims are surfaced; frontend-only and the five unverifiable security flags are never checked', () => {
+    // layers.ts: attributedHandler parses req.body directly (backend
+    // attribution confirmed) — VC-LAYER-ATTRIBUTED-021's `layers: ["backend"]`
+    // claim produces no LAYER-UNRESOLVED finding. unattributedUsage parses a
+    // fixed local literal, never req.* — VC-LAYER-UNATTRIBUTED-022 claims the
+    // same layer but cannot be confirmed. securityUsage is the same
+    // unattributed shape, but the contract declares `security.serverSideValidation`
+    // (not `layers`) plus two flags Stoa never checks (authenticationRequired,
+    // ownershipRequired) — exactly one finding, naming only the checked flag.
+    // frontendOnlyUsage is also unattributed, but VC-LAYER-FRONTEND-ONLY-024
+    // claims ONLY the frontend layer, which Stoa never checks — no finding.
+    const findings = vcFindings(analyzeFixture(loadValidationContract(contractPath)));
+    const byKey = new Map(findings.map((f) => [key(f), f]));
+
+    assert.ok(!findings.some((f) => f.observation.statement.includes('VC-LAYER-ATTRIBUTED-021') && f.rule.id === 'R-VALIDATION-CONTRACT-LAYER-UNRESOLVED'));
+
+    const unattributed = byKey.get('R-VALIDATION-CONTRACT-LAYER-UNRESOLVED|layers.ts:12');
+    assert.ok(unattributed, 'VC-LAYER-UNATTRIBUTED-022: claims backend, never shown fed by the request');
+    assert.ok(unattributed?.observation.statement.includes('VC-LAYER-UNATTRIBUTED-022'));
+    assert.equal(unattributed?.confidence, 0.3);
+
+    const security = byKey.get('R-VALIDATION-CONTRACT-SECURITY-UNVERIFIED|layers.ts:15');
+    assert.ok(security, 'VC-LAYER-SECURITY-UNVERIFIED-023: declares serverSideValidation, never shown fed by the request');
+    assert.ok(security?.observation.statement.includes('VC-LAYER-SECURITY-UNVERIFIED-023'));
+    assert.ok(!findings.some((f) => f.rule.id === 'R-VALIDATION-CONTRACT-LAYER-UNRESOLVED' && f.observation.statement.includes('VC-LAYER-SECURITY-UNVERIFIED-023')), 'no LAYER-UNRESOLVED duplicate — only the more specific SECURITY-UNVERIFIED fires');
+
+    assert.ok(!findings.some((f) => f.observation.statement.includes('VC-LAYER-FRONTEND-ONLY-024') && (f.rule.id === 'R-VALIDATION-CONTRACT-LAYER-UNRESOLVED' || f.rule.id === 'R-VALIDATION-CONTRACT-SECURITY-UNVERIFIED')), 'a frontend-only layer claim is accepted but never checked (the unrelated shape-UNRESOLVED finding for this z.object schema still fires)');
+});
+
 test('every validation-contract finding states its principle, dimension and an explicit missingContext', () => {
     const findings = vcFindings(analyzeFixture(loadValidationContract(contractPath)));
-    assert.equal(findings.length, 20, 'the full fixture set across all files');
+    assert.equal(findings.length, 26, 'the full fixture set across all files');
     for (const finding of findings) {
         assert.ok(finding.interpretation.principles.length > 0, `${finding.rule.id} carries a principle`);
         assert.ok(finding.interpretation.dimensions.includes('robustness'), `${finding.rule.id} is tagged robustness`);

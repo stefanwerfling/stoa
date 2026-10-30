@@ -156,6 +156,38 @@
       "field": "tag",
       "dataType": "string",
       "required": true
+    },
+    {
+      "id": "VC-LAYER-ATTRIBUTED-021",
+      "description": "Backend attribution confirmed via request-fed dataflow evidence.",
+      "field": "name",
+      "dataType": "string",
+      "required": true,
+      "layers": ["backend"]
+    },
+    {
+      "id": "VC-LAYER-UNATTRIBUTED-022",
+      "description": "Claims the backend layer, but the implementation is never shown fed by request data.",
+      "field": "note",
+      "dataType": "string",
+      "required": true,
+      "layers": ["backend"]
+    },
+    {
+      "id": "VC-LAYER-SECURITY-UNVERIFIED-023",
+      "description": "Declares the one structured security flag Stoa can check; the implementation is never shown fed by request data.",
+      "field": "tag",
+      "dataType": "string",
+      "required": true,
+      "security": {"serverSideValidation": true, "authenticationRequired": true, "ownershipRequired": true}
+    },
+    {
+      "id": "VC-LAYER-FRONTEND-ONLY-024",
+      "description": "Frontend-only claim; never checked by Stoa.",
+      "field": "label",
+      "dataType": "string",
+      "required": true,
+      "layers": ["frontend"]
     }
   ]
 }

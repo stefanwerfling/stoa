@@ -132,6 +132,9 @@ Procedural rules (`ProjectRule`, cross-file):
 | R-VALIDATION-CONTRACT-NOT-IMPLEMENTED | marcus.judgment | robustness, decision-evidence | opt-in `--contracts`; contract entry with no annotation anywhere (low confidence, not proof of absence) |
 | R-VALIDATION-CONTRACT-UNUSED-VALIDATOR | marcus.obstacle | robustness | opt-in `--contracts`; an annotated, resolvable validator is never invoked anywhere in its file |
 | R-VALIDATION-CONTRACT-RAW-AFTER-VALIDATION | marcus.judgment | robustness | opt-in `--contracts`; a validator is invoked with request data, but a raw copy of the payload still reaches a persistence sink in the same function |
+| R-VALIDATION-CONTRACT-DATAFLOW-UNRESOLVED | marcus.judgment | robustness, decision-evidence | opt-in `--contracts`; the validated value is passed to a business/persistence-named call Stoa cannot resolve within the file |
+| R-VALIDATION-CONTRACT-LAYER-UNRESOLVED | marcus.judgment | robustness, decision-evidence | opt-in `--contracts`; the contract claims the backend layer, but no implementation was proven fed by request data |
+| R-VALIDATION-CONTRACT-SECURITY-UNVERIFIED | marcus.judgment | robustness, decision-evidence | opt-in `--contracts`; the contract requires `security.serverSideValidation`, but no implementation was proven fed by request data |
 
 All ten quality dimensions (incl. accessibility, usability) have at least one rule.
 
@@ -240,6 +243,31 @@ fails fast (exit 1, concrete errors) instead of silently yielding 0 findings.
   value is meant to reach persistence. No cross-file resolution, no
   destructured/rest parameters, no spread arguments, no recursion beyond one
   hop, only the FIRST call receiving the tracked value is traced.
+- **Layer & security attribution** (`ValidationContractRule.ts`): a contract's
+  `layers`/`security` fields are a CLAIM, not proof. When a rule claims the
+  `backend` layer, or declares the one structured security flag Stoa can
+  actually check (`security.serverSideValidation`), Stoa reuses the Validator
+  Dataflow Analysis's own evidence (a `validation.dataflowGraph` fact only
+  exists for an invocation proven fed by request data) to confirm the claim;
+  an annotated implementation that was never shown running on the backend is
+  `R-VALIDATION-CONTRACT-LAYER-UNRESOLVED` / `-SECURITY-UNVERIFIED` (low
+  confidence). A `frontend`-only claim, and the other five `security` flags
+  (`authenticationRequired`, `authorizationRequired`, `ownershipRequired`,
+  `tenantIsolation`, `massAssignmentProtection`) are accepted and
+  schema-validated but intentionally produce NO finding either way — Stoa
+  has no session/auth/tenant model to verify them, and their absence from a
+  finding list must never be read as "confirmed met".
+- **Mass assignment extensions** (`BackendValidation.ts`): `R-VALIDATION-MASS-ASSIGNMENT`
+  now also recognizes a DIRECT property assignment tainting an object (`entity.data = req.body`,
+  not just a `const x = req.body` alias — a later `repo.save(entity)` is flagged
+  the same way), a raw payload passed through ONE cross-function hop to a
+  persistence-verb call (reusing the same one-hop resolver as the dataflow
+  tracer, in `OneHopResolution.ts`, shared to avoid a second implementation
+  of the same mechanics), and one narrow ORM-specific verb addition,
+  `merge` (TypeORM `repository.merge(entity, req.body)`) — not `preload`/`set`,
+  too generic (cache/Map/etc.) to add without a real false-positive cost. A
+  single plucked field through a direct assignment stays out of scope, same
+  as the existing single-field restriction elsewhere in this rule.
 - **Deliberately out of this slice** (documented, not faked): multi-field
   object schemas; cross-file usage proof; API-endpoint/alternate-endpoint
   bypass detection; a frontend/backend layer heuristic for the conflict
@@ -280,7 +308,7 @@ fails fast (exit 1, concrete errors) instead of silently yielding 0 findings.
 
 ## Quality assurance
 
-- **190 node:test cases** green (rules pos./neg., extraction, schema validation,
+- **194 node:test cases** green (rules pos./neg., extraction, schema validation,
   i18n, determinism, SARIF, evaluation, semantic groundedness, privacy,
   finding-model separation).
 - **Golden corpus** (`test/corpus/`, **TS+PHP only**) with ground truth;

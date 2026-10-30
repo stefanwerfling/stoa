@@ -7,6 +7,7 @@ import {annotatedSchemas} from './ValidationAnnotations.js';
 import type {AnnotatedSchema} from './ValidationAnnotations.js';
 import {isRawRequestExpression, isRequestRootedExpression, nearestFunction, PERSISTENCE_VERB, rawRequestAliasNames} from './BackendValidation.js';
 import {findParseCalls, isFedByRequest} from './ValidatorUsage.js';
+import {findInnerCall, resolveOneHop} from './OneHopResolution.js';
 
 type Build = (spec: FactSpec) => Fact;
 
@@ -125,84 +126,6 @@ const findDataAccess = (fn: Node, resultName: string): Node | undefined => {
     return fn.getDescendantsOfKind(SyntaxKind.PropertyAccessExpression).find((access) => isDataAccessOf(access, resultName));
 };
 
-interface OneHop {
-    declaration: Node;
-    label: string;
-    paramName: string;
-}
-
-const bodyOf = (decl: Node): Node | undefined => {
-    if (Node.isFunctionDeclaration(decl) || Node.isMethodDeclaration(decl)) {
-        return decl.getBody();
-    }
-    if (Node.isFunctionExpression(decl) || Node.isArrowFunction(decl)) {
-        return decl.getBody();
-    }
-    return undefined;
-};
-
-const declarationLabelOf = (decl: Node): string => {
-    if (Node.isMethodDeclaration(decl)) {
-        const cls = decl.getFirstAncestorByKind(SyntaxKind.ClassDeclaration);
-        return `${cls?.getName() ?? '(anonymous class)'}.${decl.getName()}`;
-    }
-    if (Node.isFunctionDeclaration(decl)) {
-        return decl.getName() ?? '(anonymous function)';
-    }
-    return '(anonymous function)';
-};
-
-// Resolves `outer`'s callee to a function/method/arrow declared in THIS
-// file, with a plain identifier parameter at the position `argument`
-// occupies — the one hop this slice supports. Null on anything beyond that
-// (cross-file, no declaration, destructured/rest parameter, no body).
-const resolveOneHop = (outer: CallExpression, argument: Node): OneHop | null => {
-    const symbol = outer.getExpression().getSymbol();
-    const argIndex = outer.getArguments().indexOf(argument);
-    for (const decl of symbol?.getDeclarations() ?? []) {
-        if (decl.getSourceFile().getFilePath() !== outer.getSourceFile().getFilePath()) {
-            continue;
-        }
-        if (!Node.isMethodDeclaration(decl) && !Node.isFunctionDeclaration(decl) && !Node.isFunctionExpression(decl) && !Node.isArrowFunction(decl)) {
-            continue;
-        }
-        const param = decl.getParameters()[argIndex];
-        const nameNode = param?.getNameNode();
-        if (nameNode === undefined || !Node.isIdentifier(nameNode)) {
-            continue;
-        }
-        if (bodyOf(decl) === undefined) {
-            continue;
-        }
-        return {declaration: decl, label: declarationLabelOf(decl), paramName: nameNode.getText()};
-    }
-    return null;
-};
-
-// A persistence-verb call directly inside `declaration`'s own body (not a
-// nested callback) whose argument list contains `paramName` as a bare
-// identifier.
-const findInnerSink = (declaration: Node): ((paramName: string) => CallExpression | null) => {
-    const body = bodyOf(declaration);
-    return (paramName: string): CallExpression | null => {
-        if (body === undefined) {
-            return null;
-        }
-        for (const call of body.getDescendantsOfKind(SyntaxKind.CallExpression)) {
-            if (nearestFunction(call) !== declaration) {
-                continue;
-            }
-            if (!PERSISTENCE_VERB.test(calleeName(call))) {
-                continue;
-            }
-            if (call.getArguments().some((arg) => Node.isIdentifier(arg) && arg.getText() === paramName)) {
-                return call;
-            }
-        }
-        return null;
-    };
-};
-
 interface SinkTrace {
     call: CallExpression;
     status: EvidenceStatus;
@@ -231,7 +154,7 @@ const traceSink = (fn: Node, matches: (node: Node) => boolean): SinkTrace | null
         }
         const hop = resolveOneHop(outer, argument);
         if (hop !== null) {
-            const inner = findInnerSink(hop.declaration)(hop.paramName);
+            const inner = findInnerCall(hop.declaration, (name) => PERSISTENCE_VERB.test(name))(hop.paramName);
             if (inner !== null) {
                 return {
                     call: outer,

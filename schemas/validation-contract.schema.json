@@ -58,12 +58,25 @@
         "layers": {
           "type": "array",
           "items": { "type": "string", "enum": ["frontend", "backend", "persistence", "api-contract"] },
-          "description": "Which layers this rule applies to; informational in this version (not yet used to gate checks per layer)."
+          "description": "Which layers this rule applies to. Its presence alone is NOT proof: when it includes \"backend\", Stoa additionally checks whether an annotated implementation of this id could actually be ATTRIBUTED to the backend (found fed by request-handling data, not merely declared) — see R-VALIDATION-CONTRACT-LAYER-UNRESOLVED. \"frontend\" is accepted but never checked (no positive frontend-attribution signal exists yet)."
         },
         "securityRequirements": {
           "type": "array",
           "items": { "type": "string" },
-          "description": "Free-text notes on backend-authoritative/security expectations; not machine-checked in this version."
+          "description": "Free-text notes on backend-authoritative/security expectations; not machine-checked. See `security` for the structured, partially machine-checked equivalent."
+        },
+        "security": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Structured backend security requirements. Stoa is honest about what it can and cannot statically prove here: only `serverSideValidation` has a real static signal (the same backend-attribution evidence as `layers: [\"backend\"]`, see R-VALIDATION-CONTRACT-SECURITY-UNVERIFIED). The other five flags describe requirements Stoa's current fact model has no way to verify (no session/auth/tenant modeling exists) — declaring them is accepted and schema-validated, but produces no finding either way; absence of a finding is NOT confirmation they are met.",
+          "properties": {
+            "authenticationRequired": { "type": "boolean", "description": "Not statically verified by Stoa." },
+            "authorizationRequired": { "type": "boolean", "description": "Not statically verified by Stoa." },
+            "ownershipRequired": { "type": "boolean", "description": "Not statically verified by Stoa." },
+            "tenantIsolation": { "type": "boolean", "description": "Not statically verified by Stoa." },
+            "serverSideValidation": { "type": "boolean", "description": "Checked via the same backend-attribution evidence as `layers: [\"backend\"]`." },
+            "massAssignmentProtection": { "type": "boolean", "description": "Not statically verified by Stoa (no reliable per-id correlation to R-VALIDATION-MASS-ASSIGNMENT exists yet)." }
+          }
         },
         "version": {
           "type": "string",

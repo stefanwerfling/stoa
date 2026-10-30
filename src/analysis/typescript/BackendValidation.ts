@@ -2,6 +2,7 @@ import {Node, SyntaxKind} from 'ts-morph';
 import type {CallExpression, SourceFile} from 'ts-morph';
 import type {Fact, SourceRange} from '../../Types.js';
 import type {FactSpec} from '../FactBuilder.js';
+import {findInnerCall, resolveOneHop} from './OneHopResolution.js';
 
 type Build = (spec: FactSpec) => Fact;
 
@@ -376,8 +377,11 @@ export const extractMassAssignmentFacts = (sourceFile: SourceFile, build: Build)
 
 // Exported for reuse by the dataflow tracer (ValidationDataflow.ts): the same
 // "does this call look like it persists something" signal, not a re-derived
-// pattern.
-export const PERSISTENCE_VERB = /^(save|create|update|insert|upsert|persist|replace)/i;
+// pattern. Includes one narrow ORM-specific addition, "merge" (TypeORM
+// `repository.merge(entity, req.body)` copies fields from its SECOND
+// argument onto the first before a later save) — not "preload"/"set", which
+// are too generic (cache/Map/etc.) to add without a real false-positive cost.
+export const PERSISTENCE_VERB = /^(save|create|update|insert|upsert|persist|replace|merge)/i;
 
 interface RawRequestSink {
     call: CallExpression;
@@ -391,6 +395,16 @@ interface RawRequestSink {
 // validator was invoked AND a raw copy of the payload still reached a sink in
 // the same function" reuses this exact, already-hardened detection rather
 // than re-deriving it.
+//
+// Beyond a direct same-function sink, also attempts ONE cross-function hop
+// (service/repository handoffs, and a request object passed through to
+// another function directly) — the raw-value mirror of
+// ValidationDataflow.ts's one-hop trace for a VALIDATED value, sharing the
+// same resolver (OneHopResolution.ts): the raw value is a direct argument of
+// SOME call in `fn`, that call's callee resolves — WITHIN THIS FILE ONLY —
+// to a function/method with a plain parameter at the matching position, and
+// that parameter is itself fed to a persistence-verb call inside that
+// declaration's own body.
 export const rawRequestSinksInFunction = (fn: Node): RawRequestSink[] => {
     if (hasRouteSchemaOption(fn)) {
         return [];
@@ -404,6 +418,19 @@ export const rawRequestSinksInFunction = (fn: Node): RawRequestSink[] => {
         const description = massAssignmentSite(call, rawNames);
         if (description !== null) {
             sinks.push({call, description});
+            continue;
+        }
+        const argument = call.getArguments().find((arg) => isRawRequestExpression(arg, rawNames));
+        if (argument === undefined) {
+            continue;
+        }
+        const hop = resolveOneHop(call, argument);
+        if (hop === null) {
+            continue;
+        }
+        const inner = findInnerCall(hop.declaration, (name) => PERSISTENCE_VERB.test(name))(hop.paramName);
+        if (inner !== null) {
+            sinks.push({call, description: `${call.getText()} → ${inner.getText()} inside ${hop.label}`});
         }
     }
     return sinks;
@@ -413,6 +440,15 @@ export const rawRequestSinksInFunction = (fn: Node): RawRequestSink[] => {
 // or `const q = (req.query as T)`) — NOT via a validator call. Stricter than
 // requestDerivedNames (used by the sibling rule), which intentionally over-matches
 // by substring to recognize validation; here under-matching is the safe direction.
+//
+// Also recognizes a DIRECT ASSIGNMENT taint, not just a declaration:
+// `entity.data = req.body` (a plain `=` onto an existing object's property,
+// not a `const x = …` alias) means `entity` now carries unvalidated raw
+// payload data in one of its fields — a later `repo.save(entity)` is just as
+// much a mass-assignment risk as `const body = req.body; repo.save(body)`,
+// even though only ONE field of `entity` is actually tainted. Scanned in a
+// second pass (after declarations) so an assignment referencing an
+// already-discovered alias still resolves.
 export const rawRequestAliasNames = (fn: Node): ReadonlySet<string> => {
     const names = new Set<string>();
     for (const declaration of fn.getDescendantsOfKind(SyntaxKind.VariableDeclaration)) {
@@ -420,6 +456,18 @@ export const rawRequestAliasNames = (fn: Node): ReadonlySet<string> => {
         const nameNode = declaration.getNameNode();
         if (initializer !== undefined && Node.isIdentifier(nameNode) && isRawRequestExpression(initializer, names)) {
             names.add(nameNode.getText());
+        }
+    }
+    for (const assignment of fn.getDescendantsOfKind(SyntaxKind.BinaryExpression)) {
+        if (assignment.getOperatorToken().getText() !== '=') {
+            continue;
+        }
+        const left = assignment.getLeft();
+        if (!Node.isPropertyAccessExpression(left) || !Node.isIdentifier(left.getExpression())) {
+            continue;
+        }
+        if (isRawRequestExpression(assignment.getRight(), names)) {
+            names.add(left.getExpression().getText());
         }
     }
     return names;

@@ -25,6 +25,24 @@ const contractValidator = (): ValidateFunction => {
 export type NormalizationKind = 'trim' | 'lowercase' | 'uppercase';
 
 /**
+ * Structured backend security requirements. Only `serverSideValidation` has
+ * a real static signal (the same backend-attribution evidence used for
+ * `layers: ["backend"]` — see `ValidationContractRule.ts`); the other five
+ * describe requirements Stoa's current fact model cannot verify at all (no
+ * session/auth/tenant modeling exists). Declaring them is accepted and
+ * schema-validated, but produces no finding either way — their absence from
+ * a finding list is NOT confirmation they are met.
+ */
+export interface ContractSecurityFlags {
+    authenticationRequired?: boolean;
+    authorizationRequired?: boolean;
+    ownershipRequired?: boolean;
+    tenantIsolation?: boolean;
+    serverSideValidation?: boolean;
+    massAssignmentProtection?: boolean;
+}
+
+/**
  * One business validation rule from a Validation Contract. The ID is a
  * project-chosen Validation Trace ID (e.g. `VC-ITEM-QUANTITY-001`) — never a
  * Stoa rule/finding/fact id. Every field but id/description/field/dataType is
@@ -46,6 +64,7 @@ export interface ContractRule {
     normalization?: NormalizationKind[];
     layers?: string[];
     securityRequirements?: string[];
+    security?: ContractSecurityFlags;
     version?: string;
 }
 

@@ -22,7 +22,9 @@ type RuleId =
     | 'R-VALIDATION-CONTRACT-NOT-IMPLEMENTED'
     | 'R-VALIDATION-CONTRACT-UNUSED-VALIDATOR'
     | 'R-VALIDATION-CONTRACT-RAW-AFTER-VALIDATION'
-    | 'R-VALIDATION-CONTRACT-DATAFLOW-UNRESOLVED';
+    | 'R-VALIDATION-CONTRACT-DATAFLOW-UNRESOLVED'
+    | 'R-VALIDATION-CONTRACT-LAYER-UNRESOLVED'
+    | 'R-VALIDATION-CONTRACT-SECURITY-UNVERIFIED';
 
 interface UsageValue {
     id: string;
@@ -51,7 +53,9 @@ const META: Record<RuleId, RuleMeta> = {
     'R-VALIDATION-CONTRACT-NOT-IMPLEMENTED': {principleId: 'marcus.judgment', dimensions: ['robustness', 'decision-evidence'], severity: 'low', confidence: 0.3, certaintyBasis: 'semantic-heuristic'},
     'R-VALIDATION-CONTRACT-UNUSED-VALIDATOR': {principleId: 'marcus.obstacle', dimensions: ['robustness'], severity: 'medium', confidence: 0.5, certaintyBasis: 'semantic-heuristic'},
     'R-VALIDATION-CONTRACT-RAW-AFTER-VALIDATION': {principleId: 'marcus.judgment', dimensions: ['robustness'], severity: 'high', confidence: 0.6, certaintyBasis: 'semantic-heuristic'},
-    'R-VALIDATION-CONTRACT-DATAFLOW-UNRESOLVED': {principleId: 'marcus.judgment', dimensions: ['robustness', 'decision-evidence'], severity: 'low', confidence: 0.3, certaintyBasis: 'semantic-heuristic'}
+    'R-VALIDATION-CONTRACT-DATAFLOW-UNRESOLVED': {principleId: 'marcus.judgment', dimensions: ['robustness', 'decision-evidence'], severity: 'low', confidence: 0.3, certaintyBasis: 'semantic-heuristic'},
+    'R-VALIDATION-CONTRACT-LAYER-UNRESOLVED': {principleId: 'marcus.judgment', dimensions: ['robustness', 'decision-evidence'], severity: 'low', confidence: 0.3, certaintyBasis: 'semantic-heuristic'},
+    'R-VALIDATION-CONTRACT-SECURITY-UNVERIFIED': {principleId: 'marcus.judgment', dimensions: ['robustness', 'decision-evidence'], severity: 'low', confidence: 0.3, certaintyBasis: 'semantic-heuristic'}
 };
 
 const TEXT: Record<RuleId, {statement: LocalizedText; suggestion: LocalizedText; drawbacks?: LocalizedText; missingContext: LocalizedText; rationale: LocalizedText}> = {
@@ -216,6 +220,42 @@ const TEXT: Record<RuleId, {statement: LocalizedText; suggestion: LocalizedText;
             en: 'Claiming a verified dataflow chain beyond what was actually traced would be a false certainty; stating plainly "this is where Stoa\'s trace ends" keeps proven relationships, heuristics and genuine unknowns honestly separate (marcus.judgment).',
             de: 'Eine über das tatsächlich Nachverfolgte hinausgehende, verifizierte Datenflusskette zu behaupten wäre eine falsche Sicherheit; klar zu sagen „hier endet Stoas Nachverfolgung" hält bewiesene Beziehungen, Heuristiken und echte Unbekannte ehrlich getrennt (marcus.judgment).'
         }
+    },
+    'R-VALIDATION-CONTRACT-LAYER-UNRESOLVED': {
+        statement: {
+            en: 'The contract declares "{value}" applies to the backend layer, but no implementation could be attributed to the backend.',
+            de: 'Der Vertrag erklärt, dass „{value}" für die Backend-Schicht gilt, doch keine Implementierung ließ sich dem Backend zuordnen.'
+        },
+        suggestion: {
+            en: 'If this rule is meant to run on the server, make sure the annotated schema is actually invoked on request-handling data (e.g. req.body) somewhere; if it only runs on the frontend, remove "backend" from this rule\'s layers.',
+            de: 'Falls diese Regel auf dem Server laufen soll, sicherstellen, dass das annotierte Schema tatsächlich auf Request-Daten (z. B. req.body) angewendet wird; falls sie nur im Frontend läuft, „backend" aus den layers dieser Regel entfernen.'
+        },
+        missingContext: {
+            en: 'The contract\'s "layers" field is a claim, not proof — Stoa only confirms backend attribution when it can trace the annotated schema\'s invocation to request-handling data (the same evidence behind the Validator Dataflow Analysis). A schema annotated and resolvable, but never shown to touch a request, looks identical to one that genuinely only runs elsewhere.',
+            de: 'Das Feld „layers" des Vertrags ist eine Behauptung, kein Beweis — Stoa bestätigt eine Backend-Zuordnung nur, wenn sich der Aufruf des annotierten Schemas bis zu Request-Daten zurückverfolgen lässt (derselbe Beleg wie bei der Validator-Datenflussanalyse). Ein annotiertes, auflösbares Schema, das nie nachweislich einen Request berührt, sieht identisch aus wie eines, das wirklich nur anderswo läuft.'
+        },
+        rationale: {
+            en: 'A business rule claimed for the backend — the authoritative security boundary — but never actually observed running there is a gap worth surfacing, not a detail to take on faith (marcus.judgment).',
+            de: 'Eine für das Backend — die autoritative Sicherheitsgrenze — behauptete fachliche Regel, die dort nie tatsächlich beobachtet läuft, ist eine Lücke, die es zu melden gilt, kein Detail, das man auf Treu und Glauben hinnimmt (marcus.judgment).'
+        }
+    },
+    'R-VALIDATION-CONTRACT-SECURITY-UNVERIFIED': {
+        statement: {
+            en: 'The contract requires server-side validation for "{value}", but no implementation could be attributed to the backend.',
+            de: 'Der Vertrag verlangt für „{value}" eine serverseitige Validierung, doch keine Implementierung ließ sich dem Backend zuordnen.'
+        },
+        suggestion: {
+            en: 'Make sure the annotated schema is actually invoked on request-handling data (e.g. req.body) on the server — a frontend-only check does not satisfy this requirement; the backend remains the authoritative security boundary.',
+            de: 'Sicherstellen, dass das annotierte Schema tatsächlich auf Request-Daten (z. B. req.body) auf dem Server angewendet wird — eine reine Frontend-Prüfung erfüllt diese Anforderung nicht; das Backend bleibt die autoritative Sicherheitsgrenze.'
+        },
+        missingContext: {
+            en: 'Of the six structured `security` flags a contract rule can declare, only `serverSideValidation` has a real static signal — the same backend-attribution evidence as the `layers` check above. The other five (authenticationRequired, authorizationRequired, ownershipRequired, tenantIsolation, massAssignmentProtection) are accepted and schema-validated but intentionally produce NO finding either way: Stoa has no session/auth/tenant modeling to verify them, and a missing finding here must never be read as "confirmed met".',
+            de: 'Von den sechs strukturierten `security`-Flags, die eine Vertragsregel deklarieren kann, hat nur `serverSideValidation` ein echtes statisches Signal — denselben Beleg für die Backend-Zuordnung wie die obige layers-Prüfung. Die übrigen fünf (authenticationRequired, authorizationRequired, ownershipRequired, tenantIsolation, massAssignmentProtection) werden akzeptiert und schema-validiert, erzeugen aber absichtlich KEINEN Befund — Stoa hat keine Session-/Auth-/Tenant-Modellierung, um sie zu prüfen, und ein fehlender Befund hier darf niemals als „bestätigt erfüllt" gelesen werden.'
+        },
+        rationale: {
+            en: 'A frontend check alone never satisfies a server-side validation requirement; reporting this plainly, with an explicit account of which security flags Stoa cannot check at all, is more honest than silence on either (marcus.judgment).',
+            de: 'Eine reine Frontend-Prüfung erfüllt niemals eine Anforderung an serverseitige Validierung; dies offen zu melden — mit expliziter Angabe, welche Security-Flags Stoa gar nicht prüfen kann — ist ehrlicher als Schweigen zu beidem (marcus.judgment).'
+        }
     }
 };
 
@@ -253,6 +293,7 @@ export class ValidationContractRule implements ProjectRule {
         findings.push(...this.unusedValidators(input));
         findings.push(...this.rawAfterValidation(input));
         findings.push(...this.dataflowUnresolved(input));
+        findings.push(...this.layerAndSecurityAttribution(annotations, input));
         return findings;
     }
 
@@ -388,6 +429,45 @@ export class ValidationContractRule implements ProjectRule {
                 continue;
             }
             findings.push(this.buildFinding('R-VALIDATION-CONTRACT-DATAFLOW-UNRESOLVED', fact, `${value.id} — ${unresolved.basis}`, input));
+        }
+        return findings;
+    }
+
+    // The contract's "layers"/"security" fields are a CLAIM, not proof. For
+    // every id that claims the backend layer, or declares the one security
+    // flag Stoa can actually check (`serverSideValidation`), confirm that at
+    // least one implementation was observed fed by request-handling data —
+    // reusing the Validator Dataflow Analysis's own evidence
+    // (`validation.dataflowGraph` facts only exist for invocations proven
+    // fed by the request). No annotation at all is already covered by
+    // NOT-IMPLEMENTED, so this only fires when an annotation exists but was
+    // never shown to run on the backend. The five other security flags are
+    // intentionally never checked here (see R-VALIDATION-CONTRACT-SECURITY-UNVERIFIED's
+    // missingContext) — Stoa has no session/auth/tenant model to verify them.
+    private layerAndSecurityAttribution(annotations: ReadonlyArray<{fact: Fact; value: AnnotationValue}>, input: ProjectRuleInput): Finding[] {
+        const contract = this.contract as ValidationContract;
+        const backendAttributed = new Set<string>();
+        for (const fact of input.facts) {
+            if (fact.kind === 'validation.dataflowGraph') {
+                backendAttributed.add((fact.value as unknown as DataflowValue).id);
+            }
+        }
+        const findings: Finding[] = [];
+        for (const rule of contract.rules) {
+            const claimsBackend = rule.layers?.includes('backend') ?? false;
+            const requiresServerSideValidation = rule.security?.serverSideValidation === true;
+            if (!claimsBackend && !requiresServerSideValidation) {
+                continue;
+            }
+            if (backendAttributed.has(rule.id)) {
+                continue;
+            }
+            const annotation = annotations.find((entry) => entry.value.idValid && entry.value.id === rule.id);
+            if (annotation === undefined) {
+                continue;
+            }
+            const ruleId: RuleId = requiresServerSideValidation ? 'R-VALIDATION-CONTRACT-SECURITY-UNVERIFIED' : 'R-VALIDATION-CONTRACT-LAYER-UNRESOLVED';
+            findings.push(this.buildFinding(ruleId, annotation.fact, rule.id, input));
         }
         return findings;
     }
