@@ -10,12 +10,16 @@ import {analyze} from '../src/Pipeline.js';
 
 // A dedicated golden corpus for Validation Trace ID / dataflow analysis
 // (Phase 6 of the "Analysis Correctness, Dataflow Verification & Cross-Layer
-// Validation" spec), mirroring the existing test/corpus/{project,expected.json}
-// precision/recall pattern (see Evaluation.test.ts / HtmlA11y.test.ts) rather
-// than inventing a second ground-truth mechanism. Covers all 16 explicitly
-// required test groups in one consolidated, navigable place — see the
-// per-case comments in corpus/*.ts for which group each belongs to, and
-// expected.json's description for the full list.
+// Validation" spec; extended under the "Dataflow Correctness, Symbol
+// Resolution & Cross-Layer Evidence" spec's Golden Corpus phase), mirroring
+// the existing test/corpus/{project,expected.json} precision/recall pattern
+// (see Evaluation.test.ts / HtmlA11y.test.ts) rather than inventing a second
+// ground-truth mechanism. Covers the 16 originally required test groups plus
+// four more (symbol-based shadowing, safeParse() control-flow verification,
+// an object-field conflict, a prototype-property field name, and an
+// unsupported nested z.object() construct) in one consolidated, navigable
+// place — see the per-case comments in corpus/*.ts for which group each
+// belongs to, and expected.json's description for the full list.
 //
 // Every individual capability already has a dedicated, more granular test
 // elsewhere (BackendValidation.test.ts, ValidationContract.test.ts,
@@ -33,13 +37,13 @@ const base = join(here, 'fixtures', 'validation-dataflow-corpus');
 const corpus = join(base, 'corpus');
 const contractPath = join(base, 'contract.json');
 
-test('validation/dataflow golden corpus: precision/recall 100% across all 16 required test groups', () => {
+test('validation/dataflow golden corpus: precision/recall 100% across all 20 required test groups', () => {
     const contract = loadValidationContract(contractPath);
     const findings = analyze({rootPath: corpus, knowledgeDir, ruleSetDir, config: DEFAULT_CONFIG, validationContract: contract}).report.findings;
     const result = evaluate(findings, loadExpected(join(base, 'expected.json')), corpus);
     assert.equal(result.overall.precision, 1, `false positives: ${JSON.stringify(result.falsePositives)}`);
     assert.equal(result.overall.recall, 1, `false negatives: ${JSON.stringify(result.falseNegatives)}`);
-    assert.equal(result.overall.truePositives, 16);
+    assert.equal(result.overall.truePositives, 20);
     assert.equal(result.overall.falsePositives, 0);
     assert.equal(result.overall.falseNegatives, 0);
     assert.deepEqual(result.duplicateExpected, [], 'the manifest itself has no duplicate identities');

@@ -67,6 +67,41 @@
       "field": "discount",
       "dataType": "number",
       "required": true
+    },
+    {
+      "id": "VC-CORPUS-SHADOW-401",
+      "description": "Name for the symbol-resolution/shadowing corpus group.",
+      "field": "name",
+      "dataType": "string",
+      "required": true
+    },
+    {
+      "id": "VC-CORPUS-UNGUARDED-402",
+      "description": "Tag for the safeParse-control-flow corpus group.",
+      "field": "tag",
+      "dataType": "string",
+      "required": true
+    },
+    {
+      "id": "VC-CORPUS-FIELD-CONFLICT-403",
+      "description": "Order quantity for the object-field-conflict corpus group; frontend and backend disagree on the minimum.",
+      "field": "quantity",
+      "dataType": "number",
+      "required": true
+    },
+    {
+      "id": "VC-CORPUS-PROTO-404",
+      "description": "A field literally named \"constructor\", for the prototype-safe field-lookup corpus group.",
+      "field": "constructor",
+      "dataType": "string",
+      "required": true
+    },
+    {
+      "id": "VC-CORPUS-NESTED-405",
+      "description": "Address for the unsupported-construct (nested z.object()) corpus group.",
+      "field": "address",
+      "dataType": "string",
+      "required": true
     }
   ]
 }
