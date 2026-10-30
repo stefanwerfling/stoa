@@ -219,6 +219,10 @@ export interface CoverageSummary {
     filesAnalyzed: number;
     filesSkipped: number;
     factCount: number;
+    /** Set only when the memory guard stopped ingestion early (see MemoryGuard.ts) — absent on every normal run. When true, `findings` reflects only the files reached before the stop, never a silently-truncated full-repo claim. */
+    analysisIncomplete?: boolean;
+    /** The file ingestion was processing when the memory guard stopped it (set together with `analysisIncomplete`). */
+    stoppedAtFile?: string;
 }
 
 /** The user-facing report. Intermediate facts stay out of it by default. */
@@ -241,6 +245,8 @@ export interface SemanticConfig {
 export interface StoaConfig {
     include: string[];
     exclude: string[];
+    /** Files larger than this (bytes) are excluded during discovery, same as a glob exclude — see Ingestion.ts DEFAULT_MAX_FILE_BYTES. Optional; defaults to DEFAULT_MAX_FILE_BYTES when omitted. */
+    maxFileBytes?: number;
     ruleSet: string;
     knowledgeBase: string;
     semantic: SemanticConfig;

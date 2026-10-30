@@ -3,7 +3,7 @@ import type {StoaConfig} from './Types.js';
 
 export const DEFAULT_CONFIG: StoaConfig = {
     include: ['**/*.ts', '**/*.tsx', '**/*.js', '**/*.jsx', '**/*.mjs', '**/*.cjs', '**/*.php', '**/*.dart', '**/*.c', '**/*.h', '**/*.cpp', '**/*.cc', '**/*.cxx', '**/*.hpp', '**/*.hh', '**/*.html', '**/*.htm', '**/*.vue'],
-    exclude: ['**/*.d.ts', 'dist/**', 'coverage/**', '.stoa/**'],
+    exclude: ['**/*.d.ts', 'dist/**', 'build/**', 'coverage/**', '.next/**', '.nuxt/**', '.turbo/**', '.cache/**', 'vendor/**', '.stoa/**'],
     ruleSet: 'default@1',
     knowledgeBase: 'marcus@1',
     semantic: {adapter: 'noop'}

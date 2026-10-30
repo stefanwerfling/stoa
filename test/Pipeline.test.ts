@@ -33,3 +33,26 @@ test('knowledge base loads the six MVP principles', () => {
     assert.ok(kb.get('marcus.control'), 'marcus.control present');
     assert.ok(kb.get('marcus.simplicity'), 'marcus.simplicity present');
 });
+
+test('a normal run never marks coverage as incomplete (the memory guard only acts under real pressure)', () => {
+    const {report} = analyze({rootPath: fixture, knowledgeDir, ruleSetDir, config: DEFAULT_CONFIG});
+    assert.equal(report.coverage.analysisIncomplete, undefined);
+    assert.equal(report.coverage.stoppedAtFile, undefined);
+});
+
+test('the memory guard stops ingestion rather than crash, and marks the report as genuinely incomplete (not a silently full result)', () => {
+    const progress: Array<{filesProcessed: number}> = [];
+    const {report, facts} = analyze({
+        rootPath: fixture,
+        knowledgeDir,
+        ruleSetDir,
+        config: DEFAULT_CONFIG,
+        memoryGuard: {checkEveryFiles: 1, criticalRatio: 0}, // 0 => always "critical", a deterministic trigger without real memory pressure
+        onProgress: (_snapshot, p) => progress.push(p)
+    });
+    assert.equal(report.coverage.analysisIncomplete, true);
+    assert.ok(typeof report.coverage.stoppedAtFile === 'string' && report.coverage.stoppedAtFile.length > 0);
+    assert.equal(report.coverage.filesAnalyzed, 0, 'stopped before the first file was processed, at the first check');
+    assert.deepEqual(facts, [], 'nothing was produced yet, so nothing was lost either — the report says so rather than claiming a complete scan');
+    assert.ok(progress.length > 0, 'onProgress is actually invoked, not just accepted and ignored');
+});

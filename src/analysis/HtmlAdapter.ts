@@ -1,5 +1,5 @@
 import {createRequire} from 'node:module';
-import {Language, Parser, type Node} from 'web-tree-sitter';
+import {Language, Parser, type Node, type Tree} from 'web-tree-sitter';
 import type {Fact} from '../Types.js';
 import {extractFacts} from './html/HtmlExtraction.js';
 import type {FileRef, LanguageAdapter, ParseResult, ProjectContext} from './LanguageAdapter.js';
@@ -23,15 +23,23 @@ export const initHtml = async (): Promise<void> => {
     parser = instance;
 };
 
+/** A parsed tree-sitter-html tree, plus its own disposal — the tree owns
+ *  native WASM-heap memory that `tree.delete()` must free once the caller is
+ *  done with `root` (there is no GC visibility into that memory otherwise). */
+export interface ParsedHtmlTree {
+    root: Node;
+    release: () => void;
+}
+
 // Shared access to the loaded tree-sitter-html parser, so the HTML-family
 // template adapters (Vue, Angular) reuse the same grammar and the same initHtml()
 // without each loading their own. Returns null until initHtml() has run.
-export const parseHtmlTree = (content: string): Node | null => {
+export const parseHtmlTree = (content: string): ParsedHtmlTree | null => {
     if (parser === null) {
         return null;
     }
-    const tree = parser.parse(content);
-    return tree === null ? null : tree.rootNode;
+    const tree: Tree | null = parser.parse(content);
+    return tree === null ? null : {root: tree.rootNode, release: () => tree.delete()};
 };
 
 /**
@@ -56,7 +64,7 @@ export class HtmlAdapter implements LanguageAdapter {
         if (tree === null) {
             return {file, ok: false, diagnostics: ['html parse produced no tree']};
         }
-        return {file, ok: true, diagnostics: [], handle: tree.rootNode};
+        return {file, ok: true, diagnostics: [], handle: tree.rootNode, release: () => tree.delete()};
     }
 
     public extractFacts(parsed: ParseResult, _ctx: ProjectContext): Fact[] {

@@ -45,11 +45,11 @@ export class VueAdapter implements LanguageAdapter {
     }
 
     public parse(file: FileRef): ParseResult {
-        const root = parseHtmlTree(file.content);
-        if (root === null) {
+        const parsed = parseHtmlTree(file.content);
+        if (parsed === null) {
             return {file, ok: false, diagnostics: ['html parser not initialized; call initHtml() before analyze()']};
         }
-        return {file, ok: true, diagnostics: [], handle: root};
+        return {file, ok: true, diagnostics: [], handle: parsed.root, release: parsed.release};
     }
 
     public extractFacts(parsed: ParseResult, _ctx: ProjectContext): Fact[] {

@@ -9,6 +9,7 @@ import {TypeScriptAdapter} from './analysis/TypeScriptAdapter.js';
 import {TypeDiagnosticsExtractor} from './analysis/typescript/TypeDiagnostics.js';
 import {collectFiles} from './Ingestion.js';
 import {KnowledgeBase} from './knowledge/KnowledgeBase.js';
+import {isMemoryCritical, takeMemorySnapshot, type MemorySnapshot} from './MemoryGuard.js';
 import {RuleEngine} from './rules/RuleEngine.js';
 import {RuleSet} from './rules/RuleSet.js';
 import {DependencyCycleRule} from './rules/project/DependencyCycleRule.js';
@@ -38,9 +39,32 @@ export interface AnalyzeOptions {
      * interpreted, so the feature is fully inert by default.
      */
     validationContract?: ValidationContract | null;
+    /**
+     * Opt-in diagnostic hook, called every `MEMORY_CHECK_INTERVAL` files with a
+     * memory snapshot and ingestion progress (see MemoryGuard.ts / CLI
+     * `--memory-stats`). Never required for correct analysis — purely
+     * observational, and never asked to retain anything across calls.
+     */
+    onProgress?: (snapshot: MemorySnapshot, progress: {filesSelected: number; filesProcessed: number}) => void;
+    /**
+     * Overrides for the memory guard (see MemoryGuard.ts). Not exposed as a
+     * CLI flag — the defaults are already derived from V8's own heap limit,
+     * not a fixed guess, so there is nothing a typical run needs to tune.
+     * Exists for tests (a deterministic trigger, e.g. `criticalRatio: 0`) and
+     * for embedding Stoa under a tighter/looser budget than the default.
+     */
+    memoryGuard?: {checkEveryFiles?: number; criticalRatio?: number};
 }
 
 const TS_EXTENSIONS: readonly string[] = ['.ts', '.tsx'] as const;
+
+// How often (in files) the memory guard samples `process.memoryUsage()` and
+// checks it against V8's own heap limit, by default. Frequent enough to
+// catch trouble within a few files of it starting; infrequent enough that
+// the check itself (the one part of this pipeline that runs on every single
+// file regardless of language or size) stays negligible overhead.
+const DEFAULT_MEMORY_CHECK_INTERVAL = 100;
+const DEFAULT_CRITICAL_RATIO = 0.9;
 
 
 /**
@@ -69,14 +93,38 @@ export const analyze = (options: AnalyzeOptions): AnalysisResult => {
     }
     const ruleEngine = new RuleEngine(knowledgeBase, ruleSet, options.lang ?? 'en', projectRules);
 
-    const files = collectFiles(options.rootPath, {include: options.config.include, exclude: options.config.exclude});
+    const files = collectFiles(options.rootPath, {
+        include: options.config.include,
+        exclude: options.config.exclude,
+        ...(options.config.maxFileBytes !== undefined ? {maxFileBytes: options.config.maxFileBytes} : {})
+    });
 
     const typeExtractor = options.typecheck === true ? new TypeDiagnosticsExtractor() : null;
+
+    const checkEveryFiles = options.memoryGuard?.checkEveryFiles ?? DEFAULT_MEMORY_CHECK_INTERVAL;
+    const criticalRatio = options.memoryGuard?.criticalRatio ?? DEFAULT_CRITICAL_RATIO;
 
     const facts: Fact[] = [];
     let analyzed = 0;
     let skipped = 0;
-    for (const file of files) {
+    let stoppedAtFile: string | undefined;
+    for (const [index, file] of files.entries()) {
+        if (index % checkEveryFiles === 0) {
+            const snapshot = takeMemorySnapshot();
+            options.onProgress?.(snapshot, {filesSelected: files.length, filesProcessed: index});
+            // Stop ingesting further files rather than let V8 crash with a
+            // fatal "JavaScript heap out of memory" error. Facts and findings
+            // already produced are kept (never discarded) and reported as
+            // genuinely partial via `coverage.analysisIncomplete` — never
+            // silently presented as a complete analysis. No global.gc() call
+            // here: by design, this guard is a last resort, not a substitute
+            // for the bounded object lifetimes Phase B/D/E establish.
+            if (isMemoryCritical(snapshot, criticalRatio)) {
+                stoppedAtFile = file.path;
+                break;
+            }
+        }
+
         const adapter = registry.resolve(file);
         if (adapter === null) {
             skipped += 1;
@@ -93,6 +141,7 @@ export const analyze = (options: AnalyzeOptions): AnalysisResult => {
         if (typeExtractor !== null && TS_EXTENSIONS.some((ext) => file.path.endsWith(ext))) {
             facts.push(...typeExtractor.extract(file));
         }
+        parsed.release?.();
         analyzed += 1;
     }
 
@@ -111,7 +160,8 @@ export const analyze = (options: AnalyzeOptions): AnalysisResult => {
             filesSelected: files.length,
             filesAnalyzed: analyzed,
             filesSkipped: skipped,
-            factCount: facts.length
+            factCount: facts.length,
+            ...(stoppedAtFile !== undefined ? {analysisIncomplete: true, stoppedAtFile} : {})
         },
         findings
     };

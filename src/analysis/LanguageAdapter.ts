@@ -11,6 +11,16 @@ export interface ParseResult {
     diagnostics: string[];
     /** Adapter-specific parse handle (e.g. a ts-morph SourceFile) for extractFacts. */
     handle?: unknown;
+    /**
+     * Releases whatever this ONE parse result is pinning in memory (a
+     * ts-morph SourceFile removed from its Project, a tree-sitter `Tree`
+     * disposed via `.delete()`, …), once `extractFacts` is done with it. Set
+     * by the adapter that created the handle — only it knows what backs it.
+     * Called exactly once, by the pipeline, right after `extractFacts`
+     * returns; omit when the handle is a plain JS object with no external
+     * lifecycle to manage (nothing to call).
+     */
+    release?: () => void;
 }
 
 export interface ProjectContext {

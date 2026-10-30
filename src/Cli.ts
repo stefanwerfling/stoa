@@ -30,8 +30,11 @@ type CliValues = {
     contracts?: string;
     include?: string[];
     exclude?: string[];
+    'memory-stats'?: boolean;
     help?: boolean;
 };
+
+const formatMB = (bytes: number): string => `${Math.round(bytes / (1024 * 1024))} MB`;
 
 const configFor = (values: CliValues) => {
     const base = loadConfig(values.config ?? null);
@@ -44,7 +47,7 @@ const USAGE = [
     'stoa – Stoic Code Analysis Engine',
     '',
     'Usage:',
-    '  stoa analyze <path> [--format markdown|json|sarif] [--lang en|de] [--include <glob>]... [--exclude <glob>]... [--typecheck] [--dead-exports] [--contracts <file>] [--semantic noop|anthropic] [--config <file>] [--knowledge <dir>] [--rules <dir>]',
+    '  stoa analyze <path> [--format markdown|json|sarif] [--lang en|de] [--include <glob>]... [--exclude <glob>]... [--typecheck] [--dead-exports] [--contracts <file>] [--semantic noop|anthropic] [--config <file>] [--knowledge <dir>] [--rules <dir>] [--memory-stats]',
     '  stoa eval <path> --expected <file> [--format markdown|json] [--contracts <file>] [--knowledge <dir>] [--rules <dir>]',
     ''
 ].join('\n');
@@ -101,6 +104,7 @@ const runAnalyze = async (values: CliValues, target: string): Promise<number> =>
     await initDart().catch(() => undefined);
     await initCpp().catch(() => undefined);
     await initHtml().catch(() => undefined);
+    const memoryStats = values['memory-stats'] === true;
     let result = analyze({
         rootPath: resolve(target),
         knowledgeDir: knowledgeDirOf(values),
@@ -109,7 +113,14 @@ const runAnalyze = async (values: CliValues, target: string): Promise<number> =>
         lang,
         typecheck: values.typecheck === true,
         deadExports: values['dead-exports'] === true,
-        validationContract
+        validationContract,
+        ...(memoryStats
+            ? {
+                  onProgress: (snapshot, progress) => {
+                      process.stderr.write(`[stoa] files ${progress.filesProcessed}/${progress.filesSelected} | heap ${formatMB(snapshot.heapUsed)}/${formatMB(snapshot.heapSizeLimit)} | rss ${formatMB(snapshot.rss)}\n`);
+                  }
+              }
+            : {})
     });
 
     const semanticId = values.semantic ?? 'noop';
@@ -117,6 +128,16 @@ const runAnalyze = async (values: CliValues, target: string): Promise<number> =>
         // Optional, async, off the deterministic path: augment findings with a
         // grounded LLM verdict. Failures degrade gracefully to the plain report.
         result = await augmentWithSemantics(result, createSemanticAdapter(semanticId));
+    }
+
+    if (memoryStats) {
+        process.stderr.write(`[stoa] done: ${result.report.coverage.filesAnalyzed} analyzed, ${result.report.coverage.filesSkipped} skipped, ${result.report.coverage.factCount} facts, ${result.report.findings.length} findings\n`);
+    }
+    // The memory guard stopped early: say so loudly, on every format, not only
+    // buried in `coverage` — a truncated analysis must never read like a
+    // complete one.
+    if (result.report.coverage.analysisIncomplete === true) {
+        process.stderr.write(`[stoa] WARNING: analysis stopped early under memory pressure before reaching "${result.report.coverage.stoppedAtFile}" — this report covers only the files reached up to that point, not the full selection.\n`);
     }
 
     process.stdout.write(`${render(values.format, result.report, lang)}\n`);
@@ -180,6 +201,7 @@ const main = async (): Promise<number> => {
             contracts: {type: 'string'},
             include: {type: 'string', multiple: true},
             exclude: {type: 'string', multiple: true},
+            'memory-stats': {type: 'boolean', default: false},
             help: {type: 'boolean', default: false}
         }
     });

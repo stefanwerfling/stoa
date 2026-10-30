@@ -44,7 +44,7 @@ export class DartAdapter implements LanguageAdapter {
         if (tree === null) {
             return {file, ok: false, diagnostics: ['dart parse produced no tree']};
         }
-        return {file, ok: true, diagnostics: [], handle: tree.rootNode};
+        return {file, ok: true, diagnostics: [], handle: tree.rootNode, release: () => tree.delete()};
     }
 
     public extractFacts(parsed: ParseResult, _ctx: ProjectContext): Fact[] {
