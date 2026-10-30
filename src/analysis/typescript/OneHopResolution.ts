@@ -1,5 +1,6 @@
 import {Node, SyntaxKind} from 'ts-morph';
 import type {CallExpression} from 'ts-morph';
+import {tracksBinding} from './SymbolResolution.js';
 
 const FUNCTION_KINDS: ReadonlySet<SyntaxKind> = new Set([
     SyntaxKind.FunctionDeclaration,
@@ -19,7 +20,9 @@ const nearestFunctionLocal = (node: Node): Node | undefined => {
 export interface OneHop {
     declaration: Node;
     label: string;
-    paramName: string;
+    /** The parameter's own name node — passed to `findInnerCall` for
+     *  symbol-based matching, never compared by text (see SymbolResolution.ts). */
+    paramNameNode: Node;
 }
 
 export const bodyOf = (decl: Node): Node | undefined => {
@@ -73,22 +76,24 @@ export const resolveOneHop = (outer: CallExpression, argument: Node): OneHop | n
         if (bodyOf(decl) === undefined) {
             continue;
         }
-        return {declaration: decl, label: declarationLabelOf(decl), paramName: nameNode.getText()};
+        return {declaration: decl, label: declarationLabelOf(decl), paramNameNode: nameNode};
     }
     return null;
 };
 
 /**
  * A call directly inside `declaration`'s own body (not a nested callback)
- * whose callee name satisfies `isSink`, fed `paramName` as a bare identifier
- * argument. Returns a lookup function so `resolveOneHop`'s declaration can
- * be probed for more than one candidate `paramName` without re-walking the
- * body each time (not currently needed by either caller, but avoids an
- * awkward two-argument signature either way).
+ * whose callee name satisfies `isSink`, fed the SAME BINDING as
+ * `paramNameNode` (symbol identity via `tracksBinding` — see
+ * SymbolResolution.ts, not text) as a bare identifier argument. Returns a
+ * lookup function so `resolveOneHop`'s declaration can be probed for more
+ * than one candidate parameter without re-walking the body each time (not
+ * currently needed by either caller, but avoids an awkward two-argument
+ * signature either way).
  */
-export const findInnerCall = (declaration: Node, isSink: (calleeName: string) => boolean): ((paramName: string) => CallExpression | null) => {
+export const findInnerCall = (declaration: Node, isSink: (calleeName: string) => boolean): ((paramNameNode: Node) => CallExpression | null) => {
     const body = bodyOf(declaration);
-    return (paramName: string): CallExpression | null => {
+    return (paramNameNode: Node): CallExpression | null => {
         if (body === undefined) {
             return null;
         }
@@ -101,7 +106,7 @@ export const findInnerCall = (declaration: Node, isSink: (calleeName: string) =>
             if (!isSink(name)) {
                 continue;
             }
-            if (call.getArguments().some((arg) => Node.isIdentifier(arg) && arg.getText() === paramName)) {
+            if (call.getArguments().some((arg) => tracksBinding(arg, paramNameNode, declaration))) {
                 return call;
             }
         }

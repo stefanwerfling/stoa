@@ -8,6 +8,7 @@ import type {AnnotatedSchema} from './ValidationAnnotations.js';
 import {isRawRequestExpression, isRequestRootedExpression, nearestFunction, PERSISTENCE_VERB, rawRequestAliasNames} from './BackendValidation.js';
 import {findParseCalls, isFedByRequest} from './ValidatorUsage.js';
 import {findInnerCall, resolveOneHop} from './OneHopResolution.js';
+import {destructuredProperty, isReassignedAnywhere, tracksBinding} from './SymbolResolution.js';
 
 type Build = (spec: FactSpec) => Fact;
 
@@ -103,27 +104,32 @@ const rootIdentifierText = (argument: Node): string => {
     return current.getText();
 };
 
-// The declared name a `.parse()`/`.safeParse()` call's result is bound to
-// (`const x = schema.parse(...)`); null when used inline (no name to trace
-// onward by).
-const bindingNameOf = (call: CallExpression): string | null => {
+// The declared NAME NODE a `.parse()`/`.safeParse()` call's result is bound
+// to (`const x = schema.parse(...)`) — an actual Identifier node, not text,
+// so later matching can use symbol identity (SymbolResolution.ts). Null
+// when used inline (no binding to trace onward by).
+const bindingDeclarationOf = (call: CallExpression): Node | null => {
     const parent = call.getParent();
     if (parent !== undefined && Node.isVariableDeclaration(parent)) {
         const nameNode = parent.getNameNode();
         if (Node.isIdentifier(nameNode)) {
-            return nameNode.getText();
+            return nameNode;
         }
     }
     return null;
 };
 
-const isDataAccessOf = (node: Node, resultName: string): boolean => {
-    return Node.isPropertyAccessExpression(node) && Node.isIdentifier(node.getExpression()) && node.getExpression().getText() === resultName && node.getName() === 'data';
+// `<result>.data` where `<result>` tracks the SAME binding as `resultDeclaration`
+// (symbol identity, not text — see SymbolResolution.ts; a shadowed, unrelated
+// `result` elsewhere in the function must not match).
+const isDataAccessOf = (node: Node, resultDeclaration: Node, scope: Node): boolean => {
+    return Node.isPropertyAccessExpression(node) && tracksBinding(node.getExpression(), resultDeclaration, scope) && node.getName() === 'data';
 };
 
-// First `<resultName>.data` property access found anywhere in `fn`, in source order.
-const findDataAccess = (fn: Node, resultName: string): Node | undefined => {
-    return fn.getDescendantsOfKind(SyntaxKind.PropertyAccessExpression).find((access) => isDataAccessOf(access, resultName));
+// First `<result>.data` property access tracking `resultDeclaration`'s
+// binding, found anywhere in `fn`, in source order.
+const findDataAccess = (fn: Node, resultDeclaration: Node): Node | undefined => {
+    return fn.getDescendantsOfKind(SyntaxKind.PropertyAccessExpression).find((access) => isDataAccessOf(access, resultDeclaration, fn));
 };
 
 interface SinkTrace {
@@ -154,15 +160,15 @@ const traceSink = (fn: Node, matches: (node: Node) => boolean): SinkTrace | null
         }
         const hop = resolveOneHop(outer, argument);
         if (hop !== null) {
-            const inner = findInnerCall(hop.declaration, (name) => PERSISTENCE_VERB.test(name))(hop.paramName);
+            const inner = findInnerCall(hop.declaration, (name) => PERSISTENCE_VERB.test(name))(hop.paramNameNode);
             if (inner !== null) {
                 return {
                     call: outer,
                     status: 'heuristic',
-                    basis: `${argument.getText()} is passed to ${outer.getText()}, whose parameter \`${hop.paramName}\` reaches ${inner.getText()} inside ${hop.label}`,
+                    basis: `${argument.getText()} is passed to ${outer.getText()}, whose parameter \`${hop.paramNameNode.getText()}\` reaches ${inner.getText()} inside ${hop.label}`,
                     limits: ['identity of the parameter across the call boundary is inferred by position, not type-proven'],
                     service: outer.getExpression().getText(),
-                    innerSink: {call: inner, basis: `\`${hop.paramName}\` is a direct argument of ${inner.getText()} inside ${hop.label}`}
+                    innerSink: {call: inner, basis: `\`${hop.paramNameNode.getText()}\` is a direct argument of ${inner.getText()} inside ${hop.label}`}
                 };
             }
             // Resolvable but no persistence call anywhere inside — genuinely
@@ -213,34 +219,57 @@ const buildGraph = (sourceFile: SourceFile, schema: AnnotatedSchema, call: CallE
     addEdge(schemaId, invocationId, 'validates', 'verified', `${schemaName} is the receiver of ${calleeName(call)}`, call);
 
     const isSafe = SAFE_PARSE_METHODS.has(calleeName(call).toLowerCase());
-    const boundName = bindingNameOf(call);
+    const boundDeclaration = bindingDeclarationOf(call);
 
     let validatedId: string;
     let matches: (node: Node) => boolean;
 
     if (isSafe) {
-        const resultId = addNode('validation-result', boundName ?? '(unbound)', call);
+        const resultId = addNode('validation-result', boundDeclaration?.getText() ?? '(unbound)', call);
         addEdge(invocationId, resultId, 'returns', 'verified', `${call.getText()} returns a {success, data} result`, call);
-        if (boundName === null) {
+        if (boundDeclaration === null) {
             // Result not bound to a name (used inline) — no `.data` access to find.
             return {nodes, edges};
         }
-        const dataAccess = findDataAccess(fn, boundName);
-        if (dataAccess === undefined) {
+        if (isReassignedAnywhere(boundDeclaration, fn)) {
+            // The result binding is reassigned somewhere in this function —
+            // Stoa cannot prove a later `.data`/destructured access still
+            // refers to THIS validator's result rather than whatever it was
+            // overwritten with. Stop here rather than guess.
             return {nodes, edges};
         }
-        validatedId = addNode('validated-value', `${boundName}.data`, dataAccess);
-        addEdge(resultId, validatedId, 'transforms', 'verified', `${boundName}.data is the validated value`, dataAccess);
-        matches = (node: Node): boolean => isDataAccessOf(node, boundName);
+        // Either `result.data` (a property access) or `const {data} = result`
+        // (destructuring) — both are the validated value, resolved via
+        // symbol identity so a shadowed, unrelated `result` elsewhere in the
+        // function is never mistaken for this one.
+        const dataAccess = findDataAccess(fn, boundDeclaration);
+        if (dataAccess !== undefined) {
+            validatedId = addNode('validated-value', `${boundDeclaration.getText()}.data`, dataAccess);
+            addEdge(resultId, validatedId, 'transforms', 'verified', `${boundDeclaration.getText()}.data is the validated value`, dataAccess);
+            matches = (node: Node): boolean => isDataAccessOf(node, boundDeclaration, fn);
+        } else {
+            const destructured = destructuredProperty(boundDeclaration, 'data', fn);
+            if (destructured === null) {
+                return {nodes, edges};
+            }
+            validatedId = addNode('validated-value', destructured.getText(), destructured);
+            addEdge(resultId, validatedId, 'transforms', 'verified', `{ data } destructured from ${boundDeclaration.getText()} is the validated value`, destructured);
+            matches = (node: Node): boolean => tracksBinding(node, destructured, fn);
+        }
     } else {
-        validatedId = addNode('validated-value', boundName ?? call.getText(), call);
+        validatedId = addNode('validated-value', boundDeclaration?.getText() ?? call.getText(), call);
         addEdge(invocationId, validatedId, 'returns', 'verified', `${call.getText()} returns the validated value directly`, call);
-        if (boundName === null) {
+        if (boundDeclaration === null) {
             // Used inline (e.g. `repo.save(schema.parse(req.body))`) — the call
             // expression itself IS the value a wrapping call would reference.
             matches = (node: Node): boolean => node === call;
+        } else if (isReassignedAnywhere(boundDeclaration, fn)) {
+            // Same reasoning as the safeParse branch above: a reassigned
+            // binding can no longer be proven to still hold the validated
+            // value at a later use site.
+            matches = (): boolean => false;
         } else {
-            matches = (node: Node): boolean => Node.isIdentifier(node) && node.getText() === boundName;
+            matches = (node: Node): boolean => tracksBinding(node, boundDeclaration, fn);
         }
     }
 

@@ -428,7 +428,7 @@ export const rawRequestSinksInFunction = (fn: Node): RawRequestSink[] => {
         if (hop === null) {
             continue;
         }
-        const inner = findInnerCall(hop.declaration, (name) => PERSISTENCE_VERB.test(name))(hop.paramName);
+        const inner = findInnerCall(hop.declaration, (name) => PERSISTENCE_VERB.test(name))(hop.paramNameNode);
         if (inner !== null) {
             sinks.push({call, description: `${call.getText()} → ${inner.getText()} inside ${hop.label}`});
         }

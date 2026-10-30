@@ -257,8 +257,30 @@ fails fast (exit 1, concrete errors) instead of silently yielding 0 findings.
   callee clearly isn't a sink, or resolves in-file to something with no
   persistence call at all) is silently not reported — not every validated
   value is meant to reach persistence. No cross-file resolution, no
-  destructured/rest parameters, no spread arguments, no recursion beyond one
-  hop, only the FIRST call receiving the tracked value is traced.
+  destructured/rest FUNCTION PARAMETERS in the one-hop step, no spread
+  arguments, no recursion beyond one hop, only the FIRST call receiving the
+  tracked value is traced.
+- **Symbol-based dataflow resolution** (`src/analysis/typescript/SymbolResolution.ts`,
+  wired into `ValidationDataflow.ts` and `OneHopResolution.ts`): every "is
+  this the SAME value" check in the dataflow tracers resolves via ts-morph's
+  own binder (`Symbol` identity), never by comparing identifier TEXT — two
+  different variables that merely share a spelling (shadowed in a nested
+  block, an unrelated same-named local elsewhere in the function) are never
+  treated as the same value. Handles: a plain `const alias = tracked` (one
+  hop, bounded depth, `const` only — a mutable alias is not followed, since
+  it could itself be reassigned away from the tracked value); destructuring
+  the validated result (`const { data } = result` after `.safeParse()`, in
+  addition to the existing `result.data` property-access form); a validated
+  value passed as an argument to a function, matched to that function's OWN
+  parameter by symbol, not by the parameter's spelling (the one-hop case).
+  A binding that is reassigned ANYWHERE in its enclosing function (scanned
+  over-inclusively — the safe direction) is never claimed to still carry the
+  validated value past that point: tracing simply stops (no edge), rather
+  than guessing which assignment "wins" without a real control-flow graph.
+  Not handled yet, documented as a gap rather than silently assumed:
+  tracing a validated value across a `return` statement into the function's
+  own callers (the trace stops at the function boundary, acknowledging the
+  return happened but claiming nothing about what the caller does with it).
 - **Layer & security attribution** (`ValidationContractRule.ts`): a contract's
   `layers`/`security` fields are a CLAIM, not proof. When a rule claims the
   `backend` layer, or declares the one structured security flag Stoa can
@@ -324,7 +346,7 @@ fails fast (exit 1, concrete errors) instead of silently yielding 0 findings.
 
 ## Quality assurance
 
-- **199 node:test cases** green (rules pos./neg., extraction, schema validation,
+- **205 node:test cases** green (rules pos./neg., extraction, schema validation,
   i18n, determinism, SARIF, evaluation, semantic groundedness, privacy,
   finding-model separation).
 - **Golden corpus** (`test/corpus/`, **TS+PHP only**) with ground truth;

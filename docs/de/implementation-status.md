@@ -271,9 +271,33 @@ zu liefern.
   keine Senke, oder löst sich innerhalb der Datei zu etwas ohne jeden
   Persistenz-Aufruf auf) wird stillschweigend nicht gemeldet — nicht jeder
   validierte Wert muss in Persistenz enden. Keine dateiübergreifende
-  Auflösung, keine destrukturierten/Rest-Parameter, keine Spread-Argumente,
-  keine Rekursion über einen Schritt hinaus, nur der ERSTE Aufruf, der den
-  verfolgten Wert erhält, wird nachverfolgt.
+  Auflösung, keine destrukturierten/Rest-FUNKTIONSPARAMETER im One-Hop-Schritt,
+  keine Spread-Argumente, keine Rekursion über einen Schritt hinaus, nur der
+  ERSTE Aufruf, der den verfolgten Wert erhält, wird nachverfolgt.
+- **Symbolbasierte Datenflussauflösung** (`src/analysis/typescript/SymbolResolution.ts`,
+  eingebunden in `ValidationDataflow.ts` und `OneHopResolution.ts`): jede
+  „ist das derselbe Wert"-Prüfung in den Datenfluss-Tracern löst über
+  ts-morphs eigenen Binder auf (`Symbol`-Identität), nie über den Vergleich
+  von Identifier-TEXT — zwei verschiedene Variablen, die sich zufällig
+  dieselbe Schreibweise teilen (in einem verschachtelten Block verschattet,
+  eine unabhängige gleichnamige lokale Variable anderswo in der Funktion),
+  gelten nie als derselbe Wert. Behandelt: einen einfachen `const alias =
+  tracked` (ein Schritt, begrenzte Tiefe, nur `const` — ein veränderlicher
+  Alias wird nicht verfolgt, da er selbst vom verfolgten Wert weg neu
+  zugewiesen werden könnte); Destrukturierung des validierten Ergebnisses
+  (`const { data } = result` nach `.safeParse()`, zusätzlich zur bestehenden
+  `result.data`-Property-Access-Form); einen validierten Wert, der als
+  Argument an eine Funktion übergeben wird, dort über das Symbol des EIGENEN
+  Parameters abgeglichen, nicht über dessen Schreibweise (der One-Hop-Fall).
+  Eine Bindung, die IRGENDWO in ihrer umschließenden Funktion neu zugewiesen
+  wird (überinklusiv gescannt — die sichere Richtung), gilt ab diesem Punkt
+  nie mehr als weiterhin den validierten Wert tragend: die Nachverfolgung
+  stoppt einfach (keine Edge), statt ohne echten Kontrollflussgraphen zu
+  raten, welche Zuweisung „gewinnt". Noch nicht behandelt, als Lücke
+  dokumentiert statt stillschweigend angenommen: die Nachverfolgung eines
+  validierten Werts über eine `return`-Anweisung hinaus zu den Aufrufern der
+  Funktion (die Nachverfolgung endet an der Funktionsgrenze, erkennt das
+  `return` an, behauptet aber nichts darüber, was der Aufrufer damit tut).
 - **Schicht- & Security-Zuordnung** (`ValidationContractRule.ts`): Die
   `layers`/`security`-Felder eines Vertrags sind eine BEHAUPTUNG, kein
   Beweis. Behauptet eine Regel die `backend`-Schicht, oder deklariert sie
@@ -345,7 +369,7 @@ zu liefern.
 
 ## Qualitätssicherung
 
-- **199 node:test-Fälle** grün (Regeln pos./neg., Extraktion, Schema-Validierung,
+- **205 node:test-Fälle** grün (Regeln pos./neg., Extraktion, Schema-Validierung,
   i18n, Determinismus, SARIF, Eval, Semantik-Groundedness, Datenschutz,
   Finding-Trennung).
 - **Golden-Korpus** (`test/corpus/`, **nur TS+PHP**) mit Ground-Truth; Eval
