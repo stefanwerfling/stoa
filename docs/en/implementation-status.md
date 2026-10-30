@@ -1,6 +1,6 @@
 # Implementation Status
 
-> As of 2026-10-30. This page describes what is **actually implemented**. The
+> As of 2026-10-31. This page describes what is **actually implemented**. The
 > other `docs/` documents describe the **design intent** (concept phase) and
 > remain valid as rationale; where the implementation deviates, this page wins.
 
@@ -130,6 +130,8 @@ Procedural rules (`ProjectRule`, cross-file):
 | R-VALIDATION-CONTRACT-MISMATCH | marcus.judgment | robustness | opt-in `--contracts`; extracted conditions disagree with the contract |
 | R-VALIDATION-CONTRACT-CONFLICT | marcus.judgment | robustness | opt-in `--contracts`; same Trace ID, conflicting implementations |
 | R-VALIDATION-CONTRACT-NOT-IMPLEMENTED | marcus.judgment | robustness, decision-evidence | opt-in `--contracts`; contract entry with no annotation anywhere (low confidence, not proof of absence) |
+| R-VALIDATION-CONTRACT-UNUSED-VALIDATOR | marcus.obstacle | robustness | opt-in `--contracts`; an annotated, resolvable validator is never invoked anywhere in its file |
+| R-VALIDATION-CONTRACT-RAW-AFTER-VALIDATION | marcus.judgment | robustness | opt-in `--contracts`; a validator is invoked with request data, but a raw copy of the payload still reaches a persistence sink in the same function |
 
 All ten quality dimensions (incl. accessibility, usability) have at least one rule.
 
@@ -139,48 +141,83 @@ Opt-in via `stoa analyze <path> --contracts <contract.json>`; without this
 option the feature is **fully inert** (annotations are always extracted as
 facts — cheap, mirroring the existing `stoa:allow-complexity` marker — but
 never interpreted). A tampered or missing contract disables no other checks
-and improves no status; a malformed contract fails fast (exit 1, concrete
-schema errors) instead of silently yielding 0 findings.
+and improves no status; a malformed contract — including a duplicate rule id
+*within* the contract, checked beyond what the JSON Schema itself expresses —
+fails fast (exit 1, concrete errors) instead of silently yielding 0 findings.
 
 - **Validation Trace ID:** a stable, project-chosen business ID (e.g.
   `VC-ITEM-QUANTITY-001`; format `^[A-Z][A-Z0-9]*(-[A-Z0-9]+)+-[0-9]{3}$`, see
   `schemas/validation-contract.schema.json`). It is an analysis hint, **not**
   a security mechanism, and must **not** be confused with Stoa's own `R-*`
-  rule, `finding:` or `fact:` ids — which is exactly why all six new Stoa
+  rule, `finding:` or `fact:` ids — which is exactly why all eight new Stoa
   rules deliberately use the `R-VALIDATION-CONTRACT-*` prefix, not `R-VC-*`.
 - **Annotation:** `// stoa:validation <ID>` as a leading comment on a
   `const x = …` statement (`src/analysis/typescript/ValidationAnnotations.ts`,
   `getLeadingCommentRanges()`, the same mechanism as the existing marker).
   **TypeScript only**, and only a direct scalar Zod chain
-  (`z.number()`/`z.string()`/`z.boolean()` with `.int()/.min()/.max()/
-  .optional()/.nullable()/.trim()/.toLowerCase()/.toUpperCase()/.email()/
-  .url()/.positive()/.nonnegative()`) is resolved. `z.object(...)`, array
-  schemas, a vts schema, or any unrecognized chained call (`.refine()`,
-  `.transform()`, `.default()`, …) is **unresolved** — never guessed at.
+  (`z.number()`/`z.string()`/`z.boolean()`/`z.enum([...])`) is resolved. Every
+  recognized modifier has an **explicitly modeled** effect — none is
+  silently treated as a no-op: `.int()` → `integer`; `.email()`/`.url()` →
+  `format`; `.positive()`/`.nonnegative()`/`.min()` are tightened to the
+  strictest lower bound order-independently (`.positive()` exclusive,
+  `.nonnegative()`/`.min()` inclusive — not "last modifier in the chain
+  wins"); `.max()`; `.optional()`/`.nullable()`;
+  `.trim()`/`.toLowerCase()`/`.toUpperCase()`; `z.enum([...])` →
+  `allowedValues` (string literals only). Any other call (`z.object(...)`,
+  array schemas, a vts schema, `.refine()`, `.transform()`, `.default()`, …)
+  is **unresolved** — never guessed at.
 - **Contract:** a JSON file validated against
   `schemas/validation-contract.schema.json` (reuses the existing ajv2020
-  pattern from `KnowledgeValidation.ts` — no new format introduced). Every
-  field but `id`/`description`/`field`/`dataType` is optional; only the
-  dimensions the contract actually declares are compared.
+  pattern from `KnowledgeValidation.ts` — no new format introduced). Fields:
+  `integer`, `format` (`email`/`url`), `allowedValues` (a set, compared
+  order-independently), alongside the existing `min`/`max`/`required`/
+  `nullable`/`normalization`. Every field but `id`/`description`/`field`/
+  `dataType` is optional; only the dimensions the contract actually declares
+  are compared. Rule ids must be **unique within one contract** (checked
+  beyond ajv; two entries sharing an id are always a contract defect, even if
+  their conditions happen to agree — unlike the softer, code-side CONFLICT
+  finding for two differing *implementations*).
 - **Matching** (`src/rules/project/ValidationContractRule.ts`, one
   `ProjectRule`, the same pattern as `R-DEP-CYCLE`/`R-UNUSED-EXPORT` — hence
   no JSON rule file of its own, text hardcoded in TS, documented here in the
   table): invalid ID format; ID not in the contract; construct not
   resolvable; extracted conditions disagree with the contract (dataType/
-  required/nullable/min/max/normalization); the same ID with conflicting
-  implementations (symmetric — Stoa does not decide which side is correct);
-  a contract entry with no annotation at all (low confidence, anchored at the
-  contract file itself since no source file applies).
+  required/nullable/min/max/integer/format/allowedValues/normalization); the
+  same ID with conflicting implementations (symmetric — Stoa does not decide
+  which side is correct); a contract entry with no annotation at all (low
+  confidence, anchored at the contract file itself since no source file
+  applies).
+- **Validator usage** (`src/analysis/typescript/ValidatorUsage.ts`, new facts
+  `validation.annotatedValidatorUnused` / `validation.rawReuseAfterValidation`):
+  no longer just the annotated schema's SHAPE, but whether it is actually
+  invoked. An annotated, resolvable validator whose `.parse()`/`.safeParse()`
+  never appears anywhere in its file is **unused**. When it IS invoked with
+  request data (even a single plucked field like `req.body.quantity` counts —
+  looser than the mass-assignment rule's strict whole-object check), but the
+  SAME function ALSO routes a raw whole-object value into a sink
+  (`Object.assign`/a persistence-verb call, reusing the exact same hardened
+  detection behind `R-VALIDATION-MASS-ASSIGNMENT`), the validation is treated
+  as not actually gating what gets saved. Both checks are **scoped to one
+  file or one function** — not a project-wide dataflow graph; a schema
+  exported and used only from another (possibly unanalyzed) file looks
+  identical to a genuinely unused one from here (documented limit, confidence
+  capped at 0.5).
 - **Deliberately out of this slice** (documented, not faked): multi-field
-  object schemas; "a validator exists but is never actually called in the
-  real data flow"; API-endpoint/alternate-endpoint bypass detection; a
-  frontend/backend layer heuristic for the conflict check; languages other
+  object schemas; cross-file usage proof; API-endpoint/alternate-endpoint
+  bypass detection; a frontend/backend layer heuristic for the conflict
+  check; structured, machine-verified backend-only security requirements
+  (`securityRequirements` stays free-text and purely informational —
+  deliberately never surfaced as a verified security rule); languages other
   than TypeScript.
 - Checked against real code: `stoa:validation` appears in none of the real
   repos used so far (expected — it is a project-specific marker that is new
-  here); fact extraction ran with no crash/regression against real Zod usage
-  (kapalium `backend/`+`shared/`, 37 files) and against stoa's own `src/`
-  (57 files) — `0` findings without `--contracts`, as designed.
+  here), so the usage-tracing rules could only be verified against
+  purpose-built fixtures, not a real annotated project (a documented limit).
+  Fact extraction ran with no crash/regression against real Zod usage
+  (kapalium `backend/`+`shared/`, 37 files — `shared/` exports Zod schemas
+  across files, exactly the risky FP shape for the unused-validator check)
+  and against stoa's own `src/` (58 files) — `0` findings without
+  `--contracts` in every case, as designed.
 
 ## Facts produced
 
@@ -199,12 +236,13 @@ schema errors) instead of silently yielding 0 findings.
 `ui.lowContrastText`, `ui.flutterImageNoSemanticLabel`,
 `ui.flutterIconButtonNoTooltip`, `ui.flutterTextFieldNoLabel`,
 `validation.backendInputUnvalidated`, `validation.rawRequestMassAssignment`,
-plus (opt-in) `external.tsc` and
+`validation.contractAnnotation`, `validation.annotatedValidatorUnused`,
+`validation.rawReuseAfterValidation`, plus (opt-in) `external.tsc` and
 `external.floatingPromise`.
 
 ## Quality assurance
 
-- **172 node:test cases** green (rules pos./neg., extraction, schema validation,
+- **178 node:test cases** green (rules pos./neg., extraction, schema validation,
   i18n, determinism, SARIF, evaluation, semantic groundedness, privacy,
   finding-model separation).
 - **Golden corpus** (`test/corpus/`, **TS+PHP only**) with ground truth;
