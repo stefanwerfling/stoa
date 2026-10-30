@@ -374,7 +374,10 @@ export const extractMassAssignmentFacts = (sourceFile: SourceFile, build: Build)
     return facts;
 };
 
-const PERSISTENCE_VERB = /^(save|create|update|insert|upsert|persist|replace)/i;
+// Exported for reuse by the dataflow tracer (ValidationDataflow.ts): the same
+// "does this call look like it persists something" signal, not a re-derived
+// pattern.
+export const PERSISTENCE_VERB = /^(save|create|update|insert|upsert|persist|replace)/i;
 
 interface RawRequestSink {
     call: CallExpression;

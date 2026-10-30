@@ -7,6 +7,7 @@ import {extractJsxA11yFacts} from '../jsx/JsxA11y.js';
 import {extractBackendValidationFacts, extractMassAssignmentFacts} from './BackendValidation.js';
 import {extractValidationAnnotations} from './ValidationAnnotations.js';
 import {extractValidatorUsageFacts} from './ValidatorUsage.js';
+import {extractValidationDataflowFacts} from './ValidationDataflow.js';
 import {destructiveDdl, nullableNoDefault, unguardedDdl} from '../MigrationSql.js';
 
 interface FunctionMetrics {
@@ -294,6 +295,11 @@ export const extractFacts = (sourceFile: SourceFile, info: AdapterInfo): Fact[] 
     // Whether an annotated schema is actually invoked, and whether a raw
     // request copy still reaches a sink despite validation having run.
     facts.push(...extractValidatorUsageFacts(sourceFile, build));
+
+    // Where the VALIDATED value (not just the raw request) goes afterwards —
+    // an Evidence Graph per validator invocation (same-function sink, a
+    // one-hop cross-function trace, or an explicit unresolved destination).
+    facts.push(...extractValidationDataflowFacts(sourceFile, build));
 
     return facts;
 };

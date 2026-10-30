@@ -1,6 +1,7 @@
 import type {Fact, Finding, PrincipleInterpretationRef, QualityDimension, Severity} from '../../Types.js';
 import {findContractRule, type ContractRule, type ValidationContract} from '../../contracts/ValidationContract.js';
 import type {ResolvedConditions} from '../../analysis/typescript/ValidationAnnotations.js';
+import type {EvidenceGraph} from '../../evidence/EvidenceGraph.js';
 import {localize, type LocalizedText} from '../../i18n/Localized.js';
 import type {KnowledgeBase} from '../../knowledge/KnowledgeBase.js';
 import type {ProjectRule, ProjectRuleInput} from '../ProjectRule.js';
@@ -20,11 +21,17 @@ type RuleId =
     | 'R-VALIDATION-CONTRACT-CONFLICT'
     | 'R-VALIDATION-CONTRACT-NOT-IMPLEMENTED'
     | 'R-VALIDATION-CONTRACT-UNUSED-VALIDATOR'
-    | 'R-VALIDATION-CONTRACT-RAW-AFTER-VALIDATION';
+    | 'R-VALIDATION-CONTRACT-RAW-AFTER-VALIDATION'
+    | 'R-VALIDATION-CONTRACT-DATAFLOW-UNRESOLVED';
 
 interface UsageValue {
     id: string;
     sinks?: string[];
+}
+
+interface DataflowValue {
+    id: string;
+    graph: EvidenceGraph;
 }
 
 interface RuleMeta {
@@ -43,7 +50,8 @@ const META: Record<RuleId, RuleMeta> = {
     'R-VALIDATION-CONTRACT-CONFLICT': {principleId: 'marcus.judgment', dimensions: ['robustness'], severity: 'high', confidence: 0.6, certaintyBasis: 'semantic-heuristic'},
     'R-VALIDATION-CONTRACT-NOT-IMPLEMENTED': {principleId: 'marcus.judgment', dimensions: ['robustness', 'decision-evidence'], severity: 'low', confidence: 0.3, certaintyBasis: 'semantic-heuristic'},
     'R-VALIDATION-CONTRACT-UNUSED-VALIDATOR': {principleId: 'marcus.obstacle', dimensions: ['robustness'], severity: 'medium', confidence: 0.5, certaintyBasis: 'semantic-heuristic'},
-    'R-VALIDATION-CONTRACT-RAW-AFTER-VALIDATION': {principleId: 'marcus.judgment', dimensions: ['robustness'], severity: 'high', confidence: 0.6, certaintyBasis: 'semantic-heuristic'}
+    'R-VALIDATION-CONTRACT-RAW-AFTER-VALIDATION': {principleId: 'marcus.judgment', dimensions: ['robustness'], severity: 'high', confidence: 0.6, certaintyBasis: 'semantic-heuristic'},
+    'R-VALIDATION-CONTRACT-DATAFLOW-UNRESOLVED': {principleId: 'marcus.judgment', dimensions: ['robustness', 'decision-evidence'], severity: 'low', confidence: 0.3, certaintyBasis: 'semantic-heuristic'}
 };
 
 const TEXT: Record<RuleId, {statement: LocalizedText; suggestion: LocalizedText; drawbacks?: LocalizedText; missingContext: LocalizedText; rationale: LocalizedText}> = {
@@ -190,6 +198,24 @@ const TEXT: Record<RuleId, {statement: LocalizedText; suggestion: LocalizedText;
             en: 'Running a check and then saving data the check never touched achieves nothing: the judgment exercised on one path must actually gate what the other path persists (marcus.judgment).',
             de: 'Eine Prüfung laufen zu lassen und dann Daten zu speichern, die die Prüfung nie berührt hat, bewirkt nichts: Das auf einem Pfad ausgeübte Urteil muss tatsächlich bestimmen, was der andere Pfad persistiert (marcus.judgment).'
         }
+    },
+    'R-VALIDATION-CONTRACT-DATAFLOW-UNRESOLVED': {
+        statement: {
+            en: 'The validated result for "{value}" is passed onward, but where it ultimately goes could not be traced.',
+            de: 'Das validierte Ergebnis für "{value}" wird weitergegeben, doch wohin es letztlich führt, ließ sich nicht nachverfolgen.'
+        },
+        suggestion: {
+            en: 'No code change is implied by this finding alone; if proving this path matters here, consider keeping the call this validated value reaches inside the analyzed file, or treat this as a reminder for manual review.',
+            de: 'Dieser Befund allein verlangt keine Codeänderung; falls der Nachweis dieses Pfads hier wichtig ist, den Aufruf, den dieser validierte Wert erreicht, innerhalb der analysierten Datei halten oder dies als Hinweis für eine manuelle Durchsicht behandeln.'
+        },
+        missingContext: {
+            en: 'Stoa only follows ONE hop beyond the validating function, and only to a function/method declared in the SAME file. The callee here is named like a business/persistence layer (service/repository/…) but its implementation is an import, a dynamic/computed call, or an interface with no single resolvable implementation — so whether the validated value is actually persisted, transformed or discarded beyond this point is unproven, not disproven.',
+            de: 'Stoa folgt nur EINEM Schritt über die validierende Funktion hinaus, und nur zu einer Funktion/Methode, die in DERSELBEN Datei deklariert ist. Der hier aufgerufene Name klingt nach einer Business-/Persistenzschicht (service/repository/…), doch seine Implementierung ist ein Import, ein dynamischer/berechneter Aufruf oder ein Interface ohne eindeutig auflösbare Implementierung — ob der validierte Wert ab hier tatsächlich persistiert, umgeformt oder verworfen wird, ist damit unbewiesen, nicht widerlegt.'
+        },
+        rationale: {
+            en: 'Claiming a verified dataflow chain beyond what was actually traced would be a false certainty; stating plainly "this is where Stoa\'s trace ends" keeps proven relationships, heuristics and genuine unknowns honestly separate (marcus.judgment).',
+            de: 'Eine über das tatsächlich Nachverfolgte hinausgehende, verifizierte Datenflusskette zu behaupten wäre eine falsche Sicherheit; klar zu sagen „hier endet Stoas Nachverfolgung" hält bewiesene Beziehungen, Heuristiken und echte Unbekannte ehrlich getrennt (marcus.judgment).'
+        }
     }
 };
 
@@ -226,6 +252,7 @@ export class ValidationContractRule implements ProjectRule {
         findings.push(...this.notImplemented(annotations, input));
         findings.push(...this.unusedValidators(input));
         findings.push(...this.rawAfterValidation(input));
+        findings.push(...this.dataflowUnresolved(input));
         return findings;
     }
 
@@ -334,6 +361,33 @@ export class ValidationContractRule implements ProjectRule {
             }
             const sinks = (value.sinks ?? []).join(', ');
             findings.push(this.buildFinding('R-VALIDATION-CONTRACT-RAW-AFTER-VALIDATION', fact, `${value.id} (${sinks})`, input));
+        }
+        return findings;
+    }
+
+    // Where the validated value is passed to a call that LOOKS business/
+    // persistence-related by name but whose implementation could not be
+    // resolved within this file (ValidationDataflow.ts's `unresolved` status
+    // — never promoted from `verified`/`heuristic`, only ever the specific
+    // "could not establish this" case). Gated on contract membership like
+    // the sibling usage-tracing findings, and deliberately only ONE finding
+    // per graph even if it has multiple unresolved edges (one hop is all
+    // this slice attempts, so at most one such edge exists per graph today).
+    private dataflowUnresolved(input: ProjectRuleInput): Finding[] {
+        const findings: Finding[] = [];
+        for (const fact of input.facts) {
+            if (fact.kind !== 'validation.dataflowGraph') {
+                continue;
+            }
+            const value = fact.value as unknown as DataflowValue;
+            if (findContractRule(this.contract as ValidationContract, value.id) === null) {
+                continue;
+            }
+            const unresolved = value.graph.edges.find((edge) => edge.status === 'unresolved');
+            if (unresolved === undefined) {
+                continue;
+            }
+            findings.push(this.buildFinding('R-VALIDATION-CONTRACT-DATAFLOW-UNRESOLVED', fact, `${value.id} — ${unresolved.basis}`, input));
         }
         return findings;
     }

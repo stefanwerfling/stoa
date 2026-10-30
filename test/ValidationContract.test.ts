@@ -30,7 +30,7 @@ const key = (f: Finding): string => `${f.rule.id}|${f.location.file.split('/').p
 test('loadValidationContract parses a well-formed contract, rejects a malformed one, and rejects a duplicate id', () => {
     const contract = loadValidationContract(contractPath);
     assert.equal(contract.version, '1.1.0');
-    assert.equal(contract.rules.length, 16);
+    assert.equal(contract.rules.length, 19);
     assert.ok(contract.rules.some((rule) => rule.id === 'VC-ITEM-QUANTITY-001'));
 
     assert.throws(() => loadValidationContract(join(fixtures, 'does-not-exist.json')));
@@ -184,9 +184,29 @@ test('correctness fix: multiple format constraints (.email().url()) AND together
     assert.ok(!findings.some((f) => f.observation.statement.includes('VC-CONTACT-HANDLE-016')), 'email is among the formats .email().url() enforces, so the contract\'s format=email requirement is satisfied');
 });
 
+test('dataflow tracing: a same-function and a one-hop cross-function persist produce no finding; an unresolvable service-like destination does', () => {
+    // dataflow.ts: sameFunctionPersist (same-function, verified) and
+    // oneHopPersist (OrderService.register -> this.repository.save, a
+    // heuristic one-hop trace) are both "good paths" — silent, like every
+    // other confirmed-safe case in this suite. unresolvedDestination passes
+    // the validated value to externalRepository.commit(...), which has no
+    // resolvable implementation in this file; its receiver name ("repository")
+    // is still business/persistence-suggestive, so this is surfaced rather
+    // than silently assumed safe.
+    const findings = vcFindings(analyzeFixture(loadValidationContract(contractPath)));
+    assert.ok(!findings.some((f) => f.observation.statement.includes('VC-DATAFLOW-SAME-FUNCTION-017') && f.rule.id === 'R-VALIDATION-CONTRACT-DATAFLOW-UNRESOLVED'));
+    assert.ok(!findings.some((f) => f.observation.statement.includes('VC-DATAFLOW-ONE-HOP-018') && f.rule.id === 'R-VALIDATION-CONTRACT-DATAFLOW-UNRESOLVED'));
+
+    const unresolved = findings.find((f) => key(f) === 'R-VALIDATION-CONTRACT-DATAFLOW-UNRESOLVED|dataflow.ts:64');
+    assert.ok(unresolved, 'VC-DATAFLOW-UNRESOLVED-019: externalRepository.commit(...) cannot be resolved within this file');
+    assert.ok(unresolved?.observation.statement.includes('externalRepository.commit(data)'));
+    assert.equal(unresolved?.confidence, 0.3, 'explicitly low confidence — a name match is a hint, not proof');
+    assert.ok(unresolved?.missingContext?.[0]?.includes('ONE hop'));
+});
+
 test('every validation-contract finding states its principle, dimension and an explicit missingContext', () => {
     const findings = vcFindings(analyzeFixture(loadValidationContract(contractPath)));
-    assert.equal(findings.length, 15, 'the full fixture set across all files');
+    assert.equal(findings.length, 20, 'the full fixture set across all files');
     for (const finding of findings) {
         assert.ok(finding.interpretation.principles.length > 0, `${finding.rule.id} carries a principle`);
         assert.ok(finding.interpretation.dimensions.includes('robustness'), `${finding.rule.id} is tagged robustness`);

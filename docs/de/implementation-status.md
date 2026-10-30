@@ -218,6 +218,42 @@ zu liefern.
   (eventuell nicht analysierten) Datei genutztes Schema sieht von hier aus
   identisch zu einem wirklich unbenutzten aus (dokumentierte Grenze, niedrige
   Konfidenz 0.5).
+- **Evidence Graph & Validator-Datenflussanalyse** (`src/evidence/EvidenceGraph.ts`,
+  `src/analysis/typescript/ValidationDataflow.ts`, neuer Fact
+  `validation.dataflowGraph`): wohin der VALIDIERTE Wert nach einem
+  Validator-Aufruf geht, nicht nur, ob der Aufruf stattfand — ein kleiner
+  Graph pro Aufruf, immer extrahiert (kein Vertrag nötig), mit Node-Arten
+  (`request-source`/`input-value`/`validation-schema`/
+  `validator-invocation`/`validation-result`/`validated-value`/`function`/
+  `service`/`repository`/`persistence-sink`) und Edge-Arten
+  (`receives`/`validates`/`returns`/`assigns`/`passes-to`/`transforms`/
+  `persists`/`bypasses`), jede Edge mit explizitem Status: `verified`
+  (eine direkte Argument-Beziehung in derselben Funktion), `heuristic`
+  (eine über eine Aufrufgrenze hinweg erschlossene Beziehung) oder
+  `unresolved` (etwas Relevantes gefunden, die Beziehung aber nicht
+  nachweisbar) — eine `heuristic`-Edge wird nie als `verified` ausgegeben.
+  Zwei Fähigkeiten: eine Nachverfolgung innerhalb derselben Funktion bis zu
+  einem Persistenz-Verb-Aufruf (`verified`), und EIN funktionsübergreifender
+  Schritt — per ts-morph-Symbol aufgelöst, NUR INNERHALB DERSELBEN DATEI, zu
+  einer Funktion/Methode mit einem einfachen (nicht destrukturierten)
+  Parameter an der passenden Position — bis zu einem Persistenz-Verb-Aufruf
+  im eigenen Rumpf dieser Deklaration (`heuristic`; die Form
+  `userService.create(result.data)` → `UserService.create(data)` →
+  `this.repository.save(data)`). Wird der validierte Wert an einen Aufruf
+  übergeben, der namentlich nach einer Business-/Persistenzschicht klingt
+  (`service`/`repository`/`repo`/`manager`/`store`), sich aber innerhalb der
+  Datei nicht auflösen lässt (ein Import, ein dynamischer/berechneter
+  Aufruf, ein Interface ohne eindeutige Implementierung), ist die Edge
+  `unresolved` und erscheint — sofern die ID der Annotation im geladenen
+  Vertrag bekannt ist — als `R-VALIDATION-CONTRACT-DATAFLOW-UNRESOLVED`
+  (niedrige Konfidenz, ausdrücklich „konnte nicht nachverfolgt werden",
+  nie als Mangel behauptet). Alles andere (der Aufruf ist offensichtlich
+  keine Senke, oder löst sich innerhalb der Datei zu etwas ohne jeden
+  Persistenz-Aufruf auf) wird stillschweigend nicht gemeldet — nicht jeder
+  validierte Wert muss in Persistenz enden. Keine dateiübergreifende
+  Auflösung, keine destrukturierten/Rest-Parameter, keine Spread-Argumente,
+  keine Rekursion über einen Schritt hinaus, nur der ERSTE Aufruf, der den
+  verfolgten Wert erhält, wird nachverfolgt.
 - **Bewusst nicht in diesem Schnitt** (dokumentiert, nicht vorgetäuscht):
   Mehrfeld-Objekt-Schemas; cross-file-Nutzungsnachweis; API-Endpunkt-/
   Alternative-Endpunkt-Bypass-Erkennung; Schicht-Heuristik (Frontend/Backend)
@@ -254,12 +290,12 @@ zu liefern.
 `ui.flutterIconButtonNoTooltip`, `ui.flutterTextFieldNoLabel`,
 `validation.backendInputUnvalidated`, `validation.rawRequestMassAssignment`,
 `validation.contractAnnotation`, `validation.annotatedValidatorUnused`,
-`validation.rawReuseAfterValidation`, sowie (opt-in) `external.tsc` und
+`validation.rawReuseAfterValidation`, `validation.dataflowGraph`, sowie (opt-in) `external.tsc` und
 `external.floatingPromise`.
 
 ## Qualitätssicherung
 
-- **184 node:test-Fälle** grün (Regeln pos./neg., Extraktion, Schema-Validierung,
+- **190 node:test-Fälle** grün (Regeln pos./neg., Extraktion, Schema-Validierung,
   i18n, Determinismus, SARIF, Eval, Semantik-Groundedness, Datenschutz,
   Finding-Trennung).
 - **Golden-Korpus** (`test/corpus/`, **nur TS+PHP**) mit Ground-Truth; Eval

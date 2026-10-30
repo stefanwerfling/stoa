@@ -135,6 +135,27 @@
       "dataType": "string",
       "required": true,
       "format": "email"
+    },
+    {
+      "id": "VC-DATAFLOW-SAME-FUNCTION-017",
+      "description": "Order item name for the dataflow-tracing fixture.",
+      "field": "name",
+      "dataType": "string",
+      "required": true
+    },
+    {
+      "id": "VC-DATAFLOW-ONE-HOP-018",
+      "description": "Order note for the dataflow-tracing fixture.",
+      "field": "note",
+      "dataType": "string",
+      "required": true
+    },
+    {
+      "id": "VC-DATAFLOW-UNRESOLVED-019",
+      "description": "Order tag for the dataflow-tracing fixture.",
+      "field": "tag",
+      "dataType": "string",
+      "required": true
     }
   ]
 }

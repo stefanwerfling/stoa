@@ -77,8 +77,10 @@ export const extractValidatorUsageFacts = (sourceFile: SourceFile, build: Build)
 };
 
 // `X.parse(...)` / `X.safeParse(...)` call expressions anywhere in the file
-// whose callee's object is the bare identifier `schemaName`.
-const findParseCalls = (sourceFile: SourceFile, schemaName: string): CallExpression[] => {
+// whose callee's object is the bare identifier `schemaName`. Exported for
+// reuse by the dataflow tracer (ValidationDataflow.ts): both need exactly
+// this same "find every parse-like call on this schema" scan.
+export const findParseCalls = (sourceFile: SourceFile, schemaName: string): CallExpression[] => {
     return sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression).filter((call) => {
         const callee = call.getExpression();
         return Node.isPropertyAccessExpression(callee)
@@ -95,7 +97,10 @@ const findParseCalls = (sourceFile: SourceFile, schemaName: string): CallExpress
 // the mass-assignment sink (isRawRequestExpression) on purpose: here Stoa only
 // needs to know "this validates something from the request", not "this is the
 // entire payload".
-const isFedByRequest = (call: CallExpression): boolean => {
+// Exported for reuse by the dataflow tracer (ValidationDataflow.ts), which
+// needs the exact same "is this validator call actually fed by the request"
+// gate before it starts tracing where the RESULT goes.
+export const isFedByRequest = (call: CallExpression): boolean => {
     const fn = nearestFunction(call);
     const rawNames = fn === undefined ? new Set<string>() : rawRequestAliasNames(fn);
     return call.getArguments().some((argument) => isRequestRootedExpression(argument) || isRawRequestExpression(argument, rawNames));

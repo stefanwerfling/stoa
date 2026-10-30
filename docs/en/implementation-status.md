@@ -208,6 +208,38 @@ fails fast (exit 1, concrete errors) instead of silently yielding 0 findings.
   exported and used only from another (possibly unanalyzed) file looks
   identical to a genuinely unused one from here (documented limit, confidence
   capped at 0.5).
+- **Evidence Graph & validator dataflow analysis** (`src/evidence/EvidenceGraph.ts`,
+  `src/analysis/typescript/ValidationDataflow.ts`, new fact
+  `validation.dataflowGraph`): where the VALIDATED value goes after a
+  validator call, not just whether the call happened — one small graph per
+  invocation, always extracted (no contract needed), with node kinds
+  (`request-source`/`input-value`/`validation-schema`/`validator-invocation`/
+  `validation-result`/`validated-value`/`function`/`service`/`repository`/
+  `persistence-sink`) and edge kinds (`receives`/`validates`/`returns`/
+  `assigns`/`passes-to`/`transforms`/`persists`/`bypasses`), each edge
+  carrying an explicit status: `verified` (a direct same-function argument
+  relationship), `heuristic` (a relationship inferred across a call
+  boundary), or `unresolved` (something relevant was found but the
+  relationship could not be established) — a `heuristic` edge is never
+  reported as `verified`. Two capabilities: a same-function trace to a
+  persistence-verb call (`verified`), and ONE cross-function hop — resolved
+  by ts-morph symbol, WITHIN THE SAME FILE ONLY, to a function/method with a
+  plain (non-destructured) parameter at the matching position — into a
+  persistence-verb call inside that declaration's own body (`heuristic`;
+  the `userService.create(result.data)` → `UserService.create(data)` →
+  `this.repository.save(data)` shape). When the validated value is passed to
+  a call that reads as business/persistence-layer by name
+  (`service`/`repository`/`repo`/`manager`/`store`) but cannot be resolved
+  within the file (an import, a dynamic/computed call, an interface with no
+  single implementation), the edge is `unresolved` and — when the
+  annotation's ID is in the loaded contract — surfaces as
+  `R-VALIDATION-CONTRACT-DATAFLOW-UNRESOLVED` (low confidence, explicitly
+  "could not be traced", never claimed as a defect). Everything else (the
+  callee clearly isn't a sink, or resolves in-file to something with no
+  persistence call at all) is silently not reported — not every validated
+  value is meant to reach persistence. No cross-file resolution, no
+  destructured/rest parameters, no spread arguments, no recursion beyond one
+  hop, only the FIRST call receiving the tracked value is traced.
 - **Deliberately out of this slice** (documented, not faked): multi-field
   object schemas; cross-file usage proof; API-endpoint/alternate-endpoint
   bypass detection; a frontend/backend layer heuristic for the conflict
@@ -243,12 +275,12 @@ fails fast (exit 1, concrete errors) instead of silently yielding 0 findings.
 `ui.flutterIconButtonNoTooltip`, `ui.flutterTextFieldNoLabel`,
 `validation.backendInputUnvalidated`, `validation.rawRequestMassAssignment`,
 `validation.contractAnnotation`, `validation.annotatedValidatorUnused`,
-`validation.rawReuseAfterValidation`, plus (opt-in) `external.tsc` and
+`validation.rawReuseAfterValidation`, `validation.dataflowGraph`, plus (opt-in) `external.tsc` and
 `external.floatingPromise`.
 
 ## Quality assurance
 
-- **184 node:test cases** green (rules pos./neg., extraction, schema validation,
+- **190 node:test cases** green (rules pos./neg., extraction, schema validation,
   i18n, determinism, SARIF, evaluation, semantic groundedness, privacy,
   finding-model separation).
 - **Golden corpus** (`test/corpus/`, **TS+PHP only**) with ground truth;
