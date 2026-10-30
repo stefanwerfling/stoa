@@ -13,7 +13,9 @@ import {RuleEngine} from './rules/RuleEngine.js';
 import {RuleSet} from './rules/RuleSet.js';
 import {DependencyCycleRule} from './rules/project/DependencyCycleRule.js';
 import {DeadExportRule} from './rules/project/DeadExportRule.js';
+import {ValidationContractRule} from './rules/project/ValidationContractRule.js';
 import type {ProjectRule} from './rules/ProjectRule.js';
+import type {ValidationContract} from './contracts/ValidationContract.js';
 import {ENGINE_VERSION} from './Version.js';
 import type {AnalysisReport, AnalysisResult, Fact, Finding, StoaConfig, VersionStamp} from './Types.js';
 
@@ -28,6 +30,14 @@ export interface AnalyzeOptions {
     typecheck?: boolean;
     /** Opt-in: flag exports used nowhere in the analyzed set (whole-project scans only). */
     deadExports?: boolean;
+    /**
+     * Opt-in: a loaded, schema-validated Validation Contract (see
+     * contracts/ValidationContract.ts). When supplied, stoa:validation
+     * annotations found in TypeScript sources are checked against it; when
+     * omitted, annotations are still extracted as facts (harmless) but never
+     * interpreted, so the feature is fully inert by default.
+     */
+    validationContract?: ValidationContract | null;
 }
 
 const TS_EXTENSIONS: readonly string[] = ['.ts', '.tsx'] as const;
@@ -53,6 +63,9 @@ export const analyze = (options: AnalyzeOptions): AnalysisResult => {
     const projectRules: ProjectRule[] = [new DependencyCycleRule()];
     if (options.deadExports === true) {
         projectRules.push(new DeadExportRule());
+    }
+    if (options.validationContract !== undefined && options.validationContract !== null) {
+        projectRules.push(new ValidationContractRule(options.validationContract));
     }
     const ruleEngine = new RuleEngine(knowledgeBase, ruleSet, options.lang ?? 'en', projectRules);
 

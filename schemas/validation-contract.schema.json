@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stoa.dev/schemas/validation-contract.schema.json",
+  "title": "Stoa Validation Contract",
+  "description": "A machine-readable contract of stable, cross-layer business validation rules (Validation Trace IDs), supplied by the user of Stoa for the project under analysis via `stoa analyze --contracts <file>`. It describes the EXPECTED business rule; it is not proof that the rule is correctly implemented or executed at runtime — see docs/*/implementation-status.md.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "rules"],
+  "properties": {
+    "version": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Contract version, for change tracking; not tied to Stoa's own engine/ruleset versions."
+    },
+    "rules": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/contractRule" }
+    }
+  },
+  "$defs": {
+    "contractRule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "description", "field", "dataType"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9]*(-[A-Z0-9]+)+-[0-9]{3}$",
+          "description": "Stable Validation Trace ID, e.g. VC-ITEM-QUANTITY-001. A project-chosen prefix, not a Stoa-reserved namespace — never confuse with Stoa's own R-* rule ids or finding:/fact: ids."
+        },
+        "description": { "type": "string", "minLength": 1 },
+        "field": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The business field or data group this rule governs (documentation only — not used to auto-match code by name)."
+        },
+        "dataType": { "type": "string", "enum": ["number", "string", "boolean"] },
+        "required": { "type": "boolean" },
+        "nullable": { "type": "boolean" },
+        "min": { "type": "number" },
+        "max": { "type": "number" },
+        "normalization": {
+          "type": "array",
+          "items": { "type": "string", "enum": ["trim", "lowercase", "uppercase"] }
+        },
+        "layers": {
+          "type": "array",
+          "items": { "type": "string", "enum": ["frontend", "backend", "persistence", "api-contract"] },
+          "description": "Which layers this rule applies to; informational in this version (not yet used to gate checks per layer)."
+        },
+        "securityRequirements": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Free-text notes on backend-authoritative/security expectations; not machine-checked in this version."
+        },
+        "version": {
+          "type": "string",
+          "description": "Per-rule version, for tracking changes to this one business rule independent of the whole contract's version."
+        }
+      }
+    }
+  }
+}

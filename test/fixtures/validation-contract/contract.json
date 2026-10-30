@@ -1,0 +1,45 @@
+{
+  "version": "1.0.0",
+  "rules": [
+    {
+      "id": "VC-ITEM-QUANTITY-001",
+      "description": "Order item quantity must be a positive integer up to 100.",
+      "field": "quantity",
+      "dataType": "number",
+      "required": true,
+      "min": 1,
+      "max": 100
+    },
+    {
+      "id": "VC-ITEM-PRICE-002",
+      "description": "Item price must be non-negative.",
+      "field": "price",
+      "dataType": "number",
+      "required": true,
+      "min": 0
+    },
+    {
+      "id": "VC-EMAIL-FORMAT-003",
+      "description": "Email addresses are trimmed before storage.",
+      "field": "email",
+      "dataType": "string",
+      "required": true,
+      "normalization": ["trim"]
+    },
+    {
+      "id": "VC-USER-ROLE-004",
+      "description": "User role must be one of a fixed set of values.",
+      "field": "role",
+      "dataType": "string",
+      "required": true
+    },
+    {
+      "id": "VC-SHIP-WEIGHT-005",
+      "description": "Shipment weight in kilograms must be positive.",
+      "field": "weightKg",
+      "dataType": "number",
+      "required": true,
+      "min": 0
+    }
+  ]
+}

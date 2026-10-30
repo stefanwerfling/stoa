@@ -5,6 +5,7 @@ import {factBuilder, type AdapterInfo} from '../FactBuilder.js';
 import {isDeepImport} from '../ImportPath.js';
 import {extractJsxA11yFacts} from '../jsx/JsxA11y.js';
 import {extractBackendValidationFacts, extractMassAssignmentFacts} from './BackendValidation.js';
+import {extractValidationAnnotations} from './ValidationAnnotations.js';
 import {destructiveDdl, nullableNoDefault, unguardedDdl} from '../MigrationSql.js';
 
 interface FunctionMetrics {
@@ -283,6 +284,11 @@ export const extractFacts = (sourceFile: SourceFile, info: AdapterInfo): Fact[] 
     // Mass-assignment facts: the raw request payload flowing whole into
     // Object.assign or a persistence-verb call.
     facts.push(...extractMassAssignmentFacts(sourceFile, build));
+
+    // Validation Trace ID annotations (// stoa:validation <ID>). Always
+    // extracted (cheap, mirrors the existing stoa:allow-complexity marker scan);
+    // only interpreted against a contract when --contracts is supplied.
+    facts.push(...extractValidationAnnotations(sourceFile, build));
 
     return facts;
 };

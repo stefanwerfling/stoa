@@ -6,6 +6,7 @@ import {initCpp} from './analysis/CppAdapter.js';
 import {initDart} from './analysis/DartAdapter.js';
 import {initHtml} from './analysis/HtmlAdapter.js';
 import {loadConfig} from './Config.js';
+import {loadValidationContract} from './contracts/ValidationContract.js';
 import {loadExpected} from './evaluation/Corpus.js';
 import {evaluate} from './evaluation/Evaluator.js';
 import {toMarkdown as evaluationMarkdown} from './evaluation/EvaluationReporter.js';
@@ -26,6 +27,7 @@ type CliValues = {
     lang?: string;
     typecheck?: boolean;
     'dead-exports'?: boolean;
+    contracts?: string;
     include?: string[];
     exclude?: string[];
     help?: boolean;
@@ -42,7 +44,7 @@ const USAGE = [
     'stoa – Stoic Code Analysis Engine',
     '',
     'Usage:',
-    '  stoa analyze <path> [--format markdown|json|sarif] [--lang en|de] [--include <glob>]... [--exclude <glob>]... [--typecheck] [--dead-exports] [--semantic noop|anthropic] [--config <file>] [--knowledge <dir>] [--rules <dir>]',
+    '  stoa analyze <path> [--format markdown|json|sarif] [--lang en|de] [--include <glob>]... [--exclude <glob>]... [--typecheck] [--dead-exports] [--contracts <file>] [--semantic noop|anthropic] [--config <file>] [--knowledge <dir>] [--rules <dir>]',
     '  stoa eval <path> --expected <file> [--format markdown|json] [--knowledge <dir>] [--rules <dir>]',
     ''
 ].join('\n');
@@ -72,6 +74,17 @@ const render = (format: string | undefined, report: AnalysisReport, lang: string
 
 const runAnalyze = async (values: CliValues, target: string): Promise<number> => {
     const lang = values.lang ?? 'en';
+    // A malformed/unreadable contract is an explicit configuration error, fail
+    // fast — never silently analyze with the feature half-engaged.
+    let validationContract = null;
+    if (values.contracts !== undefined) {
+        try {
+            validationContract = loadValidationContract(resolve(values.contracts));
+        } catch (error) {
+            process.stderr.write(`${(error as Error).message}\n`);
+            return 1;
+        }
+    }
     // Load the tree-sitter (WASM) grammars once before the synchronous pipeline
     // runs. Sequentially, not concurrently: both call the shared web-tree-sitter
     // Parser.init(), which is not safe to race. On failure those files are skipped.
@@ -85,7 +98,8 @@ const runAnalyze = async (values: CliValues, target: string): Promise<number> =>
         config: configFor(values),
         lang,
         typecheck: values.typecheck === true,
-        deadExports: values['dead-exports'] === true
+        deadExports: values['dead-exports'] === true,
+        validationContract
     });
 
     const semanticId = values.semantic ?? 'noop';
@@ -148,6 +162,7 @@ const main = async (): Promise<number> => {
             lang: {type: 'string', default: 'en'},
             typecheck: {type: 'boolean', default: false},
             'dead-exports': {type: 'boolean', default: false},
+            contracts: {type: 'string'},
             include: {type: 'string', multiple: true},
             exclude: {type: 'string', multiple: true},
             help: {type: 'boolean', default: false}
