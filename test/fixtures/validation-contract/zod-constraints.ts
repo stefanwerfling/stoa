@@ -43,6 +43,35 @@ const impossibleSchema = z.number().min(10).max(5);
 // stoa:validation VC-CONTACT-HANDLE-016
 const contactSchema = z.string().email().url();
 
+// Field-by-field z.object() resolution: the contract names exactly ONE field
+// per Validation Trace ID (contractRule.field); Stoa resolves that one field
+// the same way a top-level scalar chain would be, without resolving or
+// guessing at the rest of the object's shape.
+
+// Match: the object as a WHOLE is never a scalar chain (so `resolved` stays
+// false), but its one contract-named field ("sku") resolves cleanly and
+// matches exactly — no finding, same as a matching bare scalar schema would
+// produce.
+// stoa:validation VC-OBJECT-FIELD-MATCH-025
+const orderSchema = z.object({sku: z.string().min(1), quantity: z.number()});
+
+// Mismatch: the contract's field "price" requires non-negative, but this
+// object's "price" field has no lower bound at all.
+// stoa:validation VC-OBJECT-FIELD-MISMATCH-026
+const productSchema = z.object({price: z.number(), label: z.string()});
+
+// Unresolved: the contract names a field ("missingField") that this object
+// does not declare at all — Stoa must not silently treat an absent field as
+// "no constraint" or guess at one; it stays unresolved, naming the field.
+// stoa:validation VC-OBJECT-FIELD-ABSENT-027
+const partialSchema = z.object({otherField: z.string()});
+
+// Unresolved: the contract-named field ("note") exists, but its OWN value
+// uses .refine() — not a recognized scalar chain — so just that field stays
+// unresolved, the same as a top-level .refine() schema would.
+// stoa:validation VC-OBJECT-FIELD-UNRESOLVED-028
+const feedbackSchema = z.object({note: z.string().refine((value) => value.length > 0)});
+
 // Plain (non-request) local usage so none of the above is also flagged as an
 // unused validator — this fixture is only about the constraint comparisons.
 function checkInventory(input: {stock: number; discount: number; rating: number; website: string; coupon: number; impossible: number; contact: string}) {
@@ -57,4 +86,16 @@ function checkInventory(input: {stock: number; discount: number; rating: number;
   };
 }
 
-export {stockSchema, discountSchema, ratingSchema, websiteSchema, couponSchema, impossibleSchema, contactSchema, checkInventory};
+function checkObjects(input: {order: unknown; product: unknown; partial: unknown; feedback: unknown}) {
+  return {
+    order: orderSchema.parse(input.order),
+    product: productSchema.parse(input.product),
+    partial: partialSchema.parse(input.partial),
+    feedback: feedbackSchema.parse(input.feedback)
+  };
+}
+
+export {
+  stockSchema, discountSchema, ratingSchema, websiteSchema, couponSchema, impossibleSchema, contactSchema, checkInventory,
+  orderSchema, productSchema, partialSchema, feedbackSchema, checkObjects
+};

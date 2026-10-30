@@ -188,6 +188,36 @@
       "dataType": "string",
       "required": true,
       "layers": ["frontend"]
+    },
+    {
+      "id": "VC-OBJECT-FIELD-MATCH-025",
+      "description": "Order SKU must be a non-empty string; z.object() field-by-field match.",
+      "field": "sku",
+      "dataType": "string",
+      "required": true,
+      "min": 1
+    },
+    {
+      "id": "VC-OBJECT-FIELD-MISMATCH-026",
+      "description": "Product price must be non-negative; z.object() field-by-field mismatch.",
+      "field": "price",
+      "dataType": "number",
+      "required": true,
+      "min": 0
+    },
+    {
+      "id": "VC-OBJECT-FIELD-ABSENT-027",
+      "description": "A field the contract names but the annotated object schema does not declare.",
+      "field": "missingField",
+      "dataType": "string",
+      "required": true
+    },
+    {
+      "id": "VC-OBJECT-FIELD-UNRESOLVED-028",
+      "description": "A contract-named field whose own value uses .refine() — not a recognized scalar chain.",
+      "field": "note",
+      "dataType": "string",
+      "required": true
     }
   ]
 }

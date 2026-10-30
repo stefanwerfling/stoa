@@ -178,8 +178,19 @@ fails fast (exit 1, concrete errors) instead of silently yielding 0 findings.
   **unresolved** rather than silently resolved to one bound;
   `.optional()`/`.nullable()`; `.trim()`/`.toLowerCase()`/`.toUpperCase()`;
   `z.enum([...])` → `allowedValues` (string literals only). Any other call
-  (`z.object(...)`, array schemas, a vts schema, `.refine()`, `.transform()`,
-  `.default()`, …) is **unresolved** — never guessed at.
+  (array schemas, a vts schema, `.refine()`, `.transform()`, `.default()`,
+  a chained call after `z.object({...})` like `.strict()`/`.partial()`, …)
+  is **unresolved** — never guessed at. A bare `z.object({...})` — no
+  chained modifiers after it — is additionally resolved **field by field**:
+  Stoa compares the ONE field a contract rule actually names
+  (`contractRule.field`) using the same scalar-chain resolution, without
+  resolving or guessing at the rest of the object's shape. A field the
+  schema doesn't declare at all, or whose own value isn't a recognized
+  scalar chain, is unresolved by name; a field that resolves is compared
+  exactly like a top-level scalar schema would be. This closed the gap where
+  every realistic `z.object(...)` request-body schema — the common case —
+  was unconditionally unresolved regardless of whether its one relevant
+  field actually matched the contract.
 - **Contract:** a JSON file validated against
   `schemas/validation-contract.schema.json` (reuses the existing ajv2020
   pattern from `KnowledgeValidation.ts` — no new format introduced). Fields:
@@ -313,7 +324,7 @@ fails fast (exit 1, concrete errors) instead of silently yielding 0 findings.
 
 ## Quality assurance
 
-- **197 node:test cases** green (rules pos./neg., extraction, schema validation,
+- **199 node:test cases** green (rules pos./neg., extraction, schema validation,
   i18n, determinism, SARIF, evaluation, semantic groundedness, privacy,
   finding-model separation).
 - **Golden corpus** (`test/corpus/`, **TS+PHP only**) with ground truth;

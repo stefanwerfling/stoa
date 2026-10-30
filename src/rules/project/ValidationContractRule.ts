@@ -11,6 +11,7 @@ interface AnnotationValue {
     idValid: boolean;
     resolved: boolean;
     conditions?: ResolvedConditions;
+    objectFields?: Record<string, ResolvedConditions | null>;
 }
 
 type RuleId =
@@ -105,8 +106,8 @@ const TEXT: Record<RuleId, {statement: LocalizedText; suggestion: LocalizedText;
             de: 'Dieser Befund allein verlangt keine Codeänderung; falls eine belastbare Prüfung hier wichtig ist, ein direkt vergleichbares skalares Schema erwägen oder dies als Hinweis für eine manuelle Durchsicht behandeln.'
         },
         missingContext: {
-            en: 'Stoa only resolves a direct z.number()/z.string()/z.boolean() chain with a small set of recognized modifiers. Object/array schemas, a vts schema, a wrapped/derived schema, or any unrecognized chained call (.refine(), .transform(), .default(), …) are left unresolved rather than guessed at.',
-            de: 'Stoa löst nur eine direkte z.number()/z.string()/z.boolean()-Kette mit einer kleinen Menge erkannter Modifikatoren auf. Objekt-/Array-Schemas, ein vts-Schema, ein abgeleitetes Schema oder ein unbekannter verketteter Aufruf (.refine(), .transform(), .default(), …) bleiben unaufgelöst, statt erraten zu werden.'
+            en: 'Stoa resolves a direct z.number()/z.string()/z.boolean() chain with a small set of recognized modifiers; for a bare z.object({...}) it additionally resolves the ONE field the contract names (contractRule.field) the same way, without resolving or guessing at the rest of the object\'s shape. Array schemas, a chained call after z.object({...}) (.strict(), .partial(), …), a vts schema, a wrapped/derived schema, or any unrecognized modifier (.refine(), .transform(), .default(), …) are left unresolved rather than guessed at.',
+            de: 'Stoa löst eine direkte z.number()/z.string()/z.boolean()-Kette mit einer kleinen Menge erkannter Modifikatoren auf; bei einem bloßen z.object({...}) zusätzlich das EINE vom Vertrag benannte Feld (contractRule.field) genauso, ohne den Rest der Objektform aufzulösen oder zu erraten. Array-Schemas, ein verketteter Aufruf nach z.object({...}) (.strict(), .partial(), …), ein vts-Schema, ein abgeleitetes Schema oder ein unbekannter Modifikator (.refine(), .transform(), .default(), …) bleiben unaufgelöst, statt erraten zu werden.'
         },
         rationale: {
             en: 'Reporting "cannot verify" instead of silently passing — or silently failing — keeps the distinction between a proven match, a proven mismatch and genuine uncertainty honest (marcus.judgment).',
@@ -316,14 +317,36 @@ export class ValidationContractRule implements ProjectRule {
         if (contractRule === null) {
             return [this.buildFinding('R-VALIDATION-CONTRACT-UNKNOWN-ID', fact, value.id, input)];
         }
-        if (!value.resolved || value.conditions === undefined) {
-            return [this.buildFinding('R-VALIDATION-CONTRACT-UNRESOLVED', fact, value.id, input)];
+        if (value.resolved && value.conditions !== undefined) {
+            const mismatches = describeMismatches(contractRule, value.conditions);
+            if (mismatches.length > 0) {
+                return [this.buildFinding('R-VALIDATION-CONTRACT-MISMATCH', fact, `${value.id} — ${mismatches.join('; ')}`, input)];
+            }
+            return [];
         }
-        const mismatches = describeMismatches(contractRule, value.conditions);
-        if (mismatches.length > 0) {
-            return [this.buildFinding('R-VALIDATION-CONTRACT-MISMATCH', fact, `${value.id} — ${mismatches.join('; ')}`, input)];
+        // Not a resolvable scalar chain — but a bare `z.object({...})` can
+        // still be checked FIELD BY FIELD: the contract names exactly one
+        // field (`contractRule.field`), and the annotated schema may have
+        // resolved that one field even though the object as a whole is (by
+        // definition) never a scalar chain. The rest of the object's shape
+        // is not inspected — this compares only the ONE field the contract
+        // actually names, the same "declared dimensions only" bias as
+        // `describeMismatches` itself.
+        if (value.objectFields !== undefined) {
+            if (!(contractRule.field in value.objectFields)) {
+                return [this.buildFinding('R-VALIDATION-CONTRACT-UNRESOLVED', fact, `${value.id} — field "${contractRule.field}" not found in the annotated z.object() schema`, input)];
+            }
+            const fieldConditions = value.objectFields[contractRule.field];
+            if (fieldConditions === null || fieldConditions === undefined) {
+                return [this.buildFinding('R-VALIDATION-CONTRACT-UNRESOLVED', fact, `${value.id} — field "${contractRule.field}" is not a recognized scalar Zod chain`, input)];
+            }
+            const mismatches = describeMismatches(contractRule, fieldConditions);
+            if (mismatches.length > 0) {
+                return [this.buildFinding('R-VALIDATION-CONTRACT-MISMATCH', fact, `${value.id} — ${mismatches.join('; ')}`, input)];
+            }
+            return [];
         }
-        return [];
+        return [this.buildFinding('R-VALIDATION-CONTRACT-UNRESOLVED', fact, value.id, input)];
     }
 
     // Same ID, more than one distinct set of statically extracted conditions:

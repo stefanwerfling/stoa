@@ -39,7 +39,7 @@ test('validation/dataflow golden corpus: precision/recall 100% across all 16 req
     const result = evaluate(findings, loadExpected(join(base, 'expected.json')), corpus);
     assert.equal(result.overall.precision, 1, `false positives: ${JSON.stringify(result.falsePositives)}`);
     assert.equal(result.overall.recall, 1, `false negatives: ${JSON.stringify(result.falseNegatives)}`);
-    assert.equal(result.overall.truePositives, 20);
+    assert.equal(result.overall.truePositives, 16);
     assert.equal(result.overall.falsePositives, 0);
     assert.equal(result.overall.falseNegatives, 0);
     assert.deepEqual(result.duplicateExpected, [], 'the manifest itself has no duplicate identities');

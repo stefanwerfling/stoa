@@ -30,7 +30,7 @@ const key = (f: Finding): string => `${f.rule.id}|${f.location.file.split('/').p
 test('loadValidationContract parses a well-formed contract, rejects a malformed one, and rejects a duplicate id', () => {
     const contract = loadValidationContract(contractPath);
     assert.equal(contract.version, '1.1.0');
-    assert.equal(contract.rules.length, 23);
+    assert.equal(contract.rules.length, 27);
     assert.ok(contract.rules.some((rule) => rule.id === 'VC-ITEM-QUANTITY-001'));
 
     assert.throws(() => loadValidationContract(join(fixtures, 'does-not-exist.json')));
@@ -243,12 +243,54 @@ test('layer/security attribution: backend attribution confirmed via dataflow evi
     assert.ok(security?.observation.statement.includes('VC-LAYER-SECURITY-UNVERIFIED-023'));
     assert.ok(!findings.some((f) => f.rule.id === 'R-VALIDATION-CONTRACT-LAYER-UNRESOLVED' && f.observation.statement.includes('VC-LAYER-SECURITY-UNVERIFIED-023')), 'no LAYER-UNRESOLVED duplicate — only the more specific SECURITY-UNVERIFIED fires');
 
-    assert.ok(!findings.some((f) => f.observation.statement.includes('VC-LAYER-FRONTEND-ONLY-024') && (f.rule.id === 'R-VALIDATION-CONTRACT-LAYER-UNRESOLVED' || f.rule.id === 'R-VALIDATION-CONTRACT-SECURITY-UNVERIFIED')), 'a frontend-only layer claim is accepted but never checked (the unrelated shape-UNRESOLVED finding for this z.object schema still fires)');
+    assert.ok(!findings.some((f) => f.observation.statement.includes('VC-LAYER-FRONTEND-ONLY-024') && (f.rule.id === 'R-VALIDATION-CONTRACT-LAYER-UNRESOLVED' || f.rule.id === 'R-VALIDATION-CONTRACT-SECURITY-UNVERIFIED')), 'a frontend-only layer claim is accepted but never checked');
+});
+
+test('z.object() field-by-field resolution: a matching contract-named field produces no finding, a mismatching one does, an absent field and an unresolvable field each stay unresolved by name', () => {
+    // zod-constraints.ts: the object as a WHOLE is never a scalar chain
+    // (resolved stays false), but the ONE field the contract names
+    // (contractRule.field) is resolved the same way a top-level scalar
+    // chain would be, without resolving or guessing at the rest of the
+    // object's shape.
+    const findings = vcFindings(analyzeFixture(loadValidationContract(contractPath)));
+    const byKey = new Map(findings.map((f) => [key(f), f]));
+
+    assert.ok(!findings.some((f) => f.observation.statement.includes('VC-OBJECT-FIELD-MATCH-025')), 'orderSchema.sku (min 1) matches the contract exactly — no finding, same as a matching bare scalar schema');
+
+    const mismatch = byKey.get('R-VALIDATION-CONTRACT-MISMATCH|zod-constraints.ts:61');
+    assert.ok(mismatch, 'VC-OBJECT-FIELD-MISMATCH-026: productSchema.price has no lower bound, the contract requires min=0');
+    assert.ok(mismatch?.observation.statement.includes('min contract=0 actual=none'));
+
+    const absent = byKey.get('R-VALIDATION-CONTRACT-UNRESOLVED|zod-constraints.ts:67');
+    assert.ok(absent, 'VC-OBJECT-FIELD-ABSENT-027: partialSchema does not declare a "missingField" property at all');
+    assert.ok(absent?.observation.statement.includes('field "missingField" not found'));
+
+    const unresolvedField = byKey.get('R-VALIDATION-CONTRACT-UNRESOLVED|zod-constraints.ts:73');
+    assert.ok(unresolvedField, 'VC-OBJECT-FIELD-UNRESOLVED-028: feedbackSchema.note uses .refine(), not a recognized scalar chain');
+    assert.ok(unresolvedField?.observation.statement.includes('field "note" is not a recognized scalar Zod chain'));
+});
+
+test('correctness fix: a bare z.object() request-body schema that matches the contract field-by-field no longer shows a spurious shape-level unresolved finding', () => {
+    // dataflow.ts / layers.ts: before field-by-field resolution existed,
+    // EVERY z.object() schema produced R-VALIDATION-CONTRACT-UNRESOLVED
+    // regardless of whether its one contract-named field actually matched —
+    // the realistic request-body case was always "unresolved", never
+    // actually verified. All seven of these schemas' single named field now
+    // resolves cleanly, so none of them produce a shape-level finding.
+    const findings = vcFindings(analyzeFixture(loadValidationContract(contractPath)));
+    for (const id of ['VC-DATAFLOW-SAME-FUNCTION-017', 'VC-DATAFLOW-ONE-HOP-018', 'VC-LAYER-ATTRIBUTED-021', 'VC-LAYER-UNATTRIBUTED-022', 'VC-LAYER-SECURITY-UNVERIFIED-023', 'VC-LAYER-FRONTEND-ONLY-024']) {
+        assert.ok(!findings.some((f) => f.rule.id === 'R-VALIDATION-CONTRACT-UNRESOLVED' && f.observation.statement.includes(id)), `${id}'s single named field matches the contract — no shape-level unresolved finding`);
+    }
+    // VC-DATAFLOW-UNRESOLVED-019 still produces ITS dataflow finding (the
+    // field itself matches; the destination is what's unresolved) but no
+    // LONGER the shape-level one.
+    assert.ok(!findings.some((f) => f.rule.id === 'R-VALIDATION-CONTRACT-UNRESOLVED' && f.observation.statement.includes('VC-DATAFLOW-UNRESOLVED-019')));
+    assert.ok(findings.some((f) => f.rule.id === 'R-VALIDATION-CONTRACT-DATAFLOW-UNRESOLVED' && f.observation.statement.includes('VC-DATAFLOW-UNRESOLVED-019')));
 });
 
 test('every validation-contract finding states its principle, dimension and an explicit missingContext', () => {
     const findings = vcFindings(analyzeFixture(loadValidationContract(contractPath)));
-    assert.equal(findings.length, 27, 'the full fixture set across all files');
+    assert.equal(findings.length, 23, 'the full fixture set across all files');
     for (const finding of findings) {
         assert.ok(finding.interpretation.principles.length > 0, `${finding.rule.id} carries a principle`);
         assert.ok(finding.interpretation.dimensions.includes('robustness'), `${finding.rule.id} is tagged robustness`);

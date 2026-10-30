@@ -187,8 +187,19 @@ zu liefern.
   werden; `.optional()`/`.nullable()`;
   `.trim()`/`.toLowerCase()`/`.toUpperCase()`; `z.enum([...])` →
   `allowedValues` (nur bei reinen String-Literalen). Jeder andere Aufruf
-  (`z.object(...)`, Array-Schemas, ein vts-Schema, `.refine()`,
-  `.transform()`, `.default()`, …) gilt als **unresolved** — nie erraten.
+  (Array-Schemas, ein vts-Schema, `.refine()`, `.transform()`, `.default()`,
+  ein verketteter Aufruf nach `z.object({...})` wie `.strict()`/`.partial()`,
+  …) gilt als **unresolved** — nie erraten. Ein bloßes `z.object({...})` —
+  ohne verkettete Modifikatoren danach — wird zusätzlich **feldweise**
+  aufgelöst: Stoa vergleicht das EINE vom Vertrag benannte Feld
+  (`contractRule.field`) über dieselbe skalare Kettenauflösung, ohne den
+  Rest der Objektform aufzulösen oder zu erraten. Ein vom Schema gar nicht
+  deklariertes Feld, oder eines, dessen eigener Wert keine erkannte skalare
+  Kette ist, bleibt namentlich unaufgelöst; ein auflösbares Feld wird genauso
+  verglichen wie ein skalares Schema auf oberster Ebene. Das schließt die
+  Lücke, dass jedes realistische `z.object(...)`-Request-Body-Schema — der
+  häufige Fall — bedingungslos unaufgelöst war, unabhängig davon, ob sein
+  eines relevantes Feld tatsächlich zum Vertrag passte.
 - **Vertrag:** eine JSON-Datei nach `schemas/validation-contract.schema.json`
   (wiederverwendet das bestehende ajv2020-Muster aus
   `KnowledgeValidation.ts`, kein neues Format). Felder: `integer`, `format`
@@ -334,7 +345,7 @@ zu liefern.
 
 ## Qualitätssicherung
 
-- **197 node:test-Fälle** grün (Regeln pos./neg., Extraktion, Schema-Validierung,
+- **199 node:test-Fälle** grün (Regeln pos./neg., Extraktion, Schema-Validierung,
   i18n, Determinismus, SARIF, Eval, Semantik-Groundedness, Datenschutz,
   Finding-Trennung).
 - **Golden-Korpus** (`test/corpus/`, **nur TS+PHP**) mit Ground-Truth; Eval

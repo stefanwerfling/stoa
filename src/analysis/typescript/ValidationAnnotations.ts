@@ -39,6 +39,14 @@ export interface AnnotatedSchema {
     idValid: boolean;
     schemaName: string | null;
     conditions: ResolvedConditions | null;
+    /** Set only for a bare `z.object({...})` (no chained modifiers): each
+     *  property's own value resolved the same way a top-level scalar chain
+     *  would be, independent of `conditions` (which stays null for any object
+     *  schema — object shapes are not scalar chains). `null` for a field
+     *  whose own value is not resolvable (e.g. `.refine()`); the field is
+     *  simply absent from the map if the property is a spread/shorthand/
+     *  computed/method property (not a plain `name: <expr>` assignment). */
+    objectFields?: Record<string, ResolvedConditions | null>;
 }
 
 // `// stoa:validation <ID>` — the annotation references a Validation Trace ID;
@@ -85,6 +93,9 @@ export const extractValidationAnnotations = (sourceFile: SourceFile, build: Buil
         if (schema.conditions !== null) {
             value.conditions = schema.conditions;
         }
+        if (schema.objectFields !== undefined) {
+            value.objectFields = schema.objectFields;
+        }
         facts.push(build({
             kind: 'validation.contractAnnotation',
             kindOf: 'statement',
@@ -117,7 +128,15 @@ export const annotatedSchemas = (sourceFile: SourceFile): AnnotatedSchema[] => {
         const schemaName = nameNode !== undefined && Node.isIdentifier(nameNode) ? nameNode.getText() : null;
         const initializer = declaration?.getInitializer();
         const conditions = initializer === undefined ? null : resolveZodConditions(initializer);
-        schemas.push({statement, rawId, idValid: ID_FORMAT_RE.test(rawId), schemaName, conditions});
+        const objectFields = initializer === undefined ? null : resolveZodObjectShape(initializer);
+        schemas.push({
+            statement,
+            rawId,
+            idValid: ID_FORMAT_RE.test(rawId),
+            schemaName,
+            conditions,
+            ...(objectFields !== null ? {objectFields} : {})
+        });
     }
     return schemas;
 };
@@ -165,6 +184,50 @@ const resolveZodConditions = (expression: Expression): ResolvedConditions | null
         links.unshift({name, args: current.getArguments()});
         current = object;
     }
+};
+
+// A bare `z.object({...})` — no chained modifiers after it (`.strict()`,
+// `.partial()`, … are a documented limit, not guessed at: any call OTHER
+// than `z.object(...)` itself returns null here). Each property whose value
+// is a plain `name: <expr>` assignment (not a spread, shorthand or computed
+// name) is resolved via the SAME scalar-chain resolver as a top-level
+// annotation — a field is simply absent from the returned map if its
+// property shape isn't a plain assignment, and `null` if its value IS a
+// plain assignment but the value itself doesn't resolve (e.g. `.refine()`).
+// This is the field-by-field counterpart of `resolveZodConditions`: Stoa can
+// now compare ONE field of a `z.object(...)` request-body schema against a
+// contract rule naming that field, without resolving (or guessing at) the
+// rest of the object's shape.
+const resolveZodObjectShape = (expression: Expression): Record<string, ResolvedConditions | null> | null => {
+    if (!Node.isCallExpression(expression)) {
+        return null;
+    }
+    const callee = expression.getExpression();
+    if (!Node.isPropertyAccessExpression(callee) || callee.getName() !== 'object') {
+        return null;
+    }
+    const object = callee.getExpression();
+    if (!Node.isIdentifier(object) || object.getText() !== 'z') {
+        return null;
+    }
+    const shape = expression.getArguments()[0];
+    if (shape === undefined || !Node.isObjectLiteralExpression(shape)) {
+        return null;
+    }
+    const fields: Record<string, ResolvedConditions | null> = {};
+    for (const property of shape.getProperties()) {
+        if (!Node.isPropertyAssignment(property)) {
+            continue;
+        }
+        const nameNode = property.getNameNode();
+        const fieldName = Node.isIdentifier(nameNode) ? nameNode.getText() : Node.isStringLiteral(nameNode) ? nameNode.getLiteralValue() : null;
+        if (fieldName === null) {
+            continue;
+        }
+        const fieldInitializer = property.getInitializer();
+        fields[fieldName] = fieldInitializer === undefined ? null : resolveZodConditions(fieldInitializer);
+    }
+    return fields;
 };
 
 // `['admin', 'user']` — a literal array of string literals only; anything else
