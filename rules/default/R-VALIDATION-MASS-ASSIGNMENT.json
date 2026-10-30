@@ -1,0 +1,40 @@
+{
+  "id": "R-VALIDATION-MASS-ASSIGNMENT",
+  "version": "1.0.0",
+  "title": "Raw request payload flows into an assignment or persistence call",
+  "feature": "validation.rawRequestMassAssignment",
+  "appliesTo": ["statement"],
+  "principles": ["marcus.judgment"],
+  "dimensions": ["robustness"],
+  "trigger": {
+    "all": [{ "fact": "validation.rawRequestMassAssignment", "op": "!=", "value": "" }]
+  },
+  "requiredEvidence": ["validation.rawRequestMassAssignment"],
+  "severity": { "base": "high" },
+  "confidence": { "base": 0.6, "capBy": "certainty" },
+  "message": {
+    "en": "The raw, unvalidated request payload flows into {value} — any client-supplied property (id, role, price, status, …) rides along unchecked.",
+    "de": "Die rohe, ungeprüfte Request-Payload fließt in {value} — jede vom Client mitgesendete Eigenschaft (id, role, price, status, …) wird ungeprüft übernommen."
+  },
+  "rationale": {
+    "en": "A client can add, remove or change any JSON property on a request. When the raw body/query — not a value narrowed by a schema — is spread or passed whole into Object.assign or a persistence call (save/create/update/…), the client effectively chooses which internal fields get set: a role, owner, price or status the server never meant to accept from outside. This is a distinct concern from whether the input was rejected for being malformed (R-VALIDATION-MISSING-BACKEND): a handler can correctly reject an incomplete request and still save the untouched raw object, carrying along any extra property the check never looked at. Discerning which properties are fit to accept, rather than taking the whole payload on faith, is marcus.judgment.",
+    "de": "Ein Client kann einem Request beliebige JSON-Eigenschaften hinzufügen, entfernen oder ändern. Wird die rohe body/query — kein durch ein Schema eingeschränkter Wert — als Ganzes in Object.assign oder einen Persistenz-Aufruf (save/create/update/…) gespreizt oder übergeben, bestimmt faktisch der Client, welche internen Felder gesetzt werden: eine Rolle, ein Eigentümer, ein Preis oder Status, den der Server von außen nie akzeptieren wollte. Das ist eine eigenständige Frage, unabhängig davon, ob der Input bei Fehlform abgelehnt wurde (R-VALIDATION-MISSING-BACKEND): Ein Handler kann einen unvollständigen Request korrekt ablehnen und trotzdem das unangetastete rohe Objekt speichern — inklusive jeder zusätzlichen Eigenschaft, die die Prüfung nie betrachtet hat. Zu unterscheiden, welche Eigenschaften zulässig sind, statt der ganzen Payload blind zu vertrauen, ist marcus.judgment."
+  },
+  "remediation": {
+    "suggestion": {
+      "en": "Validate the payload through a schema first and use the narrowed result (not the raw request) for the assignment/persistence call, or explicitly allow-list the fields you accept (e.g. destructure only the known properties) before assigning or saving.",
+      "de": "Die Payload zuerst gegen ein Schema prüfen und das geprüfte Ergebnis (nicht den rohen Request) für Zuweisung/Persistenz verwenden, oder die akzeptierten Felder explizit als Allow-List behandeln (z. B. nur die bekannten Eigenschaften destrukturieren) vor Zuweisung oder Speicherung."
+    },
+    "drawbacks": {
+      "en": "An allow-list needs updating when a field is added; a shared schema between layers keeps that in one place.",
+      "de": "Eine Allow-List muss bei neuen Feldern gepflegt werden; ein zwischen den Schichten geteiltes Schema hält dies an einer Stelle."
+    }
+  },
+  "missingContext": [
+    {
+      "en": "A heuristic risk signal, not a proven defect, and TypeScript/JavaScript only. 'Raw' means the value was never passed through a recognized validator call — a value assigned from schema.parse(req.body) is not raw even though its source text still mentions req.body, since the schema's declared shape is treated as the allow-list (whether the schema itself permits extra keys, e.g. Zod .passthrough(), is not checked). Only whole-payload use is flagged; a single-field pluck is out of scope. The persistence-verb match (save/create/update/insert/upsert/persist/replace) is a name heuristic and may miss differently-named sinks or, rarely, match an unrelated method of the same name.",
+      "de": "Ein heuristisches Risiko-Signal, kein bewiesener Fehler, und nur TypeScript/JavaScript. 'Roh' heißt, der Wert lief nie durch einen erkannten Validator-Aufruf — ein über schema.parse(req.body) zugewiesener Wert ist nicht roh, auch wenn sein Quelltext weiterhin req.body nennt, da die deklarierte Form des Schemas als Allow-List gilt (ob das Schema selbst zusätzliche Schlüssel erlaubt, z. B. Zod .passthrough(), wird nicht geprüft). Gemeldet wird nur die Ganz-Payload-Nutzung; ein Einzelfeld-Pluck ist außerhalb des Scopes. Der Treffer auf Persistenz-Verben (save/create/update/insert/upsert/persist/replace) ist eine Namensheuristik und kann anders benannte Senken übersehen oder selten eine unverwandte gleichnamige Methode treffen."
+    }
+  ],
+  "tests": "test/BackendValidation.test.ts"
+}

@@ -4,7 +4,7 @@ import type {Fact, SourceRange, SubjectKind} from '../../Types.js';
 import {factBuilder, type AdapterInfo} from '../FactBuilder.js';
 import {isDeepImport} from '../ImportPath.js';
 import {extractJsxA11yFacts} from '../jsx/JsxA11y.js';
-import {extractBackendValidationFacts} from './BackendValidation.js';
+import {extractBackendValidationFacts, extractMassAssignmentFacts} from './BackendValidation.js';
 import {destructiveDdl, nullableNoDefault, unguardedDdl} from '../MigrationSql.js';
 
 interface FunctionMetrics {
@@ -279,6 +279,10 @@ export const extractFacts = (sourceFile: SourceFile, info: AdapterInfo): Fact[] 
     // Trust-boundary facts: server request handlers that read client input
     // (req/request .body/.query/.params) without recognized validation.
     facts.push(...extractBackendValidationFacts(sourceFile, build));
+
+    // Mass-assignment facts: the raw request payload flowing whole into
+    // Object.assign or a persistence-verb call.
+    facts.push(...extractMassAssignmentFacts(sourceFile, build));
 
     return facts;
 };

@@ -86,6 +86,19 @@ const ownRequestInputs = (handler: Node): Node[] => {
         .filter((access) => isRequestInput(access) && nearestFunction(access) === handler && isWholeObjectUse(access));
 };
 
+// Strips `as T`, `(…)` and `!` wrappers to the underlying expression, so a cast or
+// parenthesized request value is still recognized by shape (`(req.body as T)`).
+const unwrapExpression = (node: Node): Node => {
+    let current = node;
+    while (true) {
+        if (Node.isAsExpression(current) || Node.isParenthesizedExpression(current) || Node.isNonNullExpression(current)) {
+            current = current.getExpression();
+            continue;
+        }
+        return current;
+    }
+};
+
 // Whether the request access is consumed as a whole object (assigned, spread, cast
 // and passed, saved …) rather than immediately indexed for one field. Unwraps `as`,
 // parentheses and `!` first, then rejects when the result is the object of a
@@ -221,6 +234,120 @@ const hasRouteSchemaOption = (handler: Node): boolean => {
     return call.getArguments().some((argument) =>
         Node.isObjectLiteralExpression(argument)
         && argument.getProperties().some((property) => Node.hasName(property) && isInputSchemaOption(property.getName())));
+};
+
+/**
+ * Emits a `validation.rawRequestMassAssignment` fact where the RAW (unvalidated)
+ * request payload — not a schema-parsed result — flows whole into `Object.assign`,
+ * or into a persistence-verb call (`save`/`create`/`update`/`insert`/`upsert`/
+ * `persist`/`replace`), either directly or spread into an object literal argument.
+ * This is deliberately about the raw value: an identifier assigned FROM a validator
+ * call (`const body = schema.parse(req.body)`) is not raw, even though its
+ * initializer text still contains `req.body` — the schema's declared shape is the
+ * allow-list. A single-field pluck is not whole-object use and is not flagged
+ * (the same scope restriction as `validation.backendInputUnvalidated`).
+ */
+export const extractMassAssignmentFacts = (sourceFile: SourceFile, build: Build): Fact[] => {
+    const facts: Fact[] = [];
+    let index = 0;
+    for (const fn of handlerFunctions(sourceFile)) {
+        // A framework route-schema option (recognized the same way as the sibling
+        // rule) validates — and typically shapes/strips — the payload before the
+        // handler runs, so its own req.body/req.query use is not raw.
+        if (hasRouteSchemaOption(fn)) {
+            continue;
+        }
+        const rawNames = rawRequestAliasNames(fn);
+        for (const call of fn.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+            if (nearestFunction(call) !== fn) {
+                continue;
+            }
+            const site = massAssignmentSite(call, rawNames);
+            if (site !== null) {
+                facts.push(build({
+                    kind: 'validation.rawRequestMassAssignment',
+                    kindOf: 'statement',
+                    symbol: `massAssign#${index}`,
+                    range: rangeOf(sourceFile, call),
+                    value: site,
+                    certainty: 'semantic-heuristic'
+                }));
+                index += 1;
+            }
+        }
+    }
+    return facts;
+};
+
+const PERSISTENCE_VERB = /^(save|create|update|insert|upsert|persist|replace)/i;
+
+// Identifiers assigned directly, raw, from a request input (`const body = req.body`
+// or `const q = (req.query as T)`) — NOT via a validator call. Stricter than
+// requestDerivedNames (used by the sibling rule), which intentionally over-matches
+// by substring to recognize validation; here under-matching is the safe direction.
+const rawRequestAliasNames = (fn: Node): ReadonlySet<string> => {
+    const names = new Set<string>();
+    for (const declaration of fn.getDescendantsOfKind(SyntaxKind.VariableDeclaration)) {
+        const initializer = declaration.getInitializer();
+        const nameNode = declaration.getNameNode();
+        if (initializer !== undefined && Node.isIdentifier(nameNode) && isRawRequestExpression(initializer, names)) {
+            names.add(nameNode.getText());
+        }
+    }
+    return names;
+};
+
+// Whether `node` is, after unwrapping casts/parens/`!`, a direct req.body/req.query
+// access or a known raw alias identifier — the request payload itself, untouched by
+// any validator call.
+const isRawRequestExpression = (node: Node, rawNames: ReadonlySet<string>): boolean => {
+    const unwrapped = unwrapExpression(node);
+    if (isRequestInput(unwrapped)) {
+        return true;
+    }
+    return Node.isIdentifier(unwrapped) && rawNames.has(unwrapped.getText());
+};
+
+// Whether `call` is a mass-assignment sink fed the raw request payload, and if so a
+// short evidence string naming the pattern; null otherwise.
+const massAssignmentSite = (call: CallExpression, rawNames: ReadonlySet<string>): string | null => {
+    const callee = call.getExpression();
+    if (!Node.isPropertyAccessExpression(callee)) {
+        return null;
+    }
+    const args = call.getArguments();
+
+    if (Node.isIdentifier(callee.getExpression()) && callee.getExpression().getText() === 'Object' && callee.getName() === 'assign') {
+        const source = args.slice(1).find((argument) => isRawRequestExpression(argument, rawNames));
+        return source === undefined ? null : `Object.assign(…, ${source.getText()})`;
+    }
+
+    if (PERSISTENCE_VERB.test(callee.getName())) {
+        for (const argument of args) {
+            if (isRawRequestExpression(argument, rawNames)) {
+                return `${callee.getName()}(${argument.getText()})`;
+            }
+            const spread = spreadRawRequestSource(argument, rawNames);
+            if (spread !== null) {
+                return `${callee.getName()}({...${spread}})`;
+            }
+        }
+    }
+    return null;
+};
+
+// If `argument` is an object literal that spreads the raw request payload
+// (`{...req.body}` / `{...body, id}`), the spread source's text; otherwise null.
+const spreadRawRequestSource = (argument: Node, rawNames: ReadonlySet<string>): string | null => {
+    if (!Node.isObjectLiteralExpression(argument)) {
+        return null;
+    }
+    for (const property of argument.getProperties()) {
+        if (Node.isSpreadAssignment(property) && isRawRequestExpression(property.getExpression(), rawNames)) {
+            return property.getExpression().getText();
+        }
+    }
+    return null;
 };
 
 const rangeOf = (sourceFile: SourceFile, node: Node): SourceRange => {

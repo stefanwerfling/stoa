@@ -56,4 +56,15 @@ export function routes(app: FastifyInstance, repo: {save(x: unknown): Promise<vo
   app.get('/items/:id', async (req, reply) => {
     return reply.send(await repo.get((req.params as {id: string}).id));
   });
+
+  // manual allow-list: validated (a 400 guard) AND a fresh object literal naming
+  // only the accepted fields — not an alias of req.body and no spread of it, so
+  // neither R-VALIDATION-MISSING-BACKEND nor mass assignment applies
+  app.post('/allowlist', async (req, reply) => {
+    const body = req.body as {name?: string; role?: string};
+    if (!body.name) return reply.code(400).send('name required');
+    const safe = {name: body.name};
+    await repo.save(safe);
+    return reply.send(safe);
+  });
 }
