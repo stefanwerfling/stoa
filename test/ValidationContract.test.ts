@@ -118,10 +118,23 @@ test('an annotated, resolvable validator that is never .parse()\'d anywhere in t
     // VC-ORDER-QTY-006 (usage.ts): declared, annotated, resolvable — but no
     // .parse()/.safeParse() call on it exists anywhere in that file.
     const findings = vcFindings(analyzeFixture(loadValidationContract(contractPath)));
-    const unused = findings.find((f) => f.rule.id === 'R-VALIDATION-CONTRACT-UNUSED-VALIDATOR');
+    const unused = findings.find((f) => f.rule.id === 'R-VALIDATION-CONTRACT-UNUSED-VALIDATOR' && f.observation.statement.includes('VC-ORDER-QTY-006'));
     assert.ok(unused, 'unusedSchema (VC-ORDER-QTY-006) is declared but never parsed');
-    assert.ok(unused?.observation.statement.includes('VC-ORDER-QTY-006'));
     assert.equal(unused?.confidence, 0.5);
+});
+
+test('correctness fix: an unused-validator check does not require the schema\'s SHAPE to be resolvable — a z.object() schema (unresolved shape) is still flagged as unused', () => {
+    // VC-AGE-CHECK-013 (misc.ts): z.number().refine(...) — its shape is
+    // UNRESOLVED (refine's effect is not statically verifiable, hence the
+    // separate R-VALIDATION-CONTRACT-UNRESOLVED finding already asserted
+    // elsewhere), but it is ALSO never .parse()'d anywhere in the file.
+    // Before the fix, the unused-validator check skipped any schema whose
+    // shape was unresolved, which made it dead code for the realistic
+    // z.object(...) request-body case (shape resolution and usage tracing
+    // are orthogonal concerns).
+    const findings = vcFindings(analyzeFixture(loadValidationContract(contractPath)));
+    const unused = findings.find((f) => f.rule.id === 'R-VALIDATION-CONTRACT-UNUSED-VALIDATOR' && f.observation.statement.includes('VC-AGE-CHECK-013'));
+    assert.ok(unused, 'ageSchema is unused AND shape-unresolved — both are independently true and both are reported');
 });
 
 test('a validator invoked on the request AND whose parsed result is what gets saved produces no finding (the good usage case)', () => {
@@ -235,7 +248,7 @@ test('layer/security attribution: backend attribution confirmed via dataflow evi
 
 test('every validation-contract finding states its principle, dimension and an explicit missingContext', () => {
     const findings = vcFindings(analyzeFixture(loadValidationContract(contractPath)));
-    assert.equal(findings.length, 26, 'the full fixture set across all files');
+    assert.equal(findings.length, 27, 'the full fixture set across all files');
     for (const finding of findings) {
         assert.ok(finding.interpretation.principles.length > 0, `${finding.rule.id} carries a principle`);
         assert.ok(finding.interpretation.dimensions.includes('robustness'), `${finding.rule.id} is tagged robustness`);

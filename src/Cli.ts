@@ -45,7 +45,7 @@ const USAGE = [
     '',
     'Usage:',
     '  stoa analyze <path> [--format markdown|json|sarif] [--lang en|de] [--include <glob>]... [--exclude <glob>]... [--typecheck] [--dead-exports] [--contracts <file>] [--semantic noop|anthropic] [--config <file>] [--knowledge <dir>] [--rules <dir>]',
-    '  stoa eval <path> --expected <file> [--format markdown|json] [--knowledge <dir>] [--rules <dir>]',
+    '  stoa eval <path> --expected <file> [--format markdown|json] [--contracts <file>] [--knowledge <dir>] [--rules <dir>]',
     ''
 ].join('\n');
 
@@ -72,19 +72,29 @@ const render = (format: string | undefined, report: AnalysisReport, lang: string
     return toMarkdown(report, {lang});
 };
 
+// A malformed/unreadable contract is an explicit configuration error, fail
+// fast — never silently analyze (or evaluate) with the feature half-engaged.
+// Shared by `analyze` and `eval`: both accept --contracts and must treat a
+// bad contract identically rather than one of them silently ignoring it.
+const loadContractOrFail = (values: CliValues): {contract: ReturnType<typeof loadValidationContract> | null} | null => {
+    if (values.contracts === undefined) {
+        return {contract: null};
+    }
+    try {
+        return {contract: loadValidationContract(resolve(values.contracts))};
+    } catch (error) {
+        process.stderr.write(`${(error as Error).message}\n`);
+        return null;
+    }
+};
+
 const runAnalyze = async (values: CliValues, target: string): Promise<number> => {
     const lang = values.lang ?? 'en';
-    // A malformed/unreadable contract is an explicit configuration error, fail
-    // fast — never silently analyze with the feature half-engaged.
-    let validationContract = null;
-    if (values.contracts !== undefined) {
-        try {
-            validationContract = loadValidationContract(resolve(values.contracts));
-        } catch (error) {
-            process.stderr.write(`${(error as Error).message}\n`);
-            return 1;
-        }
+    const loadedContract = loadContractOrFail(values);
+    if (loadedContract === null) {
+        return 1;
     }
+    const validationContract = loadedContract.contract;
     // Load the tree-sitter (WASM) grammars once before the synchronous pipeline
     // runs. Sequentially, not concurrently: both call the shared web-tree-sitter
     // Parser.init(), which is not safe to race. On failure those files are skipped.
@@ -118,6 +128,10 @@ const runEval = async (values: CliValues, target: string): Promise<number> => {
         process.stdout.write(`${USAGE}\n`);
         return 1;
     }
+    const loadedContract = loadContractOrFail(values);
+    if (loadedContract === null) {
+        return 1;
+    }
     // Load the tree-sitter grammars so eval covers Dart and C/C++ too, not only
     // the synchronously-parsed TS/PHP. Sequentially (shared Parser.init() is not
     // safe to race); on failure those files are skipped.
@@ -137,7 +151,8 @@ const runEval = async (values: CliValues, target: string): Promise<number> => {
         rootPath: root,
         knowledgeDir: knowledgeDirOf(values),
         ruleSetDir: ruleSetDirOf(values),
-        config: configFor(values)
+        config: configFor(values),
+        validationContract: loadedContract.contract
     }).report.findings;
     const result = evaluate(findings, expected, root);
     const output = values.format === 'json' ? JSON.stringify(result, null, 2) : evaluationMarkdown(result);

@@ -1,0 +1,25 @@
+{
+  "description": "Ground truth for the dedicated validation/dataflow golden corpus (Phase 6 of the Analysis Correctness & Dataflow Verification spec). Each entry is a finding that SHOULD be produced when this corpus is analyzed with contract.json loaded via --contracts; any produced finding not listed here counts as a false positive. Covers the 16 explicitly required test groups (see the per-file comments in corpus/*.ts for which group each case belongs to): correct validation, missing validation, unused validator, result-ignored/raw-reuse-after-validation, validation in a separate never-called function, cross-function handoffs (both a validated-and-traced good path and a raw-and-unflagged-otherwise bad path), multiple .max() merging, multiple format AND-merging, an unresolvable Zod modifier, an AST-verified alias validator, a generic exception unrelated to the request, mass assignment via spread, security requirements Stoa cannot verify (must produce NOTHING), and conflicting FE/BE implementations under one trace ID.",
+  "findings": [
+    { "file": "01-basic-validation.ts", "rule": "R-VALIDATION-MASS-ASSIGNMENT", "symbol": "massAssign#0" },
+    { "file": "01-basic-validation.ts", "rule": "R-VALIDATION-MISSING-BACKEND", "symbol": "handler#0" },
+    { "file": "01-basic-validation.ts", "rule": "R-VALIDATION-MASS-ASSIGNMENT", "symbol": "massAssign#1" },
+    { "file": "01-basic-validation.ts", "rule": "R-VALIDATION-MISSING-BACKEND", "symbol": "handler#1" },
+    { "file": "02-validator-usage.ts", "rule": "R-VALIDATION-CONTRACT-UNRESOLVED", "symbol": "annotation#0" },
+    { "file": "02-validator-usage.ts", "rule": "R-VALIDATION-CONTRACT-UNUSED-VALIDATOR", "symbol": "unused#0" },
+    { "file": "02-validator-usage.ts", "rule": "R-VALIDATION-CONTRACT-UNRESOLVED", "symbol": "annotation#1" },
+    { "file": "02-validator-usage.ts", "rule": "R-VALIDATION-CONTRACT-RAW-AFTER-VALIDATION", "symbol": "rawreuse#0" },
+    { "file": "02-validator-usage.ts", "rule": "R-VALIDATION-MASS-ASSIGNMENT", "symbol": "massAssign#0" },
+    { "file": "02-validator-usage.ts", "rule": "R-VALIDATION-MASS-ASSIGNMENT", "symbol": "massAssign#1" },
+    { "file": "02-validator-usage.ts", "rule": "R-VALIDATION-MISSING-BACKEND", "symbol": "handler#0" },
+    { "file": "03-zod-constraints.ts", "rule": "R-VALIDATION-CONTRACT-UNRESOLVED", "symbol": "annotation#2" },
+    { "file": "04-dataflow-and-mass-assignment.ts", "rule": "R-VALIDATION-CONTRACT-UNRESOLVED", "symbol": "annotation#0" },
+    { "file": "04-dataflow-and-mass-assignment.ts", "rule": "R-VALIDATION-MASS-ASSIGNMENT", "symbol": "massAssign#0" },
+    { "file": "04-dataflow-and-mass-assignment.ts", "rule": "R-VALIDATION-MISSING-BACKEND", "symbol": "handler#0" },
+    { "file": "04-dataflow-and-mass-assignment.ts", "rule": "R-VALIDATION-MASS-ASSIGNMENT", "symbol": "massAssign#1" },
+    { "file": "04-dataflow-and-mass-assignment.ts", "rule": "R-VALIDATION-MISSING-BACKEND", "symbol": "handler#1" },
+    { "file": "05-security-flags.ts", "rule": "R-VALIDATION-CONTRACT-UNRESOLVED", "symbol": "annotation#0" },
+    { "file": "06-fe-be-conflict.ts", "rule": "R-VALIDATION-CONTRACT-CONFLICT", "symbol": "annotation#0" },
+    { "file": "06-fe-be-conflict.ts", "rule": "R-VALIDATION-CONTRACT-CONFLICT", "symbol": "annotation#1" }
+  ]
+}

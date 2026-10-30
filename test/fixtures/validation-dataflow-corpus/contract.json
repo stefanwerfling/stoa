@@ -1,0 +1,72 @@
+{
+  "version": "1.0.0",
+  "rules": [
+    {
+      "id": "VC-CORPUS-UNUSED-101",
+      "description": "Order quantity for the unused-validator corpus group.",
+      "field": "quantity",
+      "dataType": "number",
+      "required": true
+    },
+    {
+      "id": "VC-CORPUS-RAW-REUSE-102",
+      "description": "Order comment for the raw-reuse-after-validation corpus group.",
+      "field": "comment",
+      "dataType": "string",
+      "required": true
+    },
+    {
+      "id": "VC-CORPUS-MAX-MERGE-103",
+      "description": "Order quantity must be between 0 and 50 inclusive.",
+      "field": "quantity",
+      "dataType": "number",
+      "required": true,
+      "min": 0,
+      "max": 50
+    },
+    {
+      "id": "VC-CORPUS-FORMAT-AND-104",
+      "description": "Contact handle must be a valid email.",
+      "field": "handle",
+      "dataType": "string",
+      "required": true,
+      "format": "email"
+    },
+    {
+      "id": "VC-CORPUS-UNKNOWN-MODIFIER-105",
+      "description": "Age must be non-negative.",
+      "field": "age",
+      "dataType": "number",
+      "required": true
+    },
+    {
+      "id": "VC-CORPUS-CROSS-FUNCTION-106",
+      "description": "Order note for the cross-function dataflow corpus group.",
+      "field": "note",
+      "dataType": "string",
+      "required": true,
+      "layers": ["backend"]
+    },
+    {
+      "id": "VC-CORPUS-SECURITY-UNCHECKED-107",
+      "description": "Transfer amount; declares five security flags Stoa does not verify.",
+      "field": "amount",
+      "dataType": "number",
+      "required": true,
+      "layers": ["backend"],
+      "security": {
+        "authenticationRequired": true,
+        "ownershipRequired": true,
+        "tenantIsolation": true,
+        "massAssignmentProtection": true
+      }
+    },
+    {
+      "id": "VC-CORPUS-FE-BE-CONFLICT-108",
+      "description": "Discount percentage; frontend and backend implementations disagree on the maximum.",
+      "field": "discount",
+      "dataType": "number",
+      "required": true
+    }
+  ]
+}

@@ -63,9 +63,11 @@
 ```
 stoa analyze <pfad> [--format markdown|json|sarif] [--lang en|de]
                     [--include <glob>]... [--exclude <glob>]...
-                    [--typecheck] [--dead-exports] [--semantic noop|anthropic]
+                    [--typecheck] [--dead-exports] [--contracts <datei>]
+                    [--semantic noop|anthropic]
                     [--config <datei>] [--knowledge <dir>] [--rules <dir>]
-stoa eval <pfad> --expected <datei> [--format markdown|json]
+stoa eval <pfad> --expected <datei> [--format markdown|json] [--contracts <datei>]
+                    [--knowledge <dir>] [--rules <dir>]
 ```
 
 - **Formate:** Markdown (Mensch), JSON (Maschine), SARIF 2.1.0 (CI/Code Scanning).
@@ -75,6 +77,10 @@ stoa eval <pfad> --expected <datei> [--format markdown|json]
   werden hart übersprungen; eine einzeln benannte Datei umgeht die Globs.
 - `knowledge/` und `rules/` werden relativ zum installierten Paket aufgelöst —
   die CLI läuft nach `npm link`/Install aus jedem Verzeichnis.
+- `--contracts <datei>` wird von BEIDEN, `analyze` und `eval`, akzeptiert
+  (zuvor von `eval` stillschweigend ignoriert) — ein fehlerhafter/unlesbarer
+  Vertrag schlägt bei beiden Befehlen sofort fehl (Exit 1), nie ein
+  stillschweigend verschlechtertes Ergebnis.
 
 ## Regelkatalog (38)
 
@@ -328,7 +334,7 @@ zu liefern.
 
 ## Qualitätssicherung
 
-- **194 node:test-Fälle** grün (Regeln pos./neg., Extraktion, Schema-Validierung,
+- **197 node:test-Fälle** grün (Regeln pos./neg., Extraktion, Schema-Validierung,
   i18n, Determinismus, SARIF, Eval, Semantik-Groundedness, Datenschutz,
   Finding-Trennung).
 - **Golden-Korpus** (`test/corpus/`, **nur TS+PHP**) mit Ground-Truth; Eval
@@ -392,6 +398,29 @@ zu liefern.
   Wrapper-Schema-Optionen und Einzelfeld-Plucks); `R-VALIDATION-MASS-ASSIGNMENT`
   **1 Befund, verifiziertes TP** (loki: `req.body` nur auf `typeof === 'object'`
   geprüft, dann roh gespeichert), **0 FP** auf den übrigen vier.
+- **Validierungs-/Datenfluss-Golden-Korpus** (`test/fixtures/validation-dataflow-corpus/`,
+  `ValidationDataflowCorpus.test.ts`): ein eigenständiger, in sich
+  geschlossener Korpus nach dem bestehenden `test/corpus/`-Precision/Recall-Muster
+  (kein zweiter Ground-Truth-Mechanismus), der alle 16 explizit geforderten
+  Testgruppen an einer Stelle abdeckt — korrekte Validierung, fehlende
+  Validierung, ein unbenutzter Validator, ein aufgerufener, aber ignorierter
+  Validator (rohe Wiederverwendung nach Validierung), eine in einer nie
+  aufgerufenen Funktion deklarierte Validierung, funktionsübergreifende
+  Übergaben (sowohl ein nachverfolgter, validierter guter Pfad als auch ein
+  roher, unvalidierter schlechter Pfad), `.max()`-Merging, Format-UND-Merging,
+  ein nicht auflösbarer Zod-Modifier, ein AST-verifizierter `.bind()`-Alias,
+  eine vom Request unabhängige generische Exception, Mass Assignment über
+  Spread, Security-Anforderungen, die Stoa nicht prüfen kann (geprüft, dass
+  NICHTS erzeugt wird), sowie widersprüchliche FE/BE-Implementierungen unter
+  einer Trace-ID. 100 %/100 % (TP 20). Der Bau dieses Korpus deckte einen
+  echten Bug auf, bevor er sich weiter ausbreitete: Die Unused-Validator- und
+  Raw-After-Validation-Prüfungen (`ValidatorUsage.ts`) teilten sich dasselbe,
+  beim Datenfluss-Tracer bereits andernorts korrigierte Gate, das eine
+  auflösbare skalare Form des Schemas verlangte — was ein `z.object(...)`-Request-Body
+  (der realistische Fall) nie ist, wodurch beide Prüfungen für diesen Fall
+  stillschweigend totgelegt waren; nur nackte Skalar-Schemas in den
+  bestehenden Fixtures erreichten sie je. Genauso behoben wie die
+  entsprechende Korrektur beim Datenfluss-Tracer.
 - Dogfooding: stoa analysiert den eigenen `src/`.
 
 ## Abweichungen vom Konzept (bewusst, dokumentiert)

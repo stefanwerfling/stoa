@@ -37,7 +37,16 @@ export const extractValidatorUsageFacts = (sourceFile: SourceFile, build: Build)
     let reuseIndex = 0;
 
     for (const schema of annotatedSchemas(sourceFile)) {
-        if (!schema.idValid || schema.conditions === null || schema.schemaName === null) {
+        // Deliberately does NOT require `schema.conditions !== null` — the
+        // same correction as ValidationDataflow.ts's gate: whether a schema's
+        // VALUE SHAPE is a recognized scalar chain is orthogonal to whether
+        // it is actually INVOKED. The realistic case is a `z.object(...)`
+        // request-body schema, which never resolves conditions (object
+        // schemas are out of scope in ValidationAnnotations.ts) — under the
+        // old gate, R-VALIDATION-CONTRACT-UNUSED-VALIDATOR and
+        // -RAW-AFTER-VALIDATION were silently dead code for that case; only
+        // bare scalar schemas (z.number()/z.string()) ever reached this far.
+        if (!schema.idValid || schema.schemaName === null) {
             continue;
         }
         const parseCalls = findParseCalls(sourceFile, schema.schemaName);

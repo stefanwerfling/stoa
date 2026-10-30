@@ -60,9 +60,11 @@
 ```
 stoa analyze <path> [--format markdown|json|sarif] [--lang en|de]
                     [--include <glob>]... [--exclude <glob>]...
-                    [--typecheck] [--dead-exports] [--semantic noop|anthropic]
+                    [--typecheck] [--dead-exports] [--contracts <file>]
+                    [--semantic noop|anthropic]
                     [--config <file>] [--knowledge <dir>] [--rules <dir>]
-stoa eval <path> --expected <file> [--format markdown|json]
+stoa eval <path> --expected <file> [--format markdown|json] [--contracts <file>]
+                    [--knowledge <dir>] [--rules <dir>]
 ```
 
 - **Formats:** Markdown (human), JSON (machine), SARIF 2.1.0 (CI / code scanning).
@@ -72,6 +74,9 @@ stoa eval <path> --expected <file> [--format markdown|json]
   are hard-pruned; a single named file bypasses the globs.
 - `knowledge/` and `rules/` resolve relative to the installed package — the CLI
   runs from any directory after `npm link`/install.
+- `--contracts <file>` is accepted by BOTH `analyze` and `eval` (previously
+  silently ignored by `eval`) — a malformed/unreadable contract fails fast
+  (exit 1) for either command, never a silently-degraded result.
 
 ## Rule catalog (38)
 
@@ -308,7 +313,7 @@ fails fast (exit 1, concrete errors) instead of silently yielding 0 findings.
 
 ## Quality assurance
 
-- **194 node:test cases** green (rules pos./neg., extraction, schema validation,
+- **197 node:test cases** green (rules pos./neg., extraction, schema validation,
   i18n, determinism, SARIF, evaluation, semantic groundedness, privacy,
   finding-model separation).
 - **Golden corpus** (`test/corpus/`, **TS+PHP only**) with ground truth;
@@ -370,6 +375,26 @@ fails fast (exit 1, concrete errors) instead of silently yielding 0 findings.
   `R-VALIDATION-MASS-ASSIGNMENT` **1 finding, verified true positive** (loki:
   `req.body` is only checked `typeof === 'object'`, then saved raw), **0 false
   positives** on the other four.
+- **Validation/dataflow golden corpus** (`test/fixtures/validation-dataflow-corpus/`,
+  `ValidationDataflowCorpus.test.ts`): a dedicated, self-contained corpus
+  mirroring the existing `test/corpus/` precision/recall pattern (not a
+  second ground-truth mechanism), covering all 16 explicitly required test
+  groups in one place — correct validation, missing validation, an unused
+  validator, a validator called but its result ignored (raw reused after
+  validation), validation declared in a function that is never called,
+  cross-function handoffs (both a validated-and-traced good path and a raw,
+  unvalidated bad path), `.max()` merging, format AND-merging, an
+  unresolvable Zod modifier, an AST-verified `.bind()` alias, a generic
+  exception unrelated to the request, mass assignment via spread, security
+  requirements Stoa cannot verify (asserted to produce NOTHING), and
+  conflicting FE/BE implementations under one trace ID. 100%/100% (TP 20).
+  Building this corpus caught one real bug before it shipped further: the
+  unused-validator and raw-after-validation checks (`ValidatorUsage.ts`)
+  shared the dataflow tracer's now-fixed-elsewhere gate requiring a
+  schema's scalar shape to be resolvable — which a `z.object(...)` request
+  body (the realistic case) never is, silently making both checks dead code
+  for it; only bare scalar schemas in the pre-existing fixtures ever
+  exercised them. Fixed the same way as the dataflow tracer's equivalent fix.
 - Dogfooding: stoa analyzes its own `src/`.
 
 ## Deviations from the concept (deliberate, documented)
