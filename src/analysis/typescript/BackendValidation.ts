@@ -156,22 +156,34 @@ const distinctSources = (inputs: Node[]): string[] => {
 // schema library; recognizing more kinds of guard favours fewer false positives.
 const isValidated = (handler: Node): boolean => {
     const derived = requestDerivedNames(handler);
+    const boundNames = boundValidatorNames(handler);
     for (const call of handler.getDescendantsOfKind(SyntaxKind.CallExpression)) {
-        if (isValidatorCall(call) && callReferencesRequest(call, derived)) {
+        if (isValidatorCall(call, boundNames) && callReferencesRequest(call, derived)) {
             return true;
         }
     }
-    return hasRouteSchemaOption(handler) || rejectsBadInput(handler);
+    // The guard-condition check below needs the STRICT alias set (a direct
+    // `const body = req.body`), not the loose `derived` above (which deliberately
+    // over-matches by substring — e.g. `const user = await repo.findById(req.params.id)`
+    // would otherwise make `user` count as "request-derived", so `if (!user) throw`
+    // would wrongly look like an input check when it is actually a DB-lookup guard).
+    return hasRouteSchemaOption(handler) || rejectsBadInput(handler, rawRequestAliasNames(handler));
 };
 
 // A hand-rolled input guard: the handler can short-circuit with a 400/422 response
-// (`reply.code(400)` / `res.status(422)`) or a throw. A handler that bothers to
-// reject bad input is validating it, even without a schema library.
+// (`reply.code(400)` / `res.status(422)`) or a throw — but ONLY when that throw/
+// response is actually gated by a condition referencing the request input (or a
+// request-derived local). A throw/400 reached unconditionally, or gated by an
+// unrelated condition (a DB-lookup result, an auth check, …), proves nothing about
+// input validation and must not be treated as evidence of it — see
+// test/BackendValidation.test.ts for the exact regression this fixes.
 const REJECT_STATUS: ReadonlySet<number> = new Set([400, 422]);
 
-const rejectsBadInput = (handler: Node): boolean => {
-    if (handler.getDescendantsOfKind(SyntaxKind.ThrowStatement).length > 0) {
-        return true;
+const rejectsBadInput = (handler: Node, rawAliases: ReadonlySet<string>): boolean => {
+    for (const statement of handler.getDescendantsOfKind(SyntaxKind.ThrowStatement)) {
+        if (guardedByRequestCondition(statement, handler, rawAliases)) {
+            return true;
+        }
     }
     return handler.getDescendantsOfKind(SyntaxKind.CallExpression).some((call) => {
         const callee = call.getExpression();
@@ -183,8 +195,85 @@ const rejectsBadInput = (handler: Node): boolean => {
             return false;
         }
         const first = call.getArguments()[0];
-        return first !== undefined && Node.isNumericLiteral(first) && REJECT_STATUS.has(Number(first.getText()));
+        const isRejectStatus = first !== undefined && Node.isNumericLiteral(first) && REJECT_STATUS.has(Number(first.getText()));
+        return isRejectStatus && guardedByRequestCondition(call, handler, rawAliases);
     });
+};
+
+// Whether `node` (a throw statement, or a .code(400)/.status(422) call) is reached
+// through an enclosing `if` whose condition references the request — directly
+// (`req.body`/`req.query`, at any depth) or via a STRICT raw-alias local name
+// (`rawAliases`, from `rawRequestAliasNames` — deliberately the under-matching
+// set, not the loose `requestDerivedNames`, so a variable merely downstream of a
+// request-mentioning expression, e.g. `const user = await repo.findById(req.params.id)`,
+// does not count). Walks EVERY enclosing if up to `handler`'s boundary (not just
+// the nearest), since a guard can be nested and an outer condition may be the one
+// that actually checks the input while an inner one checks something else.
+const guardedByRequestCondition = (node: Node, handler: Node, rawAliases: ReadonlySet<string>): boolean => {
+    let current: Node | undefined = node.getParent();
+    while (current !== undefined && current !== handler) {
+        if (Node.isIfStatement(current) && conditionReferencesRequest(current.getExpression(), rawAliases)) {
+            return true;
+        }
+        current = current.getParent();
+    }
+    return false;
+};
+
+const conditionReferencesRequest = (condition: Node, rawAliases: ReadonlySet<string>): boolean => {
+    if (Node.isIdentifier(condition)) {
+        return rawAliases.has(condition.getText());
+    }
+    if (Node.isPropertyAccessExpression(condition) && (isRequestInput(condition) || isRequestRootedExpression(condition))) {
+        return true;
+    }
+    for (const access of condition.getDescendantsOfKind(SyntaxKind.PropertyAccessExpression)) {
+        if (isRequestInput(access) || isRequestRootedExpression(access)) {
+            return true;
+        }
+    }
+    for (const identifier of condition.getDescendantsOfKind(SyntaxKind.Identifier)) {
+        if (rawAliases.has(identifier.getText())) {
+            return true;
+        }
+    }
+    return false;
+};
+
+// Identifiers bound to a validator method via `.bind(...)`
+// (`const X = schema.safeParse.bind(schema)`) — X is a verified validator alias
+// regardless of its name, discovered via the AST relationship (the explicit ask in
+// the correctness follow-up: prefer AST relationships over a name heuristic). The
+// existing name-based heuristic (VALIDATOR_NAME) is kept as a fallback, not
+// replaced, so already-verified real-world wrappers (validateBody, parseOrReply)
+// are unaffected.
+// Scans the WHOLE FILE, not just the handler's own body: a bound-validator alias
+// is realistically declared at module scope (next to the schema it wraps), not
+// freshly inside every handler that uses it.
+const boundValidatorNames = (handler: Node): ReadonlySet<string> => {
+    const names = new Set<string>();
+    for (const declaration of handler.getSourceFile().getDescendantsOfKind(SyntaxKind.VariableDeclaration)) {
+        const nameNode = declaration.getNameNode();
+        const initializer = declaration.getInitializer();
+        if (initializer !== undefined && Node.isIdentifier(nameNode) && isValidatorBindExpression(initializer)) {
+            names.add(nameNode.getText());
+        }
+    }
+    return names;
+};
+
+// `<schema>.<validatorMethod>.bind(<thisArg>)` — a call to `.bind` whose bound
+// callee-object is itself `<something>.<validatorMethod>`.
+const isValidatorBindExpression = (expression: Node): boolean => {
+    if (!Node.isCallExpression(expression)) {
+        return false;
+    }
+    const callee = expression.getExpression();
+    if (!Node.isPropertyAccessExpression(callee) || callee.getName() !== 'bind') {
+        return false;
+    }
+    const bound = callee.getExpression();
+    return Node.isPropertyAccessExpression(bound) && VALIDATOR_METHODS.has(bound.getName().toLowerCase());
 };
 
 // Identifiers assigned directly from a request input (`const body = req.body`), so a
@@ -201,13 +290,16 @@ const requestDerivedNames = (handler: Node): Set<string> => {
     return names;
 };
 
-const isValidatorCall = (call: CallExpression): boolean => {
+const isValidatorCall = (call: CallExpression, boundNames: ReadonlySet<string>): boolean => {
     const callee = call.getExpression();
     if (Node.isPropertyAccessExpression(callee)) {
         return VALIDATOR_METHODS.has(callee.getName().toLowerCase());
     }
     if (Node.isIdentifier(callee)) {
         const name = callee.getText();
+        if (boundNames.has(name)) {
+            return true;
+        }
         return VALIDATOR_NAME.test(name) && !NOT_VALIDATORS.has(name);
     }
     return false;

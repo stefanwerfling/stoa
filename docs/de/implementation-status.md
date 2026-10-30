@@ -164,13 +164,21 @@ zu liefern.
   (`z.number()`/`z.string()`/`z.boolean()`/`z.enum([...])`) wird aufgelöst.
   Jeder erkannte Modifier hat eine **explizit modellierte** Wirkung — keiner
   gilt stillschweigend als wirkungslos: `.int()` → `integer`; `.email()`/
-  `.url()` → `format`; `.positive()`/`.nonnegative()`/`.min()` werden
-  ordnungsunabhängig zur striktesten Untergrenze verschärft (`.positive()`
-  exklusiv, `.nonnegative()`/`.min()` inklusiv — unabhängig von der
-  Kettenreihenfolge, nicht „letzter Modifier gewinnt"); `.max()`;
-  `.optional()`/`.nullable()`; `.trim()`/`.toLowerCase()`/`.toUpperCase()`;
-  `z.enum([...])` → `allowedValues` (nur bei reinen String-Literalen). Jeder
-  andere Aufruf (`z.object(...)`, Array-Schemas, ein vts-Schema, `.refine()`,
+  `.url()` → `format` — werden beide verkettet, bleiben alle unterschiedlichen
+  Formate erhalten (Zod verknüpft jede Prüfung per UND, daher ist ein Vertrag,
+  der eines davon verlangt, erfüllt, solange es in der erzwungenen Menge
+  enthalten ist — nie überschrieben vom zuletzt verketteten Format-Modifier);
+  `.positive()`/`.nonnegative()`/`.min()` werden ordnungsunabhängig zur
+  striktesten Untergrenze verschärft (`.positive()` exklusiv,
+  `.nonnegative()`/`.min()` inklusiv — unabhängig von der Kettenreihenfolge,
+  nicht „letzter Modifier gewinnt"); `.max()` wird genauso zur kleinsten
+  Obergrenze über beliebig viele verkettete Aufrufe verschärft; ein
+  kombinierter Bereich ohne erfüllbaren Wert (z. B. `.min(10).max(5)`) gilt
+  als **unresolved**, statt stillschweigend auf eine Grenze aufgelöst zu
+  werden; `.optional()`/`.nullable()`;
+  `.trim()`/`.toLowerCase()`/`.toUpperCase()`; `z.enum([...])` →
+  `allowedValues` (nur bei reinen String-Literalen). Jeder andere Aufruf
+  (`z.object(...)`, Array-Schemas, ein vts-Schema, `.refine()`,
   `.transform()`, `.default()`, …) gilt als **unresolved** — nie erraten.
 - **Vertrag:** eine JSON-Datei nach `schemas/validation-contract.schema.json`
   (wiederverwendet das bestehende ajv2020-Muster aus
@@ -251,7 +259,7 @@ zu liefern.
 
 ## Qualitätssicherung
 
-- **178 node:test-Fälle** grün (Regeln pos./neg., Extraktion, Schema-Validierung,
+- **184 node:test-Fälle** grün (Regeln pos./neg., Extraktion, Schema-Validierung,
   i18n, Determinismus, SARIF, Eval, Semantik-Groundedness, Datenschutz,
   Finding-Trennung).
 - **Golden-Korpus** (`test/corpus/`, **nur TS+PHP**) mit Ground-Truth; Eval
@@ -297,7 +305,17 @@ zu liefern.
   Fastify-Routen-Schema, nur-`params`, manuelles Allow-Listing). Ein Handler kann
   `R-VALIDATION-MISSING-BACKEND` erfüllen (lehnt Fehlform ab) und trotzdem
   `R-VALIDATION-MASS-ASSIGNMENT` auslösen (speichert die unangetastete rohe
-  Payload) — beide Regeln decken getestet getrennte Fälle ab. Zusätzlich manuell
+  Payload) — beide Regeln decken getestet getrennte Fälle ab. Ein `throw`/
+  400-artiger Abbruch zählt nur als Validierung, wenn die ihn absichernde
+  Bedingung tatsächlich den Request referenziert (direkt, oder über einen
+  strikten `const body = req.body`-Alias) — ein `throw`, der von einer
+  unabhängigen Bedingung abhängt (z. B. einem DB-Lookup-Ergebnis, wie bei
+  `if (!user) throw …`, wobei `user` von `repository.findById(...)` stammt),
+  wird nicht mehr fälschlich als Input-Prüfung gewertet (Regressions-Fixture
+  `unrelated-throw.ts`). Ein Validator, der nur über eine verifizierte
+  AST-Beziehung erreicht wird — z. B. `const v = schema.safeParse.bind(schema)`
+  — wird ebenfalls erkannt, selbst wenn sein eigener Name keiner
+  Namensheuristik entspricht. Zusätzlich manuell
   gegen **fünf echte TS-Backends** geprüft (audiomesh, headbangbear — beide ein
   `{bodySchema}`-Wrapper-Muster; kapalium = Zod; helionet_pro = vts; loki =
   Express ohne Schema): `R-VALIDATION-MISSING-BACKEND` **0 FP** nach zwei

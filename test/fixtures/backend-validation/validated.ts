@@ -6,6 +6,14 @@ import {z} from 'zod';
 
 const ItemSchema = z.object({name: z.string(), price: z.number().min(0)});
 
+// A .bind() alias: a genuine validator reached via a verified AST relationship
+// (schema.safeParse.bind(schema)). Its name ("boundValidate") deliberately does
+// NOT match the VALIDATOR_NAME heuristic (validate/parse/assert/ensure/check/
+// guard as a PREFIX — "bound" isn't one), so this is recognized only via the
+// AST relationship, not by name — the explicit ask in the correctness
+// follow-up ("keine bloße Namensheuristik als Beweis").
+const boundValidate = ItemSchema.safeParse.bind(ItemSchema);
+
 // A vts-style schema + reply wrapper (as in real backends).
 function validateBody<T>(schema: {validate(b: unknown, e: unknown[]): boolean}, body: unknown, reply: {code(n: number): {send(x: unknown): void}}): T | undefined {
   const errors: unknown[] = [];
@@ -66,5 +74,15 @@ export function routes(app: FastifyInstance, repo: {save(x: unknown): Promise<vo
     const safe = {name: body.name};
     await repo.save(safe);
     return reply.send(safe);
+  });
+
+  // the .bind() alias, called with a name that would not match the name
+  // heuristic — only the AST relationship established above can recognize it.
+  app.post('/boundAlias', async (req, reply) => {
+    const result = boundValidate(req.body);
+    if (!result.success) {
+      return reply.code(400).send({error: 'invalid'});
+    }
+    await repo.save(result.data);
   });
 }

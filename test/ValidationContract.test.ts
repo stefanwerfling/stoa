@@ -30,7 +30,7 @@ const key = (f: Finding): string => `${f.rule.id}|${f.location.file.split('/').p
 test('loadValidationContract parses a well-formed contract, rejects a malformed one, and rejects a duplicate id', () => {
     const contract = loadValidationContract(contractPath);
     assert.equal(contract.version, '1.1.0');
-    assert.equal(contract.rules.length, 13);
+    assert.equal(contract.rules.length, 16);
     assert.ok(contract.rules.some((rule) => rule.id === 'VC-ITEM-QUANTITY-001'));
 
     assert.throws(() => loadValidationContract(join(fixtures, 'does-not-exist.json')));
@@ -161,9 +161,32 @@ test('.int()/.positive()/.email()/.url() each have a modeled effect: integer, ex
     assert.ok(formatMismatch?.observation.statement.includes('format contract=url actual=email'));
 });
 
+test('correctness fix: multiple .max() calls merge order-independently (smallest wins), matching the contract after merge', () => {
+    // couponSchema = z.number().min(0).max(100).max(50) — before the fix, the
+    // LAST .max() in the chain simply overwrote the earlier one (which would
+    // have matched by coincidence here); this asserts the merge itself, not
+    // just the final value, by checking no mismatch is reported against a
+    // contract whose max (50) only the TIGHTEST call satisfies.
+    const findings = vcFindings(analyzeFixture(loadValidationContract(contractPath)));
+    assert.ok(!findings.some((f) => f.observation.statement.includes('VC-COUPON-CAP-014')), '.max(100).max(50) resolves to max=50, matching the contract exactly');
+});
+
+test('correctness fix: a contradictory range (.min(10).max(5)) is reported as unresolved, not silently resolved to one bound', () => {
+    const findings = vcFindings(analyzeFixture(loadValidationContract(contractPath)));
+    assert.ok(findings.some((f) => key(f) === 'R-VALIDATION-CONTRACT-UNRESOLVED|zod-constraints.ts:36'), 'VC-IMPOSSIBLE-RANGE-015: no value can satisfy both min=10 and max=5');
+});
+
+test('correctness fix: multiple format constraints (.email().url()) AND together — a contract requiring one of them is not a mismatch', () => {
+    // contactSchema = z.string().email().url() — before the fix, the LAST
+    // format modifier (.url()) silently overwrote .email(), which would have
+    // produced a false mismatch against a contract that only requires email.
+    const findings = vcFindings(analyzeFixture(loadValidationContract(contractPath)));
+    assert.ok(!findings.some((f) => f.observation.statement.includes('VC-CONTACT-HANDLE-016')), 'email is among the formats .email().url() enforces, so the contract\'s format=email requirement is satisfied');
+});
+
 test('every validation-contract finding states its principle, dimension and an explicit missingContext', () => {
     const findings = vcFindings(analyzeFixture(loadValidationContract(contractPath)));
-    assert.equal(findings.length, 14, 'the full fixture set across all files');
+    assert.equal(findings.length, 15, 'the full fixture set across all files');
     for (const finding of findings) {
         assert.ok(finding.interpretation.principles.length > 0, `${finding.rule.id} carries a principle`);
         assert.ok(finding.interpretation.dimensions.includes('robustness'), `${finding.rule.id} is tagged robustness`);

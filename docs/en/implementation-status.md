@@ -158,14 +158,20 @@ fails fast (exit 1, concrete errors) instead of silently yielding 0 findings.
   (`z.number()`/`z.string()`/`z.boolean()`/`z.enum([...])`) is resolved. Every
   recognized modifier has an **explicitly modeled** effect — none is
   silently treated as a no-op: `.int()` → `integer`; `.email()`/`.url()` →
-  `format`; `.positive()`/`.nonnegative()`/`.min()` are tightened to the
-  strictest lower bound order-independently (`.positive()` exclusive,
-  `.nonnegative()`/`.min()` inclusive — not "last modifier in the chain
-  wins"); `.max()`; `.optional()`/`.nullable()`;
-  `.trim()`/`.toLowerCase()`/`.toUpperCase()`; `z.enum([...])` →
-  `allowedValues` (string literals only). Any other call (`z.object(...)`,
-  array schemas, a vts schema, `.refine()`, `.transform()`, `.default()`, …)
-  is **unresolved** — never guessed at.
+  `format` — chaining both keeps every distinct format seen (Zod ANDs every
+  check together, so a contract requiring one of them is satisfied as long as
+  it is among the enforced set, never overwritten by whichever format
+  modifier happens to appear last); `.positive()`/`.nonnegative()`/`.min()`
+  are tightened to the strictest lower bound order-independently
+  (`.positive()` exclusive, `.nonnegative()`/`.min()` inclusive — not "last
+  modifier in the chain wins"); `.max()` is tightened the same way to the
+  smallest upper bound across however many calls are chained; a combined
+  range with no satisfiable value (e.g. `.min(10).max(5)`) is reported as
+  **unresolved** rather than silently resolved to one bound;
+  `.optional()`/`.nullable()`; `.trim()`/`.toLowerCase()`/`.toUpperCase()`;
+  `z.enum([...])` → `allowedValues` (string literals only). Any other call
+  (`z.object(...)`, array schemas, a vts schema, `.refine()`, `.transform()`,
+  `.default()`, …) is **unresolved** — never guessed at.
 - **Contract:** a JSON file validated against
   `schemas/validation-contract.schema.json` (reuses the existing ajv2020
   pattern from `KnowledgeValidation.ts` — no new format introduced). Fields:
@@ -242,7 +248,7 @@ fails fast (exit 1, concrete errors) instead of silently yielding 0 findings.
 
 ## Quality assurance
 
-- **178 node:test cases** green (rules pos./neg., extraction, schema validation,
+- **184 node:test cases** green (rules pos./neg., extraction, schema validation,
   i18n, determinism, SARIF, evaluation, semantic groundedness, privacy,
   finding-model separation).
 - **Golden corpus** (`test/corpus/`, **TS+PHP only**) with ground truth;
@@ -287,7 +293,15 @@ fails fast (exit 1, concrete errors) instead of silently yielding 0 findings.
   route schema, params-only, a manual allow-list). A handler can satisfy
   `R-VALIDATION-MISSING-BACKEND` (it rejects malformed input) and still trigger
   `R-VALIDATION-MASS-ASSIGNMENT` (it saves the untouched raw payload) — both rules
-  are tested as genuinely separate concerns. Also checked manually against
+  are tested as genuinely separate concerns. A `throw`/400-style rejection only
+  counts as validation if the condition guarding it actually references the
+  request (directly, or via a strict `const body = req.body` alias) — a
+  `throw` gated by an unrelated condition (e.g. a DB-lookup result, as in
+  `if (!user) throw …` where `user` came from `repository.findById(...)`) is
+  no longer mistaken for an input check (regression fixture
+  `unrelated-throw.ts`). A validator reached only via a verified AST
+  relationship — e.g. `const v = schema.safeParse.bind(schema)` — is also
+  recognized even when its own name matches no naming heuristic. Also checked manually against
   **five real TS backends** (audiomesh, headbangbear — both a `{bodySchema}`
   wrapper pattern; kapalium = Zod; helionet_pro = vts; loki = Express with no
   schema): `R-VALIDATION-MISSING-BACKEND` **0 false positives** after two

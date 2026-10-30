@@ -60,10 +60,39 @@ test('mass assignment: still flags a raw alias reaching save() even when the han
     // input), but neither narrows the saved value's shape — the two concerns are
     // independent, and the raw object still carries any unchecked extra property.
     // /zod, /vts and /schema narrow via a validator/route schema; /allowlist reads
-    // only body.name into a fresh literal (a single-field pluck, no alias, no spread).
+    // only body.name into a fresh literal (a single-field pluck, no alias, no spread);
+    // /boundAlias narrows via the .bind()-alias validator (see the next test group).
     const findings = massAssignment(analyzeFixture('validated.ts'));
     assert.deepEqual(
         findings.map((f) => `${f.location.range.startLine}:${f.observation.evidence[0]?.value}`),
-        ['39:save(body)', '46:save(body)']
+        ['47:save(body)', '54:save(body)']
     );
+});
+
+test('correctness fix: a throw gated by a condition unrelated to the request (a DB-lookup result) is not treated as input validation', () => {
+    // The exact bug reported: previously ANY throw anywhere in the handler counted
+    // as evidence of a validation guard, so `if (!user) throw ...` (user is a DB
+    // lookup, unrelated to req.body) wrongly suppressed this finding.
+    const findings = rule(analyzeFixture('unrelated-throw.ts'));
+    assert.deepEqual(
+        findings.map((f) => `${f.location.range.startLine}:${f.observation.evidence[0]?.value}`),
+        ['17:req.body'],
+        'only createUserUnrelatedThrow is flagged; the direct- and aliased-guard functions correctly count as validated'
+    );
+});
+
+test('correctness fix: a throw genuinely gated by a condition on the request (direct, or via a strict whole-object alias) still counts as validated', () => {
+    const findings = rule(analyzeFixture('unrelated-throw.ts'));
+    assert.ok(!findings.some((f) => f.location.range.startLine === 26), 'createUserDirectGuard: if (!req.body.name) throw — a genuine input check');
+    assert.ok(!findings.some((f) => f.location.range.startLine === 37), 'createUserAliasedGuard: const body = req.body; if (!body.name) throw — still genuine despite the alias');
+});
+
+test('AST relationship, not a name heuristic: a .bind() validator alias whose own name would not match the VALIDATOR_NAME pattern is still recognized', () => {
+    // boundValidate = ItemSchema.safeParse.bind(ItemSchema); its name does not
+    // start with validate/parse/assert/ensure/check/guard, so only the verified
+    // AST relationship (not a name match) can recognize /boundAlias as validated —
+    // already covered by the "does not flag..." test asserting the whole file is
+    // clean; this test documents specifically WHY that holds for /boundAlias.
+    const findings = rule(analyzeFixture('validated.ts'));
+    assert.deepEqual(findings, [], '/boundAlias (and every other handler in this fixture) is correctly recognized as validated');
 });

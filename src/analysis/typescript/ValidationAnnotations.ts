@@ -21,7 +21,9 @@ export interface ResolvedConditions {
     max?: number;
     minExclusive?: boolean;
     integer?: boolean;
+    /** @deprecated kept for backward compatibility — the first entry of `formats`. Comparisons should read `formats`, which holds every distinct format modifier in the chain (Zod ANDs them, same as multiple `.min()`/`.max()` sources). */
     format?: 'email' | 'url';
+    formats?: Array<'email' | 'url'>;
     allowedValues?: string[];
     normalization: NormalizationKind[];
 }
@@ -202,9 +204,28 @@ const tightenMin = (current: Bound | undefined, candidate: Bound): Bound => {
     return {value: current.value, exclusive: current.exclusive || candidate.exclusive};
 };
 
+// The mirror of tightenMin for the upper bound: the smallest `.max(n)` across
+// however many calls are chained wins, independent of order (`.max(100).max(5)`
+// and `.max(5).max(100)` must resolve identically). This slice has only one
+// source of an upper bound (`.max()` itself — no `.negative()`/`.lt()`
+// equivalent is modeled), so exclusivity never actually varies here; the shape
+// is kept symmetric with `Bound`/`tightenMin` rather than collapsing to a bare
+// number, so a future exclusive-max source slots in without reshaping this.
+const tightenMax = (current: Bound | undefined, candidate: Bound): Bound => {
+    if (current === undefined || candidate.value < current.value) {
+        return candidate;
+    }
+    if (candidate.value > current.value) {
+        return current;
+    }
+    return {value: current.value, exclusive: current.exclusive || candidate.exclusive};
+};
+
 const applyModifiers = (dataType: 'number' | 'string' | 'boolean', links: ReadonlyArray<{name: string; args: Node[]}>, seed: Partial<ResolvedConditions>): ResolvedConditions | null => {
     const conditions: ResolvedConditions = {dataType, required: true, nullable: false, normalization: [], ...seed};
     let min: Bound | undefined;
+    let max: Bound | undefined;
+    const formats: Array<'email' | 'url'> = [];
     for (const link of links) {
         const lower = link.name.toLowerCase();
         if (lower === 'optional') {
@@ -221,7 +242,13 @@ const applyModifiers = (dataType: 'number' | 'string' | 'boolean', links: Readon
         }
         const format = FORMAT_MODIFIERS.get(lower);
         if (format !== undefined) {
-            conditions.format = format;
+            // Zod ANDs every chained check together, so `.email().url()` does not
+            // mean "url wins" — it means the value must satisfy BOTH. Every
+            // distinct format is kept (not overwritten) so a contract comparison
+            // can see the full set; duplicates of the same format collapse.
+            if (!formats.includes(format)) {
+                formats.push(format);
+            }
             continue;
         }
         const normalization = NORMALIZATION_MODIFIERS.get(lower);
@@ -250,9 +277,9 @@ const applyModifiers = (dataType: 'number' | 'string' | 'boolean', links: Readon
             if (literal === undefined || !Node.isNumericLiteral(literal)) {
                 return null;
             }
-            // Only .max() can set an upper bound in this slice, so no
-            // multi-source tightening is needed here (unlike min).
-            conditions.max = Number(literal.getText());
+            // Multiple .max() calls AND together like multiple .min() sources:
+            // the smallest value wins regardless of chain order.
+            max = tightenMax(max, {value: Number(literal.getText()), exclusive: false});
             continue;
         }
         // An unrecognized modifier (.refine(), .transform(), .default(), …):
@@ -265,6 +292,26 @@ const applyModifiers = (dataType: 'number' | 'string' | 'boolean', links: Readon
     if (min !== undefined) {
         conditions.min = min.value;
         conditions.minExclusive = min.exclusive;
+    }
+    if (max !== undefined) {
+        conditions.max = max.value;
+    }
+    if (min !== undefined && max !== undefined) {
+        // A genuinely impossible range (e.g. .min(10).max(5), or .positive().max(0))
+        // is a contradictory schema, not a resolvable one: no value can satisfy
+        // both bounds. Reported as unresolved rather than silently picking one
+        // bound and hiding the conflict — the same "don't guess" convention as
+        // an unrecognized modifier, just discovered after merging instead of
+        // per-link.
+        const impossible = min.exclusive ? min.value >= max.value : min.value > max.value;
+        if (impossible) {
+            return null;
+        }
+    }
+    const [firstFormat] = formats;
+    if (firstFormat !== undefined) {
+        conditions.formats = formats;
+        conditions.format = firstFormat;
     }
     return conditions;
 };

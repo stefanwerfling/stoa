@@ -109,6 +109,32 @@
       "dataType": "number",
       "required": true,
       "min": 0
+    },
+    {
+      "id": "VC-COUPON-CAP-014",
+      "description": "Coupon value must be between 0 and 50 inclusive.",
+      "field": "coupon",
+      "dataType": "number",
+      "required": true,
+      "min": 0,
+      "max": 50
+    },
+    {
+      "id": "VC-IMPOSSIBLE-RANGE-015",
+      "description": "Placeholder business rule for the impossible-range unresolved test.",
+      "field": "impossible",
+      "dataType": "number",
+      "required": true,
+      "min": 10,
+      "max": 5
+    },
+    {
+      "id": "VC-CONTACT-HANDLE-016",
+      "description": "Contact handle must be a valid email.",
+      "field": "contact",
+      "dataType": "string",
+      "required": true,
+      "format": "email"
     }
   ]
 }

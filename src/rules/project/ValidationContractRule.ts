@@ -417,8 +417,14 @@ const describeMismatches = (contractRule: ContractRule, conditions: ResolvedCond
     if (contractRule.integer !== undefined && contractRule.integer !== (conditions.integer ?? false)) {
         mismatches.push(`integer contract=${contractRule.integer} actual=${conditions.integer ?? false}`);
     }
-    if (contractRule.format !== undefined && contractRule.format !== conditions.format) {
-        mismatches.push(`format contract=${contractRule.format} actual=${conditions.format ?? 'none'}`);
+    if (contractRule.format !== undefined) {
+        // A schema that chains multiple format modifiers (e.g. .email().url())
+        // satisfies the contract if the required format is AMONG the ones it
+        // enforces — the extra constraint narrows further, it does not conflict.
+        const actualFormats = conditions.formats ?? [];
+        if (!actualFormats.includes(contractRule.format)) {
+            mismatches.push(`format contract=${contractRule.format} actual=${actualFormats.join(',') || 'none'}`);
+        }
     }
     if (contractRule.allowedValues !== undefined) {
         const expected = [...contractRule.allowedValues].sort();
@@ -448,7 +454,7 @@ const conditionSignature = (conditions: ResolvedConditions): string => {
         `min=${conditions.min ?? 'none'}${minSuffix}`,
         `max=${conditions.max ?? 'none'}`,
         `integer=${conditions.integer ?? false}`,
-        `format=${conditions.format ?? 'none'}`,
+        `format=${[...(conditions.formats ?? [])].sort().join(',') || 'none'}`,
         `allowedValues=${allowedValues || 'none'}`,
         `normalization=${normalization || 'none'}`
     ].join('|');
