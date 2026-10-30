@@ -18,7 +18,14 @@ type RuleId =
     | 'R-VALIDATION-CONTRACT-UNRESOLVED'
     | 'R-VALIDATION-CONTRACT-MISMATCH'
     | 'R-VALIDATION-CONTRACT-CONFLICT'
-    | 'R-VALIDATION-CONTRACT-NOT-IMPLEMENTED';
+    | 'R-VALIDATION-CONTRACT-NOT-IMPLEMENTED'
+    | 'R-VALIDATION-CONTRACT-UNUSED-VALIDATOR'
+    | 'R-VALIDATION-CONTRACT-RAW-AFTER-VALIDATION';
+
+interface UsageValue {
+    id: string;
+    sinks?: string[];
+}
 
 interface RuleMeta {
     principleId: string;
@@ -34,7 +41,9 @@ const META: Record<RuleId, RuleMeta> = {
     'R-VALIDATION-CONTRACT-UNRESOLVED': {principleId: 'marcus.judgment', dimensions: ['robustness', 'decision-evidence'], severity: 'low', confidence: 0.3, certaintyBasis: 'semantic-heuristic'},
     'R-VALIDATION-CONTRACT-MISMATCH': {principleId: 'marcus.judgment', dimensions: ['robustness'], severity: 'high', confidence: 0.7, certaintyBasis: 'semantic-heuristic'},
     'R-VALIDATION-CONTRACT-CONFLICT': {principleId: 'marcus.judgment', dimensions: ['robustness'], severity: 'high', confidence: 0.6, certaintyBasis: 'semantic-heuristic'},
-    'R-VALIDATION-CONTRACT-NOT-IMPLEMENTED': {principleId: 'marcus.judgment', dimensions: ['robustness', 'decision-evidence'], severity: 'low', confidence: 0.3, certaintyBasis: 'semantic-heuristic'}
+    'R-VALIDATION-CONTRACT-NOT-IMPLEMENTED': {principleId: 'marcus.judgment', dimensions: ['robustness', 'decision-evidence'], severity: 'low', confidence: 0.3, certaintyBasis: 'semantic-heuristic'},
+    'R-VALIDATION-CONTRACT-UNUSED-VALIDATOR': {principleId: 'marcus.obstacle', dimensions: ['robustness'], severity: 'medium', confidence: 0.5, certaintyBasis: 'semantic-heuristic'},
+    'R-VALIDATION-CONTRACT-RAW-AFTER-VALIDATION': {principleId: 'marcus.judgment', dimensions: ['robustness'], severity: 'high', confidence: 0.6, certaintyBasis: 'semantic-heuristic'}
 };
 
 const TEXT: Record<RuleId, {statement: LocalizedText; suggestion: LocalizedText; drawbacks?: LocalizedText; missingContext: LocalizedText; rationale: LocalizedText}> = {
@@ -145,6 +154,42 @@ const TEXT: Record<RuleId, {statement: LocalizedText; suggestion: LocalizedText;
             en: 'A contract entry nobody has connected to any code is, at minimum, untracked — surfacing it as a low-confidence prompt for a human to check is more honest than silence (marcus.judgment).',
             de: 'Ein Vertragseintrag, den niemand mit Code verbunden hat, ist mindestens unverfolgt — ihn als Hinweis mit niedriger Konfidenz für eine menschliche Prüfung zu melden, ist ehrlicher als Schweigen (marcus.judgment).'
         }
+    },
+    'R-VALIDATION-CONTRACT-UNUSED-VALIDATOR': {
+        statement: {
+            en: 'The validator annotated with "{value}" exists but is never invoked (no .parse()/.safeParse() call on it anywhere in this file).',
+            de: 'Der mit "{value}" annotierte Validator existiert, wird aber nie aufgerufen (kein .parse()/.safeParse()-Aufruf im gesamten Datei-Umfang).'
+        },
+        suggestion: {
+            en: 'Call the validator on the request data it is meant to check, and use its result — or remove it if the business rule is enforced elsewhere.',
+            de: 'Den Validator auf die zu prüfenden Request-Daten anwenden und dessen Ergebnis verwenden — oder entfernen, falls die fachliche Regel anderswo durchgesetzt wird.'
+        },
+        missingContext: {
+            en: 'Scoped to a single file: a schema exported and used only from another file (possibly outside the analyzed set) looks identical to a genuinely unused one from here. This is a heuristic risk signal, not proof the business rule is unenforced.',
+            de: 'Auf eine einzelne Datei begrenzt: ein Schema, das exportiert und nur in einer anderen Datei (möglicherweise außerhalb des analysierten Umfangs) verwendet wird, sieht von hier aus identisch zu einem wirklich unbenutzten aus. Dies ist ein heuristisches Risiko-Signal, kein Beweis, dass die fachliche Regel unangewendet bleibt.'
+        },
+        rationale: {
+            en: 'A check that exists but is never run leaves the obstacle it was meant to remove — unchecked input — standing; declaring an intention is not the same as carrying it out (marcus.obstacle).',
+            de: 'Eine Prüfung, die existiert, aber nie läuft, lässt das Hindernis bestehen, das sie beseitigen sollte — ungeprüften Input; eine Absicht zu erklären ist nicht dasselbe wie sie umzusetzen (marcus.obstacle).'
+        }
+    },
+    'R-VALIDATION-CONTRACT-RAW-AFTER-VALIDATION': {
+        statement: {
+            en: 'The validator for "{value}" is called with request data, but a raw copy of the payload still reaches persistence in the same function.',
+            de: 'Der Validator für "{value}" wird mit Request-Daten aufgerufen, doch eine rohe Kopie der Payload erreicht in derselben Funktion weiterhin die Persistenz.'
+        },
+        suggestion: {
+            en: 'Persist only the validated result, not a separately-held raw reference to the same request value.',
+            de: 'Nur das validierte Ergebnis persistieren, nicht eine separat gehaltene rohe Referenz auf denselben Request-Wert.'
+        },
+        missingContext: {
+            en: 'Scoped to one function: the raw-reaching-a-sink evidence reuses the same detection as R-VALIDATION-MASS-ASSIGNMENT (Object.assign / a persistence-verb call fed a whole raw request value). Whether the two values are the SAME logical field is not confirmed field-by-field — only that both a validator call and a raw sink coexist in one function.',
+            de: 'Auf eine Funktion begrenzt: Der Beleg „roh erreicht eine Senke" nutzt dieselbe Erkennung wie R-VALIDATION-MASS-ASSIGNMENT (Object.assign / ein Persistenz-Verb-Aufruf mit einem ganzen rohen Request-Wert). Ob beide Werte dasselbe fachliche Feld sind, wird nicht feldweise bestätigt — nur, dass in einer Funktion sowohl ein Validator-Aufruf als auch eine rohe Senke vorkommen.'
+        },
+        rationale: {
+            en: 'Running a check and then saving data the check never touched achieves nothing: the judgment exercised on one path must actually gate what the other path persists (marcus.judgment).',
+            de: 'Eine Prüfung laufen zu lassen und dann Daten zu speichern, die die Prüfung nie berührt hat, bewirkt nichts: Das auf einem Pfad ausgeübte Urteil muss tatsächlich bestimmen, was der andere Pfad persistiert (marcus.judgment).'
+        }
     }
 };
 
@@ -179,6 +224,8 @@ export class ValidationContractRule implements ProjectRule {
         }
         findings.push(...this.conflicts(annotations, input));
         findings.push(...this.notImplemented(annotations, input));
+        findings.push(...this.unusedValidators(input));
+        findings.push(...this.rawAfterValidation(input));
         return findings;
     }
 
@@ -254,6 +301,43 @@ export class ValidationContractRule implements ProjectRule {
         return findings;
     }
 
+    // An annotated, resolvable validator whose id is known to the contract but
+    // for which no `.parse()`/`.safeParse()` call exists anywhere in its file.
+    // Gated on contract membership (like MISMATCH) so a malformed/unknown id
+    // is reported once, by INVALID-ID/UNKNOWN-ID, not piled onto here too.
+    private unusedValidators(input: ProjectRuleInput): Finding[] {
+        const findings: Finding[] = [];
+        for (const fact of input.facts) {
+            if (fact.kind !== 'validation.annotatedValidatorUnused') {
+                continue;
+            }
+            const value = fact.value as unknown as UsageValue;
+            if (findContractRule(this.contract as ValidationContract, value.id) === null) {
+                continue;
+            }
+            findings.push(this.buildFinding('R-VALIDATION-CONTRACT-UNUSED-VALIDATOR', fact, value.id, input));
+        }
+        return findings;
+    }
+
+    // A validator invoked with request data, but a raw copy of the payload
+    // still reaches a persistence sink in the same function.
+    private rawAfterValidation(input: ProjectRuleInput): Finding[] {
+        const findings: Finding[] = [];
+        for (const fact of input.facts) {
+            if (fact.kind !== 'validation.rawReuseAfterValidation') {
+                continue;
+            }
+            const value = fact.value as unknown as UsageValue;
+            if (findContractRule(this.contract as ValidationContract, value.id) === null) {
+                continue;
+            }
+            const sinks = (value.sinks ?? []).join(', ');
+            findings.push(this.buildFinding('R-VALIDATION-CONTRACT-RAW-AFTER-VALIDATION', fact, `${value.id} (${sinks})`, input));
+        }
+        return findings;
+    }
+
     private buildFinding(ruleId: RuleId, fact: Fact, value: string, input: ProjectRuleInput): Finding {
         const meta = META[ruleId];
         const text = TEXT[ruleId];
@@ -315,11 +399,33 @@ const describeMismatches = (contractRule: ContractRule, conditions: ResolvedCond
     if (contractRule.nullable !== undefined && contractRule.nullable !== conditions.nullable) {
         mismatches.push(`nullable contract=${contractRule.nullable} actual=${conditions.nullable}`);
     }
-    if (contractRule.min !== undefined && contractRule.min !== conditions.min) {
-        mismatches.push(`min contract=${contractRule.min} actual=${conditions.min ?? 'none'}`);
+    if (contractRule.min !== undefined) {
+        // A contract min is always inclusive (no exclusive option on the
+        // contract side); code that excludes the boundary (.positive() when
+        // the contract's min is meant to be reachable) incorrectly rejects a
+        // value the business rule says is valid, so that counts as a mismatch
+        // even when the bound VALUE matches.
+        const sameValue = contractRule.min === conditions.min;
+        if (!sameValue || conditions.minExclusive === true) {
+            const suffix = conditions.minExclusive === true ? ' (exclusive)' : '';
+            mismatches.push(`min contract=${contractRule.min} actual=${conditions.min ?? 'none'}${suffix}`);
+        }
     }
     if (contractRule.max !== undefined && contractRule.max !== conditions.max) {
         mismatches.push(`max contract=${contractRule.max} actual=${conditions.max ?? 'none'}`);
+    }
+    if (contractRule.integer !== undefined && contractRule.integer !== (conditions.integer ?? false)) {
+        mismatches.push(`integer contract=${contractRule.integer} actual=${conditions.integer ?? false}`);
+    }
+    if (contractRule.format !== undefined && contractRule.format !== conditions.format) {
+        mismatches.push(`format contract=${contractRule.format} actual=${conditions.format ?? 'none'}`);
+    }
+    if (contractRule.allowedValues !== undefined) {
+        const expected = [...contractRule.allowedValues].sort();
+        const actual = [...(conditions.allowedValues ?? [])].sort();
+        if (expected.join(',') !== actual.join(',')) {
+            mismatches.push(`allowedValues contract=${expected.join(',') || 'none'} actual=${actual.join(',') || 'none'}`);
+        }
     }
     if (contractRule.normalization !== undefined) {
         const expected = [...contractRule.normalization].sort();
@@ -333,7 +439,19 @@ const describeMismatches = (contractRule: ContractRule, conditions: ResolvedCond
 
 const conditionSignature = (conditions: ResolvedConditions): string => {
     const normalization = [...conditions.normalization].sort().join(',');
-    return `${conditions.dataType}|required=${conditions.required}|nullable=${conditions.nullable}|min=${conditions.min ?? 'none'}|max=${conditions.max ?? 'none'}|normalization=${normalization || 'none'}`;
+    const allowedValues = [...(conditions.allowedValues ?? [])].sort().join(',');
+    const minSuffix = conditions.minExclusive === true ? '(excl)' : '';
+    return [
+        conditions.dataType,
+        `required=${conditions.required}`,
+        `nullable=${conditions.nullable}`,
+        `min=${conditions.min ?? 'none'}${minSuffix}`,
+        `max=${conditions.max ?? 'none'}`,
+        `integer=${conditions.integer ?? false}`,
+        `format=${conditions.format ?? 'none'}`,
+        `allowedValues=${allowedValues || 'none'}`,
+        `normalization=${normalization || 'none'}`
+    ].join('|');
 };
 
 const resolvePrinciple = (knowledgeBase: KnowledgeBase, principleId: string, rationale: LocalizedText, lang: string): PrincipleInterpretationRef[] => {

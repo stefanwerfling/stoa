@@ -40,6 +40,9 @@ export interface ContractRule {
     nullable?: boolean;
     min?: number;
     max?: number;
+    integer?: boolean;
+    format?: 'email' | 'url';
+    allowedValues?: string[];
     normalization?: NormalizationKind[];
     layers?: string[];
     securityRequirements?: string[];
@@ -63,6 +66,12 @@ export interface ValidationContract {
  * code actually does; that comparison is the job of ValidationContractRule.
  * Throws with the concrete schema violations on a malformed contract, so a
  * broken file is an explicit, visible error rather than silently-empty checks.
+ * Also enforces — beyond what JSON Schema can express — that every rule id is
+ * unique within the contract: a contract is meant to be the single source of
+ * truth for a given id, so two entries sharing one id (even if their declared
+ * conditions happen to agree) are always a contract defect, never a thing for
+ * code to "resolve" (unlike the softer, code-side CONFLICT finding for two
+ * differing *implementations*).
  */
 export const loadValidationContract = (path: string): ValidationContract => {
     let parsed: unknown;
@@ -77,7 +86,23 @@ export const loadValidationContract = (path: string): ValidationContract => {
         throw new Error(`validation contract ${path} does not match validation-contract.schema.json: ${details}`);
     }
     const data = parsed as {version: string; rules: ContractRule[]};
+    const duplicates = duplicateIds(data.rules);
+    if (duplicates.length > 0) {
+        throw new Error(`validation contract ${path} has duplicate rule id(s): ${duplicates.join(', ')}`);
+    }
     return {path, version: data.version, rules: data.rules};
+};
+
+const duplicateIds = (rules: readonly ContractRule[]): string[] => {
+    const seen = new Set<string>();
+    const duplicates = new Set<string>();
+    for (const rule of rules) {
+        if (seen.has(rule.id)) {
+            duplicates.add(rule.id);
+        }
+        seen.add(rule.id);
+    }
+    return [...duplicates].sort();
 };
 
 export const findContractRule = (contract: ValidationContract, id: string): ContractRule | null => {

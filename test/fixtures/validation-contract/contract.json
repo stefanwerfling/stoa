@@ -1,5 +1,5 @@
 {
-  "version": "1.0.0",
+  "version": "1.1.0",
   "rules": [
     {
       "id": "VC-ITEM-QUANTITY-001",
@@ -20,23 +20,92 @@
     },
     {
       "id": "VC-EMAIL-FORMAT-003",
-      "description": "Email addresses are trimmed before storage.",
+      "description": "Email addresses are trimmed before storage and must be a valid email.",
       "field": "email",
+      "dataType": "string",
+      "required": true,
+      "format": "email",
+      "normalization": ["trim"]
+    },
+    {
+      "id": "VC-USER-ROLE-004",
+      "description": "User role must be one of admin, user or guest.",
+      "field": "role",
+      "dataType": "string",
+      "required": true,
+      "allowedValues": ["admin", "user", "guest"]
+    },
+    {
+      "id": "VC-SHIP-WEIGHT-005",
+      "description": "Shipment weight in kilograms must be non-negative.",
+      "field": "weightKg",
+      "dataType": "number",
+      "required": true,
+      "min": 0
+    },
+    {
+      "id": "VC-ORDER-QTY-006",
+      "description": "Order quantity for the usage-tracing fixture: must be a positive integer up to 100.",
+      "field": "quantity",
+      "dataType": "number",
+      "required": true,
+      "min": 1,
+      "max": 100
+    },
+    {
+      "id": "VC-ORDER-NOTE-007",
+      "description": "Order note is trimmed free text.",
+      "field": "note",
       "dataType": "string",
       "required": true,
       "normalization": ["trim"]
     },
     {
-      "id": "VC-USER-ROLE-004",
-      "description": "User role must be one of a fixed set of values.",
-      "field": "role",
+      "id": "VC-ORDER-COMMENT-008",
+      "description": "Order comment is trimmed free text.",
+      "field": "comment",
       "dataType": "string",
-      "required": true
+      "required": true,
+      "normalization": ["trim"]
     },
     {
-      "id": "VC-SHIP-WEIGHT-005",
-      "description": "Shipment weight in kilograms must be positive.",
-      "field": "weightKg",
+      "id": "VC-STOCK-COUNT-009",
+      "description": "Stock count must be a non-negative integer.",
+      "field": "stock",
+      "dataType": "number",
+      "required": true,
+      "integer": true,
+      "min": 0
+    },
+    {
+      "id": "VC-DISCOUNT-PERCENT-010",
+      "description": "Discount percentage must be between 0 and 100 inclusive.",
+      "field": "discount",
+      "dataType": "number",
+      "required": true,
+      "min": 0,
+      "max": 100
+    },
+    {
+      "id": "VC-RATING-SCORE-011",
+      "description": "Rating score must be zero or a positive number (0 is a valid, unrated state).",
+      "field": "rating",
+      "dataType": "number",
+      "required": true,
+      "min": 0
+    },
+    {
+      "id": "VC-WEBSITE-URL-012",
+      "description": "Website must be a valid URL.",
+      "field": "website",
+      "dataType": "string",
+      "required": true,
+      "format": "url"
+    },
+    {
+      "id": "VC-AGE-CHECK-013",
+      "description": "Age must be a non-negative number.",
+      "field": "age",
       "dataType": "number",
       "required": true,
       "min": 0

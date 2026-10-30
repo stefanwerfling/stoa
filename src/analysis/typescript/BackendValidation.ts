@@ -72,7 +72,10 @@ const handlerFunctions = (sourceFile: SourceFile): Node[] => {
     return sourceFile.getDescendants().filter((node) => FUNCTION_KINDS.has(node.getKind()));
 };
 
-const nearestFunction = (node: Node): Node | undefined => {
+// Exported for reuse by the Validation Trace ID usage tracer
+// (ValidatorUsage.ts): the nearest enclosing function-like ancestor, the same
+// per-function scoping used throughout this file.
+export const nearestFunction = (node: Node): Node | undefined => {
     return node.getAncestors().find((ancestor) => FUNCTION_KINDS.has(ancestor.getKind()));
 };
 
@@ -127,6 +130,19 @@ const isRequestInput = (access: Node): boolean => {
     }
     const object = access.getExpression();
     return Node.isIdentifier(object) && REQUEST_OBJECTS.has(object.getText()) && REQUEST_PROPERTIES.has(access.getName());
+};
+
+// Whether `node` is, after unwrapping casts/parens/`!`, ROOTED at a bare
+// req/request identifier at any depth (`req.body`, `req.body.quantity`,
+// `req.query['id']`, …) — looser than isRequestInput (whole-object only) on
+// purpose: used by the usage tracer to recognize the common, realistic shape
+// of a single plucked field being fed into a validator call.
+export const isRequestRootedExpression = (node: Node): boolean => {
+    let current: Node = unwrapExpression(node);
+    while (Node.isPropertyAccessExpression(current) || Node.isElementAccessExpression(current)) {
+        current = current.getExpression();
+    }
+    return Node.isIdentifier(current) && REQUEST_OBJECTS.has(current.getText());
 };
 
 const distinctSources = (inputs: Node[]): string[] => {
@@ -251,29 +267,16 @@ export const extractMassAssignmentFacts = (sourceFile: SourceFile, build: Build)
     const facts: Fact[] = [];
     let index = 0;
     for (const fn of handlerFunctions(sourceFile)) {
-        // A framework route-schema option (recognized the same way as the sibling
-        // rule) validates — and typically shapes/strips — the payload before the
-        // handler runs, so its own req.body/req.query use is not raw.
-        if (hasRouteSchemaOption(fn)) {
-            continue;
-        }
-        const rawNames = rawRequestAliasNames(fn);
-        for (const call of fn.getDescendantsOfKind(SyntaxKind.CallExpression)) {
-            if (nearestFunction(call) !== fn) {
-                continue;
-            }
-            const site = massAssignmentSite(call, rawNames);
-            if (site !== null) {
-                facts.push(build({
-                    kind: 'validation.rawRequestMassAssignment',
-                    kindOf: 'statement',
-                    symbol: `massAssign#${index}`,
-                    range: rangeOf(sourceFile, call),
-                    value: site,
-                    certainty: 'semantic-heuristic'
-                }));
-                index += 1;
-            }
+        for (const site of rawRequestSinksInFunction(fn)) {
+            facts.push(build({
+                kind: 'validation.rawRequestMassAssignment',
+                kindOf: 'statement',
+                symbol: `massAssign#${index}`,
+                range: rangeOf(sourceFile, site.call),
+                value: site.description,
+                certainty: 'semantic-heuristic'
+            }));
+            index += 1;
         }
     }
     return facts;
@@ -281,11 +284,41 @@ export const extractMassAssignmentFacts = (sourceFile: SourceFile, build: Build)
 
 const PERSISTENCE_VERB = /^(save|create|update|insert|upsert|persist|replace)/i;
 
+interface RawRequestSink {
+    call: CallExpression;
+    description: string;
+}
+
+// The raw-request-to-sink evidence found directly in `fn` (not nested
+// functions) — a framework route-schema option exempts the whole function
+// (it validates/shapes the payload before the handler runs). Exported for
+// reuse by the Validation Trace ID usage tracer (ValidatorUsage.ts): "a
+// validator was invoked AND a raw copy of the payload still reached a sink in
+// the same function" reuses this exact, already-hardened detection rather
+// than re-deriving it.
+export const rawRequestSinksInFunction = (fn: Node): RawRequestSink[] => {
+    if (hasRouteSchemaOption(fn)) {
+        return [];
+    }
+    const rawNames = rawRequestAliasNames(fn);
+    const sinks: RawRequestSink[] = [];
+    for (const call of fn.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+        if (nearestFunction(call) !== fn) {
+            continue;
+        }
+        const description = massAssignmentSite(call, rawNames);
+        if (description !== null) {
+            sinks.push({call, description});
+        }
+    }
+    return sinks;
+};
+
 // Identifiers assigned directly, raw, from a request input (`const body = req.body`
 // or `const q = (req.query as T)`) — NOT via a validator call. Stricter than
 // requestDerivedNames (used by the sibling rule), which intentionally over-matches
 // by substring to recognize validation; here under-matching is the safe direction.
-const rawRequestAliasNames = (fn: Node): ReadonlySet<string> => {
+export const rawRequestAliasNames = (fn: Node): ReadonlySet<string> => {
     const names = new Set<string>();
     for (const declaration of fn.getDescendantsOfKind(SyntaxKind.VariableDeclaration)) {
         const initializer = declaration.getInitializer();
@@ -300,7 +333,7 @@ const rawRequestAliasNames = (fn: Node): ReadonlySet<string> => {
 // Whether `node` is, after unwrapping casts/parens/`!`, a direct req.body/req.query
 // access or a known raw alias identifier — the request payload itself, untouched by
 // any validator call.
-const isRawRequestExpression = (node: Node, rawNames: ReadonlySet<string>): boolean => {
+export const isRawRequestExpression = (node: Node, rawNames: ReadonlySet<string>): boolean => {
     const unwrapped = unwrapExpression(node);
     if (isRequestInput(unwrapped)) {
         return true;

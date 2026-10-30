@@ -39,6 +39,18 @@
         "nullable": { "type": "boolean" },
         "min": { "type": "number" },
         "max": { "type": "number" },
+        "integer": { "type": "boolean", "description": "Whether the value must be a whole number (Zod .int())." },
+        "format": {
+          "type": "string",
+          "enum": ["email", "url"],
+          "description": "A recognized string format constraint (Zod .email()/.url())."
+        },
+        "allowedValues": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1,
+          "description": "A fixed, enumerated set of allowed string values (Zod z.enum([...])). Compared as a set, order-independent."
+        },
         "normalization": {
           "type": "array",
           "items": { "type": "string", "enum": ["trim", "lowercase", "uppercase"] }
@@ -55,6 +67,7 @@
         },
         "version": {
           "type": "string",
+          "minLength": 1,
           "description": "Per-rule version, for tracking changes to this one business rule independent of the whole contract's version."
         }
       }

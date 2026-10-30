@@ -6,6 +6,7 @@ import {isDeepImport} from '../ImportPath.js';
 import {extractJsxA11yFacts} from '../jsx/JsxA11y.js';
 import {extractBackendValidationFacts, extractMassAssignmentFacts} from './BackendValidation.js';
 import {extractValidationAnnotations} from './ValidationAnnotations.js';
+import {extractValidatorUsageFacts} from './ValidatorUsage.js';
 import {destructiveDdl, nullableNoDefault, unguardedDdl} from '../MigrationSql.js';
 
 interface FunctionMetrics {
@@ -289,6 +290,10 @@ export const extractFacts = (sourceFile: SourceFile, info: AdapterInfo): Fact[] 
     // extracted (cheap, mirrors the existing stoa:allow-complexity marker scan);
     // only interpreted against a contract when --contracts is supplied.
     facts.push(...extractValidationAnnotations(sourceFile, build));
+
+    // Whether an annotated schema is actually invoked, and whether a raw
+    // request copy still reaches a sink despite validation having run.
+    facts.push(...extractValidatorUsageFacts(sourceFile, build));
 
     return facts;
 };
