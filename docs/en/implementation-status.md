@@ -73,7 +73,7 @@ stoa eval <path> --expected <file> [--format markdown|json]
 - `knowledge/` and `rules/` resolve relative to the installed package — the CLI
   runs from any directory after `npm link`/install.
 
-## Rule catalog (39)
+## Rule catalog (40)
 
 Declarative rules (`rules/default/*.json`), on by default:
 
@@ -98,6 +98,7 @@ Declarative rules (`rules/default/*.json`), on by default:
 | R-MIGRATION-NO-DOWN | marcus.judgment | robustness, decision-evidence | TS/JS, PHP (migration files only) |
 | R-MIGRATION-DATA-LOSS | marcus.judgment | robustness, decision-evidence | TS/JS, PHP (drops in `up()`) |
 | R-VALIDATION-MISSING-BACKEND | marcus.judgment | robustness | TS/JS (server handler reads `req`/`request` `.body`/`.query` with no recognized validation; risk signal) |
+| R-VALIDATION-MASS-ASSIGNMENT | marcus.judgment | robustness | TS/JS (raw payload flows whole into `Object.assign`/a persistence call; risk signal) |
 | R-A11Y-IMG-ALT | marcus.purpose | accessibility | HTML, JSX, Vue, Angular (static, WCAG 1.1.1) |
 | R-A11Y-CONTROL-NAME | marcus.purpose | accessibility, usability | HTML, JSX (static, WCAG 4.1.2) |
 | R-A11Y-FORM-LABEL | marcus.purpose | accessibility, usability | HTML, JSX (static, WCAG 1.3.1/4.1.2) |
@@ -142,12 +143,13 @@ All ten quality dimensions (incl. accessibility, usability) have at least one ru
 `ui.danglingAriaIdref`, `ui.duplicateId`, `ui.frameMissingTitle`,
 `ui.lowContrastText`, `ui.flutterImageNoSemanticLabel`,
 `ui.flutterIconButtonNoTooltip`, `ui.flutterTextFieldNoLabel`,
-`validation.backendInputUnvalidated`, plus (opt-in) `external.tsc` and
+`validation.backendInputUnvalidated`, `validation.rawRequestMassAssignment`,
+plus (opt-in) `external.tsc` and
 `external.floatingPromise`.
 
 ## Quality assurance
 
-- **161 node:test cases** green (rules pos./neg., extraction, schema validation,
+- **163 node:test cases** green (rules pos./neg., extraction, schema validation,
   i18n, determinism, SARIF, evaluation, semantic groundedness, privacy,
   finding-model separation).
 - **Golden corpus** (`test/corpus/`, **TS+PHP only**) with ground truth;
@@ -186,11 +188,21 @@ All ten quality dimensions (incl. accessibility, usability) have at least one ru
   `contenteditable` focus; contrast is judged even under `aria-hidden`/
   `role=presentation` (the text is still visually rendered).
 - **Backend-validation corpus** (`test/fixtures/backend-validation/`): positive
-  (handler reads `req.body`/`req.query` with no validation) and negative cases (Zod
-  `.parse`, a vts wrapper + `schema.validate`, a manual 400 guard, a Fastify route
-  schema, params-only). Also checked manually against two real TS backends
-  (helionet_pro = vts, kapalium = Zod): **0 findings** each — both validate, nothing
-  wrongly flagged (a zero-false-positive signal).
+  (handler reads `req.body`/`req.query` with no validation; the raw payload flows
+  into `Object.assign`/a persistence call — directly or spread) and negative cases
+  (Zod `.parse`, a vts wrapper + `schema.validate`, a manual 400 guard, a Fastify
+  route schema, params-only, a manual allow-list). A handler can satisfy
+  `R-VALIDATION-MISSING-BACKEND` (it rejects malformed input) and still trigger
+  `R-VALIDATION-MASS-ASSIGNMENT` (it saves the untouched raw payload) — both rules
+  are tested as genuinely separate concerns. Also checked manually against
+  **five real TS backends** (audiomesh, headbangbear — both a `{bodySchema}`
+  wrapper pattern; kapalium = Zod; helionet_pro = vts; loki = Express with no
+  schema): `R-VALIDATION-MISSING-BACKEND` **0 false positives** after two
+  hardening rounds (down from 29 earlier false alarms from `params` lookups,
+  unrecognized wrapper schema options, and single-field plucks);
+  `R-VALIDATION-MASS-ASSIGNMENT` **1 finding, verified true positive** (loki:
+  `req.body` is only checked `typeof === 'object'`, then saved raw), **0 false
+  positives** on the other four.
 - Dogfooding: stoa analyzes its own `src/`.
 
 ## Deviations from the concept (deliberate, documented)
@@ -214,15 +226,21 @@ ESLint fact adapter; context facts (`flag.generatedCode`, `hasTests`) for richer
 suppression; LLM-output evaluation at scale.
 
 **Cross-layer validation — limits (first vertical slice):**
-`R-VALIDATION-MISSING-BACKEND` deliberately checks only **one** layer (the backend
-trust boundary), not the full frontend → API → backend → persistence chain
-sketched in the analysis vision. There are **no** facts yet for frontend form
-constraints, API contracts/DTOs, Zod/vts schema value ranges, or endpoint data
-flow — a genuine frontend/backend *constraint mismatch* (differing value
-ranges/required-ness between layers) is **not** reliably detectable with the
-current fact model and is not claimed. TypeScript/JavaScript only; PHP/Dart
-backends are not covered. See the rule's `missingContext` for the detection
-limits within the one layer (e.g. `preValidation` hooks, global middleware).
+`R-VALIDATION-MISSING-BACKEND` (the "Missing Backend Validation" category) and
+`R-VALIDATION-MASS-ASSIGNMENT` (the "Untrusted Property / Mass Assignment"
+category) deliberately check only **one** layer (the backend trust boundary),
+not the full frontend → API → backend → persistence chain sketched in the
+analysis vision. There are **no** facts yet for frontend form constraints, API
+contracts/DTOs, Zod/vts schema value ranges, or endpoint data flow — a genuine
+frontend/backend *constraint mismatch* (differing value ranges/required-ness
+between layers) is **not** reliably detectable with the current fact model and
+is not claimed. Mass assignment is further limited to the statically recognized
+sinks `Object.assign` and calls named like a persistence verb (`save`/`create`/
+`update`/`insert`/`upsert`/`persist`/`replace`); whether a schema meant as an
+allow-list itself permits extra keys (e.g. Zod `.passthrough()`) is not checked.
+TypeScript/JavaScript only; PHP/Dart backends are not covered. See each rule's
+`missingContext` for the detection limits within the one layer (e.g.
+`preValidation` hooks, global middleware).
 
 **UI/UX — limits and planned:** static analysis only. Colour contrast
 (WCAG 1.4.3) is checked only for the provable inline case (both colours on the

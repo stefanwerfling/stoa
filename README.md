@@ -8,7 +8,7 @@ An LLM is an optional, switchable adapter.
 
 > **Status:** past the MVP. The deterministic core (ingestion → facts → rule
 > engine → findings → reports), a knowledge base of 6 source-checked principles,
-> 39 rules across 10 quality dimensions (incl. a TypeORM/Doctrine persistence pack,
+> 40 rules across 10 quality dimensions (incl. a TypeORM/Doctrine persistence pack,
 > a robustness pack and a UI/UX accessibility pack), SARIF 2.1.0 / JSON / Markdown
 > output, localized output (`--lang en|de`), a golden-corpus evaluator with a
 > per-language breakdown, and an optional, off-by-default, grounded semantic (LLM)
@@ -19,9 +19,10 @@ An LLM is an optional, switchable adapter.
 > - *Implemented and unit-tested:* TypeScript/JavaScript (`ts-morph`), PHP
 >   (`php-parser`/glayzzle), Dart and C/C++ (tree-sitter / `web-tree-sitter`,
 >   in-process WASM); the evaluator (with a per-language/category breakdown); the
->   grounded semantic layer. 39 rules, including a backend-trust-boundary check
->   (`R-VALIDATION-MISSING-BACKEND`) — a first, deliberately single-layer slice of
->   cross-layer validation consistency (see implementation-status for scope).
+>   grounded semantic layer. 40 rules, including two backend-trust-boundary checks
+>   (`R-VALIDATION-MISSING-BACKEND`, `R-VALIDATION-MASS-ASSIGNMENT`) — a first,
+>   deliberately single-layer slice of cross-layer validation consistency (see
+>   implementation-status for scope).
 > - *UI/UX accessibility, per surface (static):* **HTML** (tree-sitter-html, all 14
 >   WCAG-anchored rules); **React/JSX** (ts-morph, 11 of 14); **Vue SFC** and
 >   **Angular** templates (8 attribute/contrast rules via a shared binding-aware

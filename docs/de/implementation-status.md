@@ -76,7 +76,7 @@ stoa eval <pfad> --expected <datei> [--format markdown|json]
 - `knowledge/` und `rules/` werden relativ zum installierten Paket aufgelöst —
   die CLI läuft nach `npm link`/Install aus jedem Verzeichnis.
 
-## Regelkatalog (39)
+## Regelkatalog (40)
 
 Deklarative Regeln (`rules/default/*.json`), Default aktiv:
 
@@ -101,6 +101,7 @@ Deklarative Regeln (`rules/default/*.json`), Default aktiv:
 | R-MIGRATION-NO-DOWN | marcus.judgment | Robustheit, Belegbarkeit | TS/JS, PHP (nur Migrationsdateien) |
 | R-MIGRATION-DATA-LOSS | marcus.judgment | Robustheit, Belegbarkeit | TS/JS, PHP (Drops im `up()`) |
 | R-VALIDATION-MISSING-BACKEND | marcus.judgment | Robustheit | TS/JS (Server-Handler liest `req`/`request` `.body`/`.query` ohne erkennbare Validierung; Risiko-Signal) |
+| R-VALIDATION-MASS-ASSIGNMENT | marcus.judgment | Robustheit | TS/JS (rohe Payload fließt ganz in `Object.assign`/Persistenz-Aufruf; Risiko-Signal) |
 | R-A11Y-IMG-ALT | marcus.purpose | Barrierefreiheit | HTML, JSX, Vue, Angular (statisch, WCAG 1.1.1) |
 | R-A11Y-CONTROL-NAME | marcus.purpose | Barrierefreiheit, Bedienbarkeit | HTML, JSX (statisch, WCAG 4.1.2) |
 | R-A11Y-FORM-LABEL | marcus.purpose | Barrierefreiheit, Bedienbarkeit | HTML, JSX (statisch, WCAG 1.3.1/4.1.2) |
@@ -146,12 +147,13 @@ mindestens eine Regel.
 `ui.danglingAriaIdref`, `ui.duplicateId`, `ui.frameMissingTitle`,
 `ui.lowContrastText`, `ui.flutterImageNoSemanticLabel`,
 `ui.flutterIconButtonNoTooltip`, `ui.flutterTextFieldNoLabel`,
-`validation.backendInputUnvalidated`, sowie (opt-in) `external.tsc` und
+`validation.backendInputUnvalidated`, `validation.rawRequestMassAssignment`,
+sowie (opt-in) `external.tsc` und
 `external.floatingPromise`.
 
 ## Qualitätssicherung
 
-- **161 node:test-Fälle** grün (Regeln pos./neg., Extraktion, Schema-Validierung,
+- **163 node:test-Fälle** grün (Regeln pos./neg., Extraktion, Schema-Validierung,
   i18n, Determinismus, SARIF, Eval, Semantik-Groundedness, Datenschutz,
   Finding-Trennung).
 - **Golden-Korpus** (`test/corpus/`, **nur TS+PHP**) mit Ground-Truth; Eval
@@ -191,11 +193,20 @@ mindestens eine Regel.
   tabindex-Prüfung und `contenteditable`-Fokus; Kontrast wird auch unter `aria-hidden`/
   `role=presentation` geprüft (Text bleibt visuell sichtbar).
 - **Backend-Validierungs-Korpus** (`test/fixtures/backend-validation/`): Positiv-
-  (Handler liest `req.body`/`req.query` ohne Validierung) und Negativfälle (Zod
-  `.parse`, vts-Wrapper + `schema.validate`, manuelle 400-Prüfung, Fastify-Routen-
-  Schema, nur-`params`). Zusätzlich manuell gegen zwei echte TS-Backends geprüft
-  (helionet_pro = vts, kapalium = Zod): je **0 Befunde** — beide validieren, nichts
-  wurde fälschlich beanstandet (Zero-FP-Signal).
+  (Handler liest `req.body`/`req.query` ohne Validierung; rohe Payload fließt in
+  `Object.assign`/einen Persistenz-Aufruf — direkt oder gespreizt) und Negativfälle
+  (Zod `.parse`, vts-Wrapper + `schema.validate`, manuelle 400-Prüfung,
+  Fastify-Routen-Schema, nur-`params`, manuelles Allow-Listing). Ein Handler kann
+  `R-VALIDATION-MISSING-BACKEND` erfüllen (lehnt Fehlform ab) und trotzdem
+  `R-VALIDATION-MASS-ASSIGNMENT` auslösen (speichert die unangetastete rohe
+  Payload) — beide Regeln decken getestet getrennte Fälle ab. Zusätzlich manuell
+  gegen **fünf echte TS-Backends** geprüft (audiomesh, headbangbear — beide ein
+  `{bodySchema}`-Wrapper-Muster; kapalium = Zod; helionet_pro = vts; loki =
+  Express ohne Schema): `R-VALIDATION-MISSING-BACKEND` **0 FP** nach zwei
+  Härtungsrunden (zuvor 29 Fehlalarme durch `params`-Lookups, ungesehene
+  Wrapper-Schema-Optionen und Einzelfeld-Plucks); `R-VALIDATION-MASS-ASSIGNMENT`
+  **1 Befund, verifiziertes TP** (loki: `req.body` nur auf `typeof === 'object'`
+  geprüft, dann roh gespeichert), **0 FP** auf den übrigen vier.
 - Dogfooding: stoa analysiert den eigenen `src/`.
 
 ## Abweichungen vom Konzept (bewusst, dokumentiert)
@@ -220,16 +231,22 @@ abdecken; generischer ESLint-Fact-Adapter; Kontext-Facts
 LLM-Ausgabe-Evaluierung im Maßstab.
 
 **Cross-Layer-Validierung — Grenzen (erster vertikaler Schnitt):**
-`R-VALIDATION-MISSING-BACKEND` prüft bewusst nur **eine** Schicht (Backend-
-Vertrauensgrenze), nicht die volle in der Analysevision skizzierte Kette
-Frontend → API → Backend → Persistenz. Es gibt **keine** Fakten zu Frontend-
-Formular-Constraints, API-Contracts/DTOs, Zod-/vts-Schema-Wertebereichen oder
-Endpunkt-Datenfluss — ein echter Frontend/Backend-*Constraint-Mismatch*
-(unterschiedliche Wertebereiche/Pflichtfelder zwischen den Schichten) ist mit dem
-heutigen Faktenmodell **nicht** belastbar erkennbar und wird nicht behauptet. Nur
+`R-VALIDATION-MISSING-BACKEND` (Kategorie „Missing Backend Validation") und
+`R-VALIDATION-MASS-ASSIGNMENT` (Kategorie „Untrusted Property / Mass Assignment")
+prüfen bewusst nur **eine** Schicht (Backend-Vertrauensgrenze), nicht die volle in
+der Analysevision skizzierte Kette Frontend → API → Backend → Persistenz. Es gibt
+**keine** Fakten zu Frontend-Formular-Constraints, API-Contracts/DTOs,
+Zod-/vts-Schema-Wertebereichen oder Endpunkt-Datenfluss — ein echter
+Frontend/Backend-*Constraint-Mismatch* (unterschiedliche Wertebereiche/
+Pflichtfelder zwischen den Schichten) ist mit dem heutigen Faktenmodell **nicht**
+belastbar erkennbar und wird nicht behauptet. Mass-Assignment ist zusätzlich auf
+die statisch erkennbaren Senken `Object.assign` und Aufrufe mit
+Persistenz-Verb-Namen (`save`/`create`/`update`/`insert`/`upsert`/`persist`/
+`replace`) beschränkt; ob ein als Allow-List gedachtes Schema selbst zusätzliche
+Schlüssel durchlässt (z. B. Zod `.passthrough()`), wird nicht geprüft. Nur
 TypeScript/JavaScript; PHP/Dart-Backends sind nicht abgedeckt. Siehe
-`missingContext` der Regel für die Erkennungsgrenzen innerhalb der einen Schicht
-(z. B. `preValidation`-Hooks, globale Middleware).
+`missingContext` der jeweiligen Regel für die Erkennungsgrenzen innerhalb der
+einen Schicht (z. B. `preValidation`-Hooks, globale Middleware).
 
 **UI/UX — Grenzen und Geplantes:** Rein statische Analyse. Farbkontrast
 (WCAG 1.4.3) wird nur im belegbaren Inline-Fall geprüft (beide Farben am
