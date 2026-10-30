@@ -186,43 +186,32 @@ const resolveZodConditions = (expression: Expression): ResolvedConditions | null
     }
 };
 
-// A bare `z.object({...})` — no chained modifiers after it (`.strict()`,
-// `.partial()`, … are a documented limit, not guessed at: any call OTHER
-// than `z.object(...)` itself returns null here). Each property whose value
-// is a plain `name: <expr>` assignment (not a spread, shorthand or computed
+// A null-prototype object, not `{}`: a Zod schema field literally named
+// `__proto__` (unusual, but syntactically valid via a string-literal
+// property name) would otherwise be silently swallowed — `fields.__proto__
+// = resolved` on a normal object invokes Object.prototype's `__proto__`
+// SETTER (changing the object's own prototype) instead of creating an own
+// property, so the field's resolved conditions would vanish rather than
+// being stored. With no inherited `__proto__` accessor, this is just a
+// normal property assignment like any other key.
+const emptyFieldMap = (): Record<string, ResolvedConditions | null> => Object.create(null) as Record<string, ResolvedConditions | null>;
+
+// The base field map for ONE `{...}` object literal — no modifiers, no
+// recursion into a wrapping `z.object(...)`/`.extend(...)`/`.merge(...)`
+// call (callers supply those separately). Each property whose value is a
+// plain `name: <expr>` assignment (not a spread, shorthand or computed
 // name) is resolved via the SAME scalar-chain resolver as a top-level
 // annotation — a field is simply absent from the returned map if its
-// property shape isn't a plain assignment, and `null` if its value IS a
-// plain assignment but the value itself doesn't resolve (e.g. `.refine()`).
-// This is the field-by-field counterpart of `resolveZodConditions`: Stoa can
-// now compare ONE field of a `z.object(...)` request-body schema against a
-// contract rule naming that field, without resolving (or guessing at) the
-// rest of the object's shape.
-const resolveZodObjectShape = (expression: Expression): Record<string, ResolvedConditions | null> | null => {
-    if (!Node.isCallExpression(expression)) {
-        return null;
+// property shape isn't a plain assignment (spread/shorthand/computed name:
+// not statically resolvable in general, not guessed at), and `null` if its
+// value IS a plain assignment but the value itself doesn't resolve (e.g.
+// `.refine()`, or a nested `z.object(...)` — dotted/nested field paths are
+// a documented limit, not attempted here).
+const fieldsFromObjectLiteral = (shape: Node): Record<string, ResolvedConditions | null> => {
+    const fields = emptyFieldMap();
+    if (!Node.isObjectLiteralExpression(shape)) {
+        return fields;
     }
-    const callee = expression.getExpression();
-    if (!Node.isPropertyAccessExpression(callee) || callee.getName() !== 'object') {
-        return null;
-    }
-    const object = callee.getExpression();
-    if (!Node.isIdentifier(object) || object.getText() !== 'z') {
-        return null;
-    }
-    const shape = expression.getArguments()[0];
-    if (shape === undefined || !Node.isObjectLiteralExpression(shape)) {
-        return null;
-    }
-    // A null-prototype object, not `{}`: a Zod schema field literally named
-    // `__proto__` (unusual, but syntactically valid via a string-literal
-    // property name) would otherwise be silently swallowed — `fields.__proto__
-    // = resolved` on a normal object invokes Object.prototype's `__proto__`
-    // SETTER (changing the object's own prototype) instead of creating an
-    // own property, so the field's resolved conditions would vanish rather
-    // than being stored. With no inherited `__proto__` accessor, this is
-    // just a normal property assignment like any other key.
-    const fields: Record<string, ResolvedConditions | null> = Object.create(null) as Record<string, ResolvedConditions | null>;
     for (const property of shape.getProperties()) {
         if (!Node.isPropertyAssignment(property)) {
             continue;
@@ -236,6 +225,135 @@ const resolveZodObjectShape = (expression: Expression): Record<string, ResolvedC
         fields[fieldName] = fieldInitializer === undefined ? null : resolveZodConditions(fieldInitializer);
     }
     return fields;
+};
+
+const mergeFieldMaps = (base: Record<string, ResolvedConditions | null>, overrides: Record<string, ResolvedConditions | null>): Record<string, ResolvedConditions | null> => {
+    const merged = emptyFieldMap();
+    for (const key of Object.keys(base)) {
+        merged[key] = base[key] as ResolvedConditions | null;
+    }
+    for (const key of Object.keys(overrides)) {
+        merged[key] = overrides[key] as ResolvedConditions | null;
+    }
+    return merged;
+};
+
+// Object-level modifiers chained AFTER a base `z.object({...})` — mirrors
+// resolveZodConditions's own outside-in walk/applyModifiers split, but at
+// the SHAPE level instead of the field level:
+// - `.strict()`: the field set is unaffected (it only adds a runtime
+//   "reject extra keys" check, nothing about the declared fields changes).
+// - `.partial()`: every field becomes optional, including ones not marked
+//   `.optional()` in the literal.
+// - `.extend({...})`: merges another plain object literal's fields in,
+//   overriding the base on a name clash — the same semantics Zod itself has.
+// - `.merge(<expr>)`: merges another schema's fields in the same way,
+//   where `<expr>` resolves (inline, or through ONE identifier reference —
+//   reusing the same symbol lookup `resolveOneHop` uses elsewhere) to
+//   another bare `z.object({...})`.
+// Any other chained call (`.refine()`, `.transform()`, an unresolvable
+// `.merge()`/`.extend()` argument, …) makes the WHOLE shape unresolved
+// rather than guessed at, consistent with resolveZodConditions.
+const applyObjectModifiers = (fields: Record<string, ResolvedConditions | null>, links: ReadonlyArray<{name: string; args: Node[]}>): Record<string, ResolvedConditions | null> | null => {
+    let result = fields;
+    for (const link of links) {
+        const lower = link.name.toLowerCase();
+        if (lower === 'strict') {
+            continue;
+        }
+        if (lower === 'partial') {
+            const partial = emptyFieldMap();
+            for (const key of Object.keys(result)) {
+                const value = result[key] as ResolvedConditions | null;
+                partial[key] = value === null ? null : {...value, required: false};
+            }
+            result = partial;
+            continue;
+        }
+        if (lower === 'extend') {
+            const arg = link.args[0];
+            if (arg === undefined || !Node.isObjectLiteralExpression(arg)) {
+                return null;
+            }
+            result = mergeFieldMaps(result, fieldsFromObjectLiteral(arg));
+            continue;
+        }
+        if (lower === 'merge') {
+            const arg = link.args[0];
+            const otherShape = arg === undefined ? null : resolveZodObjectShapeFromExpression(arg);
+            if (otherShape === null) {
+                return null;
+            }
+            result = mergeFieldMaps(result, otherShape);
+            continue;
+        }
+        return null;
+    }
+    return result;
+};
+
+// Resolves `expression` to a base `z.object({...})`'s field map — direct,
+// or through ONE identifier reference to a `const x = z.object({...})`
+// declared elsewhere (the realistic shape for `.merge(otherSchema)`).
+// Null for anything else (a second hop, a non-object expression, …).
+const resolveZodObjectShapeFromExpression = (expression: Node): Record<string, ResolvedConditions | null> | null => {
+    if (Node.isIdentifier(expression)) {
+        const declaration = expression.getSymbol()?.getDeclarations().find((d) => Node.isVariableDeclaration(d));
+        const initializer = declaration !== undefined && Node.isVariableDeclaration(declaration) ? declaration.getInitializer() : undefined;
+        return initializer === undefined ? null : resolveZodObjectShapeFromExpression(initializer);
+    }
+    if (!Node.isCallExpression(expression)) {
+        return null;
+    }
+    const callee = expression.getExpression();
+    if (!Node.isPropertyAccessExpression(callee) || callee.getName() !== 'object') {
+        return null;
+    }
+    const object = callee.getExpression();
+    if (!Node.isIdentifier(object) || object.getText() !== 'z') {
+        return null;
+    }
+    return fieldsFromObjectLiteral(expression.getArguments()[0] as Node);
+};
+
+// A `z.object({...})`, optionally followed by a chain of object-level
+// modifiers (`.strict()`, `.partial()`, `.extend({...})`, `.merge(<expr>)`)
+// — walked outside-in exactly like resolveZodConditions walks a scalar
+// chain, down to the base `z.object({...})` call. This is the field-by-field
+// counterpart of `resolveZodConditions`: Stoa can compare ONE field of a
+// `z.object(...)` request-body schema against a contract rule naming that
+// field, without resolving (or guessing at) the rest of the object's shape.
+const resolveZodObjectShape = (expression: Expression): Record<string, ResolvedConditions | null> | null => {
+    const links: Array<{name: string; args: Node[]}> = [];
+    let current: Node = expression;
+
+    while (true) {
+        if (!Node.isCallExpression(current)) {
+            // The chain's base is not itself a call — e.g. an identifier
+            // referencing another `const base = z.object({...})` declared
+            // elsewhere (`base.extend({...})`, the realistic shape for
+            // reusing a shared base schema). Resolve THAT reference the
+            // same one-hop way `.merge()`'s own argument is resolved, then
+            // apply whatever modifiers were collected on top of it.
+            const referenced = resolveZodObjectShapeFromExpression(current);
+            return referenced === null ? null : applyObjectModifiers(referenced, links);
+        }
+        const callee = current.getExpression();
+        if (!Node.isPropertyAccessExpression(callee)) {
+            return null;
+        }
+        const name = callee.getName();
+        const object = callee.getExpression();
+        if (Node.isIdentifier(object) && object.getText() === 'z' && name === 'object') {
+            const shape = current.getArguments()[0];
+            if (shape === undefined || !Node.isObjectLiteralExpression(shape)) {
+                return null;
+            }
+            return applyObjectModifiers(fieldsFromObjectLiteral(shape), links);
+        }
+        links.unshift({name, args: current.getArguments()});
+        current = object;
+    }
 };
 
 // `['admin', 'user']` — a literal array of string literals only; anything else

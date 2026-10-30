@@ -267,6 +267,79 @@
       "field": "amount",
       "dataType": "number",
       "required": true
+    },
+    {
+      "id": "VC-SHAPE-STRICT-301",
+      "description": ".strict() does not change the field set.",
+      "field": "name",
+      "dataType": "string",
+      "required": true
+    },
+    {
+      "id": "VC-SHAPE-PARTIAL-302",
+      "description": ".partial() makes every field optional.",
+      "field": "name",
+      "dataType": "string",
+      "required": false
+    },
+    {
+      "id": "VC-SHAPE-EXTEND-303",
+      "description": ".extend({...}) adds a field from the extension, not the base.",
+      "field": "quantity",
+      "dataType": "number",
+      "required": true,
+      "min": 1
+    },
+    {
+      "id": "VC-SHAPE-MERGE-INLINE-304",
+      "description": ".merge(<inline z.object(...)>) merges in a field from the inline argument.",
+      "field": "amount",
+      "dataType": "number",
+      "required": true,
+      "min": 5
+    },
+    {
+      "id": "VC-SHAPE-MERGE-REF-305",
+      "description": ".merge(<identifier>) merges in a field from a separately-declared, referenced schema.",
+      "field": "tag",
+      "dataType": "string",
+      "required": true,
+      "min": 1
+    },
+    {
+      "id": "VC-SHAPE-OPTIONAL-306",
+      "description": "A field explicitly marked .optional() — already worked before this round.",
+      "field": "nickname",
+      "dataType": "string",
+      "required": false
+    },
+    {
+      "id": "VC-SHAPE-UNKNOWN-MODIFIER-307",
+      "description": "An unrecognized object-level modifier after z.object({...}) — stays unresolved.",
+      "field": "name",
+      "dataType": "string",
+      "required": true
+    },
+    {
+      "id": "VC-SHAPE-SPREAD-308",
+      "description": "A spread-introduced field is not statically resolvable — stays unresolved.",
+      "field": "extra",
+      "dataType": "string",
+      "required": true
+    },
+    {
+      "id": "VC-SHAPE-NESTED-309",
+      "description": "A nested z.object() field is itself not a scalar chain — stays unresolved.",
+      "field": "address",
+      "dataType": "string",
+      "required": true
+    },
+    {
+      "id": "VC-SHAPE-ARRAY-310",
+      "description": "z.array(z.object({...})) is not a bare z.object() at the top level — stays fully unresolved.",
+      "field": "name",
+      "dataType": "string",
+      "required": true
     }
   ]
 }

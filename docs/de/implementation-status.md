@@ -189,18 +189,40 @@ zu liefern.
   `.trim()`/`.toLowerCase()`/`.toUpperCase()`; `z.enum([...])` →
   `allowedValues` (nur bei reinen String-Literalen). Jeder andere Aufruf
   (Array-Schemas, ein vts-Schema, `.refine()`, `.transform()`, `.default()`,
-  ein verketteter Aufruf nach `z.object({...})` wie `.strict()`/`.partial()`,
-  …) gilt als **unresolved** — nie erraten. Ein bloßes `z.object({...})` —
-  ohne verkettete Modifikatoren danach — wird zusätzlich **feldweise**
-  aufgelöst: Stoa vergleicht das EINE vom Vertrag benannte Feld
-  (`contractRule.field`) über dieselbe skalare Kettenauflösung, ohne den
-  Rest der Objektform aufzulösen oder zu erraten. Ein vom Schema gar nicht
-  deklariertes Feld, oder eines, dessen eigener Wert keine erkannte skalare
-  Kette ist, bleibt namentlich unaufgelöst; ein auflösbares Feld wird genauso
-  verglichen wie ein skalares Schema auf oberster Ebene. Das schließt die
-  Lücke, dass jedes realistische `z.object(...)`-Request-Body-Schema — der
-  häufige Fall — bedingungslos unaufgelöst war, unabhängig davon, ob sein
-  eines relevantes Feld tatsächlich zum Vertrag passte.
+  …) gilt als **unresolved** — nie erraten. Ein `z.object({...})` wird
+  zusätzlich **feldweise** aufgelöst: Stoa vergleicht das EINE vom Vertrag
+  benannte Feld (`contractRule.field`) über dieselbe skalare
+  Kettenauflösung, ohne den Rest der Objektform aufzulösen oder zu erraten.
+  Ein vom Schema gar nicht deklariertes Feld, oder eines, dessen eigener
+  Wert keine erkannte skalare Kette ist, bleibt namentlich unaufgelöst
+  (`Object.hasOwn`, nicht der `in`-Operator — ein Feld, das buchstäblich
+  `constructor`/`toString` heißt, wird nie mit einer GEERBTEN
+  `Object.prototype`-Eigenschaft verwechselt, und die Felder-Map selbst ist
+  ein Objekt ohne Prototyp, sodass ein Feld namens `__proto__` nie
+  stillschweigend vom `__proto__`-Setter verschluckt wird, statt gespeichert
+  zu werden); ein auflösbares Feld wird genauso verglichen wie ein skalares
+  Schema auf oberster Ebene und nimmt an der CONFLICT-Erkennung (zwei
+  Implementierungen teilen eine Trace-ID, mit abweichenden Bedingungen für
+  genau dieses Feld) genauso teil wie die Bedingungen eines skalaren
+  Schemas — ein auf einer Seite fehlendes Feld wird aus dem Vergleich
+  komplett ausgeschlossen, nie stillschweigend als „dasselbe" wie ein
+  aufgelöstes Geschwister behandelt. Das schließt die Lücke, dass jedes
+  realistische `z.object(...)`-Request-Body-Schema — der häufige Fall —
+  bedingungslos unaufgelöst war, unabhängig davon, ob sein eines relevantes
+  Feld tatsächlich zum Vertrag passte. Objekt-Level-Modifikatoren, die nach
+  dem Basis-`z.object({...})` verkettet werden, werden schrittweise
+  aufgelöst, nie über diese Liste hinaus erraten: `.strict()` (die Feldmenge
+  bleibt unverändert), `.partial()` (jedes Feld wird optional), `.extend({...})`
+  (fügt die Felder eines weiteren reinen Objektliterals hinzu, überschreibt
+  die Basis bei einer Namensgleichheit), `.merge(<expr>)` (fügt die Felder
+  eines anderen Schemas genauso hinzu, wobei `<expr>` entweder inline oder
+  über EINEN Identifier-Verweis auf ein separat deklariertes
+  `const base = z.object({...})` aufgelöst wird — die realistische Form
+  für die Wiederverwendung eines gemeinsamen Basis-Schemas). Jeder andere
+  verkettete Aufruf, eine Spread-/Shorthand-/berechnete Property im
+  Objektliteral, ein verschachteltes `z.object(...)`-Feld (keine
+  gepunkteten/verschachtelten Feldpfade) oder `z.array(z.object({...}))`
+  auf oberster Ebene bleibt unaufgelöst.
 - **Vertrag:** eine JSON-Datei nach `schemas/validation-contract.schema.json`
   (wiederverwendet das bestehende ajv2020-Muster aus
   `KnowledgeValidation.ts`, kein neues Format). Felder: `integer`, `format`
@@ -390,7 +412,7 @@ zu liefern.
 
 ## Qualitätssicherung
 
-- **211 node:test-Fälle** grün (Regeln pos./neg., Extraktion, Schema-Validierung,
+- **214 node:test-Fälle** grün (Regeln pos./neg., Extraktion, Schema-Validierung,
   i18n, Determinismus, SARIF, Eval, Semantik-Groundedness, Datenschutz,
   Finding-Trennung).
 - **Golden-Korpus** (`test/corpus/`, **nur TS+PHP**) mit Ground-Truth; Eval

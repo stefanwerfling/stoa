@@ -30,7 +30,7 @@ const key = (f: Finding): string => `${f.rule.id}|${f.location.file.split('/').p
 test('loadValidationContract parses a well-formed contract, rejects a malformed one, and rejects a duplicate id', () => {
     const contract = loadValidationContract(contractPath);
     assert.equal(contract.version, '1.1.0');
-    assert.equal(contract.rules.length, 34);
+    assert.equal(contract.rules.length, 44);
     assert.ok(contract.rules.some((rule) => rule.id === 'VC-ITEM-QUANTITY-001'));
 
     assert.throws(() => loadValidationContract(join(fixtures, 'does-not-exist.json')));
@@ -324,9 +324,36 @@ test('object-field conflict detection: two z.object() implementations sharing a 
     assert.equal(missingFieldFinding?.rule.id, 'R-VALIDATION-CONTRACT-UNRESOLVED', 'the undeclared side still gets its own, separate "field not found" finding');
 });
 
+test('z.object() shape extensions: .strict()/.partial()/.extend()/.merge() (inline and by reference) resolve correctly; unknown modifiers, spread, nested objects and arrays-of-objects stay safely unresolved', () => {
+    // object-shape-extensions.ts — every MATCH case (.strict() unaffected
+    // field set, .partial() making a field optional, .extend() adding a
+    // field, .merge() with both an inline and a referenced schema, and a
+    // plain .optional() field that already worked before this round)
+    // produces NO finding; every UNRESOLVED case (an unrecognized
+    // modifier, a spread-introduced field, a nested z.object() field, and
+    // a top-level z.array(z.object(...))) is explicitly flagged as
+    // unresolved, never silently guessed at.
+    const findings = vcFindings(analyzeFixture(loadValidationContract(contractPath)));
+    for (const id of ['VC-SHAPE-STRICT-301', 'VC-SHAPE-PARTIAL-302', 'VC-SHAPE-EXTEND-303', 'VC-SHAPE-MERGE-INLINE-304', 'VC-SHAPE-MERGE-REF-305', 'VC-SHAPE-OPTIONAL-306']) {
+        assert.ok(!findings.some((f) => f.observation.statement.includes(id)), `${id}: resolves and matches the contract — no finding`);
+    }
+
+    const unknownModifier = findings.find((f) => f.observation.statement.includes('VC-SHAPE-UNKNOWN-MODIFIER-307'));
+    assert.equal(unknownModifier?.rule.id, 'R-VALIDATION-CONTRACT-UNRESOLVED', '.readonly() is not a recognized object-level modifier');
+
+    const spread = findings.find((f) => f.observation.statement.includes('VC-SHAPE-SPREAD-308'));
+    assert.ok(spread?.observation.statement.includes('field "extra" not found'), 'a spread-introduced field is not captured, reported as not found');
+
+    const nested = findings.find((f) => f.observation.statement.includes('VC-SHAPE-NESTED-309'));
+    assert.ok(nested?.observation.statement.includes('field "address" is not a recognized scalar Zod chain'), 'a nested z.object() field resolves to null, not guessed at');
+
+    const array = findings.find((f) => f.observation.statement.includes('VC-SHAPE-ARRAY-310'));
+    assert.equal(array?.rule.id, 'R-VALIDATION-CONTRACT-UNRESOLVED', 'z.array(z.object(...)) is not a bare z.object() at the top level — stays fully unresolved');
+});
+
 test('every validation-contract finding states its principle, dimension and an explicit missingContext', () => {
     const findings = vcFindings(analyzeFixture(loadValidationContract(contractPath)));
-    assert.equal(findings.length, 27, 'the full fixture set across all files');
+    assert.equal(findings.length, 31, 'the full fixture set across all files');
     for (const finding of findings) {
         assert.ok(finding.interpretation.principles.length > 0, `${finding.rule.id} carries a principle`);
         assert.ok(finding.interpretation.dimensions.includes('robustness'), `${finding.rule.id} is tagged robustness`);

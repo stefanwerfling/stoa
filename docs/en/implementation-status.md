@@ -179,19 +179,37 @@ fails fast (exit 1, concrete errors) instead of silently yielding 0 findings.
   **unresolved** rather than silently resolved to one bound;
   `.optional()`/`.nullable()`; `.trim()`/`.toLowerCase()`/`.toUpperCase()`;
   `z.enum([...])` → `allowedValues` (string literals only). Any other call
-  (array schemas, a vts schema, `.refine()`, `.transform()`, `.default()`,
-  a chained call after `z.object({...})` like `.strict()`/`.partial()`, …)
-  is **unresolved** — never guessed at. A bare `z.object({...})` — no
-  chained modifiers after it — is additionally resolved **field by field**:
-  Stoa compares the ONE field a contract rule actually names
-  (`contractRule.field`) using the same scalar-chain resolution, without
-  resolving or guessing at the rest of the object's shape. A field the
-  schema doesn't declare at all, or whose own value isn't a recognized
-  scalar chain, is unresolved by name; a field that resolves is compared
-  exactly like a top-level scalar schema would be. This closed the gap where
-  every realistic `z.object(...)` request-body schema — the common case —
-  was unconditionally unresolved regardless of whether its one relevant
-  field actually matched the contract.
+  (array schemas, a vts schema, `.refine()`, `.transform()`, `.default()`, …)
+  is **unresolved** — never guessed at. A `z.object({...})` is additionally
+  resolved **field by field**: Stoa compares the ONE field a contract rule
+  actually names (`contractRule.field`) using the same scalar-chain
+  resolution, without resolving or guessing at the rest of the object's
+  shape. A field the schema doesn't declare at all, or whose own value isn't
+  a recognized scalar chain, is unresolved by name (`Object.hasOwn`, not the
+  `in` operator — a field literally named `constructor`/`toString` is never
+  confused with an INHERITED `Object.prototype` property, and the fields map
+  itself is a null-prototype object so a field literally named `__proto__`
+  is never silently swallowed by the `__proto__` setter instead of being
+  stored); a field that resolves is compared exactly like a top-level
+  scalar schema would be, and participates in CONFLICT detection (two
+  implementations sharing a trace ID, with differing conditions for that
+  one field) the same way a scalar schema's conditions do — a field that is
+  missing on one side is excluded from the comparison entirely, never
+  silently treated as "the same" as a resolved sibling. This closed the gap
+  where every realistic `z.object(...)` request-body schema — the common
+  case — was unconditionally unresolved regardless of whether its one
+  relevant field actually matched the contract. Object-level modifiers
+  chained after the base `z.object({...})` are resolved incrementally,
+  never guessed at for anything beyond this list: `.strict()` (the field set
+  is unaffected), `.partial()` (every field becomes optional), `.extend({...})`
+  (merges another plain object literal's fields in, overriding the base on
+  a name clash), `.merge(<expr>)` (merges another schema's fields in the
+  same way, where `<expr>` resolves inline OR through ONE identifier
+  reference to a separately-declared `const base = z.object({...})` — the
+  realistic shape for reusing a shared base schema). Any other chained call,
+  a spread/shorthand/computed property name in the object literal, a nested
+  `z.object(...)` field (no dotted/nested field paths), or
+  `z.array(z.object({...}))` at the top level, stays unresolved.
 - **Contract:** a JSON file validated against
   `schemas/validation-contract.schema.json` (reuses the existing ajv2020
   pattern from `KnowledgeValidation.ts` — no new format introduced). Fields:
@@ -365,7 +383,7 @@ fails fast (exit 1, concrete errors) instead of silently yielding 0 findings.
 
 ## Quality assurance
 
-- **211 node:test cases** green (rules pos./neg., extraction, schema validation,
+- **214 node:test cases** green (rules pos./neg., extraction, schema validation,
   i18n, determinism, SARIF, evaluation, semantic groundedness, privacy,
   finding-model separation).
 - **Golden corpus** (`test/corpus/`, **TS+PHP only**) with ground truth;
