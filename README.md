@@ -8,7 +8,7 @@ An LLM is an optional, switchable adapter.
 
 > **Status:** past the MVP. The deterministic core (ingestion → facts → rule
 > engine → findings → reports), a knowledge base of 6 source-checked principles,
-> 40 rules across 10 quality dimensions (incl. a TypeORM/Doctrine persistence pack,
+> 38 rules across 10 quality dimensions (incl. a TypeORM/Doctrine persistence pack,
 > a robustness pack and a UI/UX accessibility pack), SARIF 2.1.0 / JSON / Markdown
 > output, localized output (`--lang en|de`), a golden-corpus evaluator with a
 > per-language breakdown, and an optional, off-by-default, grounded semantic (LLM)
@@ -19,7 +19,7 @@ An LLM is an optional, switchable adapter.
 > - *Implemented and unit-tested:* TypeScript/JavaScript (`ts-morph`), PHP
 >   (`php-parser`/glayzzle), Dart and C/C++ (tree-sitter / `web-tree-sitter`,
 >   in-process WASM); the evaluator (with a per-language/category breakdown); the
->   grounded semantic layer. 40 rules, including two backend-trust-boundary checks
+>   grounded semantic layer. 38 rules, including two backend-trust-boundary checks
 >   (`R-VALIDATION-MISSING-BACKEND`, `R-VALIDATION-MASS-ASSIGNMENT`) — a first,
 >   deliberately single-layer slice of cross-layer validation consistency (see
 >   implementation-status for scope).
@@ -39,6 +39,10 @@ An LLM is an optional, switchable adapter.
 >   not external.
 > - *Evaluated on independent external projects:* **not yet** — `stoa eval` works
 >   on any project, but no externally-validated corpus ships here.
+> - *Validation Trace IDs / cross-layer contracts:* opt-in (`--contracts <file>`),
+>   TypeScript-only, first vertical slice — six procedural checks comparing
+>   `// stoa:validation <ID>`-annotated scalar Zod schemas against an external,
+>   schema-validated contract (see implementation-status for exact scope).
 > - *Planned / not yet validated:* baseline & diff/PR mode, richer context facts,
 >   PSR-4 PHP import resolution, Dart/C/C++ dependency facts.
 >

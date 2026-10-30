@@ -1,6 +1,6 @@
 # Implementation Status
 
-> As of 2026-10-29. This page describes what is **actually implemented**. The
+> As of 2026-10-30. This page describes what is **actually implemented**. The
 > other `docs/` documents describe the **design intent** (concept phase) and
 > remain valid as rationale; where the implementation deviates, this page wins.
 
@@ -73,7 +73,7 @@ stoa eval <path> --expected <file> [--format markdown|json]
 - `knowledge/` and `rules/` resolve relative to the installed package — the CLI
   runs from any directory after `npm link`/install.
 
-## Rule catalog (40)
+## Rule catalog (38)
 
 Declarative rules (`rules/default/*.json`), on by default:
 
@@ -124,8 +124,63 @@ Procedural rules (`ProjectRule`, cross-file):
 |------|-----------|-----------|------|
 | R-DEP-CYCLE | marcus.cooperation | dependencies | Tarjan SCC over relative imports; type-only imports skipped |
 | R-UNUSED-EXPORT | marcus.cooperation | dependencies | opt-in `--dead-exports`; only sound for whole-project scans |
+| R-VALIDATION-CONTRACT-INVALID-ID | marcus.purpose | robustness | opt-in `--contracts <file>`; a `stoa:validation` annotation does not match the Trace ID format |
+| R-VALIDATION-CONTRACT-UNKNOWN-ID | marcus.purpose | robustness | opt-in `--contracts`; valid ID, but not in the loaded contract |
+| R-VALIDATION-CONTRACT-UNRESOLVED | marcus.judgment | robustness, decision-evidence | opt-in `--contracts`; construct not resolvable as a scalar Zod chain (Insufficient Evidence) |
+| R-VALIDATION-CONTRACT-MISMATCH | marcus.judgment | robustness | opt-in `--contracts`; extracted conditions disagree with the contract |
+| R-VALIDATION-CONTRACT-CONFLICT | marcus.judgment | robustness | opt-in `--contracts`; same Trace ID, conflicting implementations |
+| R-VALIDATION-CONTRACT-NOT-IMPLEMENTED | marcus.judgment | robustness, decision-evidence | opt-in `--contracts`; contract entry with no annotation anywhere (low confidence, not proof of absence) |
 
 All ten quality dimensions (incl. accessibility, usability) have at least one rule.
+
+## Validation Trace IDs & contract verification (first vertical slice)
+
+Opt-in via `stoa analyze <path> --contracts <contract.json>`; without this
+option the feature is **fully inert** (annotations are always extracted as
+facts — cheap, mirroring the existing `stoa:allow-complexity` marker — but
+never interpreted). A tampered or missing contract disables no other checks
+and improves no status; a malformed contract fails fast (exit 1, concrete
+schema errors) instead of silently yielding 0 findings.
+
+- **Validation Trace ID:** a stable, project-chosen business ID (e.g.
+  `VC-ITEM-QUANTITY-001`; format `^[A-Z][A-Z0-9]*(-[A-Z0-9]+)+-[0-9]{3}$`, see
+  `schemas/validation-contract.schema.json`). It is an analysis hint, **not**
+  a security mechanism, and must **not** be confused with Stoa's own `R-*`
+  rule, `finding:` or `fact:` ids — which is exactly why all six new Stoa
+  rules deliberately use the `R-VALIDATION-CONTRACT-*` prefix, not `R-VC-*`.
+- **Annotation:** `// stoa:validation <ID>` as a leading comment on a
+  `const x = …` statement (`src/analysis/typescript/ValidationAnnotations.ts`,
+  `getLeadingCommentRanges()`, the same mechanism as the existing marker).
+  **TypeScript only**, and only a direct scalar Zod chain
+  (`z.number()`/`z.string()`/`z.boolean()` with `.int()/.min()/.max()/
+  .optional()/.nullable()/.trim()/.toLowerCase()/.toUpperCase()/.email()/
+  .url()/.positive()/.nonnegative()`) is resolved. `z.object(...)`, array
+  schemas, a vts schema, or any unrecognized chained call (`.refine()`,
+  `.transform()`, `.default()`, …) is **unresolved** — never guessed at.
+- **Contract:** a JSON file validated against
+  `schemas/validation-contract.schema.json` (reuses the existing ajv2020
+  pattern from `KnowledgeValidation.ts` — no new format introduced). Every
+  field but `id`/`description`/`field`/`dataType` is optional; only the
+  dimensions the contract actually declares are compared.
+- **Matching** (`src/rules/project/ValidationContractRule.ts`, one
+  `ProjectRule`, the same pattern as `R-DEP-CYCLE`/`R-UNUSED-EXPORT` — hence
+  no JSON rule file of its own, text hardcoded in TS, documented here in the
+  table): invalid ID format; ID not in the contract; construct not
+  resolvable; extracted conditions disagree with the contract (dataType/
+  required/nullable/min/max/normalization); the same ID with conflicting
+  implementations (symmetric — Stoa does not decide which side is correct);
+  a contract entry with no annotation at all (low confidence, anchored at the
+  contract file itself since no source file applies).
+- **Deliberately out of this slice** (documented, not faked): multi-field
+  object schemas; "a validator exists but is never actually called in the
+  real data flow"; API-endpoint/alternate-endpoint bypass detection; a
+  frontend/backend layer heuristic for the conflict check; languages other
+  than TypeScript.
+- Checked against real code: `stoa:validation` appears in none of the real
+  repos used so far (expected — it is a project-specific marker that is new
+  here); fact extraction ran with no crash/regression against real Zod usage
+  (kapalium `backend/`+`shared/`, 37 files) and against stoa's own `src/`
+  (57 files) — `0` findings without `--contracts`, as designed.
 
 ## Facts produced
 
@@ -149,7 +204,7 @@ plus (opt-in) `external.tsc` and
 
 ## Quality assurance
 
-- **163 node:test cases** green (rules pos./neg., extraction, schema validation,
+- **172 node:test cases** green (rules pos./neg., extraction, schema validation,
   i18n, determinism, SARIF, evaluation, semantic groundedness, privacy,
   finding-model separation).
 - **Golden corpus** (`test/corpus/`, **TS+PHP only**) with ground truth;
