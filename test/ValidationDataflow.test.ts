@@ -96,3 +96,31 @@ test('a resolvable one-hop callee with no persistence call anywhere inside produ
     assert.ok(!graph.nodes.some((node) => node.kind === 'service' || node.kind === 'persistence-sink'), 'OrderService.log resolves but does nothing persistence-related, so no further node is added');
     assert.ok(graph.edges.every((edge) => edge.kind !== 'persists' && edge.kind !== 'bypasses'));
 });
+
+test('every edge names the analysis function that produced it (producedBy), so evidence is traceable back to concrete code, not just asserted', () => {
+    for (const traceId of ['VC-DATAFLOW-SAME-FUNCTION-017', 'VC-DATAFLOW-ONE-HOP-018', 'VC-DATAFLOW-UNRESOLVED-019']) {
+        const [entry] = dataflowFactsFor(traceId);
+        const graph = entry?.graph;
+        assert.ok(graph !== undefined, `expected a graph for ${traceId}`);
+        for (const edge of graph.edges) {
+            assert.ok(typeof edge.producedBy === 'string' && edge.producedBy.length > 0, `${traceId}: edge ${edge.kind} (${edge.from} -> ${edge.to}) has no producedBy`);
+        }
+    }
+    const [oneHop] = dataflowFactsFor('VC-DATAFLOW-ONE-HOP-018');
+    const persists = oneHop?.graph.edges.find((edge) => edge.kind === 'persists');
+    assert.ok(persists?.producedBy.includes('OneHopResolution'), 'the one-hop persist edge names the module that actually resolved it');
+});
+
+test('a heuristic edge is never silently upgraded to verified by a later graph step', () => {
+    // The one-hop case builds TWO edges from the same SinkTrace (validated-value
+    // -> service, then service -> persistence-sink): both must carry the
+    // IDENTICAL status, proving the second addEdge call never re-decides or
+    // upgrades what the first one already established.
+    const [entry] = dataflowFactsFor('VC-DATAFLOW-ONE-HOP-018');
+    const graph = entry?.graph;
+    assert.ok(graph !== undefined);
+    const passesTo = graph.edges.find((edge) => edge.kind === 'passes-to' && edge.to.startsWith('service'));
+    const persists = graph.edges.find((edge) => edge.kind === 'persists');
+    assert.equal(passesTo?.status, 'heuristic');
+    assert.equal(persists?.status, 'heuristic', 'the persists edge inherits the SAME status as the passes-to edge before it — never upgraded to verified');
+});

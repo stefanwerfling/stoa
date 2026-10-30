@@ -255,11 +255,21 @@ fails fast (exit 1, concrete errors) instead of silently yielding 0 findings.
   `validation-result`/`validated-value`/`function`/`service`/`repository`/
   `persistence-sink`) and edge kinds (`receives`/`validates`/`returns`/
   `assigns`/`passes-to`/`transforms`/`persists`/`bypasses`), each edge
-  carrying an explicit status: `verified` (a direct same-function argument
-  relationship), `heuristic` (a relationship inferred across a call
-  boundary), or `unresolved` (something relevant was found but the
-  relationship could not be established) — a `heuristic` edge is never
-  reported as `verified`. Two capabilities: a same-function trace to a
+  carrying: source/target node, source file + code position, a short
+  human-readable `basis` (the concrete AST shape matched — every edge
+  traces back to specific code, not just an assertion), an explicit status
+  (`verified`: a direct same-function argument relationship; `heuristic`: a
+  relationship inferred across a call boundary; `unresolved`: something
+  relevant was found but the relationship could not be established), an
+  optional `limits` array (present whenever status isn't `verified` — what
+  specifically keeps it from being proven), and `producedBy` (which
+  analysis function established the edge, e.g. `"OneHopResolution.resolveOneHop"`
+  — so a reader can go straight to the code, not just the prose). A
+  `heuristic` edge is never reported as `verified`, enforced by
+  construction — every edge's status is decided once, when it is added;
+  nothing re-visits or upgrades an edge afterward, and the same
+  (from, to, kind) is never added twice with two different statuses. Two
+  capabilities: a same-function trace to a
   persistence-verb call (`verified`), and ONE cross-function hop — resolved
   by ts-morph symbol, WITHIN THE SAME FILE ONLY, to a function/method with a
   plain (non-destructured) parameter at the matching position — into a
@@ -383,7 +393,7 @@ fails fast (exit 1, concrete errors) instead of silently yielding 0 findings.
 
 ## Quality assurance
 
-- **214 node:test cases** green (rules pos./neg., extraction, schema validation,
+- **216 node:test cases** green (rules pos./neg., extraction, schema validation,
   i18n, determinism, SARIF, evaluation, semantic groundedness, privacy,
   finding-model separation).
 - **Golden corpus** (`test/corpus/`, **TS+PHP only**) with ground truth;

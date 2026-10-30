@@ -270,12 +270,23 @@ zu liefern.
   `validator-invocation`/`validation-result`/`validated-value`/`function`/
   `service`/`repository`/`persistence-sink`) und Edge-Arten
   (`receives`/`validates`/`returns`/`assigns`/`passes-to`/`transforms`/
-  `persists`/`bypasses`), jede Edge mit explizitem Status: `verified`
-  (eine direkte Argument-Beziehung in derselben Funktion), `heuristic`
-  (eine über eine Aufrufgrenze hinweg erschlossene Beziehung) oder
-  `unresolved` (etwas Relevantes gefunden, die Beziehung aber nicht
-  nachweisbar) — eine `heuristic`-Edge wird nie als `verified` ausgegeben.
-  Zwei Fähigkeiten: eine Nachverfolgung innerhalb derselben Funktion bis zu
+  `persists`/`bypasses`), jede Edge mit: Quell-/Zielknoten, Quelldatei +
+  Codeposition, einer kurzen, menschenlesbaren `basis` (die konkrete
+  AST-Form, die zutraf — jede Edge lässt sich bis zu konkretem Code
+  zurückverfolgen, nicht nur zu einer Behauptung), einem expliziten Status
+  (`verified`: eine direkte Argument-Beziehung in derselben Funktion;
+  `heuristic`: eine über eine Aufrufgrenze hinweg erschlossene Beziehung;
+  `unresolved`: etwas Relevantes gefunden, die Beziehung aber nicht
+  nachweisbar), einem optionalen `limits`-Array (vorhanden, sobald der
+  Status nicht `verified` ist — was konkret den Nachweis verhindert) und
+  `producedBy` (welche Analysefunktion die Edge erzeugt hat, z. B.
+  `"OneHopResolution.resolveOneHop"` — damit ein Leser direkt zum Code
+  gehen kann, nicht nur zur Prosa). Eine `heuristic`-Edge wird nie als
+  `verified` ausgegeben — durch Konstruktion erzwungen: Jede Edge
+  entscheidet ihren Status genau einmal, beim Hinzufügen; nichts besucht
+  oder erhöht eine Edge danach erneut, und dasselbe (from, to, kind) wird
+  nie zweimal mit unterschiedlichem Status hinzugefügt. Zwei Fähigkeiten:
+  eine Nachverfolgung innerhalb derselben Funktion bis zu
   einem Persistenz-Verb-Aufruf (`verified`), und EIN funktionsübergreifender
   Schritt — per ts-morph-Symbol aufgelöst, NUR INNERHALB DERSELBEN DATEI, zu
   einer Funktion/Methode mit einem einfachen (nicht destrukturierten)
@@ -412,7 +423,7 @@ zu liefern.
 
 ## Qualitätssicherung
 
-- **214 node:test-Fälle** grün (Regeln pos./neg., Extraktion, Schema-Validierung,
+- **216 node:test-Fälle** grün (Regeln pos./neg., Extraktion, Schema-Validierung,
   i18n, Determinismus, SARIF, Eval, Semantik-Groundedness, Datenschutz,
   Finding-Trennung).
 - **Golden-Korpus** (`test/corpus/`, **nur TS+PHP**) mit Ground-Truth; Eval

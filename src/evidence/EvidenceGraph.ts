@@ -56,7 +56,16 @@ export interface EvidenceNode {
  * One traced relationship between two graph nodes. `basis` is a short,
  * human-readable statement of WHY Stoa believes this edge holds (the
  * concrete AST shape it matched) — every edge must be traceable back to a
- * specific piece of code, not just asserted.
+ * specific piece of code, not just asserted. `file`/`range` are this one
+ * edge's own evidence location (the AST node `basis` describes), not
+ * necessarily the same position as either endpoint node.
+ *
+ * Invariant enforced by construction, not by any runtime dedup/merge step:
+ * a builder decides EVERY edge's status explicitly, once, when it adds the
+ * edge — nothing in this codebase re-visits or upgrades an already-added
+ * edge afterward, so a `heuristic` edge can never later become `verified`,
+ * and the same (from, to, kind) is never added twice with two different
+ * statuses (duplicate/contradictory evidence).
  */
 export interface EvidenceEdge {
     from: string;
@@ -68,6 +77,12 @@ export interface EvidenceEdge {
     status: EvidenceStatus;
     /** Present when status is not `verified` — what, specifically, keeps this from being proven. */
     limits?: string[];
+    /** Which analysis function established this edge (e.g.
+     *  `"ValidationDataflow.traceSink"`, `"SafeParseGuard.verifySafeParseGuard"`,
+     *  `"OneHopResolution.resolveOneHop"`) — so a reader can go straight to
+     *  the code that produced a given piece of evidence, not just read its
+     *  human-readable `basis`. */
+    producedBy: string;
 }
 
 export interface EvidenceGraph {

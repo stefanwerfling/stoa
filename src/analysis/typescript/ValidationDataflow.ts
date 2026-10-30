@@ -137,10 +137,11 @@ interface SinkTrace {
     call: CallExpression;
     status: EvidenceStatus;
     basis: string;
+    producedBy: string;
     limits?: string[];
     /** Set when this edge lands on an intermediate function/service, not a confirmed sink. */
     service?: string;
-    innerSink?: {call: CallExpression; basis: string};
+    innerSink?: {call: CallExpression; basis: string; producedBy: string};
 }
 
 const traceSink = (fn: Node, matches: (node: Node) => boolean): SinkTrace | null => {
@@ -156,7 +157,8 @@ const traceSink = (fn: Node, matches: (node: Node) => boolean): SinkTrace | null
             return {
                 call: outer,
                 status: 'verified',
-                basis: `${argument.getText()} is a direct argument of ${outer.getText()}, a persistence-verb call in the same function`
+                basis: `${argument.getText()} is a direct argument of ${outer.getText()}, a persistence-verb call in the same function`,
+                producedBy: 'ValidationDataflow.traceSink (same-function persistence-verb match)'
             };
         }
         const hop = resolveOneHop(outer, argument);
@@ -167,9 +169,14 @@ const traceSink = (fn: Node, matches: (node: Node) => boolean): SinkTrace | null
                     call: outer,
                     status: 'heuristic',
                     basis: `${argument.getText()} is passed to ${outer.getText()}, whose parameter \`${hop.paramNameNode.getText()}\` reaches ${inner.getText()} inside ${hop.label}`,
+                    producedBy: 'ValidationDataflow.traceSink + OneHopResolution.resolveOneHop',
                     limits: ['identity of the parameter across the call boundary is inferred by position, not type-proven'],
                     service: outer.getExpression().getText(),
-                    innerSink: {call: inner, basis: `\`${hop.paramNameNode.getText()}\` is a direct argument of ${inner.getText()} inside ${hop.label}`}
+                    innerSink: {
+                        call: inner,
+                        basis: `\`${hop.paramNameNode.getText()}\` is a direct argument of ${inner.getText()} inside ${hop.label}`,
+                        producedBy: 'OneHopResolution.findInnerCall'
+                    }
                 };
             }
             // Resolvable but no persistence call anywhere inside — genuinely
@@ -181,6 +188,7 @@ const traceSink = (fn: Node, matches: (node: Node) => boolean): SinkTrace | null
                 call: outer,
                 status: 'unresolved',
                 basis: `${argument.getText()} is passed to ${outer.getText()}, whose implementation could not be resolved within this file`,
+                producedBy: 'ValidationDataflow.traceSink (service-like receiver name, unresolved)',
                 limits: ['the callee is not declared in this file (an import, a dynamic/computed call, or an interface with no single resolvable implementation)'],
                 service: outer.getExpression().getText()
             };
@@ -206,18 +214,18 @@ const buildGraph = (sourceFile: SourceFile, schema: AnnotatedSchema, call: CallE
         nodes.push({id: nid, kind, label, file: sourceFile.getFilePath(), range: rangeOf(sourceFile, at)});
         return nid;
     };
-    const addEdge = (from: string, to: string, kind: EvidenceEdge['kind'], status: EvidenceStatus, basis: string, at: Node, limits?: string[]): void => {
-        edges.push({from, to, kind, file: sourceFile.getFilePath(), range: rangeOf(sourceFile, at), basis, status, ...(limits !== undefined ? {limits} : {})});
+    const addEdge = (from: string, to: string, kind: EvidenceEdge['kind'], status: EvidenceStatus, basis: string, at: Node, producedBy: string, limits?: string[]): void => {
+        edges.push({from, to, kind, file: sourceFile.getFilePath(), range: rangeOf(sourceFile, at), basis, status, producedBy, ...(limits !== undefined ? {limits} : {})});
     };
 
     const sourceId = addNode('request-source', rootIdentifierText(requestArg), requestArg);
     const inputId = addNode('input-value', requestArg.getText(), requestArg);
-    addEdge(sourceId, inputId, 'receives', 'verified', `${requestArg.getText()} read directly in this function`, requestArg);
+    addEdge(sourceId, inputId, 'receives', 'verified', `${requestArg.getText()} read directly in this function`, requestArg, 'ValidationDataflow.buildGraph');
 
     const schemaId = addNode('validation-schema', schemaName, schema.statement);
     const invocationId = addNode('validator-invocation', call.getText(), call);
-    addEdge(inputId, invocationId, 'passes-to', 'verified', `argument of ${call.getText()}`, call);
-    addEdge(schemaId, invocationId, 'validates', 'verified', `${schemaName} is the receiver of ${calleeName(call)}`, call);
+    addEdge(inputId, invocationId, 'passes-to', 'verified', `argument of ${call.getText()}`, call, 'ValidationDataflow.buildGraph');
+    addEdge(schemaId, invocationId, 'validates', 'verified', `${schemaName} is the receiver of ${calleeName(call)}`, call, 'ValidationDataflow.buildGraph');
 
     const isSafe = SAFE_PARSE_METHODS.has(calleeName(call).toLowerCase());
     const boundDeclaration = bindingDeclarationOf(call);
@@ -227,7 +235,7 @@ const buildGraph = (sourceFile: SourceFile, schema: AnnotatedSchema, call: CallE
 
     if (isSafe) {
         const resultId = addNode('validation-result', boundDeclaration?.getText() ?? '(unbound)', call);
-        addEdge(invocationId, resultId, 'returns', 'verified', `${call.getText()} returns a {success, data} result`, call);
+        addEdge(invocationId, resultId, 'returns', 'verified', `${call.getText()} returns a {success, data} result`, call, 'ValidationDataflow.buildGraph');
         if (boundDeclaration === null) {
             // Result not bound to a name (used inline) — no `.data` access to find.
             return {nodes, edges};
@@ -264,10 +272,10 @@ const buildGraph = (sourceFile: SourceFile, schema: AnnotatedSchema, call: CallE
             matches = (node: Node): boolean => tracksBinding(node, destructured, fn);
         }
         const guard = verifySafeParseGuard(boundDeclaration, accessSite, fn);
-        addEdge(resultId, validatedId, 'transforms', guard.evidenceStatus, guard.basis, accessSite, guard.evidenceStatus === 'verified' ? undefined : [`safeParse guard: ${guard.status}`]);
+        addEdge(resultId, validatedId, 'transforms', guard.evidenceStatus, guard.basis, accessSite, 'SafeParseGuard.verifySafeParseGuard', guard.evidenceStatus === 'verified' ? undefined : [`safeParse guard: ${guard.status}`]);
     } else {
         validatedId = addNode('validated-value', boundDeclaration?.getText() ?? call.getText(), call);
-        addEdge(invocationId, validatedId, 'returns', 'verified', `${call.getText()} returns the validated value directly`, call);
+        addEdge(invocationId, validatedId, 'returns', 'verified', `${call.getText()} returns the validated value directly`, call, 'ValidationDataflow.buildGraph');
         if (boundDeclaration === null) {
             // Used inline (e.g. `repo.save(schema.parse(req.body))`) — the call
             // expression itself IS the value a wrapping call would reference.
@@ -286,14 +294,16 @@ const buildGraph = (sourceFile: SourceFile, schema: AnnotatedSchema, call: CallE
     if (sink !== null) {
         if (sink.service !== undefined) {
             const serviceId = addNode('service', sink.service, sink.call);
-            addEdge(validatedId, serviceId, 'passes-to', sink.status, sink.basis, sink.call, sink.limits);
+            addEdge(validatedId, serviceId, 'passes-to', sink.status, sink.basis, sink.call, sink.producedBy, sink.limits);
             if (sink.innerSink !== undefined) {
                 const innerId = addNode('persistence-sink', sink.innerSink.call.getText(), sink.innerSink.call);
-                addEdge(serviceId, innerId, 'persists', sink.status, sink.innerSink.basis, sink.innerSink.call);
+                // Same status as the outer edge, NEVER upgraded: a heuristic
+                // one-hop match stays heuristic all the way to the sink.
+                addEdge(serviceId, innerId, 'persists', sink.status, sink.innerSink.basis, sink.innerSink.call, sink.innerSink.producedBy);
             }
         } else {
             const sinkId = addNode('persistence-sink', sink.call.getText(), sink.call);
-            addEdge(validatedId, sinkId, 'persists', sink.status, sink.basis, sink.call, sink.limits);
+            addEdge(validatedId, sinkId, 'persists', sink.status, sink.basis, sink.call, sink.producedBy, sink.limits);
         }
     }
 
