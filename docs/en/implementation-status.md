@@ -61,7 +61,7 @@
 stoa analyze <path> [--format markdown|json|sarif] [--lang en|de]
                     [--include <glob>]... [--exclude <glob>]...
                     [--typecheck] [--dead-exports] [--contracts <file>]
-                    [--semantic noop|anthropic]
+                    [--semantic noop|anthropic] [--memory-stats]
                     [--config <file>] [--knowledge <dir>] [--rules <dir>]
 stoa eval <path> --expected <file> [--format markdown|json] [--contracts <file>]
                     [--knowledge <dir>] [--rules <dir>]
@@ -71,12 +71,94 @@ stoa eval <path> --expected <file> [--format markdown|json] [--contracts <file>]
 - **Languages:** `en` (default) and `de`; rule/principle text, reporter labels and
   dimension names are localized via `LocalizedText` (en fallback).
 - **File selection:** `include`/`exclude` globs (picomatch); `node_modules`/`.git`
-  are hard-pruned; a single named file bypasses the globs.
+  are hard-pruned; a single named file bypasses the globs. Default excludes
+  additionally cover `build/`, `.next/`, `.nuxt/`, `.turbo/`, `.cache/`,
+  `vendor/`, `dist/`, `coverage/` (see Memory-bounded analysis pipeline below
+  for why, and for the companion file-size filter).
 - `knowledge/` and `rules/` resolve relative to the installed package — the CLI
   runs from any directory after `npm link`/install.
 - `--contracts <file>` is accepted by BOTH `analyze` and `eval` (previously
   silently ignored by `eval`) — a malformed/unreadable contract fails fast
   (exit 1) for either command, never a silently-degraded result.
+- `--memory-stats` prints one progress line to stderr every 100 files
+  (`files processed/selected | heap used/limit | rss`) plus a final totals
+  line; stdout (the report itself) is unaffected. Off by default — the
+  defaults below need no tuning for a typical run.
+
+## Memory-bounded analysis pipeline
+
+Large-repository root cause (profiled, not guessed — see the "Dataflow
+Correctness, Symbol Resolution & Cross-Layer Evidence" spec's successor, the
+"Memory-Bounded Analysis Pipeline" spec, for the full before/after numbers):
+`TypeScriptAdapter` held ONE ts-morph `Project` for the entire `analyze()`
+call and never released a `SourceFile` after extracting its facts — AST,
+ts-morph's own permanent node-wrapper cache, and the TS compiler's
+Program/Checker state all accumulated for the whole repository, never freed,
+for the whole run. Separately, the Dart/C/C++/HTML adapters (`web-tree-sitter`,
+WASM) never called `Tree.delete()` — a native linear-memory leak invisible to
+V8's heap stats (it lives outside the JS heap). Fixed:
+
+- **Per-file release** (`LanguageAdapter.ts`'s `ParseResult.release`, called
+  once by `Pipeline.ts` right after `extractFacts`): `TypeScriptAdapter` now
+  calls `project.removeSourceFile()`; the four tree-sitter adapters call
+  `tree.delete()`. Safe because nothing in `src/analysis/typescript/*`
+  resolves a ts-morph symbol ACROSS two files — `OneHopResolution`,
+  `ValidationDataflow`, `SymbolResolution` and `SafeParseGuard` are all
+  documented and tested as same-file-only, so no analysis needs a sibling
+  file's `SourceFile` to still be registered once its own facts are
+  extracted. Measured on a real ~300-file repository: peak RSS 909 MB → 451
+  MB, wall time 145 s → 5.7 s (this one change plus the file-size filter
+  below; see commit history for the isolated before/after of each).
+- **Discovery hardening** (`Ingestion.ts`): a directory `readdirSync` cannot
+  read (permission error, race with a concurrent delete) is now skipped and
+  reported via an optional `onExcluded` callback instead of crashing the
+  entire run (previously confirmed against a real external repository with
+  one unreadable subdirectory). A new `maxFileBytes` filter (default 1 MB,
+  configurable via `StoaConfig.maxFileBytes`) excludes oversized files the
+  same way a glob exclude does — found while measuring: a single 3 MB
+  generated webpack bundle, sitting outside any default-excluded directory,
+  was the single largest memory/time contributor in the measured repository,
+  and carries zero analytical value once bundled. An explicitly-named path
+  (a single-file analysis root) always bypasses this filter, the same as it
+  already bypasses the include/exclude globs. Symlinks are deliberately never
+  followed (a `Dirent`'s own `isSymbolicLink()` entry is neither
+  `isDirectory()` nor `isFile()`, so this was already true before, just not
+  documented as intentional) — the alternative, following them, risks an
+  unbounded walk on a circular symlink with no documented need for it here.
+- **Memory guard** (`src/MemoryGuard.ts`): every 100 files, `Pipeline.ts`
+  compares `process.memoryUsage().heapUsed` against V8's own
+  `v8.getHeapStatistics().heap_size_limit` — the same figure a "JavaScript
+  heap out of memory" fatal error is measured against, not a fixed MB guess.
+  Past 90%, ingestion stops rather than let V8 crash; facts/findings already
+  produced are kept (nothing is discarded), and
+  `coverage.analysisIncomplete`/`coverage.stoppedAtFile` mark the report as
+  genuinely partial — a truncated run is never presented as a complete one.
+  No `global.gc()` call anywhere — this guard is a last resort on top of the
+  bounded object lifetimes above, not a substitute for them.
+- **Deliberately not done, and why:** no new concurrency/backpressure
+  mechanism — the file-processing loop was already fully synchronous with no
+  parallelism to bound in the first place, so Section 7 of the originating
+  spec's premise did not apply; adding concurrency now would be unneeded
+  complexity, not a fix for an observed problem. No incremental/cached
+  analysis — correctness was prioritized over speed, per the spec's own
+  explicit principle, and a reliable cache-invalidation story (rule version,
+  contract version, tsconfig changes, cross-file dependencies) is a
+  substantial feature on its own that was not attempted half-done. No
+  `.gitignore` parsing — the extended default-exclude list already covers the
+  dominant real-world memory risk (build output, caches, vendor directories)
+  without it, and correct multi-level `.gitignore` semantics (nested files,
+  negation patterns) is its own scoped feature.
+- **Scaling test** (`test/MemoryPipelineScaling.test.ts`): a synthetic,
+  generated-on-the-fly, mixed-language (TS+PHP), multi-directory repository
+  with several Validation Trace ID annotations spread across different
+  files — asserts the analysis completes in full, is deterministic across two
+  runs, produces no duplicate finding identities, and loses no Evidence Graph
+  connection (one `validation.dataflowGraph` fact per annotated-and-invoked
+  validator, regardless of which file it lives in). Deliberately NOT a
+  memory-threshold assertion (an RSS/heap ceiling in a test is unreliable
+  across machines and Node versions) — the real, reproducible before/after
+  numbers above came from manually measuring real external repositories with
+  `/usr/bin/time -v`, not from a CI-gated benchmark.
 
 ## Rule catalog (38)
 
@@ -397,7 +479,7 @@ fails fast (exit 1, concrete errors) instead of silently yielding 0 findings.
 
 ## Quality assurance
 
-- **216 node:test cases** green (rules pos./neg., extraction, schema validation,
+- **225 node:test cases** green (rules pos./neg., extraction, schema validation,
   i18n, determinism, SARIF, evaluation, semantic groundedness, privacy,
   finding-model separation).
 - **Golden corpus** (`test/corpus/`, **TS+PHP only**) with ground truth;

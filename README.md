@@ -55,6 +55,15 @@ An LLM is an optional, switchable adapter.
 >
 > Golden- and a11y-corpus precision/recall reflect those small, curated corpora
 > only; they are **not** a general reliability guarantee for arbitrary code.
+>
+> **Memory on large repositories:** a per-file analysis lifetime (ts-morph
+> SourceFiles and tree-sitter trees are released right after their own facts
+> are extracted — see implementation-status), a configurable file-size
+> discovery filter (default 1 MB — generated/bundled files carry no analytical
+> value and are excluded the same way a glob exclude is), and a memory guard
+> that stops ingestion (and marks the report incomplete) before V8's own heap
+> limit is reached, rather than crashing. Measured on a real ~300-file
+> repository: peak RSS 909 MB → 451 MB, wall time 145s → 5.7s.
 
 ## Documentation
 
@@ -93,6 +102,7 @@ node dist/Cli.js analyze ./src --lang de            # localized output (en defau
 node dist/Cli.js analyze ./src --typecheck          # + in-process TypeScript type checker as a fact source
 node dist/Cli.js analyze . --include 'src/**/*.ts' --exclude '**/*.test.ts'  # glob file selection
 node dist/Cli.js analyze ./src --format sarif   # SARIF 2.1.0 for CI / code scanning
+node dist/Cli.js analyze . --memory-stats       # progress + heap/RSS to stderr every 100 files
 
 # evaluate the engine against the golden corpus (precision/recall)
 node dist/Cli.js eval test/corpus/project --expected test/corpus/expected.json

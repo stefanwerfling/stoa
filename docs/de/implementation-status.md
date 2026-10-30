@@ -64,7 +64,7 @@
 stoa analyze <pfad> [--format markdown|json|sarif] [--lang en|de]
                     [--include <glob>]... [--exclude <glob>]...
                     [--typecheck] [--dead-exports] [--contracts <datei>]
-                    [--semantic noop|anthropic]
+                    [--semantic noop|anthropic] [--memory-stats]
                     [--config <datei>] [--knowledge <dir>] [--rules <dir>]
 stoa eval <pfad> --expected <datei> [--format markdown|json] [--contracts <datei>]
                     [--knowledge <dir>] [--rules <dir>]
@@ -75,12 +75,108 @@ stoa eval <pfad> --expected <datei> [--format markdown|json] [--contracts <datei
   Dimensionsnamen sind über `LocalizedText` lokalisiert (en-Fallback).
 - **Dateiauswahl:** `include`/`exclude`-Globs (picomatch); `node_modules`/`.git`
   werden hart übersprungen; eine einzeln benannte Datei umgeht die Globs.
+  Die Default-Excludes decken zusätzlich `build/`, `.next/`, `.nuxt/`,
+  `.turbo/`, `.cache/`, `vendor/`, `dist/`, `coverage/` ab (siehe Memory-Bounded
+  Analysis Pipeline unten für das Warum, sowie den begleitenden
+  Dateigrößen-Filter).
 - `knowledge/` und `rules/` werden relativ zum installierten Paket aufgelöst —
   die CLI läuft nach `npm link`/Install aus jedem Verzeichnis.
 - `--contracts <datei>` wird von BEIDEN, `analyze` und `eval`, akzeptiert
   (zuvor von `eval` stillschweigend ignoriert) — ein fehlerhafter/unlesbarer
   Vertrag schlägt bei beiden Befehlen sofort fehl (Exit 1), nie ein
   stillschweigend verschlechtertes Ergebnis.
+- `--memory-stats` gibt alle 100 Dateien eine Fortschrittszeile auf stderr aus
+  (`Dateien verarbeitet/ausgewählt | Heap genutzt/Limit | RSS`), plus eine
+  abschließende Summenzeile; stdout (der eigentliche Report) bleibt
+  unverändert. Standardmäßig aus — die untenstehenden Defaults benötigen für
+  einen typischen Lauf keine Anpassung.
+
+## Memory-Bounded Analysis Pipeline
+
+Ursache des Speicherproblems bei großen Repositories (gemessen, nicht
+vermutet — siehe die Spec "Memory-Bounded Analysis Pipeline", Nachfolger der
+"Dataflow Correctness, Symbol Resolution & Cross-Layer Evidence"-Spec, für die
+vollständigen Vorher/Nachher-Zahlen): `TypeScriptAdapter` hielt EIN
+ts-morph-`Project` für den gesamten `analyze()`-Lauf und gab eine
+`SourceFile` nie wieder frei, nachdem ihre Facts extrahiert waren — AST,
+ts-morphs eigener permanenter Node-Wrapper-Cache und der Program-/
+Checker-Zustand des TS-Compilers akkumulierten für das gesamte Repository,
+nie freigegeben, über den gesamten Lauf. Separat riefen die
+Dart-/C-/C++-/HTML-Adapter (`web-tree-sitter`, WASM) nie `Tree.delete()` auf
+— ein nativer Linear-Memory-Leak, unsichtbar für V8s Heap-Statistiken (er
+lebt außerhalb des JS-Heaps). Behoben:
+
+- **Pro-Datei-Freigabe** (`LanguageAdapter.ts`s `ParseResult.release`, von
+  `Pipeline.ts` einmal direkt nach `extractFacts` aufgerufen):
+  `TypeScriptAdapter` ruft jetzt `project.removeSourceFile()` auf; die vier
+  tree-sitter-Adapter rufen `tree.delete()` auf. Sicher, weil nichts in
+  `src/analysis/typescript/*` ein ts-morph-Symbol ÜBER zwei Dateien hinweg
+  auflöst — `OneHopResolution`, `ValidationDataflow`, `SymbolResolution` und
+  `SafeParseGuard` sind alle dokumentiert und getestet als
+  dateiintern-only, sodass keine Analyse die `SourceFile` einer
+  Nachbardatei noch registriert braucht, nachdem deren eigene Facts
+  extrahiert sind. Gemessen an einem echten ~300-Dateien-Repository: Peak
+  RSS 909 MB → 451 MB, Laufzeit 145 s → 5,7 s (diese eine Änderung plus der
+  Dateigrößen-Filter unten; siehe Commit-Historie für den isolierten
+  Vorher/Nachher-Wert jeder einzelnen Änderung).
+- **Gehärtete Discovery** (`Ingestion.ts`): Ein Verzeichnis, das
+  `readdirSync` nicht lesen kann (Berechtigungsfehler, Race mit einem
+  gleichzeitigen Löschen), wird jetzt übersprungen und über einen optionalen
+  `onExcluded`-Callback gemeldet, statt den gesamten Lauf abzubrechen (zuvor
+  real bestätigt an einem externen Repository mit einem unlesbaren
+  Unterverzeichnis). Ein neuer `maxFileBytes`-Filter (Default 1 MB,
+  konfigurierbar über `StoaConfig.maxFileBytes`) schließt überdimensionierte
+  Dateien genauso aus wie ein Glob-Exclude — gefunden während der Messung:
+  ein einzelnes 3-MB-Webpack-Bundle, außerhalb jedes Default-Exclude-
+  Verzeichnisses, war der mit Abstand größte Speicher-/Zeit-Verursacher im
+  gemessenen Repository und hat nach dem Bundling keinen Analysewert mehr.
+  Ein explizit benannter Pfad (eine Einzeldatei als Analysewurzel) umgeht
+  diesen Filter immer, genau wie er bereits die include/exclude-Globs
+  umgeht. Symlinks werden bewusst nie aufgelöst (ein `Dirent`-Eintrag ist
+  für einen Symlink weder `isDirectory()` noch `isFile()`, das war also
+  schon vorher so, nur nicht als Absicht dokumentiert) — die Alternative,
+  ihnen zu folgen, riskiert einen unbegrenzten Walk bei einem zyklischen
+  Symlink, ohne dass hier ein dokumentierter Bedarf dafür besteht.
+- **Memory Guard** (`src/MemoryGuard.ts`): Alle 100 Dateien vergleicht
+  `Pipeline.ts` `process.memoryUsage().heapUsed` mit V8s eigenem
+  `v8.getHeapStatistics().heap_size_limit` — derselbe Wert, an dem ein
+  "JavaScript heap out of memory"-Fatal-Error gemessen wird, keine fest
+  geratene MB-Zahl. Ab 90 % stoppt die weitere Dateiaufnahme, statt V8
+  abstürzen zu lassen; bereits erzeugte Facts/Findings bleiben erhalten
+  (nichts wird verworfen), und `coverage.analysisIncomplete`/
+  `coverage.stoppedAtFile` kennzeichnen den Report als wirklich
+  unvollständig — ein abgebrochener Lauf wird nie als vollständig
+  ausgegeben. Kein `global.gc()`-Aufruf irgendwo — dieser Guard ist ein
+  letztes Mittel zusätzlich zu den oben beschriebenen begrenzten
+  Objekt-Lebensdauern, kein Ersatz dafür.
+- **Bewusst nicht umgesetzt, und warum:** kein neuer Nebenläufigkeits-/
+  Backpressure-Mechanismus — die Datei-Verarbeitungsschleife war bereits
+  vollständig synchron, es gab also gar keine Parallelität zu begrenzen,
+  die Prämisse von Abschnitt 7 der ursprünglichen Spec traf nicht zu; jetzt
+  Nebenläufigkeit einzuführen wäre unnötige Komplexität, keine Behebung
+  eines beobachteten Problems. Keine inkrementelle/gecachte Analyse —
+  Korrektheit wurde laut dem expliziten Prinzip der Spec über Geschwindigkeit
+  priorisiert, und eine zuverlässige Cache-Invalidierung (Regelversion,
+  Vertragsversion, tsconfig-Änderungen, dateiübergreifende Abhängigkeiten)
+  ist ein eigenständiges, umfangreiches Feature, das nicht halb umgesetzt
+  wurde. Kein `.gitignore`-Parsing — die erweiterte Default-Exclude-Liste
+  deckt das dominante reale Speicherrisiko (Build-Output, Caches,
+  Vendor-Verzeichnisse) bereits ohne das ab, und korrekte, mehrstufige
+  `.gitignore`-Semantik (verschachtelte Dateien, Negationsmuster) ist ein
+  eigenes, abgegrenztes Feature.
+- **Skalierungstest** (`test/MemoryPipelineScaling.test.ts`): ein
+  synthetisches, zur Laufzeit erzeugtes, mehrsprachiges (TS+PHP),
+  mehrverzeichniges Repository mit mehreren über verschiedene Dateien
+  verteilten Validation-Trace-ID-Annotationen — prüft, dass die Analyse
+  vollständig abschließt, über zwei Läufe deterministisch ist, keine
+  doppelten Finding-Identitäten erzeugt und keine Evidence-Graph-Verbindung
+  verliert (ein `validation.dataflowGraph`-Fact pro annotiertem und
+  aufgerufenem Validator, unabhängig davon, in welcher Datei er liegt).
+  Bewusst KEINE Speicher-Schwellenwert-Prüfung (eine RSS-/Heap-Obergrenze in
+  einem Test ist über Maschinen und Node-Versionen hinweg unzuverlässig) —
+  die echten, reproduzierbaren Vorher/Nachher-Zahlen oben stammen aus
+  manuellen Messungen realer externer Repositories mit `/usr/bin/time -v`,
+  nicht aus einem CI-gesteuerten Benchmark.
 
 ## Regelkatalog (38)
 
@@ -428,7 +524,7 @@ zu liefern.
 
 ## Qualitätssicherung
 
-- **216 node:test-Fälle** grün (Regeln pos./neg., Extraktion, Schema-Validierung,
+- **225 node:test-Fälle** grün (Regeln pos./neg., Extraktion, Schema-Validierung,
   i18n, Determinismus, SARIF, Eval, Semantik-Groundedness, Datenschutz,
   Finding-Trennung).
 - **Golden-Korpus** (`test/corpus/`, **nur TS+PHP**) mit Ground-Truth; Eval
