@@ -382,19 +382,34 @@ export class ValidationContractRule implements ProjectRule {
     // flags every contributing annotation (symmetric — Stoa cannot tell which
     // side, if either, is correct).
     private conflicts(annotations: ReadonlyArray<{fact: Fact; value: AnnotationValue}>, input: ProjectRuleInput): Finding[] {
-        const byId = new Map<string, Array<{fact: Fact; value: AnnotationValue}>>();
+        const contract = this.contract as ValidationContract;
+        const byId = new Map<string, Array<{fact: Fact; conditions: ResolvedConditions}>>();
         for (const annotation of annotations) {
-            if (!annotation.value.idValid || !annotation.value.resolved || annotation.value.conditions === undefined) {
+            if (!annotation.value.idValid) {
+                continue;
+            }
+            // Resolves to the SAME comparable shape for a scalar annotation
+            // or an object-shaped one (via the contract's named field) —
+            // null when nothing reliably comparable exists (a missing or
+            // itself-unresolvable field). A null entry is EXCLUDED from the
+            // comparison entirely: it must never silently count as "the
+            // same" as a resolved sibling, but it also must not be forced
+            // into a spurious conflict by itself — "not reliably
+            // comparable" is its own outcome, already surfaced separately
+            // by evaluateAnnotation()'s own UNRESOLVED finding for this
+            // annotation.
+            const conditions = resolvedConditionsForConflict(annotation.value, contract);
+            if (conditions === null) {
                 continue;
             }
             const group = byId.get(annotation.value.id) ?? [];
-            group.push(annotation);
+            group.push({fact: annotation.fact, conditions});
             byId.set(annotation.value.id, group);
         }
 
         const findings: Finding[] = [];
         for (const [id, group] of byId) {
-            const signatures = new Set(group.map((entry) => conditionSignature(entry.value.conditions as ResolvedConditions)));
+            const signatures = new Set(group.map((entry) => conditionSignature(entry.conditions)));
             if (signatures.size <= 1) {
                 continue;
             }
@@ -606,6 +621,29 @@ export class ValidationContractRule implements ProjectRule {
         };
     }
 }
+
+// The comparable conditions for CONFLICT detection: an annotation's own
+// scalar conditions if it resolved as a scalar, or — for a bare
+// `z.object({...})` — the ONE field the contract names for this id,
+// following the exact same "field by field" resolution evaluateAnnotation()
+// already uses for the mismatch check. Null when nothing reliably
+// comparable exists for THIS annotation (unresolved scalar AND the
+// contract-named field is missing or itself unresolvable, or the id is not
+// in the contract at all) — such an annotation is excluded from the
+// conflict comparison set entirely, never silently treated as agreeing.
+const resolvedConditionsForConflict = (value: AnnotationValue, contract: ValidationContract): ResolvedConditions | null => {
+    if (value.resolved && value.conditions !== undefined) {
+        return value.conditions;
+    }
+    if (value.objectFields === undefined) {
+        return null;
+    }
+    const contractRule = findContractRule(contract, value.id);
+    if (contractRule === null || !Object.hasOwn(value.objectFields, contractRule.field)) {
+        return null;
+    }
+    return value.objectFields[contractRule.field] ?? null;
+};
 
 const describeMismatches = (contractRule: ContractRule, conditions: ResolvedConditions): string[] => {
     const mismatches: string[] = [];

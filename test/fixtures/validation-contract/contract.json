@@ -253,6 +253,20 @@
       "field": "missingField",
       "dataType": "string",
       "required": true
+    },
+    {
+      "id": "VC-OBJECT-CONFLICT-206",
+      "description": "Order quantity; frontend and backend z.object() implementations disagree on the minimum.",
+      "field": "quantity",
+      "dataType": "number",
+      "required": true
+    },
+    {
+      "id": "VC-OBJECT-CONFLICT-MISSING-207",
+      "description": "One implementation declares the field, the other does not — must not count as agreeing, and must not itself become a spurious conflict.",
+      "field": "amount",
+      "dataType": "number",
+      "required": true
     }
   ]
 }

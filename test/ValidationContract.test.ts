@@ -30,7 +30,7 @@ const key = (f: Finding): string => `${f.rule.id}|${f.location.file.split('/').p
 test('loadValidationContract parses a well-formed contract, rejects a malformed one, and rejects a duplicate id', () => {
     const contract = loadValidationContract(contractPath);
     assert.equal(contract.version, '1.1.0');
-    assert.equal(contract.rules.length, 32);
+    assert.equal(contract.rules.length, 34);
     assert.ok(contract.rules.some((rule) => rule.id === 'VC-ITEM-QUANTITY-001'));
 
     assert.throws(() => loadValidationContract(join(fixtures, 'does-not-exist.json')));
@@ -305,9 +305,28 @@ test('correctness fix: prototype-safe object-field lookup — "constructor"/"toS
     assert.ok(absent?.observation.statement.includes('field "missingField" not found'));
 });
 
+test('object-field conflict detection: two z.object() implementations sharing a trace ID with differing field conditions conflict; a missing field never counts as agreeing, and never becomes a spurious conflict on its own', () => {
+    // object-field-conflict.ts: frontendSchema.quantity (min=1) vs
+    // backendSchema.quantity (min=10) under VC-OBJECT-CONFLICT-206 — the
+    // exact FE/BE shape from the spec, via z.object() rather than a bare
+    // scalar. declaredSchema.amount (min=5) vs undeclaredSchema (no
+    // "amount" field at all) under VC-OBJECT-CONFLICT-MISSING-207 — the
+    // undeclared side is excluded from the comparison entirely (it already
+    // gets its own UNRESOLVED finding), so there is nothing left to
+    // conflict with declaredSchema's single remaining entry.
+    const findings = vcFindings(analyzeFixture(loadValidationContract(contractPath)));
+    const conflicts206 = findings.filter((f) => f.rule.id === 'R-VALIDATION-CONTRACT-CONFLICT' && f.observation.statement.includes('VC-OBJECT-CONFLICT-206'));
+    assert.equal(conflicts206.length, 2, 'both z.object() implementations are flagged as conflicting with each other');
+    assert.ok(conflicts206[0]?.observation.statement.includes('min=1') && conflicts206[0]?.observation.statement.includes('min=10'));
+
+    assert.ok(!findings.some((f) => f.rule.id === 'R-VALIDATION-CONTRACT-CONFLICT' && f.observation.statement.includes('VC-OBJECT-CONFLICT-MISSING-207')), 'a missing field never becomes its own spurious conflict — only one comparable entry remains');
+    const missingFieldFinding = findings.find((f) => f.observation.statement.includes('VC-OBJECT-CONFLICT-MISSING-207'));
+    assert.equal(missingFieldFinding?.rule.id, 'R-VALIDATION-CONTRACT-UNRESOLVED', 'the undeclared side still gets its own, separate "field not found" finding');
+});
+
 test('every validation-contract finding states its principle, dimension and an explicit missingContext', () => {
     const findings = vcFindings(analyzeFixture(loadValidationContract(contractPath)));
-    assert.equal(findings.length, 24, 'the full fixture set across all files');
+    assert.equal(findings.length, 27, 'the full fixture set across all files');
     for (const finding of findings) {
         assert.ok(finding.interpretation.principles.length > 0, `${finding.rule.id} carries a principle`);
         assert.ok(finding.interpretation.dimensions.includes('robustness'), `${finding.rule.id} is tagged robustness`);
