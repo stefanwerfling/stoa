@@ -1,0 +1,40 @@
+{
+  "version": "1.0.0",
+  "rules": [
+    {
+      "id": "VC-GUARD-FALLA-101",
+      "description": "Fall A: early-exit guard, correct.",
+      "field": "name",
+      "dataType": "string",
+      "required": true
+    },
+    {
+      "id": "VC-GUARD-FALLB-102",
+      "description": "Fall B: nested positive guard, correct.",
+      "field": "note",
+      "dataType": "string",
+      "required": true
+    },
+    {
+      "id": "VC-GUARD-FALLC-103",
+      "description": "Fall C: no guard at all.",
+      "field": "tag",
+      "dataType": "string",
+      "required": true
+    },
+    {
+      "id": "VC-GUARD-FALLD-104",
+      "description": "Fall D: an unrelated condition precedes the access.",
+      "field": "flag",
+      "dataType": "boolean",
+      "required": true
+    },
+    {
+      "id": "VC-GUARD-UNRESOLVED-105",
+      "description": "Negative control: AND-combined reject condition, unsound.",
+      "field": "amount",
+      "dataType": "number",
+      "required": true
+    }
+  ]
+}

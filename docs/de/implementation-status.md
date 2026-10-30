@@ -144,6 +144,7 @@ Prozedurale Regeln (`ProjectRule`, cross-file):
 | R-VALIDATION-CONTRACT-DATAFLOW-UNRESOLVED | marcus.judgment | Robustheit, Belegbarkeit | opt-in `--contracts`; der validierte Wert wird an einen business-/persistenz-klingenden Aufruf übergeben, den Stoa innerhalb der Datei nicht auflösen kann |
 | R-VALIDATION-CONTRACT-LAYER-UNRESOLVED | marcus.judgment | Robustheit, Belegbarkeit | opt-in `--contracts`; der Vertrag behauptet die Backend-Schicht, doch keine Implementierung wurde nachweislich mit Request-Daten gefüttert |
 | R-VALIDATION-CONTRACT-SECURITY-UNVERIFIED | marcus.judgment | Robustheit, Belegbarkeit | opt-in `--contracts`; der Vertrag verlangt `security.serverSideValidation`, doch keine Implementierung wurde nachweislich mit Request-Daten gefüttert |
+| R-VALIDATION-CONTRACT-SAFEPARSE-UNGUARDED | marcus.judgment | Robustheit, Belegbarkeit | opt-in `--contracts`; `.data` eines `.safeParse()`-Ergebnisses wird ohne nachgewiesene `result.success`-Prüfung verwendet |
 
 Alle zehn Qualitätsdimensionen (inkl. Barrierefreiheit, Bedienbarkeit) haben
 mindestens eine Regel.
@@ -298,6 +299,26 @@ zu liefern.
   validierten Werts über eine `return`-Anweisung hinaus zu den Aufrufern der
   Funktion (die Nachverfolgung endet an der Funktionsgrenze, erkennt das
   `return` an, behauptet aber nichts darüber, was der Aufrufer damit tut).
+- **safeParse()-Erfolgs-/Fehlerpfad-Verifikation** (`src/analysis/typescript/SafeParseGuard.ts`):
+  der Zugriff auf `.data` nach `.safeParse()` ist für sich kein Beweis, dass
+  er sicher ist — `.safeParse()` liefert eine diskriminierte Union, und
+  `.data` ist erst solide, sobald `result.success` durch den umgebenden
+  Kontrollfluss NACHWEISLICH wahr ist. Die `transforms`-Edge
+  (Validierungs-Ergebnis → validierter Wert) spiegelt das jetzt wider, statt
+  immer `verified` zu sein: `verified` nur für zwei solide Formen — eine
+  Early-Exit-Absicherung (`if (!result.success) { throw/return/… }`, die
+  unbedingt terminiert, sodass späterer Code im selben Block nur bei Erfolg
+  läuft) oder eine verschachtelte positive Absicherung
+  (`if (result.success) { …Zugriff… }`), jeweils kombinierbar mit weiteren
+  Bedingungen via UND/ODER, solange die Kombination logisch solide bleibt
+  (eine UND-kombinierte Ablehnung oder eine ODER-kombinierte Annahme ist
+  NICHT solide und zählt nicht). Andernfalls `unresolved` — entweder
+  referenziert nichts `result.success` überhaupt, oder etwas tut es, aber
+  nicht solide — gemeldet (vertragsgebunden, wie seine Geschwister) als
+  `R-VALIDATION-CONTRACT-SAFEPARSE-UNGUARDED` (mittlere Schwere, Konfidenz
+  0.5: eine echte, nachweisbare Lücke, nicht nur „konnte nicht weiter
+  nachverfolgt werden"). Stoa nimmt niemals Sicherheit an, nur weil IRGENDEINE
+  Bedingung dem Zugriff zufällig vorausgeht.
 - **Schicht- & Security-Zuordnung** (`ValidationContractRule.ts`): Die
   `layers`/`security`-Felder eines Vertrags sind eine BEHAUPTUNG, kein
   Beweis. Behauptet eine Regel die `backend`-Schicht, oder deklariert sie
@@ -369,7 +390,7 @@ zu liefern.
 
 ## Qualitätssicherung
 
-- **205 node:test-Fälle** grün (Regeln pos./neg., Extraktion, Schema-Validierung,
+- **211 node:test-Fälle** grün (Regeln pos./neg., Extraktion, Schema-Validierung,
   i18n, Determinismus, SARIF, Eval, Semantik-Groundedness, Datenschutz,
   Finding-Trennung).
 - **Golden-Korpus** (`test/corpus/`, **nur TS+PHP**) mit Ground-Truth; Eval

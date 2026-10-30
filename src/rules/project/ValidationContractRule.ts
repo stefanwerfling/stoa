@@ -25,7 +25,8 @@ type RuleId =
     | 'R-VALIDATION-CONTRACT-RAW-AFTER-VALIDATION'
     | 'R-VALIDATION-CONTRACT-DATAFLOW-UNRESOLVED'
     | 'R-VALIDATION-CONTRACT-LAYER-UNRESOLVED'
-    | 'R-VALIDATION-CONTRACT-SECURITY-UNVERIFIED';
+    | 'R-VALIDATION-CONTRACT-SECURITY-UNVERIFIED'
+    | 'R-VALIDATION-CONTRACT-SAFEPARSE-UNGUARDED';
 
 interface UsageValue {
     id: string;
@@ -56,7 +57,8 @@ const META: Record<RuleId, RuleMeta> = {
     'R-VALIDATION-CONTRACT-RAW-AFTER-VALIDATION': {principleId: 'marcus.judgment', dimensions: ['robustness'], severity: 'high', confidence: 0.6, certaintyBasis: 'semantic-heuristic'},
     'R-VALIDATION-CONTRACT-DATAFLOW-UNRESOLVED': {principleId: 'marcus.judgment', dimensions: ['robustness', 'decision-evidence'], severity: 'low', confidence: 0.3, certaintyBasis: 'semantic-heuristic'},
     'R-VALIDATION-CONTRACT-LAYER-UNRESOLVED': {principleId: 'marcus.judgment', dimensions: ['robustness', 'decision-evidence'], severity: 'low', confidence: 0.3, certaintyBasis: 'semantic-heuristic'},
-    'R-VALIDATION-CONTRACT-SECURITY-UNVERIFIED': {principleId: 'marcus.judgment', dimensions: ['robustness', 'decision-evidence'], severity: 'low', confidence: 0.3, certaintyBasis: 'semantic-heuristic'}
+    'R-VALIDATION-CONTRACT-SECURITY-UNVERIFIED': {principleId: 'marcus.judgment', dimensions: ['robustness', 'decision-evidence'], severity: 'low', confidence: 0.3, certaintyBasis: 'semantic-heuristic'},
+    'R-VALIDATION-CONTRACT-SAFEPARSE-UNGUARDED': {principleId: 'marcus.judgment', dimensions: ['robustness', 'decision-evidence'], severity: 'medium', confidence: 0.5, certaintyBasis: 'semantic-heuristic'}
 };
 
 const TEXT: Record<RuleId, {statement: LocalizedText; suggestion: LocalizedText; drawbacks?: LocalizedText; missingContext: LocalizedText; rationale: LocalizedText}> = {
@@ -257,6 +259,24 @@ const TEXT: Record<RuleId, {statement: LocalizedText; suggestion: LocalizedText;
             en: 'A frontend check alone never satisfies a server-side validation requirement; reporting this plainly, with an explicit account of which security flags Stoa cannot check at all, is more honest than silence on either (marcus.judgment).',
             de: 'Eine reine Frontend-Prüfung erfüllt niemals eine Anforderung an serverseitige Validierung; dies offen zu melden — mit expliziter Angabe, welche Security-Flags Stoa gar nicht prüfen kann — ist ehrlicher als Schweigen zu beidem (marcus.judgment).'
         }
+    },
+    'R-VALIDATION-CONTRACT-SAFEPARSE-UNGUARDED': {
+        statement: {
+            en: 'The validated result for "{value}" is used without a proven check that validation actually succeeded.',
+            de: 'Das validierte Ergebnis für „{value}" wird verwendet, ohne nachweislich zu prüfen, dass die Validierung tatsächlich erfolgreich war.'
+        },
+        suggestion: {
+            en: 'Check `result.success` before using `result.data` — either `if (!result.success) { throw/return; }` followed by the use, or nest the use inside `if (result.success) { ... }`. A condition that merely happens to precede the access, without referencing `result.success`, does not establish this.',
+            de: 'Vor der Verwendung von `result.data` `result.success` prüfen — entweder `if (!result.success) { throw/return; }`, gefolgt von der Verwendung, oder die Verwendung in `if (result.success) { ... }` verschachteln. Eine Bedingung, die der Zugriff lediglich zufällig vorausgeht, ohne `result.success` zu referenzieren, stellt dies nicht sicher.'
+        },
+        missingContext: {
+            en: '`.safeParse()` returns a discriminated union (`{success: true, data} | {success: false, error}`); accessing `.data` without a proven `success` check is unsound regardless of whether the code "happens to work" at runtime for a given input. Stoa recognizes two sound shapes: an early-exit guard (`if (!result.success)` unconditionally terminating) and a nested positive guard (`if (result.success) { ... }`) — combined with AND/OR as long as the combination stays logically sound. A condition that references `result.success` but not soundly (e.g. AND-combined with an unrelated reject term) is reported the same way as no check at all; the distinction lives only in this finding\'s evidence, not in its severity.',
+            de: '`.safeParse()` liefert eine diskriminierte Union (`{success: true, data} | {success: false, error}`); der Zugriff auf `.data` ohne nachgewiesene `success`-Prüfung ist unsolide, unabhängig davon, ob der Code für einen bestimmten Input zur Laufzeit „zufällig funktioniert". Stoa erkennt zwei solide Formen: eine Early-Exit-Absicherung (`if (!result.success)`, die unbedingt terminiert) und eine verschachtelte positive Absicherung (`if (result.success) { ... }`) — kombiniert mit UND/ODER, solange die Kombination logisch solide bleibt. Eine Bedingung, die `result.success` referenziert, aber nicht solide, wird genauso gemeldet wie gar keine Prüfung; der Unterschied steckt nur in der Evidenz dieses Befunds, nicht in seiner Schwere.'
+        },
+        rationale: {
+            en: 'A validator whose result is used without proof that it succeeded has not actually gated anything — the same obstacle the validation existed to remove (an unchecked value reaching the rest of the program) remains standing (marcus.judgment).',
+            de: 'Ein Validator, dessen Ergebnis ohne Erfolgsnachweis verwendet wird, hat tatsächlich nichts abgesichert — dasselbe Hindernis, das die Validierung beseitigen sollte (ein ungeprüfter Wert, der den Rest des Programms erreicht), bleibt bestehen (marcus.judgment).'
+        }
     }
 };
 
@@ -295,6 +315,7 @@ export class ValidationContractRule implements ProjectRule {
         findings.push(...this.rawAfterValidation(input));
         findings.push(...this.dataflowUnresolved(input));
         findings.push(...this.layerAndSecurityAttribution(annotations, input));
+        findings.push(...this.safeParseUnguarded(input));
         return findings;
     }
 
@@ -447,7 +468,12 @@ export class ValidationContractRule implements ProjectRule {
             if (findContractRule(this.contract as ValidationContract, value.id) === null) {
                 continue;
             }
-            const unresolved = value.graph.edges.find((edge) => edge.status === 'unresolved');
+            // Specifically the DESTINATION being unresolved (passes-to/persists,
+            // built by traceSink) — NOT a `transforms` edge, which can also
+            // carry `unresolved` for an entirely different reason (an
+            // unproven safeParse success guard, see safeParseUnguarded())
+            // and already gets its own, more specific finding.
+            const unresolved = value.graph.edges.find((edge) => edge.status === 'unresolved' && edge.kind !== 'transforms');
             if (unresolved === undefined) {
                 continue;
             }
@@ -491,6 +517,34 @@ export class ValidationContractRule implements ProjectRule {
             }
             const ruleId: RuleId = requiresServerSideValidation ? 'R-VALIDATION-CONTRACT-SECURITY-UNVERIFIED' : 'R-VALIDATION-CONTRACT-LAYER-UNRESOLVED';
             findings.push(this.buildFinding(ruleId, annotation.fact, rule.id, input));
+        }
+        return findings;
+    }
+
+    // A `.safeParse()` result's `.data` is used (directly, or destructured)
+    // without a PROVEN `result.success` check (SafeParseGuard.ts) —
+    // represented as the dataflow graph's `transforms` edge carrying status
+    // `unresolved` with a `safeParse guard: ...` limit. Gated on contract
+    // membership like the sibling usage-tracing findings; fires for BOTH
+    // `success-guard-missing` (nothing related exists) and
+    // `success-guard-unresolved` (something exists, not provably sound) —
+    // the distinction is informational (in the edge's own basis text), not
+    // a severity difference, since both mean "not proven safe".
+    private safeParseUnguarded(input: ProjectRuleInput): Finding[] {
+        const findings: Finding[] = [];
+        for (const fact of input.facts) {
+            if (fact.kind !== 'validation.dataflowGraph') {
+                continue;
+            }
+            const value = fact.value as unknown as DataflowValue;
+            if (findContractRule(this.contract as ValidationContract, value.id) === null) {
+                continue;
+            }
+            const transforms = value.graph.edges.find((edge) => edge.kind === 'transforms' && edge.limits?.some((limit) => limit.startsWith('safeParse guard:')));
+            if (transforms === undefined) {
+                continue;
+            }
+            findings.push(this.buildFinding('R-VALIDATION-CONTRACT-SAFEPARSE-UNGUARDED', fact, `${value.id} — ${transforms.basis}`, input));
         }
         return findings;
     }

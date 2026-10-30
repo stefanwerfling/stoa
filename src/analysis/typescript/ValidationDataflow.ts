@@ -9,6 +9,7 @@ import {isRawRequestExpression, isRequestRootedExpression, nearestFunction, PERS
 import {findParseCalls, isFedByRequest} from './ValidatorUsage.js';
 import {findInnerCall, resolveOneHop} from './OneHopResolution.js';
 import {destructuredProperty, isReassignedAnywhere, tracksBinding} from './SymbolResolution.js';
+import {verifySafeParseGuard} from './SafeParseGuard.js';
 
 type Build = (spec: FactSpec) => Fact;
 
@@ -241,21 +242,29 @@ const buildGraph = (sourceFile: SourceFile, schema: AnnotatedSchema, call: CallE
         // Either `result.data` (a property access) or `const {data} = result`
         // (destructuring) — both are the validated value, resolved via
         // symbol identity so a shadowed, unrelated `result` elsewhere in the
-        // function is never mistaken for this one.
+        // function is never mistaken for this one. Accessing `.data` is not
+        // by itself proof the value is safe to use: `.safeParse()` returns a
+        // discriminated union, so the access is only sound once
+        // `result.success` has been proven true — verifySafeParseGuard
+        // checks that control-flow guarantee, not just that the access
+        // syntactically exists.
         const dataAccess = findDataAccess(fn, boundDeclaration);
+        let accessSite: Node;
         if (dataAccess !== undefined) {
+            accessSite = dataAccess;
             validatedId = addNode('validated-value', `${boundDeclaration.getText()}.data`, dataAccess);
-            addEdge(resultId, validatedId, 'transforms', 'verified', `${boundDeclaration.getText()}.data is the validated value`, dataAccess);
             matches = (node: Node): boolean => isDataAccessOf(node, boundDeclaration, fn);
         } else {
             const destructured = destructuredProperty(boundDeclaration, 'data', fn);
             if (destructured === null) {
                 return {nodes, edges};
             }
+            accessSite = destructured;
             validatedId = addNode('validated-value', destructured.getText(), destructured);
-            addEdge(resultId, validatedId, 'transforms', 'verified', `{ data } destructured from ${boundDeclaration.getText()} is the validated value`, destructured);
             matches = (node: Node): boolean => tracksBinding(node, destructured, fn);
         }
+        const guard = verifySafeParseGuard(boundDeclaration, accessSite, fn);
+        addEdge(resultId, validatedId, 'transforms', guard.evidenceStatus, guard.basis, accessSite, guard.evidenceStatus === 'verified' ? undefined : [`safeParse guard: ${guard.status}`]);
     } else {
         validatedId = addNode('validated-value', boundDeclaration?.getText() ?? call.getText(), call);
         addEdge(invocationId, validatedId, 'returns', 'verified', `${call.getText()} returns the validated value directly`, call);

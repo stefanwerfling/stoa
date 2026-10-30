@@ -140,6 +140,7 @@ Procedural rules (`ProjectRule`, cross-file):
 | R-VALIDATION-CONTRACT-DATAFLOW-UNRESOLVED | marcus.judgment | robustness, decision-evidence | opt-in `--contracts`; the validated value is passed to a business/persistence-named call Stoa cannot resolve within the file |
 | R-VALIDATION-CONTRACT-LAYER-UNRESOLVED | marcus.judgment | robustness, decision-evidence | opt-in `--contracts`; the contract claims the backend layer, but no implementation was proven fed by request data |
 | R-VALIDATION-CONTRACT-SECURITY-UNVERIFIED | marcus.judgment | robustness, decision-evidence | opt-in `--contracts`; the contract requires `security.serverSideValidation`, but no implementation was proven fed by request data |
+| R-VALIDATION-CONTRACT-SAFEPARSE-UNGUARDED | marcus.judgment | robustness, decision-evidence | opt-in `--contracts`; a `.safeParse()` result's `.data` is used without a proven `result.success` check |
 
 All ten quality dimensions (incl. accessibility, usability) have at least one rule.
 
@@ -281,6 +282,24 @@ fails fast (exit 1, concrete errors) instead of silently yielding 0 findings.
   tracing a validated value across a `return` statement into the function's
   own callers (the trace stops at the function boundary, acknowledging the
   return happened but claiming nothing about what the caller does with it).
+- **safeParse() success/failure-path verification** (`src/analysis/typescript/SafeParseGuard.ts`):
+  accessing `.data` after `.safeParse()` is not by itself proof the access
+  is safe — `.safeParse()` returns a discriminated union, and `.data` is
+  only sound once `result.success` is PROVEN true by the surrounding
+  control flow. The `transforms` edge (validation-result → validated-value)
+  now reflects this instead of always being `verified`: `verified` only for
+  two sound shapes — an early-exit guard (`if (!result.success) { throw/return/… }`
+  unconditionally terminating, so later code in the same block only runs on
+  success) or a nested positive guard (`if (result.success) { …access… }`),
+  each allowed to combine with other conditions via AND/OR as long as the
+  combination stays logically sound (an AND-combined reject, or an
+  OR-combined accept, is NOT sound and does not count). Otherwise
+  `unresolved` — either nothing references `result.success` at all, or
+  something does but not soundly — surfaced (contract-gated, like its
+  siblings) as `R-VALIDATION-CONTRACT-SAFEPARSE-UNGUARDED` (medium severity,
+  0.5 confidence: a real, demonstrable gap, not just "could not trace
+  further"). Stoa never assumes safety just because SOME condition happens
+  to precede the access.
 - **Layer & security attribution** (`ValidationContractRule.ts`): a contract's
   `layers`/`security` fields are a CLAIM, not proof. When a rule claims the
   `backend` layer, or declares the one structured security flag Stoa can
@@ -346,7 +365,7 @@ fails fast (exit 1, concrete errors) instead of silently yielding 0 findings.
 
 ## Quality assurance
 
-- **205 node:test cases** green (rules pos./neg., extraction, schema validation,
+- **211 node:test cases** green (rules pos./neg., extraction, schema validation,
   i18n, determinism, SARIF, evaluation, semantic groundedness, privacy,
   finding-model separation).
 - **Golden corpus** (`test/corpus/`, **TS+PHP only**) with ground truth;

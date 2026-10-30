@@ -71,7 +71,9 @@ test('case 3 — alias: a plain `const alias = result` still resolves to the val
 test('case 4 — destructuring: `const { data } = result` after safeParse() resolves the same as result.data would', () => {
     const {facts} = analyzeFixture();
     const graph = graphFor(facts, 'VC-SYMBOL-DESTRUCTURE-103');
-    assert.ok(graph.edges.some((e) => e.kind === 'transforms' && e.basis.includes('destructured from result')));
+    const transforms = graph.edges.find((e) => e.kind === 'transforms');
+    assert.ok(transforms, 'a transforms edge exists for the destructured { data }');
+    assert.equal(transforms?.status, 'verified', 'the preceding `if (!result.success) return;` is a proven failure-path-rejected guard');
     const persists = graph.edges.filter((e) => e.kind === 'persists');
     assert.equal(persists.length, 1);
     assert.equal(persists[0]?.status, 'verified');
