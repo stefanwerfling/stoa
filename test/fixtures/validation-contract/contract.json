@@ -218,6 +218,41 @@
       "field": "note",
       "dataType": "string",
       "required": true
+    },
+    {
+      "id": "VC-PROTO-CONSTRUCTOR-201",
+      "description": "A field literally named 'constructor' — must be matched as its own declared field, not via the inherited Object.prototype.constructor.",
+      "field": "constructor",
+      "dataType": "string",
+      "required": true
+    },
+    {
+      "id": "VC-PROTO-TOSTRING-202",
+      "description": "A field literally named 'toString' — must be matched as its own declared field, not via the inherited Object.prototype.toString.",
+      "field": "toString",
+      "dataType": "string",
+      "required": true
+    },
+    {
+      "id": "VC-PROTO-PROTO-203",
+      "description": "A field literally named '__proto__' — must not be silently swallowed by the __proto__ setter.",
+      "field": "__proto__",
+      "dataType": "string",
+      "required": true
+    },
+    {
+      "id": "VC-PROTO-PRESENT-204",
+      "description": "A genuinely present field, for contrast with the absent case below.",
+      "field": "realField",
+      "dataType": "string",
+      "required": true
+    },
+    {
+      "id": "VC-PROTO-ABSENT-205",
+      "description": "A field the schema does not declare — must stay 'not found', never match via any inherited property.",
+      "field": "missingField",
+      "dataType": "string",
+      "required": true
     }
   ]
 }

@@ -30,7 +30,7 @@ const key = (f: Finding): string => `${f.rule.id}|${f.location.file.split('/').p
 test('loadValidationContract parses a well-formed contract, rejects a malformed one, and rejects a duplicate id', () => {
     const contract = loadValidationContract(contractPath);
     assert.equal(contract.version, '1.1.0');
-    assert.equal(contract.rules.length, 27);
+    assert.equal(contract.rules.length, 32);
     assert.ok(contract.rules.some((rule) => rule.id === 'VC-ITEM-QUANTITY-001'));
 
     assert.throws(() => loadValidationContract(join(fixtures, 'does-not-exist.json')));
@@ -288,9 +288,26 @@ test('correctness fix: a bare z.object() request-body schema that matches the co
     assert.ok(findings.some((f) => f.rule.id === 'R-VALIDATION-CONTRACT-DATAFLOW-UNRESOLVED' && f.observation.statement.includes('VC-DATAFLOW-UNRESOLVED-019')));
 });
 
+test('correctness fix: prototype-safe object-field lookup — "constructor"/"toString"/"__proto__" fields match their OWN contract entry, never an inherited Object.prototype property, and "__proto__" is never silently swallowed', () => {
+    // prototype-fields.ts: the `in` operator would ALSO match "constructor"
+    // and "toString" via Object.prototype even if the schema never declared
+    // them; a plain object literal assignment to the key "__proto__" sets
+    // the object's OWN PROTOTYPE instead of creating a property, silently
+    // losing that field's resolved conditions entirely. Object.hasOwn + a
+    // null-prototype fields map (ValidationAnnotations.ts) fixes both.
+    const findings = vcFindings(analyzeFixture(loadValidationContract(contractPath)));
+    for (const id of ['VC-PROTO-CONSTRUCTOR-201', 'VC-PROTO-TOSTRING-202', 'VC-PROTO-PROTO-203', 'VC-PROTO-PRESENT-204']) {
+        assert.ok(!findings.some((f) => f.observation.statement.includes(id)), `${id}: the field is genuinely declared and matches — no finding`);
+    }
+    const absent = findings.find((f) => f.observation.statement.includes('VC-PROTO-ABSENT-205'));
+    assert.ok(absent, 'VC-PROTO-ABSENT-205: "missingField" is genuinely not declared — correctly unresolved, not confused with "realField" or any inherited property');
+    assert.equal(absent?.rule.id, 'R-VALIDATION-CONTRACT-UNRESOLVED');
+    assert.ok(absent?.observation.statement.includes('field "missingField" not found'));
+});
+
 test('every validation-contract finding states its principle, dimension and an explicit missingContext', () => {
     const findings = vcFindings(analyzeFixture(loadValidationContract(contractPath)));
-    assert.equal(findings.length, 23, 'the full fixture set across all files');
+    assert.equal(findings.length, 24, 'the full fixture set across all files');
     for (const finding of findings) {
         assert.ok(finding.interpretation.principles.length > 0, `${finding.rule.id} carries a principle`);
         assert.ok(finding.interpretation.dimensions.includes('robustness'), `${finding.rule.id} is tagged robustness`);

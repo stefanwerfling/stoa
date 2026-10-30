@@ -354,7 +354,15 @@ export class ValidationContractRule implements ProjectRule {
         // actually names, the same "declared dimensions only" bias as
         // `describeMismatches` itself.
         if (value.objectFields !== undefined) {
-            if (!(contractRule.field in value.objectFields)) {
+            // Object.hasOwn, not the `in` operator: `in` also matches
+            // INHERITED properties (a field literally named "constructor"
+            // or "toString" would otherwise appear to exist via
+            // Object.prototype even when the schema never declared it — a
+            // field that was never actually validated must never look
+            // "found"). ValidationAnnotations.ts additionally builds
+            // `objectFields` as a null-prototype object, so this is airtight
+            // even for "__proto__" as a field name.
+            if (!Object.hasOwn(value.objectFields, contractRule.field)) {
                 return [this.buildFinding('R-VALIDATION-CONTRACT-UNRESOLVED', fact, `${value.id} — field "${contractRule.field}" not found in the annotated z.object() schema`, input)];
             }
             const fieldConditions = value.objectFields[contractRule.field];

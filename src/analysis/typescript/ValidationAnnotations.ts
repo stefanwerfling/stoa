@@ -214,7 +214,15 @@ const resolveZodObjectShape = (expression: Expression): Record<string, ResolvedC
     if (shape === undefined || !Node.isObjectLiteralExpression(shape)) {
         return null;
     }
-    const fields: Record<string, ResolvedConditions | null> = {};
+    // A null-prototype object, not `{}`: a Zod schema field literally named
+    // `__proto__` (unusual, but syntactically valid via a string-literal
+    // property name) would otherwise be silently swallowed — `fields.__proto__
+    // = resolved` on a normal object invokes Object.prototype's `__proto__`
+    // SETTER (changing the object's own prototype) instead of creating an
+    // own property, so the field's resolved conditions would vanish rather
+    // than being stored. With no inherited `__proto__` accessor, this is
+    // just a normal property assignment like any other key.
+    const fields: Record<string, ResolvedConditions | null> = Object.create(null) as Record<string, ResolvedConditions | null>;
     for (const property of shape.getProperties()) {
         if (!Node.isPropertyAssignment(property)) {
             continue;
