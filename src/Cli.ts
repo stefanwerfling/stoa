@@ -16,7 +16,7 @@ import {toJson, toMarkdown} from './reporting/Reporter.js';
 import {toSarif} from './reporting/SarifReporter.js';
 import {createSemanticAdapter} from './semantic/SemanticAdapters.js';
 import {augmentWithSemantics} from './semantic/SemanticRunner.js';
-import type {AnalysisReport} from './Types.js';
+import type {AnalysisReport, Fact} from './Types.js';
 
 type CliValues = {
     format?: string;
@@ -40,6 +40,23 @@ type CliValues = {
 };
 
 const formatMB = (bytes: number): string => `${Math.round(bytes / (1024 * 1024))} MB`;
+
+// `--memory-stats` only — summed once, at the very end, from the already-
+// collected facts (never accumulated incrementally; see AnalyzeOptions.onProgress's
+// own doc comment on why a diagnostic must not become its own growth source).
+const evidenceGraphTotals = (facts: readonly Fact[]): {nodes: number; edges: number} => {
+    let nodes = 0;
+    let edges = 0;
+    for (const fact of facts) {
+        if (fact.kind !== 'validation.dataflowGraph') {
+            continue;
+        }
+        const value = fact.value as unknown as {graph?: {nodes?: unknown[]; edges?: unknown[]}};
+        nodes += value.graph?.nodes?.length ?? 0;
+        edges += value.graph?.edges?.length ?? 0;
+    }
+    return {nodes, edges};
+};
 
 const configFor = (values: CliValues) => {
     const base = loadConfig(values.config ?? null);
@@ -136,7 +153,10 @@ const runAnalyze = async (values: CliValues, target: string): Promise<number> =>
         ...(memoryStats
             ? {
                   onProgress: (snapshot, progress) => {
-                      process.stderr.write(`[stoa] files ${progress.filesProcessed}/${progress.filesSelected} | heap ${formatMB(snapshot.heapUsed)}/${formatMB(snapshot.heapSizeLimit)} | rss ${formatMB(snapshot.rss)}\n`);
+                      const elapsed = (progress.elapsedMs / 1000).toFixed(1);
+                      process.stderr.write(
+                          `[stoa] ${progress.phase}: files ${progress.filesProcessed}/${progress.filesSelected} | facts ${progress.factsExtracted} | heap ${formatMB(snapshot.heapUsed)}/${formatMB(snapshot.heapSizeLimit)} (total ${formatMB(snapshot.heapTotal)}) | rss ${formatMB(snapshot.rss)} | external ${formatMB(snapshot.external)} | ${elapsed}s\n`
+                      );
                   }
               }
             : {}),
@@ -157,7 +177,10 @@ const runAnalyze = async (values: CliValues, target: string): Promise<number> =>
 
     if (memoryStats) {
         const cacheNote = result.report.coverage.cacheHits !== undefined ? `, ${result.report.coverage.cacheHits} cache hits` : '';
-        process.stderr.write(`[stoa] done: ${result.report.coverage.filesAnalyzed} analyzed, ${result.report.coverage.filesSkipped} skipped, ${result.report.coverage.factCount} facts, ${result.report.findings.length} findings${cacheNote}\n`);
+        const evidence = evidenceGraphTotals(result.facts);
+        process.stderr.write(
+            `[stoa] done: ${result.report.coverage.filesAnalyzed} analyzed, ${result.report.coverage.filesSkipped} skipped, ${result.report.coverage.factCount} facts, ${result.report.findings.length} findings, ${evidence.nodes} evidence nodes / ${evidence.edges} evidence edges${cacheNote}\n`
+        );
     }
     // The memory guard stopped early: say so loudly, on every format, not only
     // buried in `coverage` — a truncated analysis must never read like a

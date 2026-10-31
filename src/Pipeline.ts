@@ -42,11 +42,13 @@ export interface AnalyzeOptions {
     validationContract?: ValidationContract | null;
     /**
      * Opt-in diagnostic hook, called every `MEMORY_CHECK_INTERVAL` files with a
-     * memory snapshot and ingestion progress (see MemoryGuard.ts / CLI
+     * memory snapshot and progress (see MemoryGuard.ts / CLI
      * `--memory-stats`). Never required for correct analysis — purely
-     * observational, and never asked to retain anything across calls.
+     * observational, and never asked to retain anything across calls (callers
+     * that want a trend print/log each call rather than accumulating them, so
+     * the diagnostic itself never becomes a growth source).
      */
-    onProgress?: (snapshot: MemorySnapshot, progress: {filesSelected: number; filesProcessed: number}) => void;
+    onProgress?: (snapshot: MemorySnapshot, progress: AnalysisProgress) => void;
     /**
      * Overrides for the memory guard (see MemoryGuard.ts). Not exposed as a
      * CLI flag — the defaults are already derived from V8's own heap limit,
@@ -64,6 +66,15 @@ export interface AnalyzeOptions {
      * is read from or written to disk beyond the analysis target itself.
      */
     cacheDir?: string;
+}
+
+/** One `onProgress` snapshot's non-memory half — see AnalyzeOptions.onProgress. */
+export interface AnalysisProgress {
+    phase: 'analysis' | 'evaluation';
+    filesSelected: number;
+    filesProcessed: number;
+    factsExtracted: number;
+    elapsedMs: number;
 }
 
 const TS_EXTENSIONS: readonly string[] = ['.ts', '.tsx'] as const;
@@ -115,6 +126,7 @@ export const analyze = (options: AnalyzeOptions): AnalysisResult => {
     const checkEveryFiles = options.memoryGuard?.checkEveryFiles ?? DEFAULT_MEMORY_CHECK_INTERVAL;
     const criticalRatio = options.memoryGuard?.criticalRatio ?? DEFAULT_CRITICAL_RATIO;
 
+    const startedAt = Date.now();
     const facts: Fact[] = [];
     let analyzed = 0;
     let skipped = 0;
@@ -123,7 +135,7 @@ export const analyze = (options: AnalyzeOptions): AnalysisResult => {
     for (const [index, meta] of files.entries()) {
         if (index % checkEveryFiles === 0) {
             const snapshot = takeMemorySnapshot();
-            options.onProgress?.(snapshot, {filesSelected: files.length, filesProcessed: index});
+            options.onProgress?.(snapshot, {phase: 'analysis', filesSelected: files.length, filesProcessed: index, factsExtracted: facts.length, elapsedMs: Date.now() - startedAt});
             // Stop ingesting further files rather than let V8 crash with a
             // fatal "JavaScript heap out of memory" error. Facts and findings
             // already produced are kept (never discarded) and reported as
@@ -185,6 +197,7 @@ export const analyze = (options: AnalyzeOptions): AnalysisResult => {
         analyzed += 1;
     }
 
+    options.onProgress?.(takeMemorySnapshot(), {phase: 'evaluation', filesSelected: files.length, filesProcessed: analyzed + skipped, factsExtracted: facts.length, elapsedMs: Date.now() - startedAt});
     const findings: Finding[] = ruleEngine.evaluate(facts);
 
     const versions: VersionStamp = {
