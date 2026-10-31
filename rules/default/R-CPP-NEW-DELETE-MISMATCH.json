@@ -1,0 +1,36 @@
+{
+  "id": "R-CPP-NEW-DELETE-MISMATCH",
+  "version": "1.0.0",
+  "title": "new[]/delete form mismatch",
+  "feature": "ast.newDeleteMismatch",
+  "appliesTo": ["statement"],
+  "principles": ["marcus.control"],
+  "dimensions": ["robustness", "error-handling"],
+  "trigger": {
+    "all": [{ "fact": "ast.newDeleteMismatch", "op": "==", "value": true }]
+  },
+  "requiredEvidence": ["ast.newDeleteMismatch"],
+  "severity": { "base": "high" },
+  "confidence": { "base": 0.8, "capBy": "certainty" },
+  "message": {
+    "en": "new[]/new and delete[]/delete are mismatched for the same pointer (array-form allocation freed with the scalar form, or vice versa).",
+    "de": "new[]/new und delete[]/delete passen für denselben Zeiger nicht zusammen (Array-Allokation mit der skalaren Form freigegeben, oder umgekehrt)."
+  },
+  "rationale": {
+    "en": "Which delete form matches the allocation is entirely within the author's own control at the point of writing it (marcus.control) — getting it wrong is undefined behavior, not a style issue.",
+    "de": "Welche delete-Form zur Allokation passt, liegt beim Schreiben vollständig im eigenen Einflussbereich des Autors (marcus.control) — es falsch zu machen ist undefiniertes Verhalten, kein Stilproblem."
+  },
+  "remediation": {
+    "suggestion": {
+      "en": "Use delete[] for every new[] allocation and plain delete for every scalar new — or avoid the question entirely with a container/smart pointer.",
+      "de": "delete[] für jede new[]-Allokation und einfaches delete für jedes skalare new verwenden — oder die Frage mit einem Container/Smart Pointer ganz vermeiden."
+    }
+  },
+  "missingContext": [
+    {
+      "en": "Matched by identifier text within one function (tree-sitter has no symbol table) — a variable shadowed in a nested block with the same name could in principle be mismatched against the wrong allocation; not observed in practice so far.",
+      "de": "Abgleich per Identifier-Text innerhalb einer Funktion (tree-sitter hat keine Symboltabelle) — eine in einem verschachtelten Block gleichnamig verschattete Variable könnte theoretisch gegen die falsche Allokation abgeglichen werden; bisher in der Praxis nicht beobachtet."
+    }
+  ],
+  "tests": "test/Cpp.test.ts"
+}

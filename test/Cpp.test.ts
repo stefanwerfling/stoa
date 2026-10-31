@@ -63,3 +63,49 @@ test('C: malformed source and preprocessor guards do not crash extraction', () =
 test('C/C++: analysis is deterministic', () => {
     assert.equal(JSON.stringify(analyzePath(join(fixtures, 'tangled.c'))), JSON.stringify(analyzePath(join(fixtures, 'tangled.c'))));
 });
+
+const byLine = (findings: Finding[], ruleId: string): number[] => findings.filter((f) => f.rule.id === ruleId).map((f) => f.location.range.startLine).sort((a, b) => a - b);
+
+test('R-CPP-UNRELEASED-ALLOCATION: fires on new/malloc/calloc left with no release, no escape anywhere in the function', () => {
+    const findings = analyzePath(join(fixtures, 'allocation.cpp'));
+    // leakedNew (5), leakedMalloc (9), usedThenLeaked (53, dereferenced but
+    // never released — a dereference is an ordinary use, not an escape),
+    // callocLeak (69). Everything else in the fixture is either correctly
+    // released, or escapes (a call argument, a return, a reassignment) and
+    // is therefore deliberately NOT claimed as a leak.
+    assert.deepEqual(byLine(findings, 'R-CPP-UNRELEASED-ALLOCATION'), [5, 9, 53, 69]);
+});
+
+test('R-CPP-NEW-DELETE-MISMATCH: fires only when the SAME pointer\'s new[]/new does not match its delete[]/delete form', () => {
+    const findings = analyzePath(join(fixtures, 'allocation.cpp'));
+    // mismatchedArray (23: new[] freed with plain delete), mismatchedScalar
+    // (28: new freed with delete[]). matchedNew/matchedArray/matchedMalloc
+    // are correctly paired and must not appear here.
+    assert.deepEqual(byLine(findings, 'R-CPP-NEW-DELETE-MISMATCH'), [23, 28]);
+});
+
+test('R-CPP-UNRELEASED-ALLOCATION: escapes (call argument, return, reassignment) and a correct release all suppress the finding — never a false positive', () => {
+    const findings = analyzePath(join(fixtures, 'allocation.cpp'));
+    const leakLines = new Set(byLine(findings, 'R-CPP-UNRELEASED-ALLOCATION'));
+    // matchedNew(13), matchedArray(18), mismatchedArray(23, reported under
+    // the OTHER rule, not this one), mismatchedScalar(28, same), matchedMalloc(33),
+    // escapesViaCall(38), escapesViaReturn(43), escapesViaReassign(48), reallocPattern(58).
+    for (const safeLine of [13, 18, 33, 38, 43, 48, 58]) {
+        assert.ok(!leakLines.has(safeLine), `line ${safeLine} must not be flagged as an unreleased allocation`);
+    }
+});
+
+test('R-CPP-UNRELEASED-ALLOCATION: a declare-then-assign allocation and one inside a lambda are both out of scope (documented, not a false negative introduced by this test)', () => {
+    const findings = analyzePath(join(fixtures, 'allocation.cpp'));
+    assert.equal(byLine(findings, 'R-CPP-UNRELEASED-ALLOCATION').includes(65), false, 'p = new int(5) after a bare `int* p;` is not tracked — only a direct initializer is');
+    assert.equal(byLine(findings, 'R-CPP-UNRELEASED-ALLOCATION').includes(74), false, 'an allocation inside a lambda is not attributed anywhere — lambdas are not analyzed at all, same as for complexity metrics');
+});
+
+test('R-CPP-UNRELEASED-ALLOCATION: four real-world false positives found by dogfooding against external repos are fixed and stay fixed', () => {
+    const findings = analyzePath(join(fixtures, 'allocation.cpp'));
+    const leakLines = new Set(byLine(findings, 'R-CPP-UNRELEASED-ALLOCATION'));
+    assert.ok(!leakLines.has(82), 'a `static` local pointer is a process-lifetime singleton by design (mimirmind bigBlockPool()), not a leak');
+    assert.ok(!leakLines.has(89), 'returning the pointer inside a braced aggregate initializer (mimirmind ComputeBuffer{raw,...}) is still an escape, not just a bare `return raw;`');
+    assert.ok(!leakLines.has(94), 'placement new (vllm shm.cpp/cpu_attn_impl.hpp) constructs in caller-owned storage — there is nothing of its own to delete');
+    assert.ok(!leakLines.has(98), 'free() reached through a cast (`free((void*)buf)`) is still a release, not a miss');
+});

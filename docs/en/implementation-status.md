@@ -11,7 +11,11 @@
   API), **PHP** (via `php-parser`/glayzzle, fully in-process — no subprocess) and
   **Dart/Flutter** and **C/C++** (both via tree-sitter / `web-tree-sitter`,
   WASM, in-process; metric/complexity facts, error-handling for Dart and C++ —
-  C has no try/catch).
+  C has no try/catch). **C/C++ additionally gets two memory-safety rules**
+  (`R-CPP-UNRELEASED-ALLOCATION`, `R-CPP-NEW-DELETE-MISMATCH` — see the rule
+  table below) — the one place in the rule catalog where a language's own
+  distinguishing risk (manual memory management) is covered, rather than only
+  the language-neutral complexity/error-handling rules every adapter gets.
 - **UI/UX adapter (HTML):** static accessibility analysis via tree-sitter-html
   (WASM, in-process). Purely static — no rendering and no CSS cascade. Text
   contrast is checked **only** from colours declared together on an element's
@@ -263,7 +267,7 @@ surface only what a change actually introduced, not the whole backlog.
   that second run → zero findings in the output; removing the underlying
   issue and re-running → reported as `fixed`.
 
-## Rule catalog (38)
+## Rule catalog (40)
 
 Declarative rules (`rules/default/*.json`), on by default:
 
@@ -275,6 +279,8 @@ Declarative rules (`rules/default/*.json`), on by default:
 | R-WIDE-PUBLIC-SURFACE | marcus.purpose | responsibility-boundaries | TS/JS |
 | R-ERR-SWALLOWED | marcus.obstacle | error-handling | TS, PHP, Dart, C++ |
 | R-SIDEEFFECT-NONDETERMINISM | marcus.control | side-effect-control | TS, PHP, Dart, C/C++ |
+| R-CPP-UNRELEASED-ALLOCATION | marcus.control | robustness, error-handling | C/C++ (a `new`/`malloc`/`calloc`/`realloc` left with no release, no escape, anywhere in the function) |
+| R-CPP-NEW-DELETE-MISMATCH | marcus.control | robustness, error-handling | C/C++ (the same pointer's `new[]`/`new` does not match its `delete[]`/`delete` form) |
 | R-DEP-UNUSED | marcus.cooperation | dependencies | TS, PHP |
 | R-DEEP-IMPORT | marcus.cooperation | dependencies | TS, PHP |
 | R-TYPE-UNSOUND | marcus.judgment | decision-evidence, robustness | TS (opt-in `--typecheck`) |
@@ -328,6 +334,62 @@ Procedural rules (`ProjectRule`, cross-file):
 | R-VALIDATION-CONTRACT-SAFEPARSE-UNGUARDED | marcus.judgment | robustness, decision-evidence | opt-in `--contracts`; a `.safeParse()` result's `.data` is used without a proven `result.success` check |
 
 All ten quality dimensions (incl. accessibility, usability) have at least one rule.
+
+## C/C++ memory-safety rules
+
+The one place in the rule catalog where a language's OWN distinguishing risk
+(manual memory management) is covered, rather than only the language-neutral
+complexity/error-handling rules every adapter gets (`src/analysis/cpp/CppExtraction.ts`).
+Tree-sitter has no symbol table or type checker — unlike the TypeScript side's
+`SymbolResolution.ts`, matching here is necessarily by identifier TEXT within
+one function body (never across functions, never across files). Within that
+constraint, both rules are deliberately conservative: a false negative is
+preferred over a false positive (the same standing bias as the rest of this
+engine), confirmed by dogfooding against eleven real external C/C++
+repositories (not synthetic fixtures only) before shipping.
+
+- **Tracked:** a direct `Type* name = new ...;` / `Type* name = malloc/calloc/realloc(...);`
+  (optionally cast-wrapped) in ONE statement. **Not tracked, documented as a
+  gap, not guessed at:** a bare `Type* name;` followed by a separate
+  assignment; multiple declarators in one statement (`int *a, *b;`);
+  anything inside a lambda (consistent with the existing complexity-metric
+  scoping — lambdas are not analyzed as their own unit at all); placement new
+  (`new (buf) T(...)` constructs IN caller-owned storage — there is nothing
+  of its own to release, so it is excluded from tracking entirely, not just
+  from the leak check).
+- **Escape analysis** (`R-CPP-UNRELEASED-ALLOCATION`): every other reference
+  to the allocated identifier in the function is classified by climbing
+  through value-preserving wrappers (a cast, parentheses, a braced aggregate
+  initializer, a ternary branch — but NOT a dereference/member/subscript
+  operator, which consumes the pointer value itself rather than passing it
+  on) to find the nearest meaningful ancestor: a matching
+  `delete`/`delete[]`/`free(...)` is a release; a call argument, a `return`,
+  a reassignment (either side of `=`), or another declaration's initializer
+  is an ESCAPE — ownership may have transferred, so no leak claim is made at
+  all once one occurs. A `static` local is excluded up front (a
+  process-lifetime "allocate once" singleton is a deliberate, if
+  controversial, idiom — not a bug; found via dogfooding against
+  `mimirmind`'s `bigBlockPool()`, explicitly commented `// intentionally
+  leaked` in the source). Anything else (a dereference, `obj->field`,
+  `arr[i]`, a null check) is an ordinary local use — it neither releases nor
+  escapes the pointer, so an allocation that IS used internally but never
+  released still correctly fires (recall this engine's narrow identifier-text
+  matching does not sacrifice: "allocate, use, forget to free" is caught, not
+  just "allocate and never touch again").
+- **`R-CPP-NEW-DELETE-MISMATCH`** checks the array-ness of the allocation
+  (`new T[n]` vs `new T`) against every matching `delete`/`delete[]` found
+  for that identifier, independent of the escape analysis above (a mismatch
+  is about the PAIR, not about whether the pointer also escapes elsewhere
+  first). Found 4 genuine instances on first real-world use (legacy MFC C++
+  in a hobby project's `SMADlg.cpp`: `new unsigned char[...]` freed with
+  plain `delete` four times over).
+- **Dogfooding fixed two real false-positive classes before this shipped**
+  (both now locked in as regression tests in `test/Cpp.test.ts`): (1) a
+  pointer returned inside a braced aggregate initializer
+  (`return ComputeBuffer{raw, bytes, deleter};`) was not recognized as an
+  escape — only a bare `return raw;` was; (2) placement new was being tracked
+  as an ordinary allocation, flagging every use as an unreleased leak. Both
+  found against real external repositories, not invented as hypotheticals.
 
 ## Validation Trace IDs & contract verification (first vertical slice)
 
@@ -582,7 +644,7 @@ fails fast (exit 1, concrete errors) instead of silently yielding 0 findings.
 
 ## Quality assurance
 
-- **244 node:test cases** green (rules pos./neg., extraction, schema validation,
+- **249 node:test cases** green (rules pos./neg., extraction, schema validation,
   i18n, determinism, SARIF, evaluation, semantic groundedness, privacy,
   finding-model separation).
 - **Golden corpus** (`test/corpus/`, **TS+PHP only**) with ground truth;

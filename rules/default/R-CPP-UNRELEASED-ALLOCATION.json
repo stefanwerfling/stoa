@@ -1,0 +1,40 @@
+{
+  "id": "R-CPP-UNRELEASED-ALLOCATION",
+  "version": "1.0.0",
+  "title": "Unreleased heap allocation",
+  "feature": "ast.unreleasedAllocation",
+  "appliesTo": ["statement"],
+  "principles": ["marcus.control"],
+  "dimensions": ["robustness", "error-handling"],
+  "trigger": {
+    "all": [{ "fact": "ast.unreleasedAllocation", "op": "==", "value": true }]
+  },
+  "requiredEvidence": ["ast.unreleasedAllocation"],
+  "severity": { "base": "medium" },
+  "confidence": { "base": 0.6, "capBy": "certainty" },
+  "message": {
+    "en": "A heap allocation (new/malloc/calloc/realloc) is never freed, returned, passed elsewhere or reassigned anywhere in this function.",
+    "de": "Eine Heap-Allokation (new/malloc/calloc/realloc) wird in dieser Funktion nirgends freigegeben, zurückgegeben, weitergegeben oder neu zugewiesen."
+  },
+  "rationale": {
+    "en": "Releasing what you allocated is squarely within your own control (marcus.control) — an allocation whose ownership never leaves this function and is never released is a leak by construction, not a guess.",
+    "de": "Freizugeben, was man selbst alloziert hat, liegt klar im eigenen Einflussbereich (marcus.control) — eine Allokation, deren Eigentümerschaft diese Funktion nie verlässt und die nie freigegeben wird, ist konstruktionsbedingt ein Leck, keine Vermutung."
+  },
+  "remediation": {
+    "suggestion": {
+      "en": "Free/delete the pointer before it goes out of scope, or use RAII (a smart pointer / container) so release happens automatically.",
+      "de": "Den Zeiger freigeben/löschen, bevor er den Gültigkeitsbereich verlässt, oder RAII nutzen (Smart Pointer / Container), damit die Freigabe automatisch erfolgt."
+    },
+    "drawbacks": {
+      "en": "A smart pointer changes the pointer's type at every use site; for a narrow, function-local allocation a plain free()/delete at the right point is sometimes simpler.",
+      "de": "Ein Smart Pointer ändert den Zeigertyp an jeder Verwendungsstelle; für eine eng begrenzte, funktionslokale Allokation ist ein einfaches free()/delete an der richtigen Stelle manchmal einfacher."
+    }
+  },
+  "missingContext": [
+    {
+      "en": "Only a direct `Type* name = <allocation>;` in one statement is tracked (not a separate later assignment, multiple declarators in one statement, or an allocation inside a lambda); the pointer may also be released by code this analysis cannot see (a different translation unit, a macro).",
+      "de": "Nur ein direktes `Type* name = <Allokation>;` in einer Anweisung wird erfasst (keine spätere separate Zuweisung, keine mehreren Deklaratoren in einer Anweisung, keine Allokation innerhalb einer Lambda); der Zeiger könnte auch durch Code freigegeben werden, den diese Analyse nicht sieht (eine andere Translation Unit, ein Makro)."
+    }
+  ],
+  "tests": "test/Cpp.test.ts"
+}

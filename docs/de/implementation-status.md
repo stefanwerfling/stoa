@@ -11,7 +11,13 @@
   **PHP** (via `php-parser`/glayzzle, rein in-process — kein Subprozess) und
   **Dart/Flutter** und **C/C++** (beide via tree-sitter / `web-tree-sitter`,
   WASM, in-process; Metrik-/Komplexitäts-Facts, Fehlerbehandlung bei Dart und
-  C++ — C hat kein try/catch).
+  C++ — C hat kein try/catch). **C/C++ erhält zusätzlich zwei
+  Memory-Safety-Regeln** (`R-CPP-UNRELEASED-ALLOCATION`,
+  `R-CPP-NEW-DELETE-MISMATCH` — siehe Regeltabelle unten) — die einzige
+  Stelle im Regelkatalog, an der das eigene, unterscheidende Risiko einer
+  Sprache (manuelle Speicherverwaltung) abgedeckt wird, statt nur der
+  sprachneutralen Komplexitäts-/Fehlerbehandlungsregeln, die jeder Adapter
+  bekommt.
 - **UI/UX-Adapter (HTML):** statische Barrierefreiheits-Analyse via
   tree-sitter-html (WASM, in-process). Rein statisch — kein Rendering, keine
   CSS-Kaskade. Textkontrast wird **nur** aus Farben geprüft, die gemeinsam im
@@ -296,7 +302,7 @@ eingeführt hat, nicht den gesamten Backlog.
   Ausgabe; das zugrunde liegende Problem entfernen und erneut laufen lassen
   → als `fixed` gemeldet.
 
-## Regelkatalog (38)
+## Regelkatalog (40)
 
 Deklarative Regeln (`rules/default/*.json`), Default aktiv:
 
@@ -308,6 +314,8 @@ Deklarative Regeln (`rules/default/*.json`), Default aktiv:
 | R-WIDE-PUBLIC-SURFACE | marcus.purpose | Verantwortungsgrenzen | TS/JS |
 | R-ERR-SWALLOWED | marcus.obstacle | Fehlerbehandlung | TS, PHP, Dart, C++ |
 | R-SIDEEFFECT-NONDETERMINISM | marcus.control | Seiteneffekt-Kontrolle | TS, PHP, Dart, C/C++ |
+| R-CPP-UNRELEASED-ALLOCATION | marcus.control | Robustheit, Fehlerbehandlung | C/C++ (ein `new`/`malloc`/`calloc`/`realloc` bleibt ohne Freigabe, ohne Escape, irgendwo in der Funktion) |
+| R-CPP-NEW-DELETE-MISMATCH | marcus.control | Robustheit, Fehlerbehandlung | C/C++ (die `new[]`/`new`-Form desselben Zeigers passt nicht zu seiner `delete[]`/`delete`-Form) |
 | R-DEP-UNUSED | marcus.cooperation | Abhängigkeiten | TS, PHP |
 | R-DEEP-IMPORT | marcus.cooperation | Abhängigkeiten | TS, PHP |
 | R-TYPE-UNSOUND | marcus.judgment | Belegbarkeit, Robustheit | TS (opt-in `--typecheck`) |
@@ -362,6 +370,70 @@ Prozedurale Regeln (`ProjectRule`, cross-file):
 
 Alle zehn Qualitätsdimensionen (inkl. Barrierefreiheit, Bedienbarkeit) haben
 mindestens eine Regel.
+
+## C/C++-Memory-Safety-Regeln
+
+Die einzige Stelle im Regelkatalog, an der das EIGENE, unterscheidende
+Risiko einer Sprache (manuelle Speicherverwaltung) abgedeckt wird, statt nur
+der sprachneutralen Komplexitäts-/Fehlerbehandlungsregeln, die jeder Adapter
+bekommt (`src/analysis/cpp/CppExtraction.ts`). tree-sitter hat keine
+Symboltabelle und keinen Typchecker — anders als auf der TypeScript-Seite
+mit `SymbolResolution.ts` erfolgt der Abgleich hier notwendigerweise per
+Identifier-TEXT innerhalb einer Funktion (nie über Funktionen, nie über
+Dateien hinweg). Innerhalb dieser Einschränkung sind beide Regeln bewusst
+konservativ: Ein False Negative wird einem False Positive vorgezogen
+(dieselbe durchgängige Tendenz wie im Rest dieser Engine), bestätigt durch
+Dogfooding gegen elf echte externe C/C++-Repositories (nicht nur
+synthetische Fixtures), bevor dies ausgeliefert wurde.
+
+- **Erfasst:** ein direktes `Type* name = new ...;` / `Type* name = malloc/calloc/realloc(...);`
+  (optional cast-umschlossen) in EINER Anweisung. **Nicht erfasst, als Lücke
+  dokumentiert, nicht erraten:** ein bloßes `Type* name;` gefolgt von einer
+  separaten Zuweisung; mehrere Deklaratoren in einer Anweisung (`int *a, *b;`);
+  alles innerhalb einer Lambda (konsistent mit der bestehenden
+  Komplexitätsmetrik-Abgrenzung — Lambdas werden gar nicht als eigene
+  Einheit analysiert); Placement New (`new (buf) T(...)` konstruiert IN
+  vom Aufrufer bereitgestelltem Speicher — es gibt nichts Eigenes
+  freizugeben, daher wird es komplett von der Erfassung ausgeschlossen,
+  nicht nur von der Leak-Prüfung).
+- **Escape-Analyse** (`R-CPP-UNRELEASED-ALLOCATION`): Jede andere Referenz
+  auf den allozierten Identifier in der Funktion wird klassifiziert, indem
+  durch wertdurchlassende Wrapper geklettert wird (ein Cast, Klammern, ein
+  geklammerter Aggregat-Initialisierer, ein Ternary-Zweig — aber NICHT ein
+  Dereferenzierungs-/Member-/Subskript-Operator, der den Zeigerwert selbst
+  konsumiert statt ihn weiterzugeben), um den nächsten bedeutsamen
+  Vorfahren zu finden: ein passendes `delete`/`delete[]`/`free(...)` ist
+  eine Freigabe; ein Aufrufargument, ein `return`, eine Neuzuweisung (auf
+  beiden Seiten von `=`) oder der Initialisierer einer anderen Deklaration
+  ist ein ESCAPE — die Eigentümerschaft könnte übergegangen sein, daher
+  wird dann gar keine Leak-Behauptung mehr aufgestellt. Eine `static`-lokale
+  Variable wird vorab ausgeschlossen (ein prozesslebensdauerlanges
+  „einmal allozieren"-Singleton ist ein bewusstes, wenn auch umstrittenes
+  Idiom — kein Bug; gefunden durch Dogfooding gegen `mimirmind`s
+  `bigBlockPool()`, im Quellcode explizit mit `// intentionally leaked`
+  kommentiert). Alles andere (eine Dereferenzierung, `obj->field`, `arr[i]`,
+  eine Null-Prüfung) ist eine gewöhnliche lokale Nutzung — sie gibt den
+  Zeiger weder frei noch lässt sie ihn entkommen, sodass eine Allokation,
+  die INTERN genutzt, aber nie freigegeben wird, trotzdem korrekt feuert
+  (der Recall wird durch den engen Identifier-Text-Abgleich dieser Engine
+  nicht geopfert: „allozieren, nutzen, Freigabe vergessen" wird erkannt,
+  nicht nur „allozieren und nie wieder berühren").
+- **`R-CPP-NEW-DELETE-MISMATCH`** prüft die Array-Eigenschaft der Allokation
+  (`new T[n]` vs. `new T`) gegen jedes passende `delete`/`delete[]`, das für
+  diesen Identifier gefunden wird, unabhängig von der obigen Escape-Analyse
+  (ein Mismatch betrifft das PAAR, nicht ob der Zeiger vorher auch noch
+  anderswo entkommt). Fand bei der ersten Anwendung auf echten Code 4
+  echte Fälle (Legacy-MFC-C++ in einem Hobbyprojekt, `SMADlg.cpp`:
+  `new unsigned char[...]` viermal mit einfachem `delete` freigegeben).
+- **Dogfooding behob zwei echte False-Positive-Klassen, bevor dies
+  ausgeliefert wurde** (beide jetzt als Regressionstests in
+  `test/Cpp.test.ts` festgehalten): (1) Ein Zeiger, der innerhalb eines
+  geklammerten Aggregat-Initialisierers zurückgegeben wird
+  (`return ComputeBuffer{raw, bytes, deleter};`), wurde nicht als Escape
+  erkannt — nur ein bloßes `return raw;` wurde es; (2) Placement New wurde
+  wie eine gewöhnliche Allokation erfasst und markierte jede Nutzung als
+  nicht freigegebenes Leck. Beide gefunden gegen echte externe
+  Repositories, nicht als Hypothesen erfunden.
 
 ## Validation Trace IDs & Contract-Verifikation (erster vertikaler Schnitt)
 
@@ -642,7 +714,7 @@ zu liefern.
 
 ## Qualitätssicherung
 
-- **244 node:test-Fälle** grün (Regeln pos./neg., Extraktion, Schema-Validierung,
+- **249 node:test-Fälle** grün (Regeln pos./neg., Extraktion, Schema-Validierung,
   i18n, Determinismus, SARIF, Eval, Semantik-Groundedness, Datenschutz,
   Finding-Trennung).
 - **Golden-Korpus** (`test/corpus/`, **nur TS+PHP**) mit Ground-Truth; Eval
