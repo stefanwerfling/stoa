@@ -34,6 +34,10 @@ export interface ReportLabels {
     suggestion: string;
     drawbacks: string;
     llm: string;
+    baseline: string;
+    baselineNew: string;
+    baselineKnown: string;
+    baselineFixed: string;
 }
 
 const LABELS: Record<string, ReportLabels> = {
@@ -53,7 +57,11 @@ const LABELS: Record<string, ReportLabels> = {
         interpretation: 'Possible interpretation (not a fact)',
         suggestion: 'Suggestion',
         drawbacks: 'Drawbacks',
-        llm: 'LLM assessment (advisory — not a fact)'
+        llm: 'LLM assessment (advisory — not a fact)',
+        baseline: 'Baseline',
+        baselineNew: 'new',
+        baselineKnown: 'known',
+        baselineFixed: 'fixed'
     },
     de: {
         title: 'stoa – Analysebericht',
@@ -71,7 +79,11 @@ const LABELS: Record<string, ReportLabels> = {
         interpretation: 'Mögliche Deutung (keine Tatsache)',
         suggestion: 'Vorschlag',
         drawbacks: 'Nachteile',
-        llm: 'LLM-Einschätzung (beratend – keine Tatsache)'
+        llm: 'LLM-Einschätzung (beratend – keine Tatsache)',
+        baseline: 'Baseline',
+        baselineNew: 'neu',
+        baselineKnown: 'bekannt',
+        baselineFixed: 'behoben'
     }
 };
 

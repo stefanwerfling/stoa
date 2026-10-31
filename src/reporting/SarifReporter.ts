@@ -42,6 +42,12 @@ const messageText = (finding: Finding): string => {
     );
 };
 
+// SARIF's own baselineState vocabulary ('new'|'unchanged'|'updated'|'absent')
+// — 'absent' describes a PRIOR result verified gone, which this reporter does
+// not model (fixed findings are surfaced separately in AnalysisReport.baseline,
+// never synthesized as a SARIF result with no current location to anchor to).
+const SARIF_BASELINE_STATE: Record<'new' | 'known', string> = {new: 'new', known: 'unchanged'};
+
 const toResult = (finding: Finding, baseDir: string, ruleIndex: Map<string, number>): object => ({
     ruleId: finding.rule.id,
     ruleIndex: ruleIndex.get(finding.rule.id) ?? 0,
@@ -55,6 +61,7 @@ const toResult = (finding: Finding, baseDir: string, ruleIndex: Map<string, numb
             }
         }
     ],
+    ...(finding.baselineStatus !== undefined && finding.baselineStatus !== 'fixed' ? {baselineState: SARIF_BASELINE_STATE[finding.baselineStatus]} : {}),
     properties: {
         severity: finding.severity,
         confidence: finding.confidence,

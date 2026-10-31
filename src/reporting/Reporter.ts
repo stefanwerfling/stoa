@@ -25,6 +25,9 @@ export const toMarkdown = (report: AnalysisReport, options: ReportOptions = {}):
             `${report.coverage.filesSelected}/${report.coverage.filesAnalyzed}/${report.coverage.filesSkipped}`
     );
     lines.push(`- ${t.facts}: ${report.coverage.factCount}`);
+    if (report.baseline !== undefined) {
+        lines.push(`- ${t.baseline}: ${report.baseline.newCount} ${t.baselineNew}, ${report.baseline.knownCount} ${t.baselineKnown}, ${report.baseline.fixedCount} ${t.baselineFixed}`);
+    }
     lines.push('');
 
     if (report.findings.length === 0) {
@@ -38,8 +41,9 @@ export const toMarkdown = (report: AnalysisReport, options: ReportOptions = {}):
         const symbol = symbolName.length > 0 ? ` (${symbolName})` : '';
         const principles = finding.interpretation.principles.map((ref) => ref.name).join(', ');
         const dimensions = finding.interpretation.dimensions.map((dimension) => dimensionLabel(dimension, lang)).join(', ');
+        const baselineTag = finding.baselineStatus !== undefined ? ` [${finding.baselineStatus === 'new' ? t.baselineNew : t.baselineKnown}]` : '';
         lines.push('');
-        lines.push(`### ${finding.rule.id} – ${finding.location.file}:${finding.location.range.startLine}${symbol}`);
+        lines.push(`### ${finding.rule.id} – ${finding.location.file}:${finding.location.range.startLine}${symbol}${baselineTag}`);
         lines.push(`- ${t.observation}: ${finding.observation.statement}`);
         lines.push(`- ${t.severity}: **${finding.severity}** · ${t.confidence}: ${finding.confidence.toFixed(2)} (${finding.certaintyBasis})`);
         lines.push(`- ${t.dimensions}: ${dimensions}`);

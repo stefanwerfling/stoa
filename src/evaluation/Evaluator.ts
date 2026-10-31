@@ -1,31 +1,17 @@
-import {relative} from 'node:path';
+import {findingKey as producedKey, keyString, toForwardSlashes, type FindingKey} from '../FindingIdentity.js';
 import type {Finding} from '../Types.js';
 import type {
     EvaluationResult,
     ExpectedFinding,
-    FindingKey,
     LanguageMetrics,
     OverallMetrics,
     RuleMetrics
 } from './EvaluationTypes.js';
 
-const toForwardSlashes = (path: string): string => path.split('\\').join('/');
-
-const keyString = (key: FindingKey): string => `${toForwardSlashes(key.file)}::${key.rule}::${key.symbol}`;
-
 const expectedKey = (item: ExpectedFinding): FindingKey => ({
     file: toForwardSlashes(item.file),
     rule: item.rule,
     symbol: item.symbol
-});
-
-// Produced findings carry an absolute location; relativize it against the
-// analysis root so the identity matches the project-relative paths in the
-// corpus manifest and does not depend on where the scan was launched.
-const producedKey = (rootDir: string, finding: Finding): FindingKey => ({
-    file: toForwardSlashes(relative(rootDir, finding.location.file)),
-    rule: finding.rule.id,
-    symbol: finding.location.symbol ?? ''
 });
 
 const ratio = (hit: number, other: number): number => {

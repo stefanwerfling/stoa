@@ -4,6 +4,7 @@
  * The deterministic core deals in these shapes only; adapters translate
  * language-specific detail into them.
  */
+import type {FindingKey} from './FindingIdentity.js';
 import type {LocalizedText} from './i18n/Localized.js';
 
 export interface SourceRange {
@@ -227,11 +228,20 @@ export interface CoverageSummary {
     cacheHits?: number;
 }
 
+/** Present only when `--baseline` was used (see Baseline.ts). `fixed` lists baseline identities absent from the current run — not Findings (there is nothing in current code to anchor them to), just reported so a diff/PR comment can say what got fixed, not only what's new. */
+export interface BaselineSummary {
+    newCount: number;
+    knownCount: number;
+    fixedCount: number;
+    fixed: FindingKey[];
+}
+
 /** The user-facing report. Intermediate facts stay out of it by default. */
 export interface AnalysisReport {
     versions: VersionStamp;
     coverage: CoverageSummary;
     findings: Finding[];
+    baseline?: BaselineSummary;
 }
 
 /** What the pipeline returns: the report plus the intermediate facts. */

@@ -5,6 +5,7 @@ import {parseArgs} from 'node:util';
 import {initCpp} from './analysis/CppAdapter.js';
 import {initDart} from './analysis/DartAdapter.js';
 import {initHtml} from './analysis/HtmlAdapter.js';
+import {applyBaseline, loadBaseline, onlyNewFindings, saveBaseline} from './Baseline.js';
 import {loadConfig} from './Config.js';
 import {loadValidationContract} from './contracts/ValidationContract.js';
 import {loadExpected} from './evaluation/Corpus.js';
@@ -32,6 +33,9 @@ type CliValues = {
     exclude?: string[];
     'memory-stats'?: boolean;
     cache?: boolean;
+    baseline?: string;
+    'update-baseline'?: boolean;
+    'only-new'?: boolean;
     help?: boolean;
 };
 
@@ -48,7 +52,7 @@ const USAGE = [
     'stoa – Stoic Code Analysis Engine',
     '',
     'Usage:',
-    '  stoa analyze <path> [--format markdown|json|sarif] [--lang en|de] [--include <glob>]... [--exclude <glob>]... [--typecheck] [--dead-exports] [--contracts <file>] [--semantic noop|anthropic] [--config <file>] [--knowledge <dir>] [--rules <dir>] [--memory-stats] [--cache]',
+    '  stoa analyze <path> [--format markdown|json|sarif] [--lang en|de] [--include <glob>]... [--exclude <glob>]... [--typecheck] [--dead-exports] [--contracts <file>] [--semantic noop|anthropic] [--config <file>] [--knowledge <dir>] [--rules <dir>] [--memory-stats] [--cache] [--baseline <file>] [--update-baseline] [--only-new]',
     '  stoa eval <path> --expected <file> [--format markdown|json] [--contracts <file>] [--knowledge <dir>] [--rules <dir>]',
     ''
 ].join('\n');
@@ -144,6 +148,31 @@ const runAnalyze = async (values: CliValues, target: string): Promise<number> =>
         process.stderr.write(`[stoa] WARNING: analysis stopped early under memory pressure before reaching "${result.report.coverage.stoppedAtFile}" — this report covers only the files reached up to that point, not the full selection.\n`);
     }
 
+    if (values.baseline !== undefined) {
+        const baselinePath = resolve(values.baseline);
+        let baseline;
+        try {
+            baseline = loadBaseline(baselinePath);
+        } catch (error) {
+            // A malformed baseline is a configuration error, never silently
+            // treated as "no baseline" — that would make every known finding
+            // look new, the opposite of what a baseline is for.
+            process.stderr.write(`${(error as Error).message}\n`);
+            return 1;
+        }
+        let report = applyBaseline(result.report, baseline, rootPath);
+        if (values['update-baseline'] === true) {
+            // Reflects the CURRENT run (pre-filter) — updating the baseline
+            // and asking to see only the new findings in the same invocation
+            // would otherwise make the "new" set invisible to itself.
+            saveBaseline(baselinePath, result.report.findings, rootPath);
+        }
+        if (values['only-new'] === true) {
+            report = onlyNewFindings(report);
+        }
+        result = {...result, report};
+    }
+
     process.stdout.write(`${render(values.format, result.report, lang)}\n`);
     return 0;
 };
@@ -207,6 +236,9 @@ const main = async (): Promise<number> => {
             exclude: {type: 'string', multiple: true},
             'memory-stats': {type: 'boolean', default: false},
             cache: {type: 'boolean', default: false},
+            baseline: {type: 'string'},
+            'update-baseline': {type: 'boolean', default: false},
+            'only-new': {type: 'boolean', default: false},
             help: {type: 'boolean', default: false}
         }
     });

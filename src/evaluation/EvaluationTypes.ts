@@ -1,3 +1,5 @@
+import type {FindingKey} from '../FindingIdentity.js';
+
 /** One finding that the golden corpus expects the engine to produce. */
 export interface ExpectedFinding {
     file: string;
@@ -5,12 +7,8 @@ export interface ExpectedFinding {
     symbol: string;
 }
 
-/** A produced-or-expected finding reduced to its match key parts. */
-export interface FindingKey {
-    file: string;
-    rule: string;
-    symbol: string;
-}
+/** Re-exported from the shared identity module (src/FindingIdentity.ts) — also used by the baseline diff, so the match-key shape lives in one place. */
+export type {FindingKey};
 
 export interface RuleMetrics {
     rule: string;
