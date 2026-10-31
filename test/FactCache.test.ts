@@ -16,6 +16,22 @@ const sampleFact = (value: string): Fact => ({
     producedBy: {adapter: 'test', version: '0.0.0'}
 });
 
+const allCacheEntryPaths = (dir: string): string[] => {
+    const found: string[] = [];
+    const walk = (d: string): void => {
+        for (const entry of readdirSync(d, {withFileTypes: true})) {
+            const abs = join(d, entry.name);
+            if (entry.isDirectory()) {
+                walk(abs);
+            } else {
+                found.push(abs);
+            }
+        }
+    };
+    walk(dir);
+    return found;
+};
+
 test('engineFingerprint is stable across repeated calls within one process', () => {
     assert.equal(engineFingerprint(), engineFingerprint());
 });
@@ -68,22 +84,43 @@ test('FactCache: a corrupted cache entry degrades to a miss, not a crash', () =>
         cache.set('typescript', file, [sampleFact('one')]);
         // Corrupt every entry written so far — simulates disk corruption / a
         // partial write, without needing to know the exact hashed filename.
-        const allEntries: string[] = [];
-        const walk = (d: string): void => {
-            for (const entry of readdirSync(d, {withFileTypes: true})) {
-                const abs = join(d, entry.name);
-                if (entry.isDirectory()) {
-                    walk(abs);
-                } else {
-                    allEntries.push(abs);
-                }
-            }
-        };
-        walk(dir);
-        for (const entry of allEntries) {
+        for (const entry of allCacheEntryPaths(dir)) {
             writeFileSync(entry, '{ not valid json');
         }
         assert.equal(cache.get('typescript', file), null);
+    } finally {
+        rmSync(dir, {recursive: true, force: true});
+    }
+});
+
+// Phase 5.2 — structural validation of cache CONTENTS, not just "is this
+// valid JSON with a facts array". Each of these is syntactically valid
+// JSON (so the pre-existing JSON.parse try/catch does not catch them) but
+// semantically wrong — exactly the case isValidFact() exists for.
+test('FactCache: a syntactically valid but structurally wrong fact entry is a miss, never silently passed through', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'stoa-factcache-'));
+    const file = {path: '/project/a.ts', content: 'export const x = 1;\n'};
+    const cases: Array<{label: string; facts: unknown}> = [
+        {label: 'missing required field (producedBy)', facts: [{id: 'x', kind: 'file.lineCount', subject: sampleFact('x').subject, value: 1, evidence: [], certainty: 'syntactic'}]},
+        {label: 'wrong type (kind is a number)', facts: [{...sampleFact('x'), kind: 42}]},
+        {label: 'invalid certainty value', facts: [{...sampleFact('x'), certainty: 'made-up'}]},
+        {label: 'subject.range missing a field', facts: [{...sampleFact('x'), subject: {file: '/x.ts', kindOf: 'file', range: {startLine: 1, startCol: 0, endLine: 1}}}]},
+        {label: 'evidence is not an array', facts: [{...sampleFact('x'), evidence: 'not-an-array'}]},
+        {label: 'one good fact alongside one bad one — the whole entry is still rejected, not half-served', facts: [sampleFact('good'), {bad: true}]},
+        {label: 'facts is not even an array', facts: {not: 'an array'}}
+    ];
+    try {
+        const cache = new FactCache(dir);
+        for (const {label, facts} of cases) {
+            for (const path of allCacheEntryPaths(dir)) {
+                rmSync(path, {force: true});
+            }
+            cache.set('typescript', file, [sampleFact('placeholder')]); // establishes the real path for this key
+            for (const path of allCacheEntryPaths(dir)) {
+                writeFileSync(path, JSON.stringify({facts}));
+            }
+            assert.equal(cache.get('typescript', file), null, label);
+        }
     } finally {
         rmSync(dir, {recursive: true, force: true});
     }

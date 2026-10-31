@@ -3,7 +3,42 @@ import {existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync} from 'n
 import {dirname, join, relative} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import type {FileRef} from './analysis/LanguageAdapter.js';
-import type {Fact} from './Types.js';
+import type {Certainty, Fact} from './Types.js';
+
+const CERTAINTIES: ReadonlySet<string> = new Set<Certainty>(['syntactic', 'semantic-heuristic', 'external-tool']);
+
+const isPlainObject = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const isValidRange = (value: unknown): boolean => isPlainObject(value) && typeof value.startLine === 'number' && typeof value.startCol === 'number' && typeof value.endLine === 'number' && typeof value.endCol === 'number';
+
+const isValidSubject = (value: unknown): boolean => isPlainObject(value) && typeof value.file === 'string' && typeof value.kindOf === 'string' && (value.symbol === undefined || typeof value.symbol === 'string') && isValidRange(value.range);
+
+const isValidProducer = (value: unknown): boolean => isPlainObject(value) && typeof value.adapter === 'string' && typeof value.version === 'string';
+
+const isValidValue = (value: unknown): boolean => typeof value === 'number' || typeof value === 'boolean' || typeof value === 'string' || isPlainObject(value);
+
+/**
+ * A structural check, not a full schema validator — enough to catch garbage
+ * (a corrupted write, a stray `{}`, a value of the wrong type) without
+ * re-encoding every field's exact invariants a second time. A cache entry
+ * that fails this is treated exactly like a missing one: recomputed, never
+ * thrown, never allowed to feed a wrong value into a real analysis.
+ */
+const isValidFact = (value: unknown): value is Fact => {
+    if (!isPlainObject(value)) {
+        return false;
+    }
+    return (
+        typeof value.id === 'string' &&
+        typeof value.kind === 'string' &&
+        isValidSubject(value.subject) &&
+        isValidValue(value.value) &&
+        Array.isArray(value.evidence) &&
+        typeof value.certainty === 'string' &&
+        CERTAINTIES.has(value.certainty) &&
+        isValidProducer(value.producedBy)
+    );
+};
 
 // The directory this module itself lives in — `dist/` once compiled,
 // `src/` when run directly (e.g. via tsx in tests). Fingerprinting THAT
@@ -87,7 +122,17 @@ export class FactCache {
         return join(this.dir, key.slice(0, 2), `${key}.json`);
     }
 
-    /** Returns the cached facts, or null on a miss OR a corrupted/unreadable entry — a broken cache file degrades to recomputation, it never throws and never blocks an analysis. */
+    /**
+     * Returns the cached facts, or null on a miss OR a corrupted/unreadable
+     * entry — a broken cache file degrades to recomputation, it never
+     * throws and never blocks an analysis. Every element is structurally
+     * validated (see isValidFact()), not just "parsed.facts is an array":
+     * a cache hit that silently fed a malformed value into a real analysis
+     * (a missing field, a value of the wrong type) could produce a wrong
+     * finding that looks exactly like a correct one — a miss is always the
+     * safe failure mode here, a cache is never allowed to be the reason an
+     * analysis is wrong.
+     */
     public get(adapterId: string, file: FileRef): Fact[] | null {
         const path = this.pathFor(this.keyFor(adapterId, file));
         if (!existsSync(path)) {
@@ -95,7 +140,10 @@ export class FactCache {
         }
         try {
             const parsed = JSON.parse(readFileSync(path, 'utf8')) as {facts?: unknown};
-            return Array.isArray(parsed.facts) ? (parsed.facts as Fact[]) : null;
+            if (!Array.isArray(parsed.facts) || !parsed.facts.every(isValidFact)) {
+                return null;
+            }
+            return parsed.facts;
         } catch {
             return null;
         }
