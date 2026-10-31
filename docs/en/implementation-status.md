@@ -61,7 +61,7 @@
 stoa analyze <path> [--format markdown|json|sarif] [--lang en|de]
                     [--include <glob>]... [--exclude <glob>]...
                     [--typecheck] [--dead-exports] [--contracts <file>]
-                    [--semantic noop|anthropic] [--memory-stats]
+                    [--semantic noop|anthropic] [--memory-stats] [--cache]
                     [--config <file>] [--knowledge <dir>] [--rules <dir>]
 stoa eval <path> --expected <file> [--format markdown|json] [--contracts <file>]
                     [--knowledge <dir>] [--rules <dir>]
@@ -84,6 +84,9 @@ stoa eval <path> --expected <file> [--format markdown|json] [--contracts <file>]
   (`files processed/selected | heap used/limit | rss`) plus a final totals
   line; stdout (the report itself) is unaffected. Off by default — the
   defaults below need no tuning for a typical run.
+- `--cache` stores/reuses per-file facts under `<root>/.stoa/cache` across
+  runs (see "Per-file fact cache" below) — off by default; omitting it is
+  byte-for-byte the previous behavior.
 
 ## Memory-bounded analysis pipeline
 
@@ -139,15 +142,13 @@ V8's heap stats (it lives outside the JS heap). Fixed:
   mechanism — the file-processing loop was already fully synchronous with no
   parallelism to bound in the first place, so Section 7 of the originating
   spec's premise did not apply; adding concurrency now would be unneeded
-  complexity, not a fix for an observed problem. No incremental/cached
-  analysis — correctness was prioritized over speed, per the spec's own
-  explicit principle, and a reliable cache-invalidation story (rule version,
-  contract version, tsconfig changes, cross-file dependencies) is a
-  substantial feature on its own that was not attempted half-done. No
-  `.gitignore` parsing — the extended default-exclude list already covers the
-  dominant real-world memory risk (build output, caches, vendor directories)
-  without it, and correct multi-level `.gitignore` semantics (nested files,
-  negation patterns) is its own scoped feature.
+  complexity, not a fix for an observed problem. No `.gitignore` parsing — the
+  extended default-exclude list already covers the dominant real-world memory
+  risk (build output, caches, vendor directories) without it, and correct
+  multi-level `.gitignore` semantics (nested files, negation patterns) is its
+  own scoped feature. (Incremental/cached analysis WAS later added narrowly —
+  see "Per-file fact cache" below — once a cache boundary that could be
+  reliably invalidated was identified.)
 - **Scaling test** (`test/MemoryPipelineScaling.test.ts`): a synthetic,
   generated-on-the-fly, mixed-language (TS+PHP), multi-directory repository
   with several Validation Trace ID annotations spread across different
@@ -159,6 +160,54 @@ V8's heap stats (it lives outside the JS heap). Fixed:
   across machines and Node versions) — the real, reproducible before/after
   numbers above came from manually measuring real external repositories with
   `/usr/bin/time -v`, not from a CI-gated benchmark.
+
+### Per-file fact cache (opt-in, `--cache`)
+
+An incremental-analysis slice narrow enough to be confident is correctly
+invalidated, per the spec's own explicit priority ("a correct full analysis
+beats a fast but stale cache"). `src/FactCache.ts` caches exactly ONE thing:
+the facts produced by extracting a single file with a single adapter
+(`LanguageAdapter.extractFacts` / `TypeDiagnosticsExtractor.extract`) — never
+a rule-evaluation result or a finding. That boundary is what makes the
+invalidation story airtight:
+
+- **Cache key:** `(engineFingerprint(), adapter id, file path, file content
+  hash)`. Reading every adapter confirms fact extraction depends on nothing
+  else — no adapter reads `ProjectContext.rootDir` or another file's
+  content, so this key is complete, not an approximation.
+- **`engineFingerprint()`** is a hash over every source file the running
+  engine is actually built from (the directory the running `Pipeline.js`/
+  `Pipeline.ts` module itself lives in — `dist/` once compiled, `src/` under
+  `tsx`), computed once per process. A change to the actual fact-extraction
+  code invalidates the cache automatically — there is no manually-maintained
+  version string to remember to bump. Coarser than a per-adapter fingerprint
+  (any engine change invalidates every cached file, not just the ones whose
+  extraction logic actually changed) — a deliberate trade favoring a
+  guarantee that holds by construction over one that depends on discipline.
+- **Rule/contract changes can never serve a stale finding**, by construction:
+  `RuleSet`/`ValidationContract` are consumed only AFTER this cache, fresh,
+  on every single run — there is nothing cached downstream of them that
+  could go stale. This is also why no rule-set or contract version needs to
+  be part of the cache key at all.
+- **A corrupted or unreadable cache entry is a miss, never a crash** — it
+  degrades to recomputing that one file, by design.
+- **Explicitly not attempted, and why:** no `tsconfig.json` dependency
+  tracking (nothing in today's TypeScript analysis reads a tsconfig — the
+  ts-morph `Project` is in-memory with no `tsconfig.json` loaded — so there
+  is nothing to invalidate); no cross-file dependency tracking (no
+  cross-file fact extraction exists today — same reasoning, and the same
+  constraint the per-file release in the previous section already depends
+  on). If either becomes true, this cache's correctness argument must be
+  revisited, not assumed to still hold.
+- **CLI:** `--cache` (boolean, off by default) stores under
+  `<root>/.stoa/cache` — already covered by the existing `.stoa/**` default
+  exclude. Omitting it is byte-for-byte the previous behavior: nothing is
+  read from or written to disk beyond the analysis target itself.
+  `coverage.cacheHits` is present only when the flag was used.
+- **Measured** on the same real ~300-file repository as above: cold run
+  5.5s / 451 MB, warm (fully cached) run **0.84s / 203 MB** — report output
+  identical except for the new `coverage.cacheHits` diagnostic field itself
+  (verified by diffing the two JSON reports, not just eyeballing timings).
 
 ## Rule catalog (38)
 
@@ -479,7 +528,7 @@ fails fast (exit 1, concrete errors) instead of silently yielding 0 findings.
 
 ## Quality assurance
 
-- **225 node:test cases** green (rules pos./neg., extraction, schema validation,
+- **234 node:test cases** green (rules pos./neg., extraction, schema validation,
   i18n, determinism, SARIF, evaluation, semantic groundedness, privacy,
   finding-model separation).
 - **Golden corpus** (`test/corpus/`, **TS+PHP only**) with ground truth;

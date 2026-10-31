@@ -63,7 +63,11 @@ An LLM is an optional, switchable adapter.
 > value and are excluded the same way a glob exclude is), and a memory guard
 > that stops ingestion (and marks the report incomplete) before V8's own heap
 > limit is reached, rather than crashing. Measured on a real ~300-file
-> repository: peak RSS 909 MB → 451 MB, wall time 145s → 5.7s.
+> repository: peak RSS 909 MB → 451 MB, wall time 145s → 5.7s. An opt-in
+> `--cache` narrows this further for repeated runs — a per-file fact cache,
+> invalidated by content hash and by the running engine's own code (never by
+> a rule/contract, which stay fresh on every run by construction); measured
+> warm-cache run on the same repository: 0.84s / 203 MB.
 
 ## Documentation
 
@@ -103,6 +107,7 @@ node dist/Cli.js analyze ./src --typecheck          # + in-process TypeScript ty
 node dist/Cli.js analyze . --include 'src/**/*.ts' --exclude '**/*.test.ts'  # glob file selection
 node dist/Cli.js analyze ./src --format sarif   # SARIF 2.1.0 for CI / code scanning
 node dist/Cli.js analyze . --memory-stats       # progress + heap/RSS to stderr every 100 files
+node dist/Cli.js analyze . --cache              # cache per-file facts under .stoa/cache for faster re-runs
 
 # evaluate the engine against the golden corpus (precision/recall)
 node dist/Cli.js eval test/corpus/project --expected test/corpus/expected.json

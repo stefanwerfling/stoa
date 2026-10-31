@@ -64,7 +64,7 @@
 stoa analyze <pfad> [--format markdown|json|sarif] [--lang en|de]
                     [--include <glob>]... [--exclude <glob>]...
                     [--typecheck] [--dead-exports] [--contracts <datei>]
-                    [--semantic noop|anthropic] [--memory-stats]
+                    [--semantic noop|anthropic] [--memory-stats] [--cache]
                     [--config <datei>] [--knowledge <dir>] [--rules <dir>]
 stoa eval <pfad> --expected <datei> [--format markdown|json] [--contracts <datei>]
                     [--knowledge <dir>] [--rules <dir>]
@@ -90,6 +90,9 @@ stoa eval <pfad> --expected <datei> [--format markdown|json] [--contracts <datei
   abschließende Summenzeile; stdout (der eigentliche Report) bleibt
   unverändert. Standardmäßig aus — die untenstehenden Defaults benötigen für
   einen typischen Lauf keine Anpassung.
+- `--cache` speichert/nutzt Pro-Datei-Facts unter `<root>/.stoa/cache` über
+  Läufe hinweg (siehe "Pro-Datei-Fact-Cache" unten) — standardmäßig aus; ohne
+  das Flag ist das Verhalten byte-identisch zum vorherigen.
 
 ## Memory-Bounded Analysis Pipeline
 
@@ -154,16 +157,14 @@ lebt außerhalb des JS-Heaps). Behoben:
   vollständig synchron, es gab also gar keine Parallelität zu begrenzen,
   die Prämisse von Abschnitt 7 der ursprünglichen Spec traf nicht zu; jetzt
   Nebenläufigkeit einzuführen wäre unnötige Komplexität, keine Behebung
-  eines beobachteten Problems. Keine inkrementelle/gecachte Analyse —
-  Korrektheit wurde laut dem expliziten Prinzip der Spec über Geschwindigkeit
-  priorisiert, und eine zuverlässige Cache-Invalidierung (Regelversion,
-  Vertragsversion, tsconfig-Änderungen, dateiübergreifende Abhängigkeiten)
-  ist ein eigenständiges, umfangreiches Feature, das nicht halb umgesetzt
-  wurde. Kein `.gitignore`-Parsing — die erweiterte Default-Exclude-Liste
-  deckt das dominante reale Speicherrisiko (Build-Output, Caches,
-  Vendor-Verzeichnisse) bereits ohne das ab, und korrekte, mehrstufige
-  `.gitignore`-Semantik (verschachtelte Dateien, Negationsmuster) ist ein
-  eigenes, abgegrenztes Feature.
+  eines beobachteten Problems. Kein `.gitignore`-Parsing — die erweiterte
+  Default-Exclude-Liste deckt das dominante reale Speicherrisiko
+  (Build-Output, Caches, Vendor-Verzeichnisse) bereits ohne das ab, und
+  korrekte, mehrstufige `.gitignore`-Semantik (verschachtelte Dateien,
+  Negationsmuster) ist ein eigenes, abgegrenztes Feature. (Inkrementelle/
+  gecachte Analyse wurde später doch umgesetzt, aber bewusst eng begrenzt —
+  siehe "Pro-Datei-Fact-Cache" unten, sobald eine zuverlässig invalidierbare
+  Cache-Grenze gefunden war.)
 - **Skalierungstest** (`test/MemoryPipelineScaling.test.ts`): ein
   synthetisches, zur Laufzeit erzeugtes, mehrsprachiges (TS+PHP),
   mehrverzeichniges Repository mit mehreren über verschiedene Dateien
@@ -177,6 +178,61 @@ lebt außerhalb des JS-Heaps). Behoben:
   die echten, reproduzierbaren Vorher/Nachher-Zahlen oben stammen aus
   manuellen Messungen realer externer Repositories mit `/usr/bin/time -v`,
   nicht aus einem CI-gesteuerten Benchmark.
+
+### Pro-Datei-Fact-Cache (opt-in, `--cache`)
+
+Eine Inkremental-Analyse-Scheibe, eng genug begrenzt, um sicher zu sein, dass
+sie korrekt invalidiert wird — gemäß der expliziten Priorität der Spec ("eine
+korrekte vollständige Analyse ist wichtiger als ein schneller, aber
+veralteter Cache"). `src/FactCache.ts` cached genau EINE Sache: die Facts,
+die beim Extrahieren einer einzelnen Datei mit einem einzelnen Adapter
+entstehen (`LanguageAdapter.extractFacts` / `TypeDiagnosticsExtractor.extract`)
+— nie ein Regel-Auswertungsergebnis oder einen Befund. Genau diese Grenze
+macht die Invalidierung wasserdicht:
+
+- **Cache-Schlüssel:** `(engineFingerprint(), Adapter-ID, Dateipfad,
+  Dateiinhalt-Hash)`. Das Lesen jedes Adapters bestätigt, dass die
+  Fact-Extraktion von nichts anderem abhängt — kein Adapter liest
+  `ProjectContext.rootDir` oder den Inhalt einer anderen Datei, dieser
+  Schlüssel ist also vollständig, keine Annäherung.
+- **`engineFingerprint()`** ist ein Hash über jede Quelldatei, aus der die
+  laufende Engine tatsächlich gebaut ist (das Verzeichnis, in dem das
+  laufende `Pipeline.js`/`Pipeline.ts`-Modul selbst liegt — `dist/` nach dem
+  Build, `src/` unter `tsx`), einmal pro Prozess berechnet. Eine Änderung am
+  tatsächlichen Fact-Extraktions-Code invalidiert den Cache automatisch — es
+  gibt keinen manuell gepflegten Versionsstring, den man vergessen könnte zu
+  erhöhen. Grobkörniger als ein Pro-Adapter-Fingerprint (jede Engine-Änderung
+  invalidiert jede gecachte Datei, nicht nur die, deren Extraktionslogik sich
+  tatsächlich geändert hat) — eine bewusste Entscheidung für eine Garantie,
+  die durch Konstruktion gilt, statt für eine, die von Disziplin abhängt.
+- **Regel-/Vertragsänderungen können nie einen veralteten Befund liefern**,
+  durch Konstruktion: `RuleSet`/`ValidationContract` werden erst NACH diesem
+  Cache konsumiert, frisch, bei jedem einzelnen Lauf — es gibt nichts
+  Gecachtes stromabwärts von ihnen, das veralten könnte. Deshalb muss auch
+  keine Regel-Set- oder Vertragsversion Teil des Cache-Schlüssels sein.
+- **Ein korrupter oder unlesbarer Cache-Eintrag ist ein Miss, nie ein
+  Absturz** — er degradiert absichtlich zur Neuberechnung dieser einen Datei.
+- **Bewusst nicht umgesetzt, und warum:** keine `tsconfig.json`-
+  Abhängigkeitsverfolgung (nichts in der heutigen TypeScript-Analyse liest
+  eine tsconfig — das ts-morph-`Project` ist in-memory, ohne geladene
+  `tsconfig.json` — es gibt also nichts zu invalidieren); keine
+  dateiübergreifende Abhängigkeitsverfolgung (es gibt heute keine
+  dateiübergreifende Fact-Extraktion — dieselbe Begründung, und dieselbe
+  Voraussetzung, auf der auch die Pro-Datei-Freigabe im vorigen Abschnitt
+  schon beruht). Sollte sich eine der beiden Annahmen ändern, muss das
+  Korrektheitsargument dieses Caches neu geprüft werden, nicht einfach
+  weiter angenommen werden.
+- **CLI:** `--cache` (Boolean, Default aus) speichert unter
+  `<root>/.stoa/cache` — bereits durch den bestehenden `.stoa/**`-Default-
+  Exclude abgedeckt. Ohne das Flag ist das Verhalten byte-identisch zum
+  vorherigen: nichts wird über das Analyseziel hinaus von der Festplatte
+  gelesen oder darauf geschrieben. `coverage.cacheHits` ist nur vorhanden,
+  wenn das Flag genutzt wurde.
+- **Gemessen** am selben echten ~300-Dateien-Repository wie oben: kalter
+  Lauf 5,5 s / 451 MB, warmer (vollständig gecachter) Lauf **0,84 s / 203
+  MB** — Report-Ausgabe identisch bis auf das neue
+  `coverage.cacheHits`-Diagnosefeld selbst (per Diff der beiden JSON-Reports
+  verifiziert, nicht nur nach Augenmaß bei den Laufzeiten).
 
 ## Regelkatalog (38)
 
@@ -524,7 +580,7 @@ zu liefern.
 
 ## Qualitätssicherung
 
-- **225 node:test-Fälle** grün (Regeln pos./neg., Extraktion, Schema-Validierung,
+- **234 node:test-Fälle** grün (Regeln pos./neg., Extraktion, Schema-Validierung,
   i18n, Determinismus, SARIF, Eval, Semantik-Groundedness, Datenschutz,
   Finding-Trennung).
 - **Golden-Korpus** (`test/corpus/`, **nur TS+PHP**) mit Ground-Truth; Eval
