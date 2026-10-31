@@ -64,6 +64,17 @@ test('C/C++: analysis is deterministic', () => {
     assert.equal(JSON.stringify(analyzePath(join(fixtures, 'tangled.c'))), JSON.stringify(analyzePath(join(fixtures, 'tangled.c'))));
 });
 
+test('C/C++: the memory-safety fixtures (allocation.cpp, scope.cpp) are deterministic too, analyzed individually and together', () => {
+    assert.equal(JSON.stringify(analyzePath(join(fixtures, 'allocation.cpp'))), JSON.stringify(analyzePath(join(fixtures, 'allocation.cpp'))));
+    assert.equal(JSON.stringify(analyzePath(join(fixtures, 'scope.cpp'))), JSON.stringify(analyzePath(join(fixtures, 'scope.cpp'))));
+    // Analyzed as a whole directory: no finding from one file is lost or
+    // duplicated depending on what else is in the batch.
+    const whole = analyzePath(fixtures);
+    assert.equal(JSON.stringify(whole), JSON.stringify(analyzePath(fixtures)));
+    const ids = whole.map((f) => f.id);
+    assert.equal(new Set(ids).size, ids.length, 'no finding identity collides across the two memory-safety fixture files');
+});
+
 const byLine = (findings: Finding[], ruleId: string): number[] => findings.filter((f) => f.rule.id === ruleId).map((f) => f.location.range.startLine).sort((a, b) => a - b);
 
 test('R-CPP-UNRELEASED-ALLOCATION: fires on new/malloc/calloc left with no release, no escape anywhere in the function', () => {
