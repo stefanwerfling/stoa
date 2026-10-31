@@ -32,8 +32,8 @@
   },
   "missingContext": [
     {
-      "en": "Only a direct `Type* name = <allocation>;` in one statement is tracked (not a separate later assignment, multiple declarators in one statement, or an allocation inside a lambda); the pointer may also be released by code this analysis cannot see (a different translation unit, a macro).",
-      "de": "Nur ein direktes `Type* name = <Allokation>;` in einer Anweisung wird erfasst (keine spätere separate Zuweisung, keine mehreren Deklaratoren in einer Anweisung, keine Allokation innerhalb einer Lambda); der Zeiger könnte auch durch Code freigegeben werden, den diese Analyse nicht sieht (eine andere Translation Unit, ein Makro)."
+      "en": "Only a direct `Type* name = <allocation>;` in one statement is tracked (not a separate later assignment, multiple declarators in one statement, or an allocation inside a lambda). Same-named pointers in different (even nested) scopes are correctly distinguished via a scope walk, not just identifier text — but that walk only knows about LOCAL declarations, not function parameters, so a parameter sharing a name with a local is not recognized as a shadow. The pointer may also be released by code this analysis cannot see (a different translation unit, a macro).",
+      "de": "Nur ein direktes `Type* name = <Allokation>;` in einer Anweisung wird erfasst (keine spätere separate Zuweisung, keine mehreren Deklaratoren in einer Anweisung, keine Allokation innerhalb einer Lambda). Gleichnamige Zeiger in unterschiedlichen (auch verschachtelten) Scopes werden über eine Scope-Traversierung korrekt unterschieden, nicht nur über Identifier-Text — diese Traversierung kennt aber nur LOKALE Deklarationen, keine Funktionsparameter, sodass ein Parameter mit demselben Namen wie eine lokale Variable nicht als Verschattung erkannt wird. Der Zeiger könnte auch durch Code freigegeben werden, den diese Analyse nicht sieht (eine andere Translation Unit, ein Makro)."
     }
   ],
   "tests": "test/Cpp.test.ts"

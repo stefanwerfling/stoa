@@ -92,10 +92,13 @@ stoa eval <pfad> --expected <datei> [--format markdown|json] [--contracts <datei
   (zuvor von `eval` stillschweigend ignoriert) — ein fehlerhafter/unlesbarer
   Vertrag schlägt bei beiden Befehlen sofort fehl (Exit 1), nie ein
   stillschweigend verschlechtertes Ergebnis.
-- `--memory-stats` gibt alle 100 Dateien eine Fortschrittszeile auf stderr aus
-  (`Dateien verarbeitet/ausgewählt | Heap genutzt/Limit | RSS`), plus eine
-  abschließende Summenzeile; stdout (der eigentliche Report) bleibt
-  unverändert. Standardmäßig aus — die untenstehenden Defaults benötigen für
+- `--memory-stats` gibt alle 100 Dateien eine Fortschrittszeile auf stderr
+  aus — aktuelle Phase (`analysis`/`evaluation`), verarbeitete/ausgewählte
+  Dateien, bisher extrahierte Facts, Heap genutzt/Limit/gesamt, RSS,
+  External Memory, verstrichene Zeit — plus eine abschließende Summenzeile
+  (Dateien, Facts, Findings, Evidence-Graph-Nodes/-Edges, Cache-Hits bei
+  `--cache`). stdout (der eigentliche Report) bleibt unverändert.
+  Standardmäßig aus — die untenstehenden Defaults benötigen für
   einen typischen Lauf keine Anpassung.
 - `--cache` speichert/nutzt Pro-Datei-Facts unter `<root>/.stoa/cache` über
   Läufe hinweg (siehe "Pro-Datei-Fact-Cache" unten) — standardmäßig aus; ohne
@@ -163,19 +166,45 @@ lebt außerhalb des JS-Heaps). Behoben:
   ausgegeben. Kein `global.gc()`-Aufruf irgendwo — dieser Guard ist ein
   letztes Mittel zusätzlich zu den oben beschriebenen begrenzten
   Objekt-Lebensdauern, kein Ersatz dafür.
-- **Bewusst nicht umgesetzt, und warum:** kein neuer Nebenläufigkeits-/
-  Backpressure-Mechanismus — die Datei-Verarbeitungsschleife war bereits
-  vollständig synchron, es gab also gar keine Parallelität zu begrenzen,
-  die Prämisse von Abschnitt 7 der ursprünglichen Spec traf nicht zu; jetzt
-  Nebenläufigkeit einzuführen wäre unnötige Komplexität, keine Behebung
-  eines beobachteten Problems. Kein `.gitignore`-Parsing — die erweiterte
-  Default-Exclude-Liste deckt das dominante reale Speicherrisiko
-  (Build-Output, Caches, Vendor-Verzeichnisse) bereits ohne das ab, und
-  korrekte, mehrstufige `.gitignore`-Semantik (verschachtelte Dateien,
-  Negationsmuster) ist ein eigenes, abgegrenztes Feature. (Inkrementelle/
-  gecachte Analyse wurde später doch umgesetzt, aber bewusst eng begrenzt —
-  siehe "Pro-Datei-Fact-Cache" unten, sobald eine zuverlässig invalidierbare
-  Cache-Grenze gefunden war.)
+- **Metadaten-first Discovery** (`Ingestion.ts`s `collectFiles()`,
+  Folge-Spec "Analysis Integrity & Memory-Bounded Pipeline"): las zuvor
+  während des Walks den vollen Inhalt jeder passenden Datei und gab alles
+  auf einmal zurück — der gesamte Repository-Text lag im Speicher, bevor die
+  Pro-Datei-Schleife überhaupt begann. `collectFiles()` gibt jetzt nur noch
+  `FileMeta[]` zurück (Pfad + Größe); der Inhalt wird per `readFileContent()`
+  lazy, eine Datei zur Zeit, gelesen — und erst, NACHDEM ein Adapter bereits
+  anhand des Pfads allein ausgewählt wurde (`LanguageAdapter.supports()`
+  nimmt `FileMeta`, nie Inhalt) — eine Datei, die niemand parsen kann, wird
+  also gar nicht erst gelesen.
+- **Ein Root-`.gitignore` wird berücksichtigt** (neu: `src/GitIgnore.ts`),
+  als bewusst enge, dokumentierte Scheibe: nur das `.gitignore` des
+  Repository-Roots selbst (keine Vorrang-Logik für verschachtelte
+  `.gitignore`-Dateien), keine Negation (`!pattern`-Zeilen werden
+  übersprungen — Wiedereinschluss hängt von der Regel-REIHENFOLGE ab, was
+  sich nicht sicher als ein weiteres Exclude-Pattern modellieren lässt),
+  übersetzt in picomatch-Patterns nach derselben Tiefenregel, die git selbst
+  nutzt (kein Slash → passt in jeder Tiefe; ein führender/innerer Slash →
+  am Root verankert). Zusammengeführt mit der bestehenden Exclude-Liste,
+  sodass ein explizit genannter Analysepfad diese genauso umgeht wie jede
+  andere Exclude-Quelle.
+- **Kein `--jobs`/Worker-basierte Nebenläufigkeit, eine abgewogene
+  Entscheidung, kein Versehen:** Die Datei-Verarbeitungsschleife ist bereits
+  vollständig synchron — es gibt also von vornherein keine Parallelität zu
+  begrenzen, die Prämisse hinter einem `--jobs`-Flag trifft nicht zu.
+  Wichtiger noch: echte OS-Thread-Parallelität (`worker_threads`) würde den
+  Peak-Speicherverbrauch ERHÖHEN, nicht senken — jeder Worker braucht seine
+  eigene ts-morph-/tree-sitter-Instanz, N Worker multiplizieren also genau
+  den Pro-Datei-Fußabdruck, den dieser Abschnitt gerade auf 1 begrenzt hat,
+  im Tausch gegen Durchsatz, nicht Speichersicherheit, die eigentlich das
+  Thema dieses Abschnitts ist. Es wäre außerdem ein substantieller,
+  risikoreicherer Umbau (Cross-Thread-Fact-Serialisierung, eine
+  deterministische Merge-Reihenfolge, ein Memory Guard, der pro Worker Sinn
+  ergibt), unverhältnismäßig zu "kleinen, überprüfbaren Phasen". Mit dem
+  Projektinhaber abgestimmt, bevor darauf verzichtet wurde, statt es
+  stillschweigend auszulassen.
+- **Inkrementelle/gecachte Analyse** wurde stattdessen eng begrenzt
+  umgesetzt — siehe "Pro-Datei-Fact-Cache" unten, sobald eine zuverlässig
+  invalidierbare Cache-Grenze gefunden war.
 - **Skalierungstest** (`test/MemoryPipelineScaling.test.ts`): ein
   synthetisches, zur Laufzeit erzeugtes, mehrsprachiges (TS+PHP),
   mehrverzeichniges Repository mit mehreren über verschiedene Dateien
@@ -222,7 +251,15 @@ macht die Invalidierung wasserdicht:
   Gecachtes stromabwärts von ihnen, das veralten könnte. Deshalb muss auch
   keine Regel-Set- oder Vertragsversion Teil des Cache-Schlüssels sein.
 - **Ein korrupter oder unlesbarer Cache-Eintrag ist ein Miss, nie ein
-  Absturz** — er degradiert absichtlich zur Neuberechnung dieser einen Datei.
+  Absturz** — er degradiert absichtlich zur Neuberechnung dieser einen
+  Datei. Das umfasst jetzt eine STRUKTURELLE Validierung (`isValidFact()`),
+  nicht nur "ist `facts` ein Array": jedes Element wird auf
+  `id`/`kind`/`subject`/`value`/`evidence`/`certainty`/`producedBy`
+  geprüft, und wenn auch nur EIN Fact in einem gecachten Eintrag
+  durchfällt, ist der ganze Eintrag ein Miss — eine Cache-Datei, die
+  syntaktisch gültiges JSON, aber semantisch falsch ist (ein fehlendes
+  Feld, ein Wert vom falschen Typ), darf nie stillschweigend einen
+  fehlerhaften Wert in eine echte Analyse einspeisen.
 - **Bewusst nicht umgesetzt, und warum:** keine `tsconfig.json`-
   Abhängigkeitsverfolgung (nichts in der heutigen TypeScript-Analyse liest
   eine tsconfig — das ts-morph-`Project` ist in-memory, ohne geladene
@@ -301,6 +338,26 @@ eingeführt hat, nicht den gesamten Backlog.
   `known`; `--only-new` auf diesem zweiten Lauf → null Befunde in der
   Ausgabe; das zugrunde liegende Problem entfernen und erneut laufen lassen
   → als `fixed` gemeldet.
+- **Verwechselt einen unvollständigen Scan nie mit einem saubern Ergebnis**
+  (Folge-Spec "Analysis Integrity & Memory-Bounded Pipeline"): Wenn der
+  Memory Guard einen Scan vorzeitig gestoppt hat
+  (`coverage.analysisIncomplete`), meldet `applyBaseline()` NIE einen
+  Baseline-Eintrag als `fixed` — eine Datei, die der Scan nie erreicht hat,
+  wurde nie tatsächlich erneut geprüft, "nicht reproduziert" beweist also
+  nichts über sie (`fixedCount`/`fixed` werden auf `0`/`[]` gezwungen, und
+  `AnalysisReport.baseline.incomplete` wird gesetzt, sodass der gesamte
+  Vergleich als vorläufig erscheint). `--update-baseline` geht weiter:
+  `saveBaseline()` VERWEIGERT das Schreiben komplett (wirft
+  `IncompleteAnalysisError`), statt eine vollständige Baseline mit
+  Teildaten zu überschreiben — und diese Prüfung lebt in `saveBaseline()`
+  selbst, nicht nur früher in der CLI, es gibt also keinen Aufrufpfad, der
+  sie umgeht. `--only-new`/`--update-baseline` ohne `--baseline`, sowie ein
+  `--baseline`-Pfad, der ein Verzeichnis ist, werden ebenfalls vorab mit
+  einem spezifischen Fehler abgelehnt, bevor irgendeine Analysearbeit
+  läuft. Über die ECHTE CLI Ende-zu-Ende verifiziert (nicht nur
+  Unit-Tests): ein blockiertes `--update-baseline` beendet sich mit
+  Exit-Code ungleich 0 und lässt die bestehende Baseline-Datei
+  byte-identisch zurück.
 
 ## Regelkatalog (40)
 
@@ -378,14 +435,45 @@ Risiko einer Sprache (manuelle Speicherverwaltung) abgedeckt wird, statt nur
 der sprachneutralen Komplexitäts-/Fehlerbehandlungsregeln, die jeder Adapter
 bekommt (`src/analysis/cpp/CppExtraction.ts`). tree-sitter hat keine
 Symboltabelle und keinen Typchecker — anders als auf der TypeScript-Seite
-mit `SymbolResolution.ts` erfolgt der Abgleich hier notwendigerweise per
-Identifier-TEXT innerhalb einer Funktion (nie über Funktionen, nie über
-Dateien hinweg). Innerhalb dieser Einschränkung sind beide Regeln bewusst
-konservativ: Ein False Negative wird einem False Positive vorgezogen
-(dieselbe durchgängige Tendenz wie im Rest dieser Engine), bestätigt durch
-Dogfooding gegen elf echte externe C/C++-Repositories (nicht nur
-synthetische Fixtures), bevor dies ausgeliefert wurde.
+mit `SymbolResolution.ts` gibt es keinen Binder, gegen den aufgelöst werden
+könnte, daher wird der Abgleich über eine echte SCOPE-TRAVERSIERUNG über
+Identifier-Text angenähert (`resolveBindingSite()`), nie über Funktionen
+oder Dateien hinweg. Innerhalb dieser Einschränkung sind beide Regeln
+bewusst konservativ: Ein False Negative wird einem False Positive
+vorgezogen (dieselbe durchgängige Tendenz wie im Rest dieser Engine),
+bestätigt durch Dogfooding gegen elf echte externe C/C++-Repositories
+(nicht nur synthetische Fixtures), bevor dies ausgeliefert wurde.
 
+- **Scope-bewusste, nicht nur text-basierte Identität** (Folge-Spec
+  "Analysis Integrity & Memory-Bounded Pipeline"): vor jeder Korrektur
+  bestätigt, dass der ursprüngliche reine Text-Abgleich für
+  `int* p = new int(1); { int* p = new int(2); delete p; }` NULL Findings
+  erzeugte — das innere `delete p` verschluckte das ÄUSSERE Leck.
+  `resolveBindingSite()` klettert jetzt nach außen durch umschließende
+  `{ }`-Blöcke genau wie die C++-Namensauflösung: Der nächste umschließende
+  Block mit einer FRÜHEREN gleichnamigen Deklaration gewinnt. Eine durch
+  `#ifdef`/`#else` geschützte Deklaration wird als auf der Scope-Ebene des
+  umgebenden Blocks liegend behandelt, nicht eine Ebene tiefer (tree-sitter
+  verschachtelt sie so; der Compiler nicht) — und wenn beide sich
+  gegenseitig ausschließenden Zweige denselben Namen im selben Block
+  deklarieren (tree-sitter parst beide bedingungslos), wird eine spätere
+  Freigabe gegen BEIDE Zweige abgeglichen, nicht nur gegen den, der im
+  Quelltext zuerst kommt (als echter False Positive in vllms
+  `cumem_allocator.cpp` während dieser Korrektur bestätigt, jetzt ein
+  Regressionstest). Jeder Deklarator-Identifier in der Funktion (nicht nur
+  der dieser Allokation) wird davon ausgeschlossen, jemals als "Nutzung"
+  etwas anderem zugerechnet zu werden — ohne das würde der eigene Name
+  einer verschattenden Deklaration fälschlich auf die äußere Allokation
+  zurückfallen (sie kann sich an ihrem eigenen Deklarationspunkt nicht
+  selbst verschatten) und als Übergabe dieses äußeren Zeigers an eine
+  andere Deklaration missverstanden werden.
+- **Neuzuweisung zu `nullptr` oder einer neuen Allokation ist kein Escape:**
+  `p = nullptr;` oder `p = new T(...);` gibt das URSPRÜNGLICHE Objekt nicht
+  frei und übergibt es auch nirgendwohin — das Handle wird einfach
+  überschrieben. Beide sind von der Escape-Prüfung ausgenommen (anders als
+  `other = p;`, was tatsächlich ein Escape ist), sodass die ursprüngliche
+  Allokation weiterhin korrekt als Leck markiert wird, wenn sie vorher nicht
+  freigegeben wurde.
 - **Erfasst:** ein direktes `Type* name = new ...;` / `Type* name = malloc/calloc/realloc(...);`
   (optional cast-umschlossen) in EINER Anweisung. **Nicht erfasst, als Lücke
   dokumentiert, nicht erraten:** ein bloßes `Type* name;` gefolgt von einer
@@ -714,7 +802,7 @@ zu liefern.
 
 ## Qualitätssicherung
 
-- **249 node:test-Fälle** grün (Regeln pos./neg., Extraktion, Schema-Validierung,
+- **273 node:test-Fälle** grün (Regeln pos./neg., Extraktion, Schema-Validierung,
   i18n, Determinismus, SARIF, Eval, Semantik-Groundedness, Datenschutz,
   Finding-Trennung).
 - **Golden-Korpus** (`test/corpus/`, **nur TS+PHP**) mit Ground-Truth; Eval

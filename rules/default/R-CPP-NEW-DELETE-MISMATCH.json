@@ -28,8 +28,8 @@
   },
   "missingContext": [
     {
-      "en": "Matched by identifier text within one function (tree-sitter has no symbol table) — a variable shadowed in a nested block with the same name could in principle be mismatched against the wrong allocation; not observed in practice so far.",
-      "de": "Abgleich per Identifier-Text innerhalb einer Funktion (tree-sitter hat keine Symboltabelle) — eine in einem verschachtelten Block gleichnamig verschattete Variable könnte theoretisch gegen die falsche Allokation abgeglichen werden; bisher in der Praxis nicht beobachtet."
+      "en": "Resolved via a scope walk (tree-sitter has no real symbol table), not a true binder — a same-named variable in a different, nested scope is correctly distinguished (verified against that exact case), but a function PARAMETER sharing the name with a local is not — only local declarations are tracked as shadowing boundaries.",
+      "de": "Aufgelöst über eine Scope-Traversierung (tree-sitter hat keine echte Symboltabelle), nicht über einen echten Binder — eine gleichnamige Variable in einem anderen, verschachtelten Scope wird korrekt unterschieden (gegen genau diesen Fall verifiziert), aber ein Funktionsparameter mit demselben Namen wie eine lokale Variable wird nicht erkannt — nur lokale Deklarationen werden als Verschattungsgrenzen erfasst."
     }
   ],
   "tests": "test/Cpp.test.ts"

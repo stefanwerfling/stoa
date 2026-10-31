@@ -85,10 +85,13 @@ stoa eval <path> --expected <file> [--format markdown|json] [--contracts <file>]
 - `--contracts <file>` is accepted by BOTH `analyze` and `eval` (previously
   silently ignored by `eval`) — a malformed/unreadable contract fails fast
   (exit 1) for either command, never a silently-degraded result.
-- `--memory-stats` prints one progress line to stderr every 100 files
-  (`files processed/selected | heap used/limit | rss`) plus a final totals
-  line; stdout (the report itself) is unaffected. Off by default — the
-  defaults below need no tuning for a typical run.
+- `--memory-stats` prints one progress line to stderr every 100 files —
+  current phase (`analysis`/`evaluation`), files processed/selected, facts
+  extracted so far, heap used/limit/total, RSS, external memory, elapsed
+  time — plus a final totals line (files, facts, findings, Evidence Graph
+  nodes/edges, cache hits if `--cache` was used). stdout (the report itself)
+  is unaffected. Off by default — the defaults below need no tuning for a
+  typical run.
 - `--cache` stores/reuses per-file facts under `<root>/.stoa/cache` across
   runs (see "Per-file fact cache" below) — off by default; omitting it is
   byte-for-byte the previous behavior.
@@ -146,17 +149,39 @@ V8's heap stats (it lives outside the JS heap). Fixed:
   genuinely partial — a truncated run is never presented as a complete one.
   No `global.gc()` call anywhere — this guard is a last resort on top of the
   bounded object lifetimes above, not a substitute for them.
-- **Deliberately not done, and why:** no new concurrency/backpressure
-  mechanism — the file-processing loop was already fully synchronous with no
-  parallelism to bound in the first place, so Section 7 of the originating
-  spec's premise did not apply; adding concurrency now would be unneeded
-  complexity, not a fix for an observed problem. No `.gitignore` parsing — the
-  extended default-exclude list already covers the dominant real-world memory
-  risk (build output, caches, vendor directories) without it, and correct
-  multi-level `.gitignore` semantics (nested files, negation patterns) is its
-  own scoped feature. (Incremental/cached analysis WAS later added narrowly —
-  see "Per-file fact cache" below — once a cache boundary that could be
-  reliably invalidated was identified.)
+- **Metadata-first discovery** (`Ingestion.ts`'s `collectFiles()`, follow-up
+  "Analysis Integrity & Memory-Bounded Pipeline" spec): previously read every
+  matched file's full content during the walk and returned it all at once —
+  the whole repository's text sat in memory before the per-file loop even
+  started. `collectFiles()` now returns `FileMeta[]` (path + size only);
+  content is read lazily, one file at a time, via `readFileContent()`, and
+  only AFTER an adapter has already been chosen by path alone
+  (`LanguageAdapter.supports()` takes `FileMeta`, never content) — a file
+  nothing can parse is never read into memory at all.
+- **A root `.gitignore` is honored** (new `src/GitIgnore.ts`), as a
+  deliberately narrow, documented slice: only the repository root's own
+  `.gitignore` (no nested-`.gitignore` precedence), no negation (`!pattern`
+  lines are skipped — re-inclusion depends on rule order in ways that cannot
+  be modeled safely as one more exclude pattern), translated to picomatch
+  patterns using the same depth rule git itself uses (no slash → matches at
+  any depth; a leading/inner slash → anchored to root). Merged alongside the
+  existing exclude list, so an explicitly-named analysis path still bypasses
+  it like every other exclude source.
+- **No `--jobs`/worker-based concurrency, a considered decision, not an
+  oversight:** the file-processing loop is already fully synchronous — there
+  is no parallelism to bound in the first place, so the premise behind a
+  `--jobs` flag does not hold. More importantly, real OS-thread parallelism
+  (`worker_threads`) would INCREASE peak memory, not decrease it — each
+  worker needs its own ts-morph/tree-sitter instance, so N workers multiply
+  the exact per-file footprint this section just bounded to 1, in exchange
+  for throughput, not memory safety, which is this section's actual subject.
+  It would also be a substantial, higher-risk rewrite (cross-thread fact
+  serialization, a deterministic merge order, a memory guard that makes
+  sense per-worker) disproportionate to "small, verifiable phases." Confirmed
+  with the project owner before skipping rather than silently dropped.
+- **Incremental/cached analysis** was added narrowly instead — see "Per-file
+  fact cache" below — once a cache boundary that could be reliably
+  invalidated was identified.
 - **Scaling test** (`test/MemoryPipelineScaling.test.ts`): a synthetic,
   generated-on-the-fly, mixed-language (TS+PHP), multi-directory repository
   with several Validation Trace ID annotations spread across different
@@ -198,7 +223,13 @@ invalidation story airtight:
   could go stale. This is also why no rule-set or contract version needs to
   be part of the cache key at all.
 - **A corrupted or unreadable cache entry is a miss, never a crash** — it
-  degrades to recomputing that one file, by design.
+  degrades to recomputing that one file, by design. This now includes
+  STRUCTURAL validation (`isValidFact()`), not just "is `facts` an array":
+  every element's `id`/`kind`/`subject`/`value`/`evidence`/`certainty`/
+  `producedBy` is checked, and if even ONE fact in a cached entry fails, the
+  whole entry is a miss — a cache file that is syntactically valid JSON but
+  semantically wrong (a missing field, a value of the wrong type) must not
+  silently feed a malformed value into a real analysis.
 - **Explicitly not attempted, and why:** no `tsconfig.json` dependency
   tracking (nothing in today's TypeScript analysis reads a tsconfig — the
   ts-morph `Project` is in-memory with no `tsconfig.json` loaded — so there
@@ -266,6 +297,23 @@ surface only what a change actually introduced, not the whole backlog.
   writes it; second run against that file → all `known`; `--only-new` on
   that second run → zero findings in the output; removing the underlying
   issue and re-running → reported as `fixed`.
+- **Never confuses an incomplete scan with a clean result** (follow-up
+  "Analysis Integrity & Memory-Bounded Pipeline" spec): when the memory
+  guard stopped a scan early (`coverage.analysisIncomplete`), `applyBaseline()`
+  NEVER reports a baseline entry as `fixed` — a file the scan never reached
+  was never actually re-checked, so "not reproduced" proves nothing about
+  it (`fixedCount`/`fixed` are forced to `0`/`[]`, and
+  `AnalysisReport.baseline.incomplete` is set so the whole comparison reads
+  as provisional). `--update-baseline` goes further: `saveBaseline()`
+  outright REFUSES to write at all (throws `IncompleteAnalysisError`) rather
+  than overwrite a complete baseline with partial data — and this check
+  lives inside `saveBaseline()` itself, not only earlier in the CLI, so
+  there is no call path that bypasses it. `--only-new`/`--update-baseline`
+  without `--baseline`, and a `--baseline` path that is a directory, are
+  also rejected up front with a specific error before any analysis work
+  runs. Verified through the REAL CLI end to end (not just unit tests): a
+  blocked `--update-baseline` exits non-zero and leaves the existing
+  baseline file byte-identical.
 
 ## Rule catalog (40)
 
@@ -341,12 +389,40 @@ The one place in the rule catalog where a language's OWN distinguishing risk
 (manual memory management) is covered, rather than only the language-neutral
 complexity/error-handling rules every adapter gets (`src/analysis/cpp/CppExtraction.ts`).
 Tree-sitter has no symbol table or type checker — unlike the TypeScript side's
-`SymbolResolution.ts`, matching here is necessarily by identifier TEXT within
-one function body (never across functions, never across files). Within that
-constraint, both rules are deliberately conservative: a false negative is
-preferred over a false positive (the same standing bias as the rest of this
-engine), confirmed by dogfooding against eleven real external C/C++
-repositories (not synthetic fixtures only) before shipping.
+`SymbolResolution.ts`, there is no binder to resolve against, so matching is
+approximated via a real SCOPE WALK over identifier text (`resolveBindingSite()`),
+never across functions or files. Within that constraint, both rules are
+deliberately conservative: a false negative is preferred over a false
+positive (the same standing bias as the rest of this engine), confirmed by
+dogfooding against eleven real external C/C++ repositories (not synthetic
+fixtures only) before shipping.
+
+- **Scope-aware, not text-only, identity** (follow-up "Analysis Integrity &
+  Memory-Bounded Pipeline" spec): confirmed, before any fix, that the
+  original pure-text matching produced ZERO findings for
+  `int* p = new int(1); { int* p = new int(2); delete p; }` — the inner
+  `delete p` silenced the OUTER leak. `resolveBindingSite()` now climbs
+  outward through enclosing `{ }` blocks exactly like C++ name lookup does:
+  the nearest enclosing block with an EARLIER same-named declaration wins.
+  A declaration guarded by `#ifdef`/`#else` is treated as being at its
+  surrounding block's scope level, not one level deeper (tree-sitter nests
+  it that way; the compiler does not) — and when both mutually exclusive
+  branches declare the same name in one block (tree-sitter parses both
+  unconditionally), a later release is matched against EITHER branch, not
+  just whichever came first in source order (confirmed as a real false
+  positive in `vllm`'s `cumem_allocator.cpp` during this fix, now a
+  regression test). Every declarator identifier in the function (not just
+  this allocation's own) is excluded from ever being treated as a "use" of
+  something else — without this, a shadowing declaration's own name would
+  incorrectly resolve back to the outer allocation (it cannot shadow itself
+  at its own declaration point) and be misread as that outer pointer being
+  passed to another declaration.
+- **Reassignment to `nullptr` or a new allocation is not an escape:**
+  `p = nullptr;` or `p = new T(...);` neither frees the ORIGINAL object nor
+  hands it anywhere — the handle is simply overwritten. Both are excluded
+  from the escape check (unlike `other = p;`, which genuinely is an escape),
+  so the original allocation is still correctly flagged as leaked if nothing
+  freed it first.
 
 - **Tracked:** a direct `Type* name = new ...;` / `Type* name = malloc/calloc/realloc(...);`
   (optionally cast-wrapped) in ONE statement. **Not tracked, documented as a
@@ -644,7 +720,7 @@ fails fast (exit 1, concrete errors) instead of silently yielding 0 findings.
 
 ## Quality assurance
 
-- **249 node:test cases** green (rules pos./neg., extraction, schema validation,
+- **273 node:test cases** green (rules pos./neg., extraction, schema validation,
   i18n, determinism, SARIF, evaluation, semantic groundedness, privacy,
   finding-model separation).
 - **Golden corpus** (`test/corpus/`, **TS+PHP only**) with ground truth;

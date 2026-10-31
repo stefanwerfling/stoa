@@ -77,7 +77,14 @@ An LLM is an optional, switchable adapter.
 > `--cache` narrows this further for repeated runs — a per-file fact cache,
 > invalidated by content hash and by the running engine's own code (never by
 > a rule/contract, which stay fresh on every run by construction); measured
-> warm-cache run on the same repository: 0.84s / 203 MB.
+> warm-cache run on the same repository: 0.84s / 203 MB. Discovery reads only
+> file METADATA up front (path + size); content is read lazily, one file at a
+> time, only once a matching adapter is known — a file nothing can parse is
+> never read. A root `.gitignore` is honored (narrow slice: root-only, no
+> negation). `--baseline`/`--update-baseline` refuse to report a finding
+> `fixed` or overwrite a baseline from a scan the memory guard cut short — an
+> incomplete scan is marked provisional end to end, never mistaken for a
+> clean result.
 
 ## Documentation
 
