@@ -234,6 +234,18 @@ export interface BaselineSummary {
     knownCount: number;
     fixedCount: number;
     fixed: FindingKey[];
+    /**
+     * Set only when the underlying analysis itself was incomplete
+     * (`coverage.analysisIncomplete === true`, see MemoryGuard.ts). When
+     * true, `fixedCount`/`fixed` are always 0/[] — a baseline entry not
+     * reproduced by a PARTIAL scan was never actually checked, so it is
+     * never reported as fixed. `new`/`known` are still stamped per
+     * finding (a finding that WAS produced either matches the baseline or
+     * it doesn't), but the whole comparison is provisional: files the scan
+     * never reached could still contain either, and nothing here claims
+     * otherwise.
+     */
+    incomplete?: boolean;
 }
 
 /** The user-facing report. Intermediate facts stay out of it by default. */

@@ -97,6 +97,18 @@ const loadContractOrFail = (values: CliValues): {contract: ReturnType<typeof loa
 };
 
 const runAnalyze = async (values: CliValues, target: string): Promise<number> => {
+    // Option-combination validation up front, before any analysis work —
+    // an invalid combination is a usage error, not something that should
+    // cost a full (possibly long) scan before being reported.
+    if (values['only-new'] === true && values.baseline === undefined) {
+        process.stderr.write('error: --only-new requires --baseline <file>\n');
+        return 1;
+    }
+    if (values['update-baseline'] === true && values.baseline === undefined) {
+        process.stderr.write('error: --update-baseline requires --baseline <file>\n');
+        return 1;
+    }
+
     const lang = values.lang ?? 'en';
     const loadedContract = loadContractOrFail(values);
     if (loadedContract === null) {
@@ -127,7 +139,13 @@ const runAnalyze = async (values: CliValues, target: string): Promise<number> =>
                       process.stderr.write(`[stoa] files ${progress.filesProcessed}/${progress.filesSelected} | heap ${formatMB(snapshot.heapUsed)}/${formatMB(snapshot.heapSizeLimit)} | rss ${formatMB(snapshot.rss)}\n`);
                   }
               }
-            : {})
+            : {}),
+        // Test-only hook, not a documented flag: deterministically forces
+        // `coverage.analysisIncomplete` without needing to actually exhaust
+        // memory, so the baseline-vs-incomplete-scan interaction (Section
+        // 2.3) can be tested end-to-end through the real CLI, not just at
+        // the Baseline.ts unit level. Invisible to a normal run.
+        ...(process.env.STOA_TEST_FORCE_INCOMPLETE === '1' ? {memoryGuard: {checkEveryFiles: 1, criticalRatio: 0}} : {})
     });
 
     const semanticId = values.semantic ?? 'noop';
@@ -161,11 +179,26 @@ const runAnalyze = async (values: CliValues, target: string): Promise<number> =>
             return 1;
         }
         let report = applyBaseline(result.report, baseline, rootPath);
+        if (report.baseline?.incomplete === true) {
+            // Same visibility as the memory-guard warning above — a
+            // provisional baseline comparison must never read like a
+            // complete one, on any output format.
+            process.stderr.write('[stoa] WARNING: the analysis was incomplete — baseline new/known status is provisional, and nothing is reported as fixed (a file the scan never reached was never actually re-checked).\n');
+        }
         if (values['update-baseline'] === true) {
             // Reflects the CURRENT run (pre-filter) — updating the baseline
             // and asking to see only the new findings in the same invocation
             // would otherwise make the "new" set invisible to itself.
-            saveBaseline(baselinePath, result.report.findings, rootPath);
+            try {
+                saveBaseline(baselinePath, result.report, rootPath);
+            } catch (error) {
+                // saveBaseline() itself refuses an incomplete analysis — the
+                // check lives there, not only here, so there is no call
+                // path that bypasses it. Still caught here to turn it into
+                // a clean CLI error instead of an uncaught exception.
+                process.stderr.write(`${(error as Error).message}\n`);
+                return 1;
+            }
         }
         if (values['only-new'] === true) {
             report = onlyNewFindings(report);
