@@ -57,8 +57,15 @@ export const extractFacts = (root: Node, content: string, filePath: string, info
         facts.push(build({kind: 'doc.hasComplexityRationale', kindOf, symbol, range, value: leadingHasMarker(lines, range.startLine)}));
         facts.push(build({kind: 'ast.usesNondeterminism', kindOf, symbol, range, value: usesNondeterminism(body)}));
 
+        // Every name ANY declaration in this function declares (not just
+        // tracked allocations) — a declarator identifier is a declaration
+        // SITE, never a USE of some other variable, even when it happens to
+        // shadow one. Computed once per function and shared across every
+        // allocation's classification below (see classifyAllocation()).
+        const allDeclarators = ownDescendants(body, 'declaration').flatMap((decl) => declaredNamesOf(decl));
+
         for (const allocation of findAllocations(body)) {
-            const outcome = classifyAllocation(allocation, body);
+            const outcome = classifyAllocation(allocation, body, allDeclarators);
             if (outcome === null) {
                 continue;
             }
@@ -256,6 +263,155 @@ const hasBracketChild = (node: Node): boolean => {
     return false;
 };
 
+// Follows a declarator chain (pointer_declarator -> identifier,
+// array_declarator -> identifier, or a bare identifier) down to the
+// identifier actually being declared.
+const declaredIdentifier = (declaratorNode: Node | null): Node | null => {
+    let current: Node | null = declaratorNode;
+    while (current !== null) {
+        if (current.type === 'identifier') {
+            return current;
+        }
+        current = current.childForFieldName('declarator');
+    }
+    return null;
+};
+
+// Every name a `declaration` statement declares, regardless of whether it
+// is itself a tracked allocation — needed to find shadowing boundaries
+// correctly even when the shadow is a plain `int p;`, not a pointer.
+const declaredNamesOf = (decl: Node): Node[] => {
+    const names: Node[] = [];
+    for (const child of namedChildren(decl)) {
+        const declarator = child.type === 'init_declarator' ? child.childForFieldName('declarator') : child;
+        const identifier = declaredIdentifier(declarator);
+        if (identifier !== null) {
+            names.push(identifier);
+        }
+    }
+    return names;
+};
+
+// The nearest enclosing block of `node` — its own `compound_statement`, or
+// `functionBody` if there is none closer. Used to walk outward through
+// nested `{ }` scopes the same way C/C++ name lookup does.
+const enclosingBlock = (node: Node, functionBody: Node): Node => {
+    let current = node.parent;
+    while (current !== null) {
+        if (current.equals(functionBody) || current.type === 'compound_statement') {
+            return current;
+        }
+        current = current.parent;
+    }
+    return functionBody;
+};
+
+// A preprocessor conditional does NOT introduce its own C++ scope — the
+// compiler sees whichever branch is actually compiled as flat statements in
+// the SAME enclosing block. tree-sitter-cpp nests `#ifdef`/`#else`/`#if`
+// content one AST level deeper than a real nested block would, though, so
+// without this, a declaration guarded by `#ifndef X … #else … #endif`
+// would not be found as "directly in this block" at all (confirmed against
+// real code — vllm's cumem_allocator.cpp wraps a `malloc`+matching `free`
+// in exactly this shape; the false positive this caused is now a
+// regression test).
+const PREPROC_TRANSPARENT: ReadonlySet<string> = new Set(['preproc_ifdef', 'preproc_if', 'preproc_else', 'preproc_elif']);
+
+// Every declaration effectively AT this block's own scope level — recurses
+// through preprocessor-conditional wrappers (see PREPROC_TRANSPARENT), but
+// stops at any REAL nested scope (a compound_statement, a loop/if body, …),
+// which gets its own, separate scope level instead.
+const directDeclarationsOf = (block: Node): Node[] => {
+    const found: Node[] = [];
+    const walk = (node: Node): void => {
+        for (const child of namedChildren(node)) {
+            if (child.type === 'declaration') {
+                found.push(child);
+            } else if (PREPROC_TRANSPARENT.has(child.type)) {
+                walk(child);
+            }
+        }
+    };
+    walk(block);
+    return found;
+};
+
+// Every same-named declaration directly in `block` (not a deeper nested
+// block) that precedes `beforeIndex` — i.e. "does this exact scope level
+// declare this name before this point", the question C/C++ name lookup
+// answers at every enclosing scope on the way out. Usually at most one
+// (real C++ forbids redeclaring a name twice in ONE block) — but mutually
+// exclusive `#ifdef`/`#else` branches of the SAME block are a documented
+// exception: tree-sitter parses both unconditionally, so a declaration that
+// precedes `beforeIndex` can legitimately exist in more than one branch at
+// once. Returning all of them (not just the first found) is what lets a
+// later `free(p)`/`delete p` resolve against EITHER branch, instead of
+// always binding to whichever branch happens to come first in source order
+// and silently starving the other of any release at all (confirmed as a
+// real false positive before this fix, now a regression test).
+const shadowingDeclarationsIn = (block: Node, name: string, beforeIndex: number): Node[] => {
+    const hits: Node[] = [];
+    for (const decl of directDeclarationsOf(block)) {
+        for (const identifier of declaredNamesOf(decl)) {
+            if (identifier.text === name && identifier.startIndex < beforeIndex) {
+                hits.push(identifier);
+            }
+        }
+    }
+    return hits;
+};
+
+/**
+ * Which declaration (if any) an identifier OCCURRENCE actually binds to,
+ * walking outward through enclosing `{ }` blocks the same way C/C++ scoping
+ * does: the nearest enclosing block with an earlier same-named declaration
+ * wins. This is what makes
+ *
+ *   int* p = new int(1);
+ *   { int* p = new int(2); delete p; }
+ *
+ * resolve the inner `delete p` to the INNER `p` — never to the outer one,
+ * even though both share the same identifier text (tree-sitter has no
+ * symbol table, so this walk is the closest safe substitute; a bare
+ * identifier-text match across the whole function, which is what this
+ * analysis did before, would have the inner `delete` incorrectly silence
+ * the outer leak — confirmed against exactly this snippet before this fix).
+ */
+const resolveBindingSite = (occurrence: Node, name: string, functionBody: Node): Node[] => {
+    let block: Node | null = enclosingBlock(occurrence, functionBody);
+    while (block !== null) {
+        const hits = shadowingDeclarationsIn(block, name, occurrence.startIndex);
+        if (hits.length > 0) {
+            return hits;
+        }
+        if (block.equals(functionBody)) {
+            return [];
+        }
+        block = enclosingBlock(block, functionBody);
+    }
+    return [];
+};
+
+const isNullptrLiteral = (node: Node): boolean => {
+    // tree-sitter-cpp's own node type for the `nullptr` keyword is `null`
+    // (confirmed against real parser output, not guessed from the keyword's
+    // spelling).
+    if (node.type === 'null') {
+        return true;
+    }
+    if (node.type === 'identifier' && node.text === 'NULL') {
+        return true;
+    }
+    return node.type === 'number_literal' && node.text === '0';
+};
+
+const isAllocationExpression = (node: Node): boolean => {
+    if (node.type === 'new_expression') {
+        return true;
+    }
+    return descendants(node, 'call_expression').some((call) => ALLOC_CALLS.has(calleeName(call) ?? ''));
+};
+
 // Node types a pointer VALUE passes through unchanged on its way to wherever
 // it ends up — climbed through when classifying an occurrence, so e.g.
 // `return Buf{raw, size}` or `free((void*)p)` are recognized through the
@@ -283,7 +439,27 @@ const classifyOccurrence = (occurrence: Node, body: Node): OccurrenceRole => {
         if (parent.type === 'argument_list' && parent.parent?.type === 'call_expression') {
             return calleeName(parent.parent) === 'free' ? {kind: 'release'} : {kind: 'escape'};
         }
-        if (parent.type === 'return_statement' || parent.type === 'assignment_expression' || parent.type === 'init_declarator') {
+        if (parent.type === 'return_statement' || parent.type === 'init_declarator') {
+            return {kind: 'escape'};
+        }
+        if (parent.type === 'assignment_expression') {
+            const isLeftSide = parent.childForFieldName('left')?.equals(current) === true;
+            if (isLeftSide) {
+                const rhs = parent.childForFieldName('right');
+                // `p = nullptr;` / `p = new ...;` neither frees the ORIGINAL
+                // object nor hands it to anyone else — the handle is simply
+                // overwritten/lost. Treating this as an escape would wrongly
+                // suppress a real leak (see test/Cpp.test.ts); anything else
+                // on the right (another variable, a function's return value)
+                // stays an escape — genuinely ambiguous without real
+                // dataflow, so this engine's standing bias (false negative
+                // over false positive) applies.
+                if (rhs !== null && (isNullptrLiteral(rhs) || isAllocationExpression(rhs))) {
+                    return {kind: 'ordinary'};
+                }
+                return {kind: 'escape'};
+            }
+            // The right-hand side: `other = p;` — another variable now also holds this pointer.
             return {kind: 'escape'};
         }
         if (!TRANSPARENT_WRAPPERS.has(parent.type)) {
@@ -296,28 +472,57 @@ const classifyOccurrence = (occurrence: Node, body: Node): OccurrenceRole => {
 
 /**
  * Classifies ONE allocation by scanning every other reference to its
- * identifier in the (lambda-excluded) function body via classifyOccurrence():
+ * identifier in the (lambda-excluded) function body via classifyOccurrence()
+ * — but ONLY occurrences that actually bind to THIS declaration once scope
+ * is taken into account (resolveBindingSite()), not merely every identifier
+ * that happens to share the same text anywhere in the function. Two
+ * same-named pointers in different (possibly nested) scopes are tracked
+ * completely independently, exactly like the compiler would see them:
  * - a RELEASE is a matching `delete`/`delete[]`/`free(name)` (possibly
  *   through a cast — `free((void*)p)`);
  * - an ESCAPE is anything handed elsewhere — a call argument, a return
  *   (directly or wrapped in a braced aggregate initializer), a reassignment
- *   on either side of `=`, or another declaration's initializer. No leak
- *   claim is made at all once one occurs — ownership may have transferred,
- *   so bailing out favors a false negative over a false positive,
- *   consistent with this engine's standing bias (see docs).
+ *   TO another variable, or being read as another declaration's
+ *   initializer. No leak claim is made at all once one occurs — ownership
+ *   may have transferred, so bailing out favors a false negative over a
+ *   false positive, consistent with this engine's standing bias (see docs).
+ *   Reassigning THIS pointer itself to `nullptr` or a new allocation is
+ *   deliberately NOT an escape (nothing receives the original object) — see
+ *   classifyOccurrence().
  * - anything else (a dereference, `obj->field`, `arr[i]`, a null check, …)
  *   is an ordinary local use — it neither releases nor escapes the pointer.
  *
  * Returns the fact kind to emit, or null when nothing is reportable
  * (released cleanly, or an escape made the question unanswerable).
  */
-const classifyAllocation = (allocation: Allocation, body: Node): 'ast.unreleasedAllocation' | 'ast.newDeleteMismatch' | null => {
+const classifyAllocation = (allocation: Allocation, body: Node, allDeclarators: readonly Node[]): 'ast.unreleasedAllocation' | 'ast.newDeleteMismatch' | null => {
     let released = false;
     let escaped = false;
     let mismatched = false;
 
     for (const occurrence of ownDescendants(body, 'identifier')) {
-        if (occurrence.text !== allocation.name || occurrence.equals(allocation.nameNode)) {
+        if (occurrence.text !== allocation.name) {
+            continue;
+        }
+        // A declarator identifier is a declaration SITE, never a USE of
+        // some other variable — skip every one of them (not just this
+        // allocation's own), including a shadowing declaration's own name.
+        // Without this, resolveBindingSite() below would resolve a
+        // shadowing declaration's OWN identifier back to the OUTER
+        // allocation (its own declaration cannot shadow itself AT its own
+        // position), and classifyOccurrence() would then misread that
+        // declarator position as the outer pointer being read as some
+        // other declaration's initializer — a confirmed false positive
+        // fixed before shipping, not a hypothetical.
+        if (allDeclarators.some((identifier) => identifier.equals(occurrence))) {
+            continue;
+        }
+        if (!resolveBindingSite(occurrence, allocation.name, body).some((candidate) => candidate.equals(allocation.nameNode))) {
+            // This occurrence resolves ONLY to a DIFFERENT, shadowing
+            // declaration of the same name — not a reference to this
+            // allocation at all. (If this allocation IS among the
+            // candidates — e.g. a mutually exclusive #ifdef/#else sibling —
+            // the occurrence is still considered relevant below.)
             continue;
         }
         const role = classifyOccurrence(occurrence, body);

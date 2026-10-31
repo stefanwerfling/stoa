@@ -109,3 +109,53 @@ test('R-CPP-UNRELEASED-ALLOCATION: four real-world false positives found by dogf
     assert.ok(!leakLines.has(94), 'placement new (vllm shm.cpp/cpu_attn_impl.hpp) constructs in caller-owned storage — there is nothing of its own to delete');
     assert.ok(!leakLines.has(98), 'free() reached through a cast (`free((void*)buf)`) is still a release, not a miss');
 });
+
+// Scope-aware variable identity (Phase 4, "Analysis Integrity & Memory-
+// Bounded Pipeline" spec). Before this, matching was by identifier TEXT
+// across the whole function — two same-named pointers in different scopes
+// could be mistaken for the same allocation (confirmed against the spec's
+// own example before any fix: produced ZERO findings for a leaked outer
+// pointer `delete`d only via an unrelated, differently-scoped inner `p`).
+
+test('scope: a shadowed inner pointer\'s delete does not release the differently-scoped outer allocation', () => {
+    const findings = analyzePath(join(fixtures, 'scope.cpp'));
+    const leakLines = new Set(byLine(findings, 'R-CPP-UNRELEASED-ALLOCATION'));
+    assert.ok(leakLines.has(6), 'the OUTER new int(1) (line 6) is unreleased');
+    assert.ok(!leakLines.has(8), 'the inner new int(2) (line 8) is correctly deleted in its own scope, not mistaken for the outer');
+});
+
+test('scope: both an outer and an inner same-named pointer can be correctly released independently', () => {
+    const findings = analyzePath(join(fixtures, 'scope.cpp'));
+    const leakLines = new Set(byLine(findings, 'R-CPP-UNRELEASED-ALLOCATION'));
+    assert.ok(!leakLines.has(14) && !leakLines.has(16), 'nestedShadowBothReleased: the inner delete (line 17) releases the inner (line 16), the outer delete (line 19) releases the outer (line 14)');
+});
+
+test('scope: reassigning the SAME pointer to nullptr or a new allocation does not count as an ownership-transferring escape — the original stays leaked', () => {
+    const findings = analyzePath(join(fixtures, 'scope.cpp'));
+    const leakLines = new Set(byLine(findings, 'R-CPP-UNRELEASED-ALLOCATION'));
+    assert.ok(leakLines.has(23), 'nullptrAfterAllocationStillLeaked: `p = nullptr;` frees nothing and hands the original object to nobody');
+    assert.ok(!leakLines.has(28), 'nullptrAfterFreeIsFine: the delete happens BEFORE the nullptr reassignment, so the allocation itself is correctly released');
+    assert.ok(leakLines.has(34), 'overwriteWithNewAllocationLeaksOriginal: `p = new int(2);` neither frees int(1) nor hands it anywhere — the original is leaked at the overwrite');
+});
+
+test('scope: a same-named NON-pointer local shadowing a pointer allocation does not hide the pointer\'s own leak', () => {
+    const findings = analyzePath(join(fixtures, 'scope.cpp'));
+    assert.ok(byLine(findings, 'R-CPP-UNRELEASED-ALLOCATION').includes(39), 'shadowByNonPointerLocal: the inner `int p = 5; p = p + 1;` must not be mistaken for a use of the outer pointer, so the outer new int(1) is still correctly flagged as leaked');
+});
+
+test('scope: two allocations in separate sibling blocks sharing a name are each tracked and leaked independently', () => {
+    const findings = analyzePath(join(fixtures, 'scope.cpp'));
+    assert.deepEqual(byLine(findings, 'R-CPP-UNRELEASED-ALLOCATION').filter((line) => line === 48 || line === 51), [48, 51], 'siblingBlocksSameNameBothLeaked: neither block\'s `p` is visible in the other, so both are independently unreleased');
+});
+
+test('scope: a declaration guarded by #ifdef/#else is still correctly matched to its release — preprocessor conditionals are not their own C++ scope', () => {
+    const findings = analyzePath(join(fixtures, 'scope.cpp'));
+    const leakLines = new Set(byLine(findings, 'R-CPP-UNRELEASED-ALLOCATION'));
+    // Confirmed as a real false positive via dogfooding (vllm's
+    // cumem_allocator.cpp) before this test existed: tree-sitter-cpp nests
+    // #ifdef/#else content one AST level deeper than a real block, so a
+    // naive "declarations directly in this block" scan would miss both
+    // branches' declarations entirely, making `free(p)` on line 61 bind to
+    // NEITHER branch and falsely flag both as leaked.
+    assert.ok(!leakLines.has(57) && !leakLines.has(59), 'preprocBranchAllocationReleased: free(p) on line 61 must release whichever #ifdef/#else branch is in scope');
+});
