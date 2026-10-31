@@ -7,6 +7,7 @@ import {VueAdapter} from './analysis/VueAdapter.js';
 import {PhpAdapter} from './analysis/PhpAdapter.js';
 import {TypeScriptAdapter} from './analysis/TypeScriptAdapter.js';
 import {TypeDiagnosticsExtractor} from './analysis/typescript/TypeDiagnostics.js';
+import {FactCache} from './FactCache.js';
 import {collectFiles} from './Ingestion.js';
 import {KnowledgeBase} from './knowledge/KnowledgeBase.js';
 import {isMemoryCritical, takeMemorySnapshot, type MemorySnapshot} from './MemoryGuard.js';
@@ -54,6 +55,15 @@ export interface AnalyzeOptions {
      * for embedding Stoa under a tighter/looser budget than the default.
      */
     memoryGuard?: {checkEveryFiles?: number; criticalRatio?: number};
+    /**
+     * Opt-in: a directory for the fact cache (see FactCache.ts). Caches ONLY
+     * per-file fact extraction, keyed by (running engine code, adapter id,
+     * file path, file content) — never a rule/contract-dependent result, so
+     * a rule set or Validation Contract change can never be served a stale
+     * finding. Omit (the default) for the exact previous behavior: nothing
+     * is read from or written to disk beyond the analysis target itself.
+     */
+    cacheDir?: string;
 }
 
 const TS_EXTENSIONS: readonly string[] = ['.ts', '.tsx'] as const;
@@ -100,6 +110,7 @@ export const analyze = (options: AnalyzeOptions): AnalysisResult => {
     });
 
     const typeExtractor = options.typecheck === true ? new TypeDiagnosticsExtractor() : null;
+    const cache = options.cacheDir !== undefined ? new FactCache(options.cacheDir) : null;
 
     const checkEveryFiles = options.memoryGuard?.checkEveryFiles ?? DEFAULT_MEMORY_CHECK_INTERVAL;
     const criticalRatio = options.memoryGuard?.criticalRatio ?? DEFAULT_CRITICAL_RATIO;
@@ -107,6 +118,7 @@ export const analyze = (options: AnalyzeOptions): AnalysisResult => {
     const facts: Fact[] = [];
     let analyzed = 0;
     let skipped = 0;
+    let cacheHits = 0;
     let stoppedAtFile: string | undefined;
     for (const [index, file] of files.entries()) {
         if (index % checkEveryFiles === 0) {
@@ -131,17 +143,38 @@ export const analyze = (options: AnalyzeOptions): AnalysisResult => {
             continue;
         }
 
-        const parsed = adapter.parse(file);
-        if (!parsed.ok) {
-            skipped += 1;
-            continue;
+        const cachedAdapterFacts = cache?.get(adapter.id, file) ?? null;
+        if (cachedAdapterFacts !== null) {
+            facts.push(...cachedAdapterFacts);
+            cacheHits += 1;
+        } else {
+            const parsed = adapter.parse(file);
+            if (!parsed.ok) {
+                skipped += 1;
+                continue;
+            }
+            const extracted = adapter.extractFacts(parsed, {rootDir: options.rootPath});
+            facts.push(...extracted);
+            cache?.set(adapter.id, file, extracted);
+            parsed.release?.();
         }
 
-        facts.push(...adapter.extractFacts(parsed, {rootDir: options.rootPath}));
+        // Independent of the adapter cache above: TypeDiagnosticsExtractor
+        // builds its own ts-morph Project from `file` directly (not from
+        // `parsed.handle`), so it has its own cache entry under a distinct
+        // adapter id ('tsc') and works correctly whether or not the main
+        // adapter facts were a cache hit.
         if (typeExtractor !== null && TS_EXTENSIONS.some((ext) => file.path.endsWith(ext))) {
-            facts.push(...typeExtractor.extract(file));
+            const cachedTscFacts = cache?.get('tsc', file) ?? null;
+            if (cachedTscFacts !== null) {
+                facts.push(...cachedTscFacts);
+                cacheHits += 1;
+            } else {
+                const tscFacts = typeExtractor.extract(file);
+                facts.push(...tscFacts);
+                cache?.set('tsc', file, tscFacts);
+            }
         }
-        parsed.release?.();
         analyzed += 1;
     }
 
@@ -161,7 +194,8 @@ export const analyze = (options: AnalyzeOptions): AnalysisResult => {
             filesAnalyzed: analyzed,
             filesSkipped: skipped,
             factCount: facts.length,
-            ...(stoppedAtFile !== undefined ? {analysisIncomplete: true, stoppedAtFile} : {})
+            ...(stoppedAtFile !== undefined ? {analysisIncomplete: true, stoppedAtFile} : {}),
+            ...(cache !== null ? {cacheHits} : {})
         },
         findings
     };

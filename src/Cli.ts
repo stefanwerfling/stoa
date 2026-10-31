@@ -31,6 +31,7 @@ type CliValues = {
     include?: string[];
     exclude?: string[];
     'memory-stats'?: boolean;
+    cache?: boolean;
     help?: boolean;
 };
 
@@ -47,7 +48,7 @@ const USAGE = [
     'stoa – Stoic Code Analysis Engine',
     '',
     'Usage:',
-    '  stoa analyze <path> [--format markdown|json|sarif] [--lang en|de] [--include <glob>]... [--exclude <glob>]... [--typecheck] [--dead-exports] [--contracts <file>] [--semantic noop|anthropic] [--config <file>] [--knowledge <dir>] [--rules <dir>] [--memory-stats]',
+    '  stoa analyze <path> [--format markdown|json|sarif] [--lang en|de] [--include <glob>]... [--exclude <glob>]... [--typecheck] [--dead-exports] [--contracts <file>] [--semantic noop|anthropic] [--config <file>] [--knowledge <dir>] [--rules <dir>] [--memory-stats] [--cache]',
     '  stoa eval <path> --expected <file> [--format markdown|json] [--contracts <file>] [--knowledge <dir>] [--rules <dir>]',
     ''
 ].join('\n');
@@ -105,8 +106,9 @@ const runAnalyze = async (values: CliValues, target: string): Promise<number> =>
     await initCpp().catch(() => undefined);
     await initHtml().catch(() => undefined);
     const memoryStats = values['memory-stats'] === true;
+    const rootPath = resolve(target);
     let result = analyze({
-        rootPath: resolve(target),
+        rootPath,
         knowledgeDir: knowledgeDirOf(values),
         ruleSetDir: ruleSetDirOf(values),
         config: configFor(values),
@@ -114,6 +116,7 @@ const runAnalyze = async (values: CliValues, target: string): Promise<number> =>
         typecheck: values.typecheck === true,
         deadExports: values['dead-exports'] === true,
         validationContract,
+        ...(values.cache === true ? {cacheDir: join(rootPath, '.stoa', 'cache')} : {}),
         ...(memoryStats
             ? {
                   onProgress: (snapshot, progress) => {
@@ -131,7 +134,8 @@ const runAnalyze = async (values: CliValues, target: string): Promise<number> =>
     }
 
     if (memoryStats) {
-        process.stderr.write(`[stoa] done: ${result.report.coverage.filesAnalyzed} analyzed, ${result.report.coverage.filesSkipped} skipped, ${result.report.coverage.factCount} facts, ${result.report.findings.length} findings\n`);
+        const cacheNote = result.report.coverage.cacheHits !== undefined ? `, ${result.report.coverage.cacheHits} cache hits` : '';
+        process.stderr.write(`[stoa] done: ${result.report.coverage.filesAnalyzed} analyzed, ${result.report.coverage.filesSkipped} skipped, ${result.report.coverage.factCount} facts, ${result.report.findings.length} findings${cacheNote}\n`);
     }
     // The memory guard stopped early: say so loudly, on every format, not only
     // buried in `coverage` — a truncated analysis must never read like a
@@ -202,6 +206,7 @@ const main = async (): Promise<number> => {
             include: {type: 'string', multiple: true},
             exclude: {type: 'string', multiple: true},
             'memory-stats': {type: 'boolean', default: false},
+            cache: {type: 'boolean', default: false},
             help: {type: 'boolean', default: false}
         }
     });

@@ -223,6 +223,8 @@ export interface CoverageSummary {
     analysisIncomplete?: boolean;
     /** The file ingestion was processing when the memory guard stopped it (set together with `analysisIncomplete`). */
     stoppedAtFile?: string;
+    /** Present only when `cacheDir` was set (see FactCache.ts): how many of the per-file fact extractions were served from the cache instead of re-parsed. */
+    cacheHits?: number;
 }
 
 /** The user-facing report. Intermediate facts stay out of it by default. */
