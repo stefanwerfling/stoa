@@ -8,7 +8,7 @@ import {PhpAdapter} from './analysis/PhpAdapter.js';
 import {TypeScriptAdapter} from './analysis/TypeScriptAdapter.js';
 import {TypeDiagnosticsExtractor} from './analysis/typescript/TypeDiagnostics.js';
 import {FactCache} from './FactCache.js';
-import {collectFiles} from './Ingestion.js';
+import {collectFiles, readFileContent} from './Ingestion.js';
 import {KnowledgeBase} from './knowledge/KnowledgeBase.js';
 import {isMemoryCritical, takeMemorySnapshot, type MemorySnapshot} from './MemoryGuard.js';
 import {RuleEngine} from './rules/RuleEngine.js';
@@ -120,7 +120,7 @@ export const analyze = (options: AnalyzeOptions): AnalysisResult => {
     let skipped = 0;
     let cacheHits = 0;
     let stoppedAtFile: string | undefined;
-    for (const [index, file] of files.entries()) {
+    for (const [index, meta] of files.entries()) {
         if (index % checkEveryFiles === 0) {
             const snapshot = takeMemorySnapshot();
             options.onProgress?.(snapshot, {filesSelected: files.length, filesProcessed: index});
@@ -132,16 +132,23 @@ export const analyze = (options: AnalyzeOptions): AnalysisResult => {
             // here: by design, this guard is a last resort, not a substitute
             // for the bounded object lifetimes Phase B/D/E establish.
             if (isMemoryCritical(snapshot, criticalRatio)) {
-                stoppedAtFile = file.path;
+                stoppedAtFile = meta.path;
                 break;
             }
         }
 
-        const adapter = registry.resolve(file);
+        // Resolved by path alone (FileMeta, no content) — a file nothing can
+        // parse is never read at all.
+        const adapter = registry.resolve(meta);
         if (adapter === null) {
             skipped += 1;
             continue;
         }
+
+        // Content is read lazily, right here, only once a matching adapter
+        // is known — this is the one and only point in the whole pipeline
+        // a file's content enters memory.
+        const file = readFileContent(meta);
 
         const cachedAdapterFacts = cache?.get(adapter.id, file) ?? null;
         if (cachedAdapterFacts !== null) {

@@ -1,5 +1,11 @@
 import type {Fact} from '../Types.js';
 
+/** Just enough to pick an adapter and report progress — no file content. See Ingestion.ts: discovery produces these first, content is read lazily only once a file is actually about to be parsed. */
+export interface FileMeta {
+    path: string;
+    size: number;
+}
+
 export interface FileRef {
     path: string;
     content: string;
@@ -35,7 +41,8 @@ export interface ProjectContext {
 export interface LanguageAdapter {
     readonly id: string;
     readonly version: string;
-    supports(file: FileRef): boolean;
+    /** Takes a FileMeta (path only) deliberately — supports() must never need content, so a file nothing can parse is never read in the first place. */
+    supports(file: FileMeta): boolean;
     parse(file: FileRef): ParseResult;
     extractFacts(parsed: ParseResult, ctx: ProjectContext): Fact[];
 }

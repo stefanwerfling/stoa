@@ -1,7 +1,8 @@
 import {readdirSync, readFileSync, statSync} from 'node:fs';
 import {join, relative, sep} from 'node:path';
 import picomatch from 'picomatch';
-import type {FileRef} from './analysis/LanguageAdapter.js';
+import type {FileMeta, FileRef} from './analysis/LanguageAdapter.js';
+import {gitignorePatterns} from './GitIgnore.js';
 
 // Always pruned during traversal (never analyzed, and walking them is wasteful).
 // Everything else is governed by the include/exclude globs.
@@ -32,8 +33,20 @@ type Matcher = (path: string) => boolean;
 
 /**
  * Selects files under a root using include/exclude globs (relative, POSIX-style
- * paths). A single-file root is returned as-is (explicit selection bypasses the
- * globs). Output is sorted by path, so ingestion order is deterministic.
+ * paths) plus the repository root's own `.gitignore` (see GitIgnore.ts — a
+ * deliberately narrow, best-effort slice, not full git semantics). A
+ * single-file root is returned as-is (explicit selection bypasses the globs
+ * AND .gitignore — an explicitly named path is never silently dropped).
+ * Output is sorted by path, so ingestion order is deterministic.
+ *
+ * Returns METADATA only (path + size) — no file content is read here. This
+ * is deliberate: a file discovery pass over a large repository should not
+ * hold every matched file's full content in memory at once just because the
+ * walk itself has not finished yet. Content is read lazily, one file at a
+ * time, via `readFileContent()` below, only once a file is actually about
+ * to be parsed (and only after an adapter has already been chosen by path
+ * alone — see LanguageAdapter.ts's `supports()` — so a file nothing can
+ * parse is never read in the first place either).
  *
  * Robustness: a directory that cannot be read (permission error, race with a
  * concurrent delete, …) is reported via `onExcluded` and pruned — it never
@@ -44,24 +57,28 @@ type Matcher = (path: string) => boolean;
  * alternative, following them, risks an unbounded walk on a circular symlink
  * with no correctness benefit documented as needed here.
  */
-export const collectFiles = (rootPath: string, options: IngestionOptions): FileRef[] => {
+export const collectFiles = (rootPath: string, options: IngestionOptions): FileMeta[] => {
     const stats = statSync(rootPath);
     if (stats.isFile()) {
-        return [readFile(rootPath)];
+        return [{path: rootPath, size: stats.size}];
     }
 
+    const exclude = [...options.exclude, ...gitignorePatterns(rootPath)];
     const matchInclude = picomatch(options.include);
-    const matchExclude = options.exclude.length > 0 ? picomatch(options.exclude) : () => false;
+    const matchExclude = exclude.length > 0 ? picomatch(exclude) : () => false;
     const maxFileBytes = options.maxFileBytes ?? DEFAULT_MAX_FILE_BYTES;
     const onExcluded = options.onExcluded ?? (() => undefined);
 
-    const files: FileRef[] = [];
+    const files: FileMeta[] = [];
     walk(rootPath, rootPath, matchInclude, matchExclude, maxFileBytes, onExcluded, files);
     files.sort((a, b) => a.path.localeCompare(b.path));
     return files;
 };
 
-const walk = (dir: string, root: string, include: Matcher, exclude: Matcher, maxFileBytes: number, onExcluded: (path: string, reason: string) => void, out: FileRef[]): void => {
+/** Reads one file's content on demand — the only place `collectFiles()`'s results turn into something an adapter can actually parse. */
+export const readFileContent = (meta: FileMeta): FileRef => ({path: meta.path, content: readFileSync(meta.path, 'utf8')});
+
+const walk = (dir: string, root: string, include: Matcher, exclude: Matcher, maxFileBytes: number, onExcluded: (path: string, reason: string) => void, out: FileMeta[]): void => {
     let entries;
     try {
         entries = readdirSync(dir, {withFileTypes: true});
@@ -89,12 +106,8 @@ const walk = (dir: string, root: string, include: Matcher, exclude: Matcher, max
             onExcluded(absolute, `exceeds maxFileBytes (${size} > ${maxFileBytes})`);
             continue;
         }
-        out.push(readFile(absolute));
+        out.push({path: absolute, size});
     }
 };
 
 const toPosix = (path: string): string => (sep === '/' ? path : path.split(sep).join('/'));
-
-const readFile = (path: string): FileRef => {
-    return {path, content: readFileSync(path, 'utf8')};
-};

@@ -1,6 +1,6 @@
 import {Engine} from 'php-parser';
 import type {Fact} from '../Types.js';
-import type {FileRef, LanguageAdapter, ParseResult, ProjectContext} from './LanguageAdapter.js';
+import type {FileMeta, FileRef, LanguageAdapter, ParseResult, ProjectContext} from './LanguageAdapter.js';
 import {extractFacts, type PhpNode} from './php/PhpExtraction.js';
 
 /**
@@ -21,7 +21,7 @@ export class PhpAdapter implements LanguageAdapter {
         this.engine = new Engine({parser: {extractDoc: true}, ast: {withPositions: true}});
     }
 
-    public supports(file: FileRef): boolean {
+    public supports(file: FileMeta): boolean {
         return file.path.endsWith('.php');
     }
 

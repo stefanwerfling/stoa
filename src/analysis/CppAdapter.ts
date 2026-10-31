@@ -2,7 +2,7 @@ import {createRequire} from 'node:module';
 import {Language, Parser, type Node} from 'web-tree-sitter';
 import type {Fact} from '../Types.js';
 import {extractFacts} from './cpp/CppExtraction.js';
-import type {FileRef, LanguageAdapter, ParseResult, ProjectContext} from './LanguageAdapter.js';
+import type {FileMeta, FileRef, LanguageAdapter, ParseResult, ProjectContext} from './LanguageAdapter.js';
 
 const require = createRequire(import.meta.url);
 
@@ -40,7 +40,7 @@ export class CppAdapter implements LanguageAdapter {
     public readonly id = 'cpp';
     public readonly version = '0.1.0';
 
-    public supports(file: FileRef): boolean {
+    public supports(file: FileMeta): boolean {
         return C_EXTENSIONS.some((ext) => file.path.endsWith(ext)) || CPP_EXTENSIONS.some((ext) => file.path.endsWith(ext)) || file.path.endsWith('.h');
     }
 

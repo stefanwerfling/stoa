@@ -1,7 +1,7 @@
 import {Project} from 'ts-morph';
 import type {SourceFile} from 'ts-morph';
 import type {Fact} from '../Types.js';
-import type {FileRef, LanguageAdapter, ParseResult, ProjectContext} from './LanguageAdapter.js';
+import type {FileMeta, FileRef, LanguageAdapter, ParseResult, ProjectContext} from './LanguageAdapter.js';
 import {extractFacts} from './typescript/TsExtraction.js';
 
 const SUPPORTED_EXTENSIONS: readonly string[] = ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs'] as const;
@@ -37,7 +37,7 @@ export class TypeScriptAdapter implements LanguageAdapter {
         this.project = new Project({useInMemoryFileSystem: true, compilerOptions: {allowJs: true}});
     }
 
-    public supports(file: FileRef): boolean {
+    public supports(file: FileMeta): boolean {
         return SUPPORTED_EXTENSIONS.some((ext) => file.path.endsWith(ext));
     }
 

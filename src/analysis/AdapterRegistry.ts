@@ -1,4 +1,4 @@
-import type {FileRef, LanguageAdapter} from './LanguageAdapter.js';
+import type {FileMeta, LanguageAdapter} from './LanguageAdapter.js';
 
 /**
  * Holds the registered language adapters and resolves the first one that
@@ -12,7 +12,7 @@ export class AdapterRegistry {
         return this;
     }
 
-    public resolve(file: FileRef): LanguageAdapter | null {
+    public resolve(file: FileMeta): LanguageAdapter | null {
         return this.adapters.find((adapter) => adapter.supports(file)) ?? null;
     }
 

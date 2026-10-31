@@ -2,7 +2,7 @@ import {createRequire} from 'node:module';
 import {Language, Parser, type Node, type Tree} from 'web-tree-sitter';
 import type {Fact} from '../Types.js';
 import {extractFacts} from './html/HtmlExtraction.js';
-import type {FileRef, LanguageAdapter, ParseResult, ProjectContext} from './LanguageAdapter.js';
+import type {FileMeta, FileRef, LanguageAdapter, ParseResult, ProjectContext} from './LanguageAdapter.js';
 
 const require = createRequire(import.meta.url);
 
@@ -52,7 +52,7 @@ export class HtmlAdapter implements LanguageAdapter {
     public readonly id = 'html';
     public readonly version = '0.1.0';
 
-    public supports(file: FileRef): boolean {
+    public supports(file: FileMeta): boolean {
         return file.path.endsWith('.html') || file.path.endsWith('.htm');
     }
 

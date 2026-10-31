@@ -1,7 +1,7 @@
 import type {Node} from 'web-tree-sitter';
 import type {Fact} from '../Types.js';
 import {parseHtmlTree} from './HtmlAdapter.js';
-import type {FileRef, LanguageAdapter, ParseResult, ProjectContext} from './LanguageAdapter.js';
+import type {FileMeta, FileRef, LanguageAdapter, ParseResult, ProjectContext} from './LanguageAdapter.js';
 import {extractTemplateA11yFacts, type BindingDialect} from './template/TemplateExtraction.js';
 
 // Angular template binding syntax → plain attribute + dynamic flag.
@@ -41,7 +41,7 @@ export class AngularAdapter implements LanguageAdapter {
     public readonly id = 'angular';
     public readonly version = '0.1.0';
 
-    public supports(file: FileRef): boolean {
+    public supports(file: FileMeta): boolean {
         return file.path.endsWith('.component.html');
     }
 

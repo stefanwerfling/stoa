@@ -4,7 +4,7 @@ import {tmpdir} from 'node:os';
 import {basename, dirname, join} from 'node:path';
 import {test} from 'node:test';
 import {fileURLToPath} from 'node:url';
-import {collectFiles} from '../src/Ingestion.js';
+import {collectFiles, readFileContent} from '../src/Ingestion.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const dir = join(here, 'fixtures', 'ingestion');
@@ -64,6 +64,60 @@ test('an explicitly named oversized file is still read (explicit selection bypas
     } finally {
         rmSync(tmp, {recursive: true, force: true});
     }
+});
+
+// Phase 3.1 — discovery returns METADATA only; content is read lazily.
+
+test('collectFiles returns metadata only (path + size, no content) — a separate call is needed to actually read a file', () => {
+    const files = collectFiles(dir, {include: ['**/*.ts'], exclude: []});
+    assert.ok(files.length > 0);
+    for (const file of files) {
+        assert.equal(typeof file.size, 'number');
+        assert.ok(file.size >= 0);
+        assert.ok(!('content' in file), 'collectFiles must not have read this file\'s content');
+    }
+});
+
+test('readFileContent reads exactly the file a FileMeta points at', () => {
+    const files = collectFiles(dir, {include: ['**/*.ts'], exclude: []});
+    const keepTs = files.find((f) => basename(f.path) === 'keep.ts');
+    assert.ok(keepTs !== undefined);
+    const file = readFileContent(keepTs);
+    assert.equal(file.path, keepTs.path);
+    assert.equal(typeof file.content, 'string');
+    assert.equal(file.content.length, keepTs.size, 'size reported at discovery time matches the actually-read content length (ASCII fixture, so bytes == characters)');
+});
+
+// Phase 3.1 — a root .gitignore is honored (a narrow, best-effort slice — see GitIgnore.ts).
+
+test('a root .gitignore excludes matching files/directories, at any depth for a plain name and anchored for a path with a slash', () => {
+    const tmp = mkdtempSync(join(tmpdir(), 'stoa-ingestion-gitignore-'));
+    try {
+        writeFileSync(join(tmp, '.gitignore'), ['*.log', 'build/', '/only-root.ts', '# a comment', '', '!not-supported.ts'].join('\n'));
+        writeFileSync(join(tmp, 'keep.ts'), 'export const x = 1;\n');
+        writeFileSync(join(tmp, 'debug.log'), 'noise');
+        mkdirSync(join(tmp, 'nested'));
+        writeFileSync(join(tmp, 'nested', 'debug.log'), 'noise');
+        mkdirSync(join(tmp, 'build'));
+        writeFileSync(join(tmp, 'build', 'output.ts'), 'export const y = 1;\n');
+        writeFileSync(join(tmp, 'only-root.ts'), 'export const z = 1;\n');
+        mkdirSync(join(tmp, 'nested2'));
+        writeFileSync(join(tmp, 'nested2', 'only-root.ts'), 'export const w = 1;\n'); // NOT excluded: anchored to repo root only
+
+        const files = collectFiles(tmp, {include: ['**/*.ts', '**/*.log'], exclude: []});
+        const relPaths = files.map((f) => f.path.slice(tmp.length + 1)).sort();
+        assert.deepEqual(relPaths, ['keep.ts', 'nested2/only-root.ts']);
+    } finally {
+        rmSync(tmp, {recursive: true, force: true});
+    }
+});
+
+test('with no root .gitignore, behavior is unchanged from before', () => {
+    const files = collectFiles(dir, {include: ['**/*.ts', '**/*.php'], exclude: []});
+    assert.deepEqual(
+        files.map((f) => basename(f.path)).sort(),
+        ['keep.php', 'keep.ts', 'old.ts', 'skip.d.ts']
+    );
 });
 
 test('an unreadable subdirectory is pruned and reported, not a crash of the whole walk', {skip: process.getuid?.() === 0}, () => {

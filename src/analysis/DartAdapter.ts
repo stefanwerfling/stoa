@@ -2,7 +2,7 @@ import {createRequire} from 'node:module';
 import {Language, Parser, type Node} from 'web-tree-sitter';
 import type {Fact} from '../Types.js';
 import {extractFacts} from './dart/DartExtraction.js';
-import type {FileRef, LanguageAdapter, ParseResult, ProjectContext} from './LanguageAdapter.js';
+import type {FileMeta, FileRef, LanguageAdapter, ParseResult, ProjectContext} from './LanguageAdapter.js';
 
 const require = createRequire(import.meta.url);
 
@@ -32,7 +32,7 @@ export class DartAdapter implements LanguageAdapter {
     public readonly id = 'dart';
     public readonly version = '0.1.0';
 
-    public supports(file: FileRef): boolean {
+    public supports(file: FileMeta): boolean {
         return file.path.endsWith('.dart');
     }
 
