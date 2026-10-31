@@ -62,6 +62,7 @@ stoa analyze <path> [--format markdown|json|sarif] [--lang en|de]
                     [--include <glob>]... [--exclude <glob>]...
                     [--typecheck] [--dead-exports] [--contracts <file>]
                     [--semantic noop|anthropic] [--memory-stats] [--cache]
+                    [--baseline <file>] [--update-baseline] [--only-new]
                     [--config <file>] [--knowledge <dir>] [--rules <dir>]
 stoa eval <path> --expected <file> [--format markdown|json] [--contracts <file>]
                     [--knowledge <dir>] [--rules <dir>]
@@ -87,6 +88,9 @@ stoa eval <path> --expected <file> [--format markdown|json] [--contracts <file>]
 - `--cache` stores/reuses per-file facts under `<root>/.stoa/cache` across
   runs (see "Per-file fact cache" below) — off by default; omitting it is
   byte-for-byte the previous behavior.
+- `--baseline <file>` / `--update-baseline` / `--only-new` — see "Baseline /
+  diff mode" below. Off by default; omitting `--baseline` leaves every
+  finding exactly as before (no `baselineStatus`, no `AnalysisReport.baseline`).
 
 ## Memory-bounded analysis pipeline
 
@@ -208,6 +212,56 @@ invalidation story airtight:
   5.5s / 451 MB, warm (fully cached) run **0.84s / 203 MB** — report output
   identical except for the new `coverage.cacheHits` diagnostic field itself
   (verified by diffing the two JSON reports, not just eyeballing timings).
+
+## Baseline / diff mode (opt-in, `--baseline`)
+
+Wires up `Finding.baselineStatus` (`'new' | 'known' | 'fixed'`), present in
+the type since the original finding model but never actually set by
+anything until now. The point: a large existing codebase has a backlog of
+findings nobody is going to triage today — a baseline lets CI/pre-commit
+surface only what a change actually introduced, not the whole backlog.
+
+- **Identity, reused, not reinvented:** a finding's baseline identity is
+  `(project-relative file, rule id, symbol)` — exactly the key the
+  golden-corpus evaluator (`src/evaluation/Evaluator.ts`) already uses to
+  match produced findings against expected ones. Extracted into a shared
+  `src/FindingIdentity.ts` so there is one definition, not two. Line/column
+  are deliberately excluded: the symbol already distinguishes findings
+  within a file, and an exact position would make identity brittle to
+  unrelated line shifts elsewhere in the same file (a known, accepted
+  limitation this inherits from the evaluator, not a new one).
+- **`--baseline <file>`:** loads the file if it exists and stamps every
+  current finding `new` or `known`; a baseline entry no longer reproduced
+  by the current run is reported as `fixed` in the new
+  `AnalysisReport.baseline` summary (`newCount`/`knownCount`/`fixedCount`/
+  `fixed: FindingKey[]`) — never fabricated as a Finding, since there is
+  nothing in current code to anchor a "fixed" result to. If the file does
+  not exist yet, every finding is `new` and nothing is `fixed` — the
+  natural first-run state, not an error. A malformed baseline file DOES
+  throw (exit 1) — silently treating it as "no baseline" would mislabel
+  every already-known finding as new.
+- **`--update-baseline`:** writes the current run's findings (before any
+  `--only-new` filtering) as the new baseline at the same path, sorted
+  deterministically. Separate from `--baseline` on purpose — loading and
+  overwriting are different-enough actions that conflating them risked a
+  baseline being silently created/overwritten when the user only meant to
+  compare.
+- **`--only-new`:** filters the rendered report down to findings that are
+  NOT `known` — the actual CI/pre-commit payoff. A no-op if `--baseline` was
+  never given.
+- **Rendering:** Markdown gets a `- Baseline: N new, M known, K fixed`
+  summary line and a `[new]`/`[known]` tag per finding heading (localized
+  en/de, like every other report label). SARIF gets the standard
+  `result.baselineState` (`'new'`/`'unchanged'`) — SARIF 2.1.0 already
+  defines this vocabulary for exactly this purpose, reused rather than
+  inventing a stoa-specific property; `'fixed'` findings have no SARIF
+  result to attach a state to and are not represented there (they are only
+  in `AnalysisReport.baseline.fixed`).
+- **Verified end-to-end** against a real small project (not just unit
+  tests): first run with no baseline file → all `new`; `--update-baseline`
+  writes it; second run against that file → all `known`; `--only-new` on
+  that second run → zero findings in the output; removing the underlying
+  issue and re-running → reported as `fixed`.
 
 ## Rule catalog (38)
 
@@ -528,7 +582,7 @@ fails fast (exit 1, concrete errors) instead of silently yielding 0 findings.
 
 ## Quality assurance
 
-- **234 node:test cases** green (rules pos./neg., extraction, schema validation,
+- **244 node:test cases** green (rules pos./neg., extraction, schema validation,
   i18n, determinism, SARIF, evaluation, semantic groundedness, privacy,
   finding-model separation).
 - **Golden corpus** (`test/corpus/`, **TS+PHP only**) with ground truth;

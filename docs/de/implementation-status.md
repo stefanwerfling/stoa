@@ -65,6 +65,7 @@ stoa analyze <pfad> [--format markdown|json|sarif] [--lang en|de]
                     [--include <glob>]... [--exclude <glob>]...
                     [--typecheck] [--dead-exports] [--contracts <datei>]
                     [--semantic noop|anthropic] [--memory-stats] [--cache]
+                    [--baseline <datei>] [--update-baseline] [--only-new]
                     [--config <datei>] [--knowledge <dir>] [--rules <dir>]
 stoa eval <pfad> --expected <datei> [--format markdown|json] [--contracts <datei>]
                     [--knowledge <dir>] [--rules <dir>]
@@ -93,6 +94,10 @@ stoa eval <pfad> --expected <datei> [--format markdown|json] [--contracts <datei
 - `--cache` speichert/nutzt Pro-Datei-Facts unter `<root>/.stoa/cache` über
   Läufe hinweg (siehe "Pro-Datei-Fact-Cache" unten) — standardmäßig aus; ohne
   das Flag ist das Verhalten byte-identisch zum vorherigen.
+- `--baseline <datei>` / `--update-baseline` / `--only-new` — siehe
+  "Baseline-/Diff-Modus" unten. Standardmäßig aus; ohne `--baseline` bleibt
+  jeder Befund exakt wie vorher (kein `baselineStatus`, kein
+  `AnalysisReport.baseline`).
 
 ## Memory-Bounded Analysis Pipeline
 
@@ -233,6 +238,63 @@ macht die Invalidierung wasserdicht:
   MB** — Report-Ausgabe identisch bis auf das neue
   `coverage.cacheHits`-Diagnosefeld selbst (per Diff der beiden JSON-Reports
   verifiziert, nicht nur nach Augenmaß bei den Laufzeiten).
+
+## Baseline-/Diff-Modus (opt-in, `--baseline`)
+
+Verdrahtet `Finding.baselineStatus` (`'new' | 'known' | 'fixed'`), das seit
+dem ursprünglichen Finding-Modell existiert, aber bisher von nichts gesetzt
+wurde. Der Punkt dahinter: Ein großer bestehender Codebase hat einen
+Backlog an Befunden, den heute niemand triagieren wird — eine Baseline
+lässt CI/Pre-Commit nur das zeigen, was eine Änderung tatsächlich neu
+eingeführt hat, nicht den gesamten Backlog.
+
+- **Identität, wiederverwendet, nicht neu erfunden:** Die Baseline-Identität
+  eines Befunds ist `(projektrelative Datei, Regel-ID, Symbol)` — exakt der
+  Schlüssel, den der Golden-Corpus-Evaluator
+  (`src/evaluation/Evaluator.ts`) bereits nutzt, um erzeugte Befunde gegen
+  erwartete abzugleichen. Extrahiert in ein gemeinsames
+  `src/FindingIdentity.ts`, sodass es eine Definition gibt, nicht zwei.
+  Zeile/Spalte sind bewusst ausgeschlossen: Das Symbol unterscheidet Befunde
+  innerhalb einer Datei bereits, und eine exakte Position würde die
+  Identität anfällig für unabhängige Zeilenverschiebungen anderswo in
+  derselben Datei machen (eine bekannte, akzeptierte Grenze, die hiervon vom
+  Evaluator übernommen wird, keine neue).
+- **`--baseline <datei>`:** lädt die Datei, falls vorhanden, und markiert
+  jeden aktuellen Befund als `new` oder `known`; ein Baseline-Eintrag, der
+  vom aktuellen Lauf nicht mehr reproduziert wird, wird in der neuen
+  `AnalysisReport.baseline`-Zusammenfassung als `fixed` gemeldet
+  (`newCount`/`knownCount`/`fixedCount`/`fixed: FindingKey[]`) — nie als
+  Finding erfunden, da es nichts im aktuellen Code gibt, an das ein
+  "fixed"-Ergebnis verankert werden könnte. Existiert die Datei noch nicht,
+  ist jeder Befund `new` und nichts `fixed` — der natürliche
+  Erstlauf-Zustand, kein Fehler. Eine fehlerhafte Baseline-Datei schlägt
+  dagegen fehl (Exit 1) — sie stillschweigend als "keine Baseline" zu
+  behandeln würde jeden bereits bekannten Befund fälschlich als neu
+  markieren.
+- **`--update-baseline`:** schreibt die Befunde des aktuellen Laufs (vor
+  einer etwaigen `--only-new`-Filterung) als neue Baseline an denselben
+  Pfad, deterministisch sortiert. Bewusst getrennt von `--baseline` — Laden
+  und Überschreiben sind unterschiedliche genug Aktionen, dass ein
+  Zusammenlegen riskiert hätte, dass eine Baseline stillschweigend erzeugt/
+  überschrieben wird, obwohl der Nutzer nur vergleichen wollte.
+- **`--only-new`:** filtert den gerenderten Report auf Befunde, die NICHT
+  `known` sind — der eigentliche CI/Pre-Commit-Nutzen. Ein No-op, wenn
+  `--baseline` nie angegeben wurde.
+- **Rendering:** Markdown erhält eine Zusammenfassungszeile
+  `- Baseline: N neu, M bekannt, K behoben` und einen `[neu]`/`[bekannt]`-Tag
+  pro Befund-Überschrift (lokalisiert en/de, wie jedes andere Report-Label).
+  SARIF erhält das Standard-`result.baselineState` (`'new'`/`'unchanged'`)
+  — SARIF 2.1.0 definiert dieses Vokabular bereits genau für diesen Zweck,
+  wiederverwendet statt eine stoa-eigene Property zu erfinden; `'fixed'`-
+  Befunde haben kein SARIF-Ergebnis, an das ein State angehängt werden
+  könnte, und werden dort nicht dargestellt (nur in
+  `AnalysisReport.baseline.fixed`).
+- **Ende-zu-Ende verifiziert** an einem echten kleinen Projekt (nicht nur
+  Unit-Tests): erster Lauf ohne Baseline-Datei → alles `new`;
+  `--update-baseline` schreibt sie; zweiter Lauf gegen diese Datei → alles
+  `known`; `--only-new` auf diesem zweiten Lauf → null Befunde in der
+  Ausgabe; das zugrunde liegende Problem entfernen und erneut laufen lassen
+  → als `fixed` gemeldet.
 
 ## Regelkatalog (38)
 
@@ -580,7 +642,7 @@ zu liefern.
 
 ## Qualitätssicherung
 
-- **234 node:test-Fälle** grün (Regeln pos./neg., Extraktion, Schema-Validierung,
+- **244 node:test-Fälle** grün (Regeln pos./neg., Extraktion, Schema-Validierung,
   i18n, Determinismus, SARIF, Eval, Semantik-Groundedness, Datenschutz,
   Finding-Trennung).
 - **Golden-Korpus** (`test/corpus/`, **nur TS+PHP**) mit Ground-Truth; Eval

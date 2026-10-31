@@ -50,8 +50,13 @@ An LLM is an optional, switchable adapter.
 >   failure path is actually rejected (see implementation-status for exact scope
 >   and the `heuristic`/`unresolved` evidence statuses this produces instead of a
 >   false `verified`).
-> - *Planned / not yet validated:* baseline & diff/PR mode, richer context facts,
->   PSR-4 PHP import resolution, Dart/C/C++ dependency facts.
+> - *Baseline / diff mode:* `--baseline <file>` stamps findings `new`/`known`
+>   against a stored baseline (same identity the golden-corpus evaluator
+>   uses: file + rule + symbol), `--only-new` filters the report down to the
+>   delta — the CI/pre-commit use case on an existing codebase with a backlog.
+>   Not a git-diff/PR mode (no VCS integration) — a stored-snapshot baseline.
+> - *Planned / not yet validated:* richer context facts, PSR-4 PHP import
+>   resolution, Dart/C/C++ dependency facts.
 >
 > Golden- and a11y-corpus precision/recall reflect those small, curated corpora
 > only; they are **not** a general reliability guarantee for arbitrary code.
@@ -108,6 +113,8 @@ node dist/Cli.js analyze . --include 'src/**/*.ts' --exclude '**/*.test.ts'  # g
 node dist/Cli.js analyze ./src --format sarif   # SARIF 2.1.0 for CI / code scanning
 node dist/Cli.js analyze . --memory-stats       # progress + heap/RSS to stderr every 100 files
 node dist/Cli.js analyze . --cache              # cache per-file facts under .stoa/cache for faster re-runs
+node dist/Cli.js analyze . --baseline .stoa/baseline.json --update-baseline  # accept current findings as the baseline
+node dist/Cli.js analyze . --baseline .stoa/baseline.json --only-new         # CI: report only what's new since then
 
 # evaluate the engine against the golden corpus (precision/recall)
 node dist/Cli.js eval test/corpus/project --expected test/corpus/expected.json
