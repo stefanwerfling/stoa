@@ -74,6 +74,22 @@ test('cycleAdjacency: seeds all nodes, keeps only relative non-type-only edges, 
     assert.ok(!(adjacency.get('/p/a.ts')?.has('/p/a.ts')), 'no self-edge');
 });
 
+// Correction P5 — node set comes from the EXPLICIT analyzed-file set the
+// pipeline passes, not from "files that happen to have a fact". A file that was
+// analyzed but contributed no `deps.import` (indeed no fact at all) is still a
+// node, and remains a valid import TARGET.
+
+test('an analyzed file with no facts of its own is still a node and a valid import target (node set = passed analyzedFiles)', () => {
+    // `/p/leaf.ts` produces NO fact here, yet it is in the analyzed set and is
+    // imported by a.ts — it must be a node AND the edge to it must resolve.
+    const analyzed = new Set(['/p/a.ts', '/p/leaf.ts']);
+    const graph = buildModuleGraph([importFact('/p/a.ts', './leaf')], analyzed, emptyResolver);
+    assert.deepEqual(graph.nodes, ['/p/a.ts', '/p/leaf.ts'], 'leaf.ts is a node despite contributing no fact');
+    assert.equal(graph.edges.length, 1);
+    assert.equal(graph.edges[0]?.to, '/p/leaf.ts', 'the import to the fact-less file resolves, not falsely unresolved');
+    assert.equal(graph.unresolved.length, 0);
+});
+
 test('an empty project yields empty nodes/edges/unresolved, not an error', () => {
     const graph = buildModuleGraph([], new Set(), emptyResolver);
     assert.deepEqual(graph.nodes, []);
@@ -96,16 +112,20 @@ test('each edge\'s evidence points to its OWN underlying fact (id + range); two 
     const edgeAC = graph.edges.find((e) => e.from === '/p/a.ts' && e.to === '/p/c.ts');
     assert.ok(edgeAB !== undefined && edgeAC !== undefined);
 
+    // Each edge has exactly its own one source site here.
+    assert.equal(edgeAB.evidence.length, 1);
+    assert.equal(edgeAC.evidence.length, 1);
+
     // factId is the id of the actual fact behind this edge — not the other one.
-    assert.equal(edgeAB.evidence.factId, factAtoB.id);
-    assert.equal(edgeAC.evidence.factId, factAtoC.id);
-    assert.notEqual(edgeAB.evidence.factId, edgeAC.evidence.factId, 'evidence of the two edges is not conflated');
+    assert.equal(edgeAB.evidence[0]?.factId, factAtoB.id);
+    assert.equal(edgeAC.evidence[0]?.factId, factAtoC.id);
+    assert.notEqual(edgeAB.evidence[0]?.factId, edgeAC.evidence[0]?.factId, 'evidence of the two edges is not conflated');
 
     // range is that fact's own source range (deep-equal, distinct per fact).
-    assert.deepEqual(edgeAB.evidence.range, factAtoB.subject.range);
-    assert.deepEqual(edgeAC.evidence.range, factAtoC.subject.range);
-    assert.equal(edgeAB.evidence.range.startLine, 7);
-    assert.equal(edgeAC.evidence.range.startLine, 19);
+    assert.deepEqual(edgeAB.evidence[0]?.range, factAtoB.subject.range);
+    assert.deepEqual(edgeAC.evidence[0]?.range, factAtoC.subject.range);
+    assert.equal(edgeAB.evidence[0]?.range.startLine, 7);
+    assert.equal(edgeAC.evidence[0]?.range.startLine, 19);
 });
 
 test('no edge or unresolved import carries invalid evidence — every factId resolves to a real input fact, every range is that fact\'s range', () => {
@@ -115,16 +135,48 @@ test('no edge or unresolved import carries invalid evidence — every factId res
     const graph = buildModuleGraph(facts, analyzed, emptyResolver);
 
     for (const edge of graph.edges) {
-        const origin = factById.get(edge.evidence.factId);
-        assert.ok(origin !== undefined, `edge evidence factId ${edge.evidence.factId} must be a real input fact, not fabricated`);
-        assert.ok(typeof edge.evidence.factId === 'string' && edge.evidence.factId.length > 0);
-        assert.deepEqual(edge.evidence.range, origin.subject.range);
+        assert.ok(edge.evidence.length >= 1, 'an edge always has at least one source site');
+        for (const site of edge.evidence) {
+            const origin = factById.get(site.factId);
+            assert.ok(origin !== undefined, `edge evidence factId ${site.factId} must be a real input fact, not fabricated`);
+            assert.ok(typeof site.factId === 'string' && site.factId.length > 0);
+            assert.deepEqual(site.range, origin.subject.range);
+        }
     }
     for (const unresolved of graph.unresolved) {
-        const origin = factById.get(unresolved.evidence.factId);
-        assert.ok(origin !== undefined, 'an unresolved import still cites a real fact, never a fabricated one');
-        assert.deepEqual(unresolved.evidence.range, origin.subject.range);
+        assert.ok(unresolved.evidence.length >= 1);
+        for (const site of unresolved.evidence) {
+            const origin = factById.get(site.factId);
+            assert.ok(origin !== undefined, 'an unresolved import still cites a real fact, never a fabricated one');
+            assert.deepEqual(site.range, origin.subject.range);
+        }
     }
+});
+
+// Correction P4 — multiple source sites of the SAME relationship must all be
+// kept (as deterministically-ordered evidence), never silently dropped.
+
+test('the same import relationship on two lines becomes ONE edge carrying BOTH source sites (deterministically ordered)', () => {
+    const analyzed = new Set(['/p/a.ts', '/p/b.ts']);
+    const line3 = importFact('/p/a.ts', './b', false, 3);
+    const line9 = importFact('/p/a.ts', './b', false, 9);
+    // Build in both orders; the resulting edge + its evidence order must be identical.
+    const g1 = buildModuleGraph([line3, line9], analyzed, emptyResolver);
+    const g2 = buildModuleGraph([line9, line3], analyzed, emptyResolver);
+    assert.equal(JSON.stringify(g1), JSON.stringify(g2), 'evidence order is deterministic regardless of fact order');
+
+    const edge = g1.edges.filter((e) => e.from === '/p/a.ts' && e.to === '/p/b.ts');
+    assert.equal(edge.length, 1, 'still one edge for the one relationship');
+    assert.equal(edge[0]?.evidence.length, 2, 'BOTH source sites are preserved, not just the first');
+    assert.deepEqual(edge[0]?.evidence.map((s) => s.factId), [line3.id, line9.id].sort(), 'both facts cited, deterministically ordered');
+    assert.deepEqual(edge[0]?.evidence.map((s) => s.range.startLine).sort((a, b) => a - b), [3, 9]);
+});
+
+test('unresolved imports also accumulate all their source sites', () => {
+    const analyzed = new Set(['/p/a.ts']);
+    const graph = buildModuleGraph([importFact('/p/a.ts', './gone', false, 2), importFact('/p/a.ts', './gone', false, 8)], analyzed, emptyResolver);
+    assert.equal(graph.unresolved.length, 1, 'one unresolved relationship');
+    assert.equal(graph.unresolved[0]?.evidence.length, 2, 'both unresolved source sites kept');
 });
 
 // Point 4 — determinism must not depend on the insertion order of

@@ -18,7 +18,15 @@ export interface ProjectConfig {
     configDir: string;
     /** Absolute `compilerOptions.baseUrl`, if tsconfig declared one. */
     baseUrl?: string;
-    /** `compilerOptions.paths` exactly as TypeScript resolved them (after `extends`). Patterns relative to `baseUrl` (or `configDir` when no `baseUrl`). */
+    /**
+     * Absolute base directory `paths` are resolved against when NO `baseUrl`
+     * is set — TypeScript's `options.pathsBasePath`, which is the directory of
+     * the config file that actually DECLARED `paths` (the base config in an
+     * `extends` chain, not necessarily the root). Resolution base precedence
+     * (see ModuleResolution.ts) is `baseUrl` → `pathsBasePath` → `configDir`.
+     */
+    pathsBasePath?: string;
+    /** `compilerOptions.paths` exactly as TypeScript resolved them (after `extends`). Patterns relative to `baseUrl`, else `pathsBasePath`, else `configDir`. */
     paths?: Record<string, string[]>;
     /** Root `package.json` `name`, used to recognize a self-referential import (`import x from "my-pkg/sub"`). */
     packageName?: string;
@@ -51,7 +59,7 @@ const dirOf = (rootPath: string): string => {
  * `extends` targets) are read. Returns `baseUrl`/`paths` or `undefined` on any
  * problem (missing file, parse error, no such options) — never throws.
  */
-const readTsConfig = (configDir: string): {baseUrl?: string; paths?: Record<string, string[]>} => {
+const readTsConfig = (configDir: string): {baseUrl?: string; pathsBasePath?: string; paths?: Record<string, string[]>} => {
     const tsconfigPath = join(configDir, 'tsconfig.json');
     if (!existsSync(tsconfigPath)) {
         return {};
@@ -71,9 +79,17 @@ const readTsConfig = (configDir: string): {baseUrl?: string; paths?: Record<stri
         };
         const parsed = ts.parseJsonConfigFileContent(readResult.config, host, configDir);
         const options = parsed.options;
-        const result: {baseUrl?: string; paths?: Record<string, string[]>} = {};
+        const result: {baseUrl?: string; pathsBasePath?: string; paths?: Record<string, string[]>} = {};
         if (typeof options.baseUrl === 'string') {
             result.baseUrl = options.baseUrl;
+        }
+        // `pathsBasePath` is where TypeScript anchors `paths` when `baseUrl` is
+        // absent (the declaring config's directory). It is typed `@internal` in
+        // some TS versions but is present on the resolved options at runtime —
+        // read it through a narrow, typed accessor rather than casting `options`.
+        const pathsBasePath = (options as {pathsBasePath?: unknown}).pathsBasePath;
+        if (typeof pathsBasePath === 'string') {
+            result.pathsBasePath = pathsBasePath;
         }
         if (options.paths !== undefined) {
             // TypeScript hands back a plain object; copy defensively into a
@@ -130,6 +146,7 @@ export const loadProjectConfig = (rootPath: string): ProjectConfig => {
     return {
         configDir,
         ...(tsconfig.baseUrl !== undefined ? {baseUrl: tsconfig.baseUrl} : {}),
+        ...(tsconfig.pathsBasePath !== undefined ? {pathsBasePath: tsconfig.pathsBasePath} : {}),
         ...(tsconfig.paths !== undefined ? {paths: tsconfig.paths} : {}),
         ...(pkg.packageName !== undefined ? {packageName: pkg.packageName} : {}),
         ...(pkg.exports !== undefined ? {exports: pkg.exports} : {}),

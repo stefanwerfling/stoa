@@ -114,6 +114,77 @@ test('package.json exports: a self-referential import to an analyzed source file
     }
 });
 
+// Correction P1 — overlapping exports wildcards must be resolved by Node
+// specificity (most specific pattern wins), not alphabetically, and with no
+// fallback to a less-specific pattern.
+
+test('exports wildcards: the MOST SPECIFIC matching pattern wins (not alphabetical)', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'stoa-cfg-expwild-'));
+    try {
+        mkdirSync(join(dir, 'src', 'features'), {recursive: true});
+        mkdirSync(join(dir, 'dist'), {recursive: true});
+        // Two overlapping patterns: the broad './*' (→ dist) and the specific
+        // './features/*' (→ src/features). Alphabetically './*' sorts BEFORE
+        // './features/*', so the old code would have wrongly picked it.
+        writeFileSync(join(dir, 'package.json'), JSON.stringify({name: 'p', exports: {'./*': './dist/*', './features/*': './src/features/*'}}));
+        writeFileSync(join(dir, 'src', 'features', 'thing.ts'), 'export const x = 1;\n');
+        const resolver = new ModuleResolver(loadProjectConfig(dir));
+        const analyzed = files(join(dir, 'src', 'features', 'thing.ts'));
+        assert.deepEqual(resolver.resolve(join(dir, 'a.ts'), 'p/features/thing', analyzed), {target: join(dir, 'src', 'features', 'thing.ts'), resolution: 'exports'});
+    } finally {
+        rmSync(dir, {recursive: true, force: true});
+    }
+});
+
+test('exports wildcards: a longer base before * beats a shorter one (./a/b/* over ./a/*)', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'stoa-cfg-expwild2-'));
+    try {
+        mkdirSync(join(dir, 'deep'), {recursive: true});
+        mkdirSync(join(dir, 'shallow'), {recursive: true});
+        writeFileSync(join(dir, 'package.json'), JSON.stringify({name: 'p', exports: {'./a/*': './shallow/*', './a/b/*': './deep/*'}}));
+        writeFileSync(join(dir, 'deep', 'c.ts'), 'export const x = 1;\n');
+        const resolver = new ModuleResolver(loadProjectConfig(dir));
+        const analyzed = files(join(dir, 'deep', 'c.ts'));
+        assert.deepEqual(resolver.resolve(join(dir, 'x.ts'), 'p/a/b/c', analyzed), {target: join(dir, 'deep', 'c.ts'), resolution: 'exports'});
+    } finally {
+        rmSync(dir, {recursive: true, force: true});
+    }
+});
+
+test('exports: an exact subpath key beats any wildcard pattern', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'stoa-cfg-expexact-'));
+    try {
+        mkdirSync(join(dir, 'src'), {recursive: true});
+        mkdirSync(join(dir, 'dist'), {recursive: true});
+        writeFileSync(join(dir, 'package.json'), JSON.stringify({name: 'p', exports: {'./*': './dist/*', './special': './src/special.ts'}}));
+        writeFileSync(join(dir, 'src', 'special.ts'), 'export const x = 1;\n');
+        const resolver = new ModuleResolver(loadProjectConfig(dir));
+        const analyzed = files(join(dir, 'src', 'special.ts'));
+        assert.deepEqual(resolver.resolve(join(dir, 'x.ts'), 'p/special', analyzed), {target: join(dir, 'src', 'special.ts'), resolution: 'exports'});
+    } finally {
+        rmSync(dir, {recursive: true, force: true});
+    }
+});
+
+test('exports: the most specific pattern maps to a non-analyzed target → unresolved, with NO fallback to a broader pattern', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'stoa-cfg-expnofallback-'));
+    try {
+        mkdirSync(join(dir, 'src', 'features'), {recursive: true});
+        mkdirSync(join(dir, 'src'), {recursive: true});
+        // './features/*' is most specific and maps to dist (NOT analyzed);
+        // the broader './*' maps to an analyzed src file. Node would pick the
+        // specific one and stop — so the result must be unresolved, NOT the
+        // broad pattern's analyzed target.
+        writeFileSync(join(dir, 'package.json'), JSON.stringify({name: 'p', exports: {'./*': './src/*', './features/*': './dist/features/*'}}));
+        writeFileSync(join(dir, 'src', 'features', 'thing.ts'), 'export const x = 1;\n');
+        const resolver = new ModuleResolver(loadProjectConfig(dir));
+        const analyzed = files(join(dir, 'src', 'features', 'thing.ts'));
+        assert.equal(resolver.resolve(join(dir, 'x.ts'), 'p/features/thing', analyzed).resolution, 'unresolved', 'the specific pattern wins and its target is not analyzed → unresolved, no fallback');
+    } finally {
+        rmSync(dir, {recursive: true, force: true});
+    }
+});
+
 test('package.json imports (#): resolved only for an in-project target; an external redirect stays unresolved (Festlegung 5)', () => {
     const dir = mkdtempSync(join(tmpdir(), 'stoa-cfg-'));
     try {
@@ -124,6 +195,60 @@ test('package.json imports (#): resolved only for an in-project target; an exter
         const analyzed = files(join(dir, 'src', 'internal.ts'));
         assert.deepEqual(resolver.resolve(join(dir, 'src', 'a.ts'), '#internal', analyzed), {target: join(dir, 'src', 'internal.ts'), resolution: 'imports'});
         assert.deepEqual(resolver.resolve(join(dir, 'src', 'a.ts'), '#ext', analyzed), {target: null, resolution: 'unresolved'}, 'external redirect is not reliably resolvable → unresolved');
+    } finally {
+        rmSync(dir, {recursive: true, force: true});
+    }
+});
+
+// Correction P2 — conditional exports: honor ORIGINAL property order, follow
+// only the conservative allowlist {import, node, default}, and NEVER jump past
+// a leading unsupported condition to a later supported one (strict variant).
+
+test('conditional exports: `import` first resolves; a nested node.import resolves; `default` resolves', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'stoa-cfg-cond-'));
+    try {
+        mkdirSync(join(dir, 'src'), {recursive: true});
+        writeFileSync(join(dir, 'package.json'), JSON.stringify({
+            name: 'p',
+            exports: {
+                './a': {import: './src/a.ts', require: './dist/a.cjs'},
+                './b': {node: {import: './src/b.ts'}},
+                './c': {default: './src/c.ts'}
+            }
+        }));
+        writeFileSync(join(dir, 'src', 'a.ts'), 'export const a = 1;\n');
+        writeFileSync(join(dir, 'src', 'b.ts'), 'export const b = 1;\n');
+        writeFileSync(join(dir, 'src', 'c.ts'), 'export const c = 1;\n');
+        const resolver = new ModuleResolver(loadProjectConfig(dir));
+        const analyzed = files(join(dir, 'src', 'a.ts'), join(dir, 'src', 'b.ts'), join(dir, 'src', 'c.ts'));
+        assert.equal(resolver.resolve(join(dir, 'x.ts'), 'p/a', analyzed).resolution, 'exports');
+        assert.equal(resolver.resolve(join(dir, 'x.ts'), 'p/b', analyzed).resolution, 'exports');
+        assert.equal(resolver.resolve(join(dir, 'x.ts'), 'p/c', analyzed).resolution, 'exports');
+    } finally {
+        rmSync(dir, {recursive: true, force: true});
+    }
+});
+
+test('conditional exports: a leading UNSUPPORTED condition (require/types) first → unresolved, never jumping to a later supported one', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'stoa-cfg-cond-strict-'));
+    try {
+        mkdirSync(join(dir, 'src'), {recursive: true});
+        writeFileSync(join(dir, 'package.json'), JSON.stringify({
+            name: 'p',
+            exports: {
+                // `require` is first; even though `import` points at an analyzed
+                // source file, the strict rule refuses to skip past `require`.
+                './a': {require: './dist/a.cjs', import: './src/a.ts'},
+                // `types` first, then `default` — likewise unresolved.
+                './b': {types: './types/b.d.ts', default: './src/b.ts'}
+            }
+        }));
+        writeFileSync(join(dir, 'src', 'a.ts'), 'export const a = 1;\n');
+        writeFileSync(join(dir, 'src', 'b.ts'), 'export const b = 1;\n');
+        const resolver = new ModuleResolver(loadProjectConfig(dir));
+        const analyzed = files(join(dir, 'src', 'a.ts'), join(dir, 'src', 'b.ts'));
+        assert.equal(resolver.resolve(join(dir, 'x.ts'), 'p/a', analyzed).resolution, 'unresolved', 'require-first is not skipped to reach import');
+        assert.equal(resolver.resolve(join(dir, 'x.ts'), 'p/b', analyzed).resolution, 'unresolved', 'types-first is not skipped to reach default');
     } finally {
         rmSync(dir, {recursive: true, force: true});
     }
@@ -153,6 +278,51 @@ test('loadProjectConfig on a directory with no tsconfig/package.json yields an e
         assert.equal(config.packageName, undefined);
         assert.equal(config.exports, undefined);
         assert.equal(config.imports, undefined);
+    } finally {
+        rmSync(dir, {recursive: true, force: true});
+    }
+});
+
+// Correction P3 — inherited `paths` WITHOUT `baseUrl` must resolve against the
+// directory of the config that DECLARED them (TypeScript's `pathsBasePath`),
+// not the analysis root.
+
+test('inherited paths without baseUrl resolve relative to the declaring base config (pathsBasePath), not the root', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'stoa-cfg-pbp-'));
+    try {
+        // Base config lives in cfg/ and declares paths but NO baseUrl.
+        mkdirSync(join(dir, 'cfg', 'x'), {recursive: true});
+        writeFileSync(join(dir, 'cfg', 'base.json'), JSON.stringify({compilerOptions: {paths: {'@x/*': ['x/*']}}}));
+        writeFileSync(join(dir, 'tsconfig.json'), JSON.stringify({extends: './cfg/base.json'}));
+        // The target the inherited `@x/*` must point at lives under cfg/ (the
+        // declaring config's dir), NOT under the project root.
+        writeFileSync(join(dir, 'cfg', 'x', 'thing.ts'), 'export const x = 1;\n');
+
+        const config = loadProjectConfig(dir);
+        assert.equal(config.baseUrl, undefined, 'no baseUrl is declared anywhere');
+        assert.equal(config.pathsBasePath, join(dir, 'cfg'), 'pathsBasePath is the declaring base config\'s directory');
+
+        const resolver = new ModuleResolver(config);
+        const analyzed = files(join(dir, 'cfg', 'x', 'thing.ts'));
+        assert.deepEqual(resolver.resolve(join(dir, 'importer.ts'), '@x/thing', analyzed), {target: join(dir, 'cfg', 'x', 'thing.ts'), resolution: 'alias'});
+
+        // A same-name target at the ROOT (the previously-wrong base) must NOT resolve.
+        const analyzedWrong = files(join(dir, 'x', 'thing.ts'));
+        assert.equal(resolver.resolve(join(dir, 'importer.ts'), '@x/thing', analyzedWrong).resolution, 'unresolved', 'the root-relative location is not where TS anchors these paths');
+    } finally {
+        rmSync(dir, {recursive: true, force: true});
+    }
+});
+
+test('local paths WITH baseUrl are unaffected by pathsBasePath (baseUrl still wins)', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'stoa-cfg-pbp-baseurl-'));
+    try {
+        mkdirSync(join(dir, 'src'), {recursive: true});
+        writeFileSync(join(dir, 'tsconfig.json'), JSON.stringify({compilerOptions: {baseUrl: '.', paths: {'@s/*': ['src/*']}}}));
+        writeFileSync(join(dir, 'src', 'thing.ts'), 'export const x = 1;\n');
+        const resolver = new ModuleResolver(loadProjectConfig(dir));
+        const analyzed = files(join(dir, 'src', 'thing.ts'));
+        assert.deepEqual(resolver.resolve(join(dir, 'x.ts'), '@s/thing', analyzed), {target: join(dir, 'src', 'thing.ts'), resolution: 'alias'});
     } finally {
         rmSync(dir, {recursive: true, force: true});
     }

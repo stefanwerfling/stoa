@@ -149,6 +149,15 @@ export const analyze = (options: AnalyzeOptions): AnalysisResult => {
     const criticalRatio = options.memoryGuard?.criticalRatio ?? DEFAULT_CRITICAL_RATIO;
 
     const facts: Fact[] = [];
+    // The EXPLICIT set of files successfully analyzed — the authoritative node
+    // set for the ModuleGraph (Phase 0 correction P5). Uses `meta.path`
+    // verbatim, the SAME value the adapters bind as a fact's `subject.file`
+    // (readFileContent keeps `meta.path`, FactBuilder stamps it unchanged), so
+    // graph nodes, graph edges and facts all share one path normalization.
+    // Deriving the set from `facts.map(subject.file)` instead would couple node
+    // presence to the incidental "every extractor emits file.lineCount"
+    // invariant — a file analyzed but emitting no fact would silently vanish.
+    const analyzedPaths = new Set<string>();
     let analyzed = 0;
     let skipped = 0;
     let cacheHits = 0;
@@ -235,6 +244,7 @@ export const analyze = (options: AnalyzeOptions): AnalysisResult => {
             }
         }
         analyzed += 1;
+        analyzedPaths.add(meta.path);
     }
 
     options.onProgress?.(takeMemorySnapshot(), {phase: 'evaluation', filesSelected: files.length, filesProcessed: analyzed + skipped, factsExtracted: facts.length, elapsedMs: Date.now() - startedAt});
@@ -248,7 +258,7 @@ export const analyze = (options: AnalyzeOptions): AnalysisResult => {
     // with the rest of this function's locals afterward — it adds no persistent
     // or unbounded state (the FactCache stays strictly file-local, untouched).
     const moduleResolver = new ModuleResolver(loadProjectConfig(options.rootPath));
-    const moduleGraph = buildModuleGraph(facts, new Set(facts.map((fact) => fact.subject.file)), moduleResolver);
+    const moduleGraph = buildModuleGraph(facts, analyzedPaths, moduleResolver);
     const findings: Finding[] = ruleEngine.evaluate(facts, moduleGraph);
     // RuleEngine.evaluate() is one atomic, synchronous pass with no internal
     // checkpointing — it cannot be partially applied or safely interrupted

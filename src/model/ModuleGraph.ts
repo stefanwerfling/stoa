@@ -35,14 +35,16 @@ export interface ModuleEdge {
     isTypeOnly: boolean;
     /** How `specifier` was resolved to `to` -- always a resolved method here (never `unresolved`). */
     resolution: Exclude<ResolutionMethod, 'unresolved'>;
-    evidence: ImportEvidence;
+    /** ALL source sites of this one relationship (one per contributing `deps.import` fact), deduplicated by factId and sorted deterministically — so a finding can cite every place the edge occurs, never just the first. */
+    evidence: ImportEvidence[];
 }
 
 export interface UnresolvedImport {
     from: string;
     specifier: string;
     isTypeOnly: boolean;
-    evidence: ImportEvidence;
+    /** ALL source sites of this unresolved import, deduplicated by factId and sorted deterministically. */
+    evidence: ImportEvidence[];
 }
 
 export interface ModuleGraph {
@@ -64,6 +66,20 @@ const compareEdges = (a: ModuleEdge, b: ModuleEdge): number =>
 
 const compareUnresolved = (a: UnresolvedImport, b: UnresolvedImport): number =>
     a.from.localeCompare(b.from) || a.specifier.localeCompare(b.specifier);
+
+// Deterministic order for the evidence sites of one edge/unresolved import:
+// by factId, then by source position — independent of the order facts arrived.
+const compareEvidence = (a: ImportEvidence, b: ImportEvidence): number =>
+    a.factId.localeCompare(b.factId) || a.range.startLine - b.range.startLine || a.range.startCol - b.range.startCol;
+
+// Appends a source site to an accumulator, deduplicated by factId (the same
+// fact can only be one site; distinct facts for the same relationship are the
+// extra sites we must NOT lose).
+const addEvidence = (sites: ImportEvidence[], evidence: ImportEvidence): void => {
+    if (!sites.some((site) => site.factId === evidence.factId)) {
+        sites.push(evidence);
+    }
+};
 
 /**
  * Builds the module graph from `deps.import` facts. Deterministic: the result
@@ -90,21 +106,36 @@ export const buildModuleGraph = (facts: readonly Fact[], analyzedFiles: Readonly
         const resolved = resolver.resolve(from, specifier, analyzedFiles);
         if (resolved.target === null || resolved.resolution === 'unresolved') {
             const key = `${from} ${specifier} ${isTypeOnly}`;
-            if (!unresolvedByKey.has(key)) {
-                unresolvedByKey.set(key, {from, specifier, isTypeOnly, evidence});
+            const existing = unresolvedByKey.get(key);
+            if (existing === undefined) {
+                unresolvedByKey.set(key, {from, specifier, isTypeOnly, evidence: [evidence]});
+            } else {
+                addEvidence(existing.evidence, evidence);
             }
             continue;
         }
         const key = `${from} ${resolved.target} ${specifier} ${isTypeOnly} ${resolved.resolution}`;
-        if (!edgeByKey.has(key)) {
-            edgeByKey.set(key, {from, to: resolved.target, specifier, isTypeOnly, resolution: resolved.resolution, evidence});
+        const existing = edgeByKey.get(key);
+        if (existing === undefined) {
+            edgeByKey.set(key, {from, to: resolved.target, specifier, isTypeOnly, resolution: resolved.resolution, evidence: [evidence]});
+        } else {
+            addEvidence(existing.evidence, evidence);
         }
+    }
+
+    const edges = [...edgeByKey.values()];
+    for (const edge of edges) {
+        edge.evidence.sort(compareEvidence);
+    }
+    const unresolved = [...unresolvedByKey.values()];
+    for (const entry of unresolved) {
+        entry.evidence.sort(compareEvidence);
     }
 
     return {
         nodes: [...analyzedFiles].sort((a, b) => a.localeCompare(b)),
-        edges: [...edgeByKey.values()].sort(compareEdges),
-        unresolved: [...unresolvedByKey.values()].sort(compareUnresolved)
+        edges: edges.sort(compareEdges),
+        unresolved: unresolved.sort(compareUnresolved)
     };
 };
 

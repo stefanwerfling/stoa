@@ -86,7 +86,50 @@ const substitutePattern = (pattern: string, specifier: string, replacement: stri
     return replacement.includes('*') ? replacement.replace('*', captured) : replacement;
 };
 
-/** Picks a single string target out of a Node conditions value (`{import, require, default, …}` | string), preferring the import/source-facing conditions. Null for anything not reducible to one string. */
+/**
+ * Orders two `*`-containing subpath-pattern keys by Node.js specificity
+ * (`PATTERN_KEY_COMPARE`): the key with the longer part BEFORE `*` (larger
+ * base) is more specific and sorts first; on a tie, the longer total key
+ * (longer part AFTER `*`) sorts first. A final locale tiebreak keeps the order
+ * deterministic for otherwise-equal keys. So `./features/*` beats `./*`, and
+ * `./a/b/*` beats `./a/*`.
+ */
+const patternKeyCompare = (a: string, b: string): number => {
+    const baseA = a.indexOf('*');
+    const baseB = b.indexOf('*');
+    if (baseA !== baseB) {
+        return baseB - baseA;
+    }
+    if (a.length !== b.length) {
+        return b.length - a.length;
+    }
+    return a.localeCompare(b);
+};
+
+// The ONLY conditional-export conditions this resolver follows — the
+// source/ESM-facing ones. This is a deliberately CONSERVATIVE subset, NOT a
+// full Node.js conditional-exports resolver: Node matches conditions against a
+// live, caller-supplied condition set (which can include `require`, `browser`,
+// `development`, custom flags, …) that a static analyzer does not have. See
+// `pickConditionTarget` for how unsupported conditions are handled.
+const SUPPORTED_CONDITIONS: ReadonlySet<string> = new Set(['import', 'node', 'default']);
+
+/**
+ * Picks a single string target out of a Node conditional-exports value
+ * (`{import, require, default, …}` | string), honoring the ORIGINAL property
+ * order (Node evaluates conditions in the order they are written). Rule, kept
+ * deliberately strict so an unsupported condition can never yield a wrong
+ * target:
+ *   - a plain string resolves to itself;
+ *   - for a conditions object, look at the FIRST property in source order: if
+ *     its key is in `SUPPORTED_CONDITIONS`, recurse into it; if the first key
+ *     is NOT supported (e.g. `require`, `browser`, `types`, a custom flag),
+ *     return null (`unresolved`) — we never skip PAST a higher-priority
+ *     unsupported condition to grab a later supported one, because under a real
+ *     resolver that earlier condition might win and point elsewhere.
+ * This is a conservative subset, not a full Node resolver (see
+ * `SUPPORTED_CONDITIONS`): "not sure" is always `unresolved`, never a guess.
+ */
 const pickConditionTarget = (value: unknown): string | null => {
     if (typeof value === 'string') {
         return value;
@@ -94,16 +137,12 @@ const pickConditionTarget = (value: unknown): string | null => {
     if (typeof value !== 'object' || value === null || Array.isArray(value)) {
         return null;
     }
-    const record = value as Record<string, unknown>;
-    for (const condition of ['import', 'node', 'default']) {
-        if (condition in record) {
-            const nested = pickConditionTarget(record[condition]);
-            if (nested !== null) {
-                return nested;
-            }
-        }
+    const keys = Object.keys(value as Record<string, unknown>);
+    const firstKey = keys[0];
+    if (firstKey === undefined || !SUPPORTED_CONDITIONS.has(firstKey)) {
+        return null;
     }
-    return null;
+    return pickConditionTarget((value as Record<string, unknown>)[firstKey]);
 };
 
 /**
@@ -143,7 +182,11 @@ export class ModuleResolver {
     // null. Deterministic: paths keys are iterated in the sorted order
     // ProjectConfig already stored them in.
     private resolveTsconfig(specifier: string, analyzedFiles: ReadonlySet<string>): string | null {
-        const base = this.config.baseUrl ?? (this.config.configDir.length > 0 ? this.config.configDir : null);
+        // Resolution base for `paths`: an explicit `baseUrl` wins; otherwise
+        // TypeScript's `pathsBasePath` (the directory of the config that
+        // DECLARED the paths — correct for paths inherited via `extends` from
+        // a base config in another directory); only then the analysis root.
+        const base = this.config.baseUrl ?? this.config.pathsBasePath ?? (this.config.configDir.length > 0 ? this.config.configDir : null);
         const matches = new Set<string>();
         if (this.config.paths !== undefined && base !== null) {
             for (const pattern of Object.keys(this.config.paths)) {
@@ -206,9 +249,14 @@ export class ModuleResolver {
         return matchCandidate(isAbsolute(mapped) ? mapped : resolve(this.config.configDir, mapped), analyzedFiles);
     }
 
-    // Looks a subpath key up in an exports/imports map. Handles a bare string
-    // map value, an exact key, and a single-`*` subpath pattern. Returns the
-    // mapped target string (via `pickConditionTarget`) or null.
+    // Looks a subpath key up in an exports/imports map. An exact
+    // (non-pattern) key always wins. Otherwise the MOST SPECIFIC matching
+    // `*` pattern is chosen by Node's `PATTERN_KEY_COMPARE` (see
+    // `patternKeyCompare`) — not alphabetically — and ONLY that one is
+    // resolved: there is deliberately no fallback to a less-specific pattern
+    // (Node would never pick one once the specific pattern matched), so a
+    // specific pattern whose target is not an analyzed file ends as
+    // `unresolved` rather than silently matching a broader pattern.
     private lookupSubpath(field: unknown, subpath: string): string | null {
         if (typeof field === 'string') {
             return subpath === '.' ? field : null;
@@ -220,18 +268,16 @@ export class ModuleResolver {
         if (subpath in record) {
             return pickConditionTarget(record[subpath]);
         }
-        for (const key of Object.keys(record).sort()) {
-            if (!key.includes('*')) {
-                continue;
-            }
-            const substituted = substitutePattern(key, subpath, '*');
-            if (substituted === null) {
-                continue;
-            }
-            const template = pickConditionTarget(record[key]);
-            if (template !== null && template.includes('*')) {
-                return template.replace('*', substituted);
-            }
+        const matchingKeys = Object.keys(record).filter((key) => key.includes('*') && substitutePattern(key, subpath, '*') !== null);
+        if (matchingKeys.length === 0) {
+            return null;
+        }
+        matchingKeys.sort(patternKeyCompare);
+        const bestKey = matchingKeys[0] as string;
+        const captured = substitutePattern(bestKey, subpath, '*');
+        const template = pickConditionTarget(record[bestKey]);
+        if (captured !== null && template !== null && template.includes('*')) {
+            return template.replace('*', captured);
         }
         return null;
     }
