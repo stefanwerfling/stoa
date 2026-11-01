@@ -1,8 +1,18 @@
 import type {Fact, Finding} from '../Types.js';
 import type {KnowledgeBase} from '../knowledge/KnowledgeBase.js';
+import type {ModuleGraph} from '../model/ModuleGraph.js';
 
 export interface ProjectRuleInput {
     facts: Fact[];
+    /**
+     * The project-wide module dependency graph (Phase 0), built once by the
+     * pipeline from `deps.import` facts + config-aware resolution. OPTIONAL and
+     * additive: a rule that does not need it ignores it, and a caller that does
+     * not build one (e.g. a focused unit test calling a rule directly) omits
+     * it — such a rule must still work, falling back to its own fact-derived
+     * graph. See `DependencyCycleRule` for the fallback pattern.
+     */
+    moduleGraph?: ModuleGraph;
     /**
      * Every file that contributed at least one fact to this run — computed
      * by the caller directly from the analyzed file list, independent of

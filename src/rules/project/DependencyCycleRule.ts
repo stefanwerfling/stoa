@@ -1,6 +1,7 @@
 import {basename} from 'node:path';
 import type {Fact, Finding, PrincipleInterpretationRef} from '../../Types.js';
 import {resolveRelativeImport} from '../../analysis/ImportPath.js';
+import {cycleAdjacency} from '../../model/ModuleGraph.js';
 import {localize, type LocalizedText} from '../../i18n/Localized.js';
 import type {KnowledgeBase} from '../../knowledge/KnowledgeBase.js';
 import type {ProjectRule, ProjectRuleInput} from '../ProjectRule.js';
@@ -46,7 +47,16 @@ export class DependencyCycleRule implements ProjectRule {
     public readonly requiredFactKinds = ['deps.import'];
 
     public evaluate(input: ProjectRuleInput): Finding[] {
-        const graph = this.buildGraph(input.facts, input.analyzedFiles);
+        // Phase 0 (decision D1-a): when the pipeline supplies the shared
+        // ModuleGraph, consume its `relative`-only cycle view — byte-identical
+        // to the edge set this rule used to compute itself. Alias/exports/
+        // imports edges exist in that graph but are deliberately NOT part of
+        // `cycleAdjacency`, so no new cycle can appear in this phase. When no
+        // ModuleGraph is supplied (e.g. a focused unit test calling this rule
+        // directly), fall back to building the graph from facts exactly as
+        // before — the resolution logic is identical (both go through
+        // `resolveRelativeImport`), so the two paths agree.
+        const graph = input.moduleGraph !== undefined ? cycleAdjacency(input.moduleGraph) : this.buildGraph(input.facts, input.analyzedFiles);
         const components = stronglyConnectedComponents(graph);
 
         const findings: Finding[] = [];

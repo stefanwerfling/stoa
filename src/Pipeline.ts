@@ -9,6 +9,9 @@ import {TypeScriptAdapter} from './analysis/TypeScriptAdapter.js';
 import {TypeDiagnosticsExtractor} from './analysis/typescript/TypeDiagnostics.js';
 import {FactCache} from './FactCache.js';
 import {collectFiles, readFileContent} from './Ingestion.js';
+import {loadProjectConfig} from './config/ProjectConfig.js';
+import {ModuleResolver} from './analysis/ModuleResolution.js';
+import {buildModuleGraph} from './model/ModuleGraph.js';
 import {KnowledgeBase} from './knowledge/KnowledgeBase.js';
 import {isMemoryCritical, takeMemorySnapshot, type MemorySnapshot} from './MemoryGuard.js';
 import {RuleEngine} from './rules/RuleEngine.js';
@@ -235,7 +238,18 @@ export const analyze = (options: AnalyzeOptions): AnalysisResult => {
     }
 
     options.onProgress?.(takeMemorySnapshot(), {phase: 'evaluation', filesSelected: files.length, filesProcessed: analyzed + skipped, factsExtracted: facts.length, elapsedMs: Date.now() - startedAt});
-    const findings: Finding[] = ruleEngine.evaluate(facts);
+    // Phase 0: build the reusable, project-wide ModuleGraph once, here —
+    // after all facts exist, before evaluation. Config-aware module resolution
+    // (tsconfig paths/baseUrl, package exports/imports — see ModuleResolution.ts)
+    // is read from the analysis root; it never walks node_modules or the
+    // network, and degrades to relative-only on a missing/broken config. The
+    // graph holds only paths/specifiers/fact-ids (no AST, no fact copy), is
+    // passed to the rule engine for this one evaluate() call, and is released
+    // with the rest of this function's locals afterward — it adds no persistent
+    // or unbounded state (the FactCache stays strictly file-local, untouched).
+    const moduleResolver = new ModuleResolver(loadProjectConfig(options.rootPath));
+    const moduleGraph = buildModuleGraph(facts, new Set(facts.map((fact) => fact.subject.file)), moduleResolver);
+    const findings: Finding[] = ruleEngine.evaluate(facts, moduleGraph);
     // RuleEngine.evaluate() is one atomic, synchronous pass with no internal
     // checkpointing — it cannot be partially applied or safely interrupted
     // (declarative rules iterate per-subject; project rules need the full

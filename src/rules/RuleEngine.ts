@@ -13,6 +13,7 @@ import {DependencyCycleRule} from './project/DependencyCycleRule.js';
 import type {ProjectRule} from './ProjectRule.js';
 import type {RuleSet} from './RuleSet.js';
 import type {Rule} from './RuleTypes.js';
+import type {ModuleGraph} from '../model/ModuleGraph.js';
 
 interface Unit {
     key: string;
@@ -39,7 +40,7 @@ export class RuleEngine {
         private readonly projectRules: ProjectRule[] = [new DependencyCycleRule()]
     ) {}
 
-    public evaluate(facts: Fact[]): Finding[] {
+    public evaluate(facts: Fact[], moduleGraph?: ModuleGraph): Finding[] {
         const units = groupUnits(facts);
         const keyed: KeyedFinding[] = [];
 
@@ -57,6 +58,7 @@ export class RuleEngine {
             const findings = projectRule.evaluate({
                 facts,
                 analyzedFiles,
+                ...(moduleGraph !== undefined ? {moduleGraph} : {}),
                 ruleSetId: this.ruleSet.id,
                 knowledgeBase: this.knowledgeBase,
                 lang: this.lang
