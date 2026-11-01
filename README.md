@@ -63,6 +63,20 @@ An LLM is an optional, switchable adapter.
 > - *Planned / not yet validated:* richer context facts, PSR-4 PHP import
 >   resolution, Dart/C/C++ dependency facts.
 >
+> **Analysis completion integrity:** `coverage.status` (`complete` |
+> `partial` | `failed`) is the single, centrally-managed verdict on
+> `stoa analyze` — never two independently-settable fields that could
+> disagree. Exit codes follow it: `0` only for `complete`, `1` for an
+> execution/config error (a synthesized `failed` report, still valid JSON/
+> SARIF/Markdown — never a bare stack trace), `2` whenever the scan is not
+> `complete` — an incomplete scan can never look like a clean one by exit
+> code alone, on any format. Excluded/skipped files carry a structured
+> reason (`excluded_by_config`, `excluded_by_gitignore`, `file_too_large`,
+> `unsupported_language`, `read_error`, `memory_limit`,
+> `analysis_cancelled`) instead of a freeform string; the first four are
+> intentional exclusions and never alone make a run `partial`, only a real
+> coverage gap (a selected file Stoa could not reach) does.
+>
 > Golden- and a11y-corpus precision/recall reflect those small, curated corpora
 > only; they are **not** a general reliability guarantee for arbitrary code.
 >

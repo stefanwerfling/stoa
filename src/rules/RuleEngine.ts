@@ -52,9 +52,11 @@ export class RuleEngine {
             }
         }
 
+        const analyzedFiles = new Set(facts.map((fact) => fact.subject.file));
         for (const projectRule of this.projectRules) {
             const findings = projectRule.evaluate({
                 facts,
+                analyzedFiles,
                 ruleSetId: this.ruleSet.id,
                 knowledgeBase: this.knowledgeBase,
                 lang: this.lang

@@ -20,11 +20,16 @@ export const toMarkdown = (report: AnalysisReport, options: ReportOptions = {}):
     lines.push(`- ${t.engine}: ${report.versions.engine}`);
     lines.push(`- ${t.ruleSet}: ${report.versions.ruleSet}`);
     lines.push(`- ${t.knowledgeBase}: ${report.versions.knowledgeBase}`);
+    const statusLabel = {complete: t.statusComplete, partial: t.statusPartial, failed: t.statusFailed}[report.coverage.status];
+    lines.push(`- ${t.status}: ${statusLabel}`);
     lines.push(
         `- ${t.files}: ` +
             `${report.coverage.filesSelected}/${report.coverage.filesAnalyzed}/${report.coverage.filesSkipped}`
     );
     lines.push(`- ${t.facts}: ${report.coverage.factCount}`);
+    if (report.coverage.status === 'failed' && report.error !== undefined) {
+        lines.push(`- ${t.status}: ${report.error}`);
+    }
     if (report.baseline !== undefined) {
         lines.push(`- ${t.baseline}: ${report.baseline.newCount} ${t.baselineNew}, ${report.baseline.knownCount} ${t.baselineKnown}, ${report.baseline.fixedCount} ${t.baselineFixed}`);
     }

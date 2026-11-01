@@ -3,6 +3,16 @@ import type {KnowledgeBase} from '../knowledge/KnowledgeBase.js';
 
 export interface ProjectRuleInput {
     facts: Fact[];
+    /**
+     * Every file that contributed at least one fact to this run — computed
+     * by the caller directly from the analyzed file list, independent of
+     * which fact KINDS are present (see RuleEngine.ts). A rule needing to
+     * know "does this file exist in the analyzed set" (e.g. to resolve an
+     * import target) must read THIS, not re-derive it from `facts`: a file
+     * with zero facts of the kind(s) a filtered/bounded evaluation kept
+     * would otherwise silently disappear as a valid target.
+     */
+    analyzedFiles: ReadonlySet<string>;
     ruleSetId: string;
     knowledgeBase: KnowledgeBase;
     lang: string;
@@ -17,5 +27,22 @@ export interface ProjectRuleInput {
 export interface ProjectRule {
     readonly id: string;
     readonly version: string;
+    /**
+     * Declares exactly which fact KINDS this rule's `evaluate()` reads from
+     * `input.facts` (not `analyzedFiles`, which every rule gets regardless).
+     * Omit when the rule genuinely needs to scan the full fact set — absence
+     * must always be read as "declare unknown / needs everything", never as
+     * "needs nothing". When present, evaluating this rule against ONLY
+     * these kinds (plus the separately-tracked `analyzedFiles`) must yield
+     * IDENTICAL findings to evaluating it against the full set — see
+     * test/ProjectRuleCategorization.test.ts, which proves this per rule.
+     * This is deliberately metadata only today: the main pipeline still
+     * passes every rule the complete fact array (see Pipeline.ts's "Offene
+     * Punkte" note on why — the optional semantic layer and the finding/
+     * evidence-traceability contract both still need full per-file facts
+     * after evaluation). It exists so a future bounded-evaluation pass has
+     * a verified, truthful starting point instead of having to guess.
+     */
+    readonly requiredFactKinds?: readonly string[];
     evaluate(input: ProjectRuleInput): Finding[];
 }

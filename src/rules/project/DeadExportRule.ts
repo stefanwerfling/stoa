@@ -44,9 +44,9 @@ const TEXT = {
 export class DeadExportRule implements ProjectRule {
     public readonly id = 'R-UNUSED-EXPORT';
     public readonly version = '1.0.0';
+    public readonly requiredFactKinds = ['deps.importName', 'deps.export'];
 
     public evaluate(input: ProjectRuleInput): Finding[] {
-        const analyzedFiles = new Set(input.facts.map((fact) => fact.subject.file));
         const usedNames = new Set<string>();
         const allUsedFiles = new Set<string>();
 
@@ -55,7 +55,7 @@ export class DeadExportRule implements ProjectRule {
                 continue;
             }
             const value = fact.value as unknown as ImportNameValue;
-            const target = resolveRelativeImport(fact.subject.file, value.module, analyzedFiles);
+            const target = resolveRelativeImport(fact.subject.file, value.module, input.analyzedFiles);
             if (target === null) {
                 continue;
             }

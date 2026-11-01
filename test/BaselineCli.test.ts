@@ -97,7 +97,11 @@ test('2.2: an incomplete scan compared against a baseline reports nothing as fix
         writeFileSync(baselinePath, `${JSON.stringify({version: 1, findings: [{file: 'does/not/exist.ts', rule: 'R-NONEXISTENT', symbol: 'x'}]}, null, 2)}\n`);
 
         const result = runCli(['--baseline', baselinePath, '--format', 'json'], {STOA_TEST_FORCE_INCOMPLETE: '1'});
-        assert.equal(result.status, 0, 'comparing against a baseline on an incomplete scan is not itself an error — only updating it is blocked');
+        // Analysis Completion Integrity (2.2): an incomplete scan must NEVER
+        // exit 0, even when merely comparing against a baseline (not
+        // updating it) — exit 2 signals "partial", distinct from exit 1
+        // ("execution/config error") and exit 0 ("complete").
+        assert.equal(result.status, 2, 'comparing against a baseline on an incomplete scan is not a config/execution error, but it must still never report exit 0 — exit 2 signals "partial"');
         const report = JSON.parse(result.stdout) as {baseline?: {fixedCount: number; fixed: unknown[]; incomplete?: boolean}};
         assert.equal(report.baseline?.fixedCount, 0, 'the scan never got far enough to prove that finding is actually gone');
         assert.deepEqual(report.baseline?.fixed, []);

@@ -38,17 +38,18 @@ test('a file over maxFileBytes is excluded like a glob exclude, and reported via
     try {
         writeFileSync(join(tmp, 'small.ts'), 'export const x = 1;\n');
         writeFileSync(join(tmp, 'huge.ts'), `export const x = '${'a'.repeat(200)}';\n`);
-        const excluded: Array<{path: string; reason: string}> = [];
+        const excluded: Array<{path: string; reason: string; detail?: string}> = [];
         const files = collectFiles(tmp, {
             include: ['**/*.ts'],
             exclude: [],
             maxFileBytes: 50,
-            onExcluded: (path, reason) => excluded.push({path, reason})
+            onExcluded: (file) => excluded.push(file)
         });
         assert.deepEqual(files.map((f) => basename(f.path)), ['small.ts']);
         assert.equal(excluded.length, 1);
         assert.ok(excluded[0]?.path.endsWith('huge.ts'));
-        assert.match(excluded[0]?.reason ?? '', /exceeds maxFileBytes/);
+        assert.equal(excluded[0]?.reason, 'file_too_large');
+        assert.match(excluded[0]?.detail ?? '', /exceeds maxFileBytes/);
     } finally {
         rmSync(tmp, {recursive: true, force: true});
     }
@@ -120,6 +121,28 @@ test('with no root .gitignore, behavior is unchanged from before', () => {
     );
 });
 
+test('a config exclude and a .gitignore exclude are reported under distinct structured reasons', () => {
+    const tmp = mkdtempSync(join(tmpdir(), 'stoa-ingestion-reasons-'));
+    try {
+        writeFileSync(join(tmp, '.gitignore'), '*.log\n');
+        writeFileSync(join(tmp, 'keep.ts'), 'export const x = 1;\n');
+        writeFileSync(join(tmp, 'config-excluded.ts'), 'export const y = 1;\n');
+        writeFileSync(join(tmp, 'debug.log'), 'noise');
+        const excluded: Array<{path: string; reason: string}> = [];
+        const files = collectFiles(tmp, {
+            include: ['**/*.ts', '**/*.log'],
+            exclude: ['**/config-excluded.ts'],
+            onExcluded: (file) => excluded.push(file)
+        });
+        assert.deepEqual(files.map((f) => basename(f.path)), ['keep.ts']);
+        const byReason = new Map(excluded.map((e) => [basename(e.path), e.reason]));
+        assert.equal(byReason.get('config-excluded.ts'), 'excluded_by_config');
+        assert.equal(byReason.get('debug.log'), 'excluded_by_gitignore');
+    } finally {
+        rmSync(tmp, {recursive: true, force: true});
+    }
+});
+
 test('an unreadable subdirectory is pruned and reported, not a crash of the whole walk', {skip: process.getuid?.() === 0}, () => {
     const tmp = mkdtempSync(join(tmpdir(), 'stoa-ingestion-unreadable-'));
     try {
@@ -128,16 +151,17 @@ test('an unreadable subdirectory is pruned and reported, not a crash of the whol
         mkdirSync(locked);
         writeFileSync(join(locked, 'hidden.ts'), 'export const y = 2;\n');
         chmodSync(locked, 0o000);
-        const excluded: Array<{path: string; reason: string}> = [];
+        const excluded: Array<{path: string; reason: string; detail?: string}> = [];
         const files = collectFiles(tmp, {
             include: ['**/*.ts'],
             exclude: [],
-            onExcluded: (path, reason) => excluded.push({path, reason})
+            onExcluded: (file) => excluded.push(file)
         });
         assert.deepEqual(files.map((f) => basename(f.path)), ['readable.ts']);
         assert.equal(excluded.length, 1);
         assert.ok(excluded[0]?.path.endsWith('locked'));
-        assert.match(excluded[0]?.reason ?? '', /not readable/);
+        assert.equal(excluded[0]?.reason, 'read_error');
+        assert.match(excluded[0]?.detail ?? '', /not readable/);
     } finally {
         chmodSync(join(tmp, 'locked'), 0o755);
         rmSync(tmp, {recursive: true, force: true});

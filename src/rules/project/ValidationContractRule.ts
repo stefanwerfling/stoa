@@ -296,6 +296,7 @@ const TEXT: Record<RuleId, {statement: LocalizedText; suggestion: LocalizedText;
 export class ValidationContractRule implements ProjectRule {
     public readonly id = 'R-VALIDATION-CONTRACT';
     public readonly version = '1.0.0';
+    public readonly requiredFactKinds = ['validation.contractAnnotation', 'validation.annotatedValidatorUnused', 'validation.rawReuseAfterValidation', 'validation.dataflowGraph'];
 
     public constructor(private readonly contract: ValidationContract | null) {}
 

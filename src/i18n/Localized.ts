@@ -22,6 +22,10 @@ export interface ReportLabels {
     engine: string;
     ruleSet: string;
     knowledgeBase: string;
+    status: string;
+    statusComplete: string;
+    statusPartial: string;
+    statusFailed: string;
     files: string;
     facts: string;
     noFindings: string;
@@ -46,6 +50,10 @@ const LABELS: Record<string, ReportLabels> = {
         engine: 'Engine',
         ruleSet: 'Rule set',
         knowledgeBase: 'Knowledge base',
+        status: 'Status',
+        statusComplete: 'complete',
+        statusPartial: 'partial — not every selected file was analyzed',
+        statusFailed: 'failed — no analysis was run',
         files: 'Files selected/analyzed/skipped',
         facts: 'Facts extracted',
         noFindings: 'No findings.',
@@ -68,6 +76,10 @@ const LABELS: Record<string, ReportLabels> = {
         engine: 'Engine',
         ruleSet: 'Regelsatz',
         knowledgeBase: 'Wissensbasis',
+        status: 'Status',
+        statusComplete: 'vollständig',
+        statusPartial: 'teilweise — nicht jede ausgewählte Datei wurde analysiert',
+        statusFailed: 'fehlgeschlagen — es wurde keine Analyse durchgeführt',
         files: 'Dateien ausgewählt/analysiert/übersprungen',
         facts: 'Extrahierte Facts',
         noFindings: 'Keine Befunde.',

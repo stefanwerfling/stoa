@@ -19,7 +19,7 @@ import {ValidationContractRule} from './rules/project/ValidationContractRule.js'
 import type {ProjectRule} from './rules/ProjectRule.js';
 import type {ValidationContract} from './contracts/ValidationContract.js';
 import {ENGINE_VERSION} from './Version.js';
-import type {AnalysisReport, AnalysisResult, Fact, Finding, StoaConfig, VersionStamp} from './Types.js';
+import type {AnalysisReport, AnalysisResult, AnalysisStatus, ExcludedFile, ExclusionReason, Fact, Finding, StoaConfig, VersionStamp} from './Types.js';
 
 export interface AnalyzeOptions {
     rootPath: string;
@@ -70,7 +70,7 @@ export interface AnalyzeOptions {
 
 /** One `onProgress` snapshot's non-memory half — see AnalyzeOptions.onProgress. */
 export interface AnalysisProgress {
-    phase: 'analysis' | 'evaluation';
+    phase: 'discovery' | 'analysis' | 'evaluation';
     filesSelected: number;
     filesProcessed: number;
     factsExtracted: number;
@@ -86,6 +86,13 @@ const TS_EXTENSIONS: readonly string[] = ['.ts', '.tsx'] as const;
 // file regardless of language or size) stays negligible overhead.
 const DEFAULT_MEMORY_CHECK_INTERVAL = 100;
 const DEFAULT_CRITICAL_RATIO = 0.9;
+
+// Caps the number of individual excluded/skipped files kept as examples in
+// `coverage.excludedSample` — the exact COUNT per reason always lives in
+// `excludedByReason` regardless of repo size; this bounds only the sample
+// list, so a repository with e.g. tens of thousands of gitignored files
+// cannot turn this diagnostic itself into an unbounded growth source.
+const EXCLUDED_SAMPLE_LIMIT = 20;
 
 
 /**
@@ -114,11 +121,23 @@ export const analyze = (options: AnalyzeOptions): AnalysisResult => {
     }
     const ruleEngine = new RuleEngine(knowledgeBase, ruleSet, options.lang ?? 'en', projectRules);
 
+    const startedAt = Date.now();
+    const excludedByReason: Partial<Record<ExclusionReason, number>> = {};
+    const excludedSample: ExcludedFile[] = [];
+    const recordExcluded = (excluded: ExcludedFile): void => {
+        excludedByReason[excluded.reason] = (excludedByReason[excluded.reason] ?? 0) + 1;
+        if (excludedSample.length < EXCLUDED_SAMPLE_LIMIT) {
+            excludedSample.push(excluded);
+        }
+    };
+
     const files = collectFiles(options.rootPath, {
         include: options.config.include,
         exclude: options.config.exclude,
-        ...(options.config.maxFileBytes !== undefined ? {maxFileBytes: options.config.maxFileBytes} : {})
+        ...(options.config.maxFileBytes !== undefined ? {maxFileBytes: options.config.maxFileBytes} : {}),
+        onExcluded: recordExcluded
     });
+    options.onProgress?.(takeMemorySnapshot(), {phase: 'discovery', filesSelected: files.length, filesProcessed: 0, factsExtracted: 0, elapsedMs: Date.now() - startedAt});
 
     const typeExtractor = options.typecheck === true ? new TypeDiagnosticsExtractor() : null;
     const cache = options.cacheDir !== undefined ? new FactCache(options.cacheDir) : null;
@@ -126,12 +145,13 @@ export const analyze = (options: AnalyzeOptions): AnalysisResult => {
     const checkEveryFiles = options.memoryGuard?.checkEveryFiles ?? DEFAULT_MEMORY_CHECK_INTERVAL;
     const criticalRatio = options.memoryGuard?.criticalRatio ?? DEFAULT_CRITICAL_RATIO;
 
-    const startedAt = Date.now();
     const facts: Fact[] = [];
     let analyzed = 0;
     let skipped = 0;
     let cacheHits = 0;
+    let hasCoverageGap = false;
     let stoppedAtFile: string | undefined;
+    let stoppedAtIndex: number | undefined;
     for (const [index, meta] of files.entries()) {
         if (index % checkEveryFiles === 0) {
             const snapshot = takeMemorySnapshot();
@@ -139,28 +159,43 @@ export const analyze = (options: AnalyzeOptions): AnalysisResult => {
             // Stop ingesting further files rather than let V8 crash with a
             // fatal "JavaScript heap out of memory" error. Facts and findings
             // already produced are kept (never discarded) and reported as
-            // genuinely partial via `coverage.analysisIncomplete` — never
-            // silently presented as a complete analysis. No global.gc() call
-            // here: by design, this guard is a last resort, not a substitute
-            // for the bounded object lifetimes Phase B/D/E establish.
+            // genuinely partial via `coverage.status` — never silently
+            // presented as a complete analysis. No global.gc() call here: by
+            // design, this guard is a last resort, not a substitute for
+            // bounded object lifetimes elsewhere in the pipeline.
             if (isMemoryCritical(snapshot, criticalRatio)) {
                 stoppedAtFile = meta.path;
+                stoppedAtIndex = index;
                 break;
             }
         }
 
         // Resolved by path alone (FileMeta, no content) — a file nothing can
-        // parse is never read at all.
+        // parse is never read at all. Not a coverage gap: Stoa simply has no
+        // adapter for this language, the same as an excluded-by-config file.
         const adapter = registry.resolve(meta);
         if (adapter === null) {
             skipped += 1;
+            recordExcluded({path: meta.path, reason: 'unsupported_language'});
             continue;
         }
 
         // Content is read lazily, right here, only once a matching adapter
         // is known — this is the one and only point in the whole pipeline
-        // a file's content enters memory.
-        const file = readFileContent(meta);
+        // a file's content enters memory. Unlike a structural exclusion,
+        // this file WAS selected and expected to be analyzed, so a failure
+        // here is a genuine coverage gap (forces `status: 'partial'`), not
+        // an intentional exclusion — a race with a concurrent delete/move
+        // between discovery and read is the realistic cause.
+        let file;
+        try {
+            file = readFileContent(meta);
+        } catch (error) {
+            skipped += 1;
+            hasCoverageGap = true;
+            recordExcluded({path: meta.path, reason: 'read_error', detail: (error as Error).message});
+            continue;
+        }
 
         const cachedAdapterFacts = cache?.get(adapter.id, file) ?? null;
         if (cachedAdapterFacts !== null) {
@@ -170,6 +205,8 @@ export const analyze = (options: AnalyzeOptions): AnalysisResult => {
             const parsed = adapter.parse(file);
             if (!parsed.ok) {
                 skipped += 1;
+                hasCoverageGap = true;
+                recordExcluded({path: meta.path, reason: 'read_error', detail: `parse failed: ${parsed.diagnostics.join('; ')}`});
                 continue;
             }
             const extracted = adapter.extractFacts(parsed, {rootDir: options.rootPath});
@@ -199,6 +236,24 @@ export const analyze = (options: AnalyzeOptions): AnalysisResult => {
 
     options.onProgress?.(takeMemorySnapshot(), {phase: 'evaluation', filesSelected: files.length, filesProcessed: analyzed + skipped, factsExtracted: facts.length, elapsedMs: Date.now() - startedAt});
     const findings: Finding[] = ruleEngine.evaluate(facts);
+    // RuleEngine.evaluate() is one atomic, synchronous pass with no internal
+    // checkpointing — it cannot be partially applied or safely interrupted
+    // (declarative rules iterate per-subject; project rules need the full
+    // fact set at once, see rules/ProjectRule.ts). A second snapshot here
+    // cannot change the outcome, only make its cost visible in diagnostics.
+    options.onProgress?.(takeMemorySnapshot(), {phase: 'evaluation', filesSelected: files.length, filesProcessed: analyzed + skipped, factsExtracted: facts.length, elapsedMs: Date.now() - startedAt});
+
+    // The memory guard's abort tail: every selected file after the one it
+    // stopped at was never even looked at. Represented as a COUNT (and
+    // mirrored once into excludedByReason), not one ExcludedFile per
+    // remaining path — an unbounded per-file list here would reintroduce
+    // exactly the kind of unbounded growth this phase exists to avoid.
+    const filesCancelled = stoppedAtIndex !== undefined ? files.length - stoppedAtIndex : 0;
+    if (filesCancelled > 0) {
+        excludedByReason.analysis_cancelled = filesCancelled;
+    }
+
+    const status: AnalysisStatus = stoppedAtFile !== undefined || hasCoverageGap ? 'partial' : 'complete';
 
     const versions: VersionStamp = {
         engine: ENGINE_VERSION,
@@ -210,11 +265,16 @@ export const analyze = (options: AnalyzeOptions): AnalysisResult => {
     const report: AnalysisReport = {
         versions,
         coverage: {
+            status,
             filesSelected: files.length,
             filesAnalyzed: analyzed,
             filesSkipped: skipped,
+            filesCancelled,
+            excludedByReason,
+            excludedSample,
             factCount: facts.length,
-            ...(stoppedAtFile !== undefined ? {analysisIncomplete: true, stoppedAtFile} : {}),
+            ...(status !== 'complete' ? {analysisIncomplete: true} : {}),
+            ...(stoppedAtFile !== undefined ? {abortReason: 'memory_limit' as const, stoppedAtFile} : {}),
             ...(cache !== null ? {cacheHits} : {})
         },
         findings

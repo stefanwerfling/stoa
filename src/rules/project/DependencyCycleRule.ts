@@ -43,10 +43,10 @@ interface ImportValue {
 export class DependencyCycleRule implements ProjectRule {
     public readonly id = 'R-DEP-CYCLE';
     public readonly version = '1.0.0';
+    public readonly requiredFactKinds = ['deps.import'];
 
     public evaluate(input: ProjectRuleInput): Finding[] {
-        const analyzedFiles = new Set(input.facts.map((fact) => fact.subject.file));
-        const graph = this.buildGraph(input.facts, analyzedFiles);
+        const graph = this.buildGraph(input.facts, input.analyzedFiles);
         const components = stronglyConnectedComponents(graph);
 
         const findings: Finding[] = [];
@@ -59,7 +59,7 @@ export class DependencyCycleRule implements ProjectRule {
         return findings;
     }
 
-    private buildGraph(facts: Fact[], analyzedFiles: Set<string>): Map<string, Set<string>> {
+    private buildGraph(facts: Fact[], analyzedFiles: ReadonlySet<string>): Map<string, Set<string>> {
         const graph = new Map<string, Set<string>>();
         for (const file of analyzedFiles) {
             graph.set(file, new Set<string>());

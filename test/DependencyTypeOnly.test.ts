@@ -29,7 +29,7 @@ const cycleCount = (aIsTypeOnly: boolean, bIsTypeOnly: boolean): number => {
         importFact('/proj/B.ts', './A', bIsTypeOnly)
     ];
     return new DependencyCycleRule()
-        .evaluate({facts, ruleSetId: 'default', knowledgeBase, lang: 'en'})
+        .evaluate({facts, analyzedFiles: new Set(facts.map((fact) => fact.subject.file)), ruleSetId: 'default', knowledgeBase, lang: 'en'})
         .length;
 };
 

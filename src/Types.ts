@@ -215,15 +215,76 @@ export interface VersionStamp {
     adapters: Record<string, string>;
 }
 
+/**
+ * The single, centrally-managed verdict on whether a report can be trusted as
+ * a full check (see Pipeline.ts / Cli.ts, and CLI exit codes 0/1/2):
+ * - `complete`: every selected file was either analyzed or intentionally
+ *   excluded for a documented, non-coverage reason (see `ExclusionReason`'s
+ *   "structural" half below) — findings may be trusted as the full picture
+ *   of the analyzed set.
+ * - `partial`: at least one file Stoa intended to analyze was not reached
+ *   (a memory-guard abort, or a read/parse failure on a selected file) —
+ *   `findings` reflects only what was actually analyzed, never silently
+ *   presented as the whole selection.
+ * - `failed`: the run could not produce a report at all (a config/setup
+ *   error) — `analyze()` itself never returns this; it is synthesized only
+ *   by a caller (the CLI) around a caught exception, so JSON/SARIF output
+ *   still has a valid, parseable shape instead of a raw stack trace.
+ *
+ * This is the ONLY field anything should branch on. `analysisIncomplete` is
+ * kept, always derived from this one value at the same point it is set, so
+ * the two can never disagree — never set `analysisIncomplete` independently.
+ */
+export type AnalysisStatus = 'complete' | 'partial' | 'failed';
+
+/**
+ * Why one file did not contribute facts, in a closed, machine-matchable set
+ * (never a freeform string) — see Ingestion.ts/Pipeline.ts. The first four
+ * are STRUCTURAL: Stoa never intended to analyze that file, so their presence
+ * alone does not make a run `partial` (see AnalysisStatus). The last three
+ * are COVERAGE GAPS: a file Stoa DID intend to analyze was not reached, which
+ * is exactly what `partial` exists to flag.
+ */
+export type ExclusionReason =
+    | 'excluded_by_config'
+    | 'excluded_by_gitignore'
+    | 'file_too_large'
+    | 'unsupported_language'
+    | 'read_error'
+    | 'memory_limit'
+    | 'analysis_cancelled';
+
+/** One excluded/skipped path and why — see `CoverageSummary.excludedSample`. */
+export interface ExcludedFile {
+    path: string;
+    reason: ExclusionReason;
+    detail?: string;
+}
+
 export interface CoverageSummary {
+    status: AnalysisStatus;
     filesSelected: number;
     filesAnalyzed: number;
     filesSkipped: number;
+    /** Selected files never reached at all because the memory guard aborted first (see `abortReason`/`stoppedAtFile`) — 0 on every run that was not cut short. */
+    filesCancelled: number;
+    /**
+     * Exact counts per `ExclusionReason`, always complete (never capped) —
+     * this is the authoritative breakdown; `excludedSample` below is only a
+     * bounded set of examples for human debugging, not the full list (an
+     * unbounded per-file list here would reintroduce the same kind of
+     * unbounded growth Phase 3 exists to avoid).
+     */
+    excludedByReason: Partial<Record<ExclusionReason, number>>;
+    /** A bounded sample of individual excluded/skipped files (see EXCLUDED_SAMPLE_LIMIT in Pipeline.ts) — for diagnosing WHICH files, not for counting (use `excludedByReason` for that). */
+    excludedSample: ExcludedFile[];
     factCount: number;
-    /** Set only when the memory guard stopped ingestion early (see MemoryGuard.ts) — absent on every normal run. When true, `findings` reflects only the files reached before the stop, never a silently-truncated full-repo claim. */
-    analysisIncomplete?: boolean;
-    /** The file ingestion was processing when the memory guard stopped it (set together with `analysisIncomplete`). */
+    /** Set only when the memory guard stopped ingestion early (see MemoryGuard.ts). */
+    abortReason?: 'memory_limit';
+    /** The file ingestion was processing when the memory guard stopped it (set together with `abortReason`). */
     stoppedAtFile?: string;
+    /** Derived from `status !== 'complete'` at the same point `status` is set — never set independently. Kept for backward compatibility; prefer `status`. */
+    analysisIncomplete?: boolean;
     /** Present only when `cacheDir` was set (see FactCache.ts): how many of the per-file fact extractions were served from the cache instead of re-parsed. */
     cacheHits?: number;
 }
@@ -254,6 +315,8 @@ export interface AnalysisReport {
     coverage: CoverageSummary;
     findings: Finding[];
     baseline?: BaselineSummary;
+    /** Present only when `coverage.status === 'failed'` (see Cli.ts) — the caught error that prevented a real analysis from running at all. */
+    error?: string;
 }
 
 /** What the pipeline returns: the report plus the intermediate facts. */

@@ -20,7 +20,7 @@ const finding = (over: {file: string; rule: string; symbol: string; line: number
     source: 'deterministic'
 });
 
-const coverage: CoverageSummary = {filesSelected: 10, filesAnalyzed: 9, filesSkipped: 1, factCount: 42};
+const coverage: CoverageSummary = {status: 'complete', filesSelected: 10, filesAnalyzed: 9, filesSkipped: 1, filesCancelled: 0, excludedByReason: {}, excludedSample: [], factCount: 42};
 
 const baseInput = {
     targetPath: '/repo',

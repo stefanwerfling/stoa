@@ -99,6 +99,19 @@ export const toSarif = (report: AnalysisReport, options: SarifOptions = {}): str
                         rules
                     }
                 },
+                // executionSuccessful is SARIF's own notion of "did the tool
+                // itself run to completion" — true for 'complete' AND
+                // 'partial' (the tool ran and produced real results, just not
+                // over the full selection), false only for 'failed' (no
+                // analysis was run at all). `properties.analysisStatus`
+                // carries the full three-state distinction SARIF's own
+                // vocabulary does not have a slot for.
+                invocations: [
+                    {
+                        executionSuccessful: report.coverage.status !== 'failed',
+                        properties: {analysisStatus: report.coverage.status}
+                    }
+                ],
                 results
             }
         ]

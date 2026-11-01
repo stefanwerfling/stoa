@@ -80,7 +80,7 @@ export const loadBaseline = (path: string): BaselineFile | null => {
  * deterministically (same engine run twice ⇒ byte-identical baseline
  * file). Refuses outright — throwing `IncompleteAnalysisError`, never
  * silently writing a partial result — when the analysis that produced
- * `report` stopped early (`coverage.analysisIncomplete`): overwriting a
+ * `report` is not `coverage.status === 'complete'`: overwriting a
  * baseline with data from a scan that never reached every file would mean
  * files outside what was actually re-checked silently vanish from the
  * baseline, making their already-known findings look brand new on the
@@ -89,9 +89,11 @@ export const loadBaseline = (path: string): BaselineFile | null => {
  * bypasses it.
  */
 export const saveBaseline = (path: string, report: AnalysisReport, rootDir: string): void => {
-    if (report.coverage.analysisIncomplete === true) {
+    if (report.coverage.status !== 'complete') {
         throw new IncompleteAnalysisError(
-            `refusing to update baseline ${path}: the analysis stopped early (coverage.analysisIncomplete) before reaching "${report.coverage.stoppedAtFile}" — writing it now would overwrite the existing baseline with data from a partial scan`
+            `refusing to update baseline ${path}: the analysis status is "${report.coverage.status}"` +
+                (report.coverage.stoppedAtFile !== undefined ? ` (stopped before reaching "${report.coverage.stoppedAtFile}")` : '') +
+                ' — writing it now would overwrite the existing baseline with data from a partial scan'
         );
     }
     const entries = report.findings.map((finding) => findingKey(rootDir, finding)).sort((a, b) => keyString(a).localeCompare(keyString(b)));
@@ -109,7 +111,7 @@ export const saveBaseline = (path: string, report: AnalysisReport, rootDir: stri
  * finding. A `null` baseline (no file yet) marks everything `new` and
  * reports nothing fixed — the natural first-run state, not an error.
  *
- * When the analysis itself was incomplete (`coverage.analysisIncomplete`),
+ * When the analysis itself was not `coverage.status === 'complete'`,
  * NO baseline entry is ever reported as fixed, regardless of whether it
  * was reproduced: a file the scan never reached was never actually
  * checked, so "not reproduced" proves nothing about it. `new`/`known` are
@@ -118,7 +120,7 @@ export const saveBaseline = (path: string, report: AnalysisReport, rootDir: stri
  * set so callers/renderers can mark the whole comparison as provisional.
  */
 export const applyBaseline = (report: AnalysisReport, baseline: BaselineFile | null, rootDir: string): AnalysisReport => {
-    const incomplete = report.coverage.analysisIncomplete === true;
+    const incomplete = report.coverage.status !== 'complete';
     const baselineEntries = baseline?.findings ?? [];
     const baselineKeys = new Set(baselineEntries.map((entry) => keyString(entry)));
     const currentKeys = new Set<string>();

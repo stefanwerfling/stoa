@@ -144,11 +144,21 @@ V8's heap stats (it lives outside the JS heap). Fixed:
   `v8.getHeapStatistics().heap_size_limit` — the same figure a "JavaScript
   heap out of memory" fatal error is measured against, not a fixed MB guess.
   Past 90%, ingestion stops rather than let V8 crash; facts/findings already
-  produced are kept (nothing is discarded), and
-  `coverage.analysisIncomplete`/`coverage.stoppedAtFile` mark the report as
-  genuinely partial — a truncated run is never presented as a complete one.
-  No `global.gc()` call anywhere — this guard is a last resort on top of the
-  bounded object lifetimes above, not a substitute for them.
+  produced are kept (nothing is discarded), and `coverage.status` becomes
+  `'partial'` (`coverage.abortReason: 'memory_limit'`,
+  `coverage.stoppedAtFile`) — a truncated run is never presented as a
+  complete one (see "Analysis Completion Integrity" below for the full
+  status/exit-code contract this now feeds). No `global.gc()` call
+  anywhere — this guard is a last resort on top of the bounded object
+  lifetimes above, not a substitute for them. It also takes a snapshot
+  immediately before and after `RuleEngine.evaluate()` (visible via
+  `--memory-stats`) — but cannot abort or partially apply that call:
+  declarative rules are evaluated per-subject, but the three project rules
+  (`DependencyCycleRule`/`DeadExportRule`/`ValidationContractRule`) need the
+  complete fact array at once (see "Rule categorization" below), so
+  evaluation is one atomic pass. A memory spike strictly inside that one
+  call cannot be downgraded to `'partial'` mid-flight; it can only crash the
+  process. Named explicitly as an open limitation, not hidden.
 - **Metadata-first discovery** (`Ingestion.ts`'s `collectFiles()`, follow-up
   "Analysis Integrity & Memory-Bounded Pipeline" spec): previously read every
   matched file's full content during the walk and returned it all at once —
@@ -248,6 +258,108 @@ invalidation story airtight:
   identical except for the new `coverage.cacheHits` diagnostic field itself
   (verified by diffing the two JSON reports, not just eyeballing timings).
 
+## Analysis Completion Integrity & Memory-Bounded Evaluation (follow-up spec)
+
+Two goals, from the governing principle: "Stoa may only report as proven
+what was actually, completely analyzed and is backed by the analysis
+information that exists" — a smaller, fully and correctly analyzed codebase
+is worth more than a large one whose analysis silently stays incomplete.
+
+**A single, centrally-managed status.** `coverage.status: 'complete' |
+'partial' | 'failed'` (`src/Types.ts`'s `AnalysisStatus`) is now the one
+field anything branches on:
+
+- `'complete'`: every selected file was either analyzed or intentionally
+  excluded for a documented, non-coverage reason.
+- `'partial'`: at least one file Stoa intended to analyze was not reached —
+  a memory-guard abort, or a read/parse failure on a selected file (a race
+  with a concurrent delete/move between discovery and read, or a parser that
+  failed on content it was expected to handle). `coverage.analysisIncomplete`
+  (the previous boolean) is kept, but is now always DERIVED from `status` at
+  the same point it is set — nothing ever sets it independently, so the two
+  can never disagree.
+- `'failed'`: a config/setup error (bad `--knowledge`/`--rules`/target path)
+  prevented a real report from existing at all. `analyze()` itself never
+  returns this — it throws, same as before — but `Cli.ts` now catches that
+  exception and synthesizes a minimal, validly-shaped report
+  (`AnalysisReport.error` carries the message) so JSON/SARIF/Markdown output
+  stays parseable instead of a bare stack trace with nothing on stdout.
+
+**Exit codes (`stoa analyze` only — `stoa eval` keeps its existing
+precision/recall pass/fail code, see below):** `0` only for `'complete'`;
+`1` for an execution/config/usage error (bad flags, a malformed baseline/
+contract file, or a caught setup exception — `'failed'`); `2` whenever
+`coverage.status !== 'complete'` — an incomplete scan can never be
+indistinguishable from a clean one by exit code alone, on any output format
+(verified end-to-end for all three formats in
+`test/AnalysisStatusCli.test.ts`). This is a deliberate behavior change from
+the prior spec: comparing an incomplete scan against a baseline (without
+`--update-baseline`) used to exit `0`; it now exits `2`.
+
+**Structured exclusion reasons**, replacing a freeform diagnostic string:
+`ExclusionReason` (`src/Types.ts`) is a closed set —
+`excluded_by_config`, `excluded_by_gitignore`, `file_too_large`,
+`unsupported_language` (never alone enough to make a run `'partial'` — Stoa
+never intended to fully analyze these), vs. `read_error`, `memory_limit`,
+`analysis_cancelled` (genuine coverage gaps, which do). `Ingestion.ts` now
+tracks config-excludes and `.gitignore`-excludes as two separate matchers
+specifically so they can be reported under their own distinct reason
+(previously merged into one list, indistinguishable after the fact).
+`coverage.excludedByReason` is an exact per-reason count, always complete,
+never capped — bounded by construction (seven reasons) regardless of repo
+size. `coverage.excludedSample` is a bounded (20) list of example
+`{path, reason, detail?}` entries for human debugging — deliberately NOT
+the full list: an unbounded per-file array here would reintroduce the exact
+kind of unbounded growth this phase exists to avoid. The memory-guard abort
+tail (every selected file never even looked at) is represented as a COUNT
+(`coverage.filesCancelled`, mirrored into
+`excludedByReason.analysis_cancelled`), not one entry per remaining path,
+for the same reason. Verified against a real repository (`bambooo`, 314
+files): `excludedByReason: {excluded_by_config: 542,
+excluded_by_gitignore: 1}`, `status: 'complete'` — hundreds of structurally
+excluded files, correctly never flipping the run to `'partial'`.
+
+**Rule categorization (`ProjectRule.requiredFactKinds`, `src/rules/
+ProjectRule.ts`)**: each of the three project rules now declares exactly
+which fact KINDS it reads — `DependencyCycleRule`: `['deps.import']`;
+`DeadExportRule`: `['deps.importName', 'deps.export']`;
+`ValidationContractRule`: the four `validation.*` kinds it scans. A new,
+separately-tracked `ProjectRuleInput.analyzedFiles` (computed by
+`RuleEngine` directly from the fact set's file paths, independent of which
+KINDS survive any future filtering) replaced each rule's own
+`new Set(facts.map(f => f.subject.file))` — needed because
+`DependencyCycleRule`/`DeadExportRule` resolve import targets against "does
+this file exist in the analyzed set", which a kind-filtered fact array alone
+cannot answer (a file with zero `deps.*` facts would otherwise silently stop
+being a valid target). `test/ProjectRuleCategorization.test.ts` proves the
+declarations are truthful: running each rule against ONLY its declared
+kinds (plus the independently-tracked `analyzedFiles`) produces IDENTICAL
+findings to running it against the full fact set, on a fixture that
+actually exercises all three.
+
+**Deliberately NOT done, and why — read this before assuming more than
+what is here:** the categorization above is metadata only. The main
+pipeline still gives every project rule the COMPLETE fact array, and
+`Pipeline.ts`'s `facts: Fact[]` is still accumulated in full for the whole
+run, never filtered or released early. Two existing, correctness-relevant
+consumers depend on this: the optional semantic layer
+(`src/semantic/SemanticRunner.ts`'s `buildRequest()` filters `result.facts`
+by file+line to ground an LLM verdict for ANY selected finding, file-local
+or not) and the finding/evidence-traceability guarantee
+(`test/FindingModel.test.ts` asserts every finding's evidence fact kind is
+actually present in `result.facts`). Filtering the retained fact array down
+to only the project rules' declared kinds — the obvious next step — would
+silently break both for the vast majority of findings (file-local ones),
+which is exactly the kind of regression the spec's own quality bar forbids
+("no regressions on existing rules", "keep existing public APIs as
+compatible as possible"). Wiring real incremental fact release would need
+those two consumers redesigned first (e.g. re-reading a file's facts on
+demand from the fact cache instead of the in-memory array) — a larger,
+separate change this round deliberately did not attempt without that prior
+dependency analysis. This is the single largest open item in "memory-bounded
+evaluation": `RuleEngine.evaluate(facts)` remains one atomic, unbounded pass
+over the full fact set, by necessity today, not by oversight.
+
 ## Baseline / diff mode (opt-in, `--baseline`)
 
 Wires up `Finding.baselineStatus` (`'new' | 'known' | 'fixed'`), present in
@@ -298,8 +410,9 @@ surface only what a change actually introduced, not the whole backlog.
   that second run → zero findings in the output; removing the underlying
   issue and re-running → reported as `fixed`.
 - **Never confuses an incomplete scan with a clean result** (follow-up
-  "Analysis Integrity & Memory-Bounded Pipeline" spec): when the memory
-  guard stopped a scan early (`coverage.analysisIncomplete`), `applyBaseline()`
+  "Analysis Integrity & Memory-Bounded Pipeline" spec; gating now driven by
+  `coverage.status !== 'complete'`, see "Analysis Completion Integrity"
+  above): when the memory guard stopped a scan early, `applyBaseline()`
   NEVER reports a baseline entry as `fixed` — a file the scan never reached
   was never actually re-checked, so "not reproduced" proves nothing about
   it (`fixedCount`/`fixed` are forced to `0`/`[]`, and

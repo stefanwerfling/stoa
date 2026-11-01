@@ -3,6 +3,7 @@ import {join, relative, sep} from 'node:path';
 import picomatch from 'picomatch';
 import type {FileMeta, FileRef} from './analysis/LanguageAdapter.js';
 import {gitignorePatterns} from './GitIgnore.js';
+import type {ExcludedFile} from './Types.js';
 
 // Always pruned during traversal (never analyzed, and walking them is wasteful).
 // Everything else is governed by the include/exclude globs.
@@ -25,8 +26,16 @@ export interface IngestionOptions {
     exclude: string[];
     /** Files larger than this are excluded, the same as a glob exclude (see DEFAULT_MAX_FILE_BYTES). Defaults to DEFAULT_MAX_FILE_BYTES; set to Infinity to disable. */
     maxFileBytes?: number;
-    /** Called once per path dropped for a reason OTHER than the include/exclude globs: an oversized file, or a directory that could not be read (e.g. EACCES). Optional — purely a diagnostic hook, never required for correct selection. */
-    onExcluded?: (path: string, reason: string) => void;
+    /**
+     * Called once per path dropped for a concrete, structured reason (see
+     * `ExclusionReason` in Types.ts) — a config-exclude match, a .gitignore
+     * match, an oversized file, or a directory that could not be read (e.g.
+     * EACCES). NOT called for a path that simply never matched `include` —
+     * that is "never selected", not "excluded", and would be the overwhelming
+     * majority of most filesystems. Optional — purely a diagnostic hook,
+     * never required for correct selection.
+     */
+    onExcluded?: (file: ExcludedFile) => void;
 }
 
 type Matcher = (path: string) => boolean;
@@ -63,14 +72,15 @@ export const collectFiles = (rootPath: string, options: IngestionOptions): FileM
         return [{path: rootPath, size: stats.size}];
     }
 
-    const exclude = [...options.exclude, ...gitignorePatterns(rootPath)];
     const matchInclude = picomatch(options.include);
-    const matchExclude = exclude.length > 0 ? picomatch(exclude) : () => false;
+    const matchConfigExclude = options.exclude.length > 0 ? picomatch(options.exclude) : () => false;
+    const gitignore = gitignorePatterns(rootPath);
+    const matchGitignoreExclude = gitignore.length > 0 ? picomatch(gitignore) : () => false;
     const maxFileBytes = options.maxFileBytes ?? DEFAULT_MAX_FILE_BYTES;
     const onExcluded = options.onExcluded ?? (() => undefined);
 
     const files: FileMeta[] = [];
-    walk(rootPath, rootPath, matchInclude, matchExclude, maxFileBytes, onExcluded, files);
+    walk(rootPath, rootPath, matchInclude, matchConfigExclude, matchGitignoreExclude, maxFileBytes, onExcluded, files);
     files.sort((a, b) => a.path.localeCompare(b.path));
     return files;
 };
@@ -78,19 +88,28 @@ export const collectFiles = (rootPath: string, options: IngestionOptions): FileM
 /** Reads one file's content on demand — the only place `collectFiles()`'s results turn into something an adapter can actually parse. */
 export const readFileContent = (meta: FileMeta): FileRef => ({path: meta.path, content: readFileSync(meta.path, 'utf8')});
 
-const walk = (dir: string, root: string, include: Matcher, exclude: Matcher, maxFileBytes: number, onExcluded: (path: string, reason: string) => void, out: FileMeta[]): void => {
+const walk = (
+    dir: string,
+    root: string,
+    include: Matcher,
+    matchConfigExclude: Matcher,
+    matchGitignoreExclude: Matcher,
+    maxFileBytes: number,
+    onExcluded: (file: ExcludedFile) => void,
+    out: FileMeta[]
+): void => {
     let entries;
     try {
         entries = readdirSync(dir, {withFileTypes: true});
     } catch (error) {
-        onExcluded(dir, `directory not readable: ${(error as Error).message}`);
+        onExcluded({path: dir, reason: 'read_error', detail: `directory not readable: ${(error as Error).message}`});
         return;
     }
     for (const entry of entries) {
         const absolute = join(dir, entry.name);
         if (entry.isDirectory()) {
             if (!HARD_PRUNED_DIRS.has(entry.name)) {
-                walk(absolute, root, include, exclude, maxFileBytes, onExcluded, out);
+                walk(absolute, root, include, matchConfigExclude, matchGitignoreExclude, maxFileBytes, onExcluded, out);
             }
             continue;
         }
@@ -98,12 +117,20 @@ const walk = (dir: string, root: string, include: Matcher, exclude: Matcher, max
             continue;
         }
         const rel = toPosix(relative(root, absolute));
-        if (!include(rel) || exclude(rel)) {
+        if (!include(rel)) {
+            continue;
+        }
+        if (matchConfigExclude(rel)) {
+            onExcluded({path: absolute, reason: 'excluded_by_config'});
+            continue;
+        }
+        if (matchGitignoreExclude(rel)) {
+            onExcluded({path: absolute, reason: 'excluded_by_gitignore'});
             continue;
         }
         const size = statSync(absolute).size;
         if (size > maxFileBytes) {
-            onExcluded(absolute, `exceeds maxFileBytes (${size} > ${maxFileBytes})`);
+            onExcluded({path: absolute, reason: 'file_too_large', detail: `exceeds maxFileBytes (${size} > ${maxFileBytes})`});
             continue;
         }
         out.push({path: absolute, size});

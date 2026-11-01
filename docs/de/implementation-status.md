@@ -160,12 +160,24 @@ lebt außerhalb des JS-Heaps). Behoben:
   "JavaScript heap out of memory"-Fatal-Error gemessen wird, keine fest
   geratene MB-Zahl. Ab 90 % stoppt die weitere Dateiaufnahme, statt V8
   abstürzen zu lassen; bereits erzeugte Facts/Findings bleiben erhalten
-  (nichts wird verworfen), und `coverage.analysisIncomplete`/
-  `coverage.stoppedAtFile` kennzeichnen den Report als wirklich
-  unvollständig — ein abgebrochener Lauf wird nie als vollständig
-  ausgegeben. Kein `global.gc()`-Aufruf irgendwo — dieser Guard ist ein
-  letztes Mittel zusätzlich zu den oben beschriebenen begrenzten
-  Objekt-Lebensdauern, kein Ersatz dafür.
+  (nichts wird verworfen), und `coverage.status` wird `'partial'`
+  (`coverage.abortReason: 'memory_limit'`, `coverage.stoppedAtFile`) — ein
+  abgebrochener Lauf wird nie als vollständig ausgegeben (siehe
+  "Vollständigkeits-Integrität der Analyse" unten für den vollständigen
+  Status-/Exitcode-Vertrag, der hieraus gespeist wird). Kein `global.gc()`-
+  Aufruf irgendwo — dieser Guard ist ein letztes Mittel zusätzlich zu den
+  oben beschriebenen begrenzten Objekt-Lebensdauern, kein Ersatz dafür. Er
+  nimmt außerdem unmittelbar vor und nach `RuleEngine.evaluate()` eine
+  Momentaufnahme (sichtbar über `--memory-stats`) — kann diesen Aufruf aber
+  nicht abbrechen oder teilweise anwenden: Die deklarativen Regeln werden
+  pro Subjekt ausgewertet, doch die drei projektweiten Regeln
+  (`DependencyCycleRule`/`DeadExportRule`/`ValidationContractRule`)
+  benötigen das vollständige Fact-Array auf einmal (siehe "Regel-
+  Kategorisierung" unten) — die Auswertung ist daher ein einziger, atomarer
+  Durchlauf. Eine Speicherspitze genau innerhalb dieses einen Aufrufs kann
+  nicht mitten im Lauf auf `'partial'` herabgestuft werden; sie kann nur den
+  Prozess abstürzen lassen. Dies ist explizit als offene Einschränkung
+  benannt, nicht verschwiegen.
 - **Metadaten-first Discovery** (`Ingestion.ts`s `collectFiles()`,
   Folge-Spec "Analysis Integrity & Memory-Bounded Pipeline"): las zuvor
   während des Walks den vollen Inhalt jeder passenden Datei und gab alles
@@ -282,6 +294,123 @@ macht die Invalidierung wasserdicht:
   `coverage.cacheHits`-Diagnosefeld selbst (per Diff der beiden JSON-Reports
   verifiziert, nicht nur nach Augenmaß bei den Laufzeiten).
 
+## Vollständigkeits-Integrität der Analyse & speicherbegrenzte Auswertung (Folge-Spec)
+
+Zwei Ziele, aus dem Leitprinzip: "Stoa darf nur das als bewiesen ausgeben,
+was tatsächlich vollständig analysiert und durch die vorhandenen
+Analyseinformationen gestützt wird" — eine kleinere, vollständig und korrekt
+analysierte Codebasis ist wertvoller als eine große, deren Analyse unbemerkt
+unvollständig bleibt.
+
+**Ein einziger, zentral verwalteter Status.** `coverage.status: 'complete' |
+'partial' | 'failed'` (`AnalysisStatus` in `src/Types.ts`) ist jetzt das
+einzige Feld, von dem alles andere abhängt:
+
+- `'complete'`: Jede ausgewählte Datei wurde entweder analysiert oder
+  absichtlich aus einem dokumentierten, nicht-Abdeckungs-relevanten Grund
+  ausgeschlossen.
+- `'partial'`: Mindestens eine Datei, die Stoa analysieren wollte, wurde
+  nicht erreicht — ein Memory-Guard-Abbruch, oder ein Lese-/Parse-Fehler bei
+  einer ausgewählten Datei (ein Wettlauf mit einem gleichzeitigen Löschen/
+  Verschieben zwischen Discovery und Lesen, oder ein Parser, der an Inhalt
+  scheiterte, den er eigentlich verarbeiten sollte). `coverage.
+  analysisIncomplete` (das bisherige Boolean) bleibt erhalten, wird aber
+  jetzt immer AUS `status` abgeleitet, am selben Punkt, an dem `status`
+  gesetzt wird — nichts setzt es mehr unabhängig, die beiden können also
+  nie widersprechen.
+- `'failed'`: Ein Konfigurations-/Setup-Fehler (ungültiges `--knowledge`/
+  `--rules`/Zielpfad) verhinderte, dass überhaupt ein echter Report
+  entstand. `analyze()` selbst gibt dies nie zurück — es wirft wie bisher
+  eine Exception —, aber `Cli.ts` fängt diese jetzt und synthetisiert einen
+  minimalen, gültig geformten Report (`AnalysisReport.error` trägt die
+  Fehlermeldung), damit JSON-/SARIF-/Markdown-Ausgabe parsbar bleibt statt
+  eines nackten Stacktrace ohne jede Ausgabe auf stdout.
+
+**Exitcodes (nur `stoa analyze` — `stoa eval` behält seinen bestehenden
+Precision/Recall-Bestehen/Durchfallen-Code, siehe unten):** `0` nur bei
+`'complete'`; `1` bei einem Ausführungs-/Konfigurations-/Nutzungsfehler
+(ungültige Flags, eine fehlerhafte Baseline-/Contract-Datei, oder eine
+gefangene Setup-Exception — `'failed'`); `2` immer dann, wenn
+`coverage.status !== 'complete'` — ein unvollständiger Scan darf sich allein
+am Exitcode nie von einem sauberen unterscheiden lassen, bei keinem
+Ausgabeformat (End-to-End für alle drei Formate verifiziert in
+`test/AnalysisStatusCli.test.ts`). Dies ist eine bewusste Verhaltensänderung
+gegenüber der vorherigen Spec: Ein unvollständiger Scan gegen eine Baseline
+zu vergleichen (ohne `--update-baseline`) endete bisher mit Exitcode `0`; er
+endet jetzt mit `2`.
+
+**Strukturierte Ausschlussgründe** statt eines freien Diagnose-Strings:
+`ExclusionReason` (`src/Types.ts`) ist eine geschlossene Menge —
+`excluded_by_config`, `excluded_by_gitignore`, `file_too_large`,
+`unsupported_language` (für sich allein nie genug, um einen Lauf auf
+`'partial'` zu setzen — Stoa wollte diese ohnehin nie vollständig
+analysieren), gegenüber `read_error`, `memory_limit`, `analysis_cancelled`
+(echte Abdeckungslücken, die das tun). `Ingestion.ts` führt Config-Excludes
+und `.gitignore`-Excludes jetzt als zwei getrennte Matcher, gerade damit sie
+unter ihrem jeweils eigenen Grund gemeldet werden können (zuvor in einer
+Liste zusammengeführt, nachträglich nicht mehr unterscheidbar).
+`coverage.excludedByReason` ist eine exakte Zählung pro Grund, immer
+vollständig, nie gekappt — durch Konstruktion begrenzt (sieben Gründe),
+unabhängig von der Repository-Größe. `coverage.excludedSample` ist eine
+begrenzte (20) Beispielliste von `{path, reason, detail?}`-Einträgen zur
+menschlichen Fehlersuche — bewusst NICHT die vollständige Liste: Ein
+unbegrenztes Pro-Datei-Array hier würde genau die Art von unbegrenztem
+Wachstum wieder einführen, die diese Phase vermeiden soll. Der
+Memory-Guard-Abbruchschwanz (jede ausgewählte Datei, die gar nicht erst
+angesehen wurde) wird als ZÄHLUNG dargestellt (`coverage.filesCancelled`,
+gespiegelt in `excludedByReason.analysis_cancelled`), nicht als ein Eintrag
+pro verbleibendem Pfad, aus demselben Grund. Verifiziert an einem echten
+Repository (`bambooo`, 314 Dateien): `excludedByReason: {excluded_by_config:
+542, excluded_by_gitignore: 1}`, `status: 'complete'` — hunderte strukturell
+ausgeschlossene Dateien, die den Lauf korrekt niemals auf `'partial'` kippen.
+
+**Regel-Kategorisierung (`ProjectRule.requiredFactKinds`, `src/rules/
+ProjectRule.ts`)**: Jede der drei projektweiten Regeln deklariert jetzt
+genau, welche Fact-ARTEN sie liest — `DependencyCycleRule`:
+`['deps.import']`; `DeadExportRule`: `['deps.importName', 'deps.export']`;
+`ValidationContractRule`: die vier `validation.*`-Arten, die sie
+durchsucht. Ein neues, separat geführtes `ProjectRuleInput.analyzedFiles`
+(von `RuleEngine` direkt aus den Dateipfaden des Fact-Sets berechnet,
+unabhängig davon, welche ARTEN eine künftige Filterung überleben) ersetzt
+das bisherige, jeweils eigene `new Set(facts.map(f => f.subject.file))`
+jeder Regel — nötig, weil `DependencyCycleRule`/`DeadExportRule`
+Importziele gegen die Frage "existiert diese Datei im analysierten Umfang"
+auflösen, was ein nach Art gefiltertes Fact-Array allein nicht beantworten
+kann (eine Datei mit null `deps.*`-Facts würde sonst unbemerkt aufhören,
+ein gültiges Ziel zu sein). `test/ProjectRuleCategorization.test.ts` belegt,
+dass die Deklarationen wahrheitsgemäß sind: Jede Regel nur gegen ihre
+deklarierten Arten (plus das separat geführte `analyzedFiles`)
+auszuwerten, liefert IDENTISCHE Findings wie die Auswertung gegen das
+vollständige Fact-Set, an einem Fixture, das alle drei Regeln tatsächlich
+auslöst.
+
+**Bewusst NICHT umgesetzt, und warum — dies vor der Annahme lesen, hier
+sei mehr erreicht worden:** Die obige Kategorisierung ist reine Metadaten.
+Die Hauptpipeline gibt jeder projektweiten Regel weiterhin das VOLLSTÄNDIGE
+Fact-Array, und `Pipeline.ts`s `facts: Fact[]` wird für den gesamten Lauf
+weiterhin vollständig akkumuliert, nie gefiltert oder vorzeitig
+freigegeben. Zwei bestehende, korrektheitsrelevante Konsumenten hängen
+daran: die optionale semantische Schicht
+(`src/semantic/SemanticRunner.ts`s `buildRequest()` filtert `result.facts`
+nach Datei+Zeile, um ein LLM-Urteil für JEDEN ausgewählten Befund zu
+erden, datei-lokal oder nicht) und die Finding-/Evidenz-Nachverfolgbarkeits-
+Garantie (`test/FindingModel.test.ts` prüft, dass die Evidenz-Fact-Art
+jedes Findings tatsächlich in `result.facts` vorhanden ist). Das
+vollständige Fact-Array auf nur die von den projektweiten Regeln
+deklarierten Arten zu filtern — der naheliegende nächste Schritt — würde
+beides für die überwiegende Mehrheit der Findings (datei-lokale) unbemerkt
+brechen, genau die Art von Regression, die der Qualitätsanspruch der Spec
+selbst verbietet ("keine Regressionen bei bestehenden Regeln", "bestehende
+öffentliche APIs möglichst kompatibel halten"). Eine echte inkrementelle
+Fact-Freigabe würde zuerst eine Neugestaltung dieser beiden Konsumenten
+erfordern (z. B. ein Nachlesen der Facts einer Datei bei Bedarf aus dem
+Fact-Cache statt aus dem In-Memory-Array) — eine größere, eigenständige
+Änderung, die diese Runde bewusst nicht ohne diese vorherige
+Abhängigkeitsanalyse versucht hat. Dies ist der größte offene Punkt der
+"speicherbegrenzten Auswertung": `RuleEngine.evaluate(facts)` bleibt ein
+einziger, atomarer, unbegrenzter Durchlauf über das vollständige Fact-Set —
+aus Notwendigkeit heute, nicht aus Versehen.
+
 ## Baseline-/Diff-Modus (opt-in, `--baseline`)
 
 Verdrahtet `Finding.baselineStatus` (`'new' | 'known' | 'fixed'`), das seit
@@ -339,9 +468,10 @@ eingeführt hat, nicht den gesamten Backlog.
   Ausgabe; das zugrunde liegende Problem entfernen und erneut laufen lassen
   → als `fixed` gemeldet.
 - **Verwechselt einen unvollständigen Scan nie mit einem saubern Ergebnis**
-  (Folge-Spec "Analysis Integrity & Memory-Bounded Pipeline"): Wenn der
-  Memory Guard einen Scan vorzeitig gestoppt hat
-  (`coverage.analysisIncomplete`), meldet `applyBaseline()` NIE einen
+  (Folge-Spec "Analysis Integrity & Memory-Bounded Pipeline"; die Sperre
+  läuft jetzt über `coverage.status !== 'complete'`, siehe
+  "Vollständigkeits-Integrität der Analyse" oben): Wenn der Memory Guard
+  einen Scan vorzeitig gestoppt hat, meldet `applyBaseline()` NIE einen
   Baseline-Eintrag als `fixed` — eine Datei, die der Scan nie erreicht hat,
   wurde nie tatsächlich erneut geprüft, "nicht reproduziert" beweist also
   nichts über sie (`fixedCount`/`fixed` werden auf `0`/`[]` gezwungen, und
