@@ -14,6 +14,7 @@ import type {ProjectRule} from './ProjectRule.js';
 import type {RuleSet} from './RuleSet.js';
 import type {Rule} from './RuleTypes.js';
 import type {ModuleGraph} from '../model/ModuleGraph.js';
+import type {SymbolGraph} from '../model/SymbolGraph.js';
 
 interface Unit {
     key: string;
@@ -40,7 +41,7 @@ export class RuleEngine {
         private readonly projectRules: ProjectRule[] = [new DependencyCycleRule()]
     ) {}
 
-    public evaluate(facts: Fact[], moduleGraph?: ModuleGraph): Finding[] {
+    public evaluate(facts: Fact[], moduleGraph?: ModuleGraph, symbolGraph?: SymbolGraph): Finding[] {
         const units = groupUnits(facts);
         const keyed: KeyedFinding[] = [];
 
@@ -59,6 +60,7 @@ export class RuleEngine {
                 facts,
                 analyzedFiles,
                 ...(moduleGraph !== undefined ? {moduleGraph} : {}),
+                ...(symbolGraph !== undefined ? {symbolGraph} : {}),
                 ruleSetId: this.ruleSet.id,
                 knowledgeBase: this.knowledgeBase,
                 lang: this.lang
