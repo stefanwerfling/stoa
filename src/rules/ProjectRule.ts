@@ -1,6 +1,7 @@
 import type {Fact, Finding} from '../Types.js';
 import type {KnowledgeBase} from '../knowledge/KnowledgeBase.js';
 import type {ModuleGraph} from '../model/ModuleGraph.js';
+import type {SymbolGraph} from '../model/SymbolGraph.js';
 
 export interface ProjectRuleInput {
     facts: Fact[];
@@ -13,6 +14,15 @@ export interface ProjectRuleInput {
      * graph. See `DependencyCycleRule` for the fallback pattern.
      */
     moduleGraph?: ModuleGraph;
+    /**
+     * The project-wide cross-file symbol graph (Phase 1), built once by the
+     * pipeline from `deps.importName` + `deps.export` facts + `moduleGraph`.
+     * OPTIONAL and additive, exactly like `moduleGraph`: no existing rule
+     * reads it, and a caller that does not build one omits it. Carried for a
+     * later cross-file rule to consume deliberately — it changes no current
+     * finding on its own.
+     */
+    symbolGraph?: SymbolGraph;
     /**
      * Every file that contributed at least one fact to this run — computed
      * by the caller directly from the analyzed file list, independent of

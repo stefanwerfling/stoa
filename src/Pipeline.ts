@@ -12,6 +12,7 @@ import {collectFiles, readFileContent} from './Ingestion.js';
 import {loadProjectConfig} from './config/ProjectConfig.js';
 import {ModuleResolver} from './analysis/ModuleResolution.js';
 import {buildModuleGraph} from './model/ModuleGraph.js';
+import {buildSymbolGraph} from './model/SymbolGraph.js';
 import {KnowledgeBase} from './knowledge/KnowledgeBase.js';
 import {isMemoryCritical, takeMemorySnapshot, type MemorySnapshot} from './MemoryGuard.js';
 import {RuleEngine} from './rules/RuleEngine.js';
@@ -259,7 +260,13 @@ export const analyze = (options: AnalyzeOptions): AnalysisResult => {
     // or unbounded state (the FactCache stays strictly file-local, untouched).
     const moduleResolver = new ModuleResolver(loadProjectConfig(options.rootPath));
     const moduleGraph = buildModuleGraph(facts, analyzedPaths, moduleResolver);
-    const findings: Finding[] = ruleEngine.evaluate(facts, moduleGraph);
+    // Phase 1: the cross-file symbol graph, built right after the module graph
+    // from the same facts (deps.importName + deps.export) + the module graph's
+    // resolved edges. Same discipline: strings/fact-ids only (no AST, no fact
+    // copy), lives only for this evaluate() call. No rule consumes it yet, so
+    // it changes no finding — carried via ProjectRuleInput for a later step.
+    const symbolGraph = buildSymbolGraph(facts, moduleGraph);
+    const findings: Finding[] = ruleEngine.evaluate(facts, moduleGraph, symbolGraph);
     // RuleEngine.evaluate() is one atomic, synchronous pass with no internal
     // checkpointing — it cannot be partially applied or safely interrupted
     // (declarative rules iterate per-subject; project rules need the full
