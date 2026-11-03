@@ -1,5 +1,5 @@
-import {Node, SyntaxKind} from 'ts-morph';
-import type {CallExpression, ClassDeclaration, Decorator, ImportDeclaration, MethodDeclaration, ObjectLiteralExpression, PropertyAssignment, SourceFile} from 'ts-morph';
+import {Node, SyntaxKind, ts} from 'ts-morph';
+import type {Block, CallExpression, CatchClause, ClassDeclaration, Decorator, ImportDeclaration, MethodDeclaration, ObjectLiteralExpression, PropertyAssignment, SourceFile} from 'ts-morph';
 import type {Fact, SourceRange, SubjectKind} from '../../Types.js';
 import {factBuilder, type AdapterInfo} from '../FactBuilder.js';
 import {isDeepImport} from '../ImportPath.js';
@@ -105,7 +105,8 @@ export const extractFacts = (sourceFile: SourceFile, info: AdapterInfo): Fact[] 
         const symbol = `catch#${index}`;
 
         facts.push(build({kind: 'ast.emptyCatch', kindOf: 'catch-clause', symbol, range, value: empty}));
-        facts.push(build({kind: 'ast.catchSwallowsError', kindOf: 'catch-clause', symbol, range, value: !hasThrow && !hasCall}));
+        facts.push(build({kind: 'ast.catchSwallowsError', kindOf: 'catch-clause', symbol, range, value: !hasThrow && !hasCall && !catchReadsError(clause)}));
+        facts.push(build({kind: 'doc.catchHasRationale', kindOf: 'catch-clause', symbol, range, value: blockHasComment(block)}));
     });
 
     const referenced = referencedIdentifiers(sourceFile);
@@ -719,6 +720,60 @@ const RATIONALE_MARKER = 'stoa:allow-complexity';
 
 const hasComplexityRationale = (fn: Node): boolean => {
     return fn.getLeadingCommentRanges().some((comment) => comment.getText().includes(RATIONALE_MARKER));
+};
+
+// A comment anywhere inside a catch block documents why the error is
+// deliberately not propagated — exactly what R-ERR-SWALLOWED's remediation asks
+// for ("comment an intentionally ignored case"). Comments are trivia, so they
+// are found as the leading trivia of the tokens after the opening brace; a
+// comment-only block has no statements and its comment is the leading trivia
+// of the closing brace. The raw compiler API is used on purpose: ts-morph's
+// comment-statement handling would hide such comments from getStatements().
+const blockHasComment = (block: Block): boolean => {
+    const sourceFile = block.getSourceFile().compilerNode;
+    const text = sourceFile.getFullText();
+    const afterOpenBrace = block.getStart() + 1;
+    const visit = (node: ts.Node): boolean => {
+        if (node.pos >= afterOpenBrace && (ts.getLeadingCommentRanges(text, node.pos)?.length ?? 0) > 0) {
+            return true;
+        }
+        return node.getChildren(sourceFile).some(visit);
+    };
+    return visit(block.compilerNode);
+};
+
+// A catch whose bound error is READ inside the block (assigned elsewhere,
+// passed, returned, stored in a field) hands the error on rather than
+// swallowing it — e.g. a retry loop keeping `lastError = e` for afterwards.
+// A write to the binding itself (`e = x`), a property name (`x.e`, `{e: 1}`)
+// or a shadowing declaration is not a read.
+const catchReadsError = (clause: CatchClause): boolean => {
+    const nameNode = clause.getVariableDeclaration()?.getNameNode();
+    if (nameNode === undefined) {
+        return false;
+    }
+    const bound = Node.isIdentifier(nameNode)
+        ? [nameNode]
+        : nameNode.getDescendantsOfKind(SyntaxKind.BindingElement).map((element) => element.getNameNode()).filter(Node.isIdentifier);
+    const names = new Set(bound.map((identifier) => identifier.getText()));
+    return clause
+        .getBlock()
+        .getDescendantsOfKind(SyntaxKind.Identifier)
+        .some((identifier) => names.has(identifier.getText()) && isIdentifierRead(identifier));
+};
+
+const isIdentifierRead = (identifier: Node): boolean => {
+    const parent = identifier.getParent();
+    if (parent === undefined) {
+        return false;
+    }
+    if ((Node.isPropertyAccessExpression(parent) || Node.isPropertyAssignment(parent)) && parent.getNameNode() === identifier) {
+        return false;
+    }
+    if ((Node.isVariableDeclaration(parent) || Node.isParameterDeclaration(parent) || Node.isBindingElement(parent)) && parent.getNameNode() === identifier) {
+        return false;
+    }
+    return !(Node.isBinaryExpression(parent) && parent.getOperatorToken().getKind() === SyntaxKind.EqualsToken && parent.getLeft() === identifier);
 };
 
 const rangeOf = (sourceFile: SourceFile, node: Node): SourceRange => {

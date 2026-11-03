@@ -149,7 +149,7 @@ Deklarative Regeln (`rules/default/*.json`, Default aktiv):
 | `R-DEEP-NESTING` | `metric.nestingDepth` | `marcus.simplicity` | Komplexität | syntaktisch |
 | `R-FN-TOO-MANY-PARAMS` | `metric.parameterCount` | `marcus.purpose` | Verantwortungsgrenzen | syntaktisch |
 | `R-WIDE-PUBLIC-SURFACE` | `metric.exportCount` | `marcus.purpose` | Verantwortungsgrenzen | syntaktisch (nur TS/JS) |
-| `R-ERR-SWALLOWED` | `ast.catchSwallowsError` | `marcus.obstacle` | Fehlerbehandlung | syntaktisch |
+| `R-ERR-SWALLOWED` | `ast.catchSwallowsError` (unterdrückt durch `doc.catchHasRationale`) | `marcus.obstacle` | Fehlerbehandlung | syntaktisch |
 | `R-SIDEEFFECT-NONDETERMINISM` | `ast.usesNondeterminism` | `marcus.control` | Seiteneffekt-Kontrolle | heuristisch |
 | `R-DEP-UNUSED` | `deps.importUnused` | `marcus.cooperation` | Abhängigkeiten | syntaktisch |
 | `R-DEEP-IMPORT` | `deps.importDeep` | `marcus.cooperation` | Abhängigkeiten | syntaktisch |

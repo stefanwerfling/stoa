@@ -64,13 +64,49 @@ export const extractFacts = (root: Node, content: string, filePath: string, info
         const range = spanRange(clause, block ?? clause);
 
         facts.push(build({kind: 'ast.emptyCatch', kindOf: 'catch-clause', symbol, range, value: statements === 0}));
-        facts.push(build({kind: 'ast.catchSwallowsError', kindOf: 'catch-clause', symbol, range, value: !hasThrow && !hasCall}));
+        facts.push(build({kind: 'ast.catchSwallowsError', kindOf: 'catch-clause', symbol, range, value: !hasThrow && !hasCall && !catchReadsError(clause, block)}));
+        facts.push(build({kind: 'doc.catchHasRationale', kindOf: 'catch-clause', symbol, range, value: block !== null && descendants(block, COMMENT_TYPES).length > 0}));
     });
 
     // Flutter widget-tree accessibility facts (Image/IconButton labelling).
     facts.push(...extractFlutterA11yFacts(root, build));
 
     return facts;
+};
+
+// A comment inside the catch block documents a deliberately ignored error
+// (R-ERR-SWALLOWED's own remediation); tree-sitter keeps comments as nodes.
+const COMMENT_TYPES = ['comment', 'documentation_comment'];
+
+// A catch whose bound error (or stack trace) is READ in the block — assigned
+// elsewhere (`lastError = e`), passed, returned — hands the error on rather
+// than swallowing it. The wildcard `_` binds nothing; a write to the binding
+// itself, a member selector (`x.e`) or a named-argument label (`f(e: 1)`) is
+// not a read. Mirrors the TypeScript adapter.
+const catchReadsError = (clause: Node, block: Node | null): boolean => {
+    if (block === null) {
+        return false;
+    }
+    const names = new Set(namedChildren(clause).filter((child) => child.type === 'identifier' && !/^_+$/.test(child.text)).map((child) => child.text));
+    if (names.size === 0) {
+        return false;
+    }
+    return descendants(block, 'identifier').some((identifier) => names.has(identifier.text) && isIdentifierRead(identifier));
+};
+
+const isIdentifierRead = (identifier: Node): boolean => {
+    const parent = identifier.parent;
+    if (parent === null) {
+        return false;
+    }
+    if (parent.type === 'label' || parent.type.includes('selector')) {
+        return false;
+    }
+    if (parent.type === 'assignable_expression' && parent.namedChildCount === 1) {
+        const assignment = parent.parent;
+        return !(assignment !== null && assignment.type === 'assignment_expression' && assignment.childForFieldName('left')?.id === parent.id);
+    }
+    return true;
 };
 
 const descendants = (node: Node, types: string | string[]): Node[] => {

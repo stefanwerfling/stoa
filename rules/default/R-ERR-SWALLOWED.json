@@ -1,6 +1,6 @@
 {
   "id": "R-ERR-SWALLOWED",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "title": "Swallowed error",
   "feature": "ast.catchSwallowsError",
   "appliesTo": ["catch-clause"],
@@ -10,6 +10,9 @@
     "all": [{ "fact": "ast.catchSwallowsError", "op": "==", "value": true }]
   },
   "requiredEvidence": ["ast.catchSwallowsError"],
+  "suppressWhen": {
+    "any": [{ "fact": "doc.catchHasRationale", "op": "==", "value": true }]
+  },
   "severity": { "base": "high" },
   "confidence": { "base": 0.9, "capBy": "certainty" },
   "message": {

@@ -84,10 +84,31 @@ export const extractFacts = (root: Node, content: string, filePath: string, info
         const range = rangeOf(block ?? clause);
 
         facts.push(build({kind: 'ast.emptyCatch', kindOf: 'catch-clause', symbol, range, value: statements === 0}));
-        facts.push(build({kind: 'ast.catchSwallowsError', kindOf: 'catch-clause', symbol, range, value: !hasThrow && !hasCall}));
+        facts.push(build({kind: 'ast.catchSwallowsError', kindOf: 'catch-clause', symbol, range, value: !hasThrow && !hasCall && !catchReadsError(clause, block)}));
+        facts.push(build({kind: 'doc.catchHasRationale', kindOf: 'catch-clause', symbol, range, value: block !== null && descendants(block, 'comment').length > 0}));
     });
 
     return facts;
+};
+
+// A catch whose bound exception is READ in the body (`last = e;`, passed,
+// returned) hands the error on rather than swallowing it; the left side of a
+// plain assignment to the binding is a write. The parameter's type
+// (`std::exception`) parses as type/namespace identifiers, so plain
+// `identifier`s in the parameter list are exactly the bound names.
+const catchReadsError = (clause: Node, block: Node | null): boolean => {
+    const parameters = clause.childForFieldName('parameters');
+    if (block === null || parameters === null) {
+        return false;
+    }
+    const names = new Set(descendants(parameters, 'identifier').map((identifier) => identifier.text));
+    return descendants(block, 'identifier').some((identifier) => {
+        if (!names.has(identifier.text)) {
+            return false;
+        }
+        const parent = identifier.parent;
+        return !(parent !== null && parent.type === 'assignment_expression' && parent.childForFieldName('left')?.id === identifier.id);
+    });
 };
 
 const descendants = (node: Node, types: string | string[]): Node[] => {

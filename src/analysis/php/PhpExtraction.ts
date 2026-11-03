@@ -82,7 +82,16 @@ export const extractFacts = (program: PhpNode, content: string, filePath: string
                 kindOf: 'catch-clause',
                 symbol,
                 range: rangeOf(clause),
-                value: !hasThrow && !hasCall
+                value: !hasThrow && !hasCall && !catchReadsError(clause)
+            })
+        );
+        facts.push(
+            build({
+                kind: 'doc.catchHasRationale',
+                kindOf: 'catch-clause',
+                symbol,
+                range: rangeOf(clause),
+                value: body !== undefined && exists(body, (node) => node.kind === 'commentline' || node.kind === 'commentblock')
             })
         );
     });
@@ -515,6 +524,20 @@ const collect = (root: PhpNode, predicate: (node: PhpNode) => boolean): PhpNode[
     };
     walk(root);
     return found;
+};
+
+// A catch whose bound `$e` is READ in the block (`$last = $e`, passed,
+// returned) hands the error on rather than swallowing it; the target of a plain
+// `$e = …` assignment is a write, not a read. Mirrors the TypeScript adapter.
+const catchReadsError = (clause: PhpNode): boolean => {
+    const variable = clause.variable as PhpNode | undefined;
+    const body = clause.body as PhpNode | undefined;
+    const name = variable?.name;
+    if (body === undefined || typeof name !== 'string') {
+        return false;
+    }
+    const writes = new Set(collect(body, (node) => node.kind === 'assign' && node.operator === '=').map((assign) => assign.left));
+    return exists(body, (node) => node.kind === 'variable' && node.name === name && !writes.has(node));
 };
 
 const exists = (root: PhpNode, predicate: (node: PhpNode) => boolean): boolean => {
