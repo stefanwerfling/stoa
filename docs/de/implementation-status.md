@@ -389,6 +389,36 @@
   (`test/fixtures/solid/contracts/{dart,ts}`: positive, negative, unbekannte,
   Testpfad- und Test-Double-Fälle, ein Lauf ohne `--solid`), dazu die
   Lossless-Kinds-Prüfung in `test/ProjectRuleCategorization.test.ts`.
+- **SOLID, DIP konkrete Abhängigkeit (Flutter-Qualitätsstrang, E6c):**
+  `R-SOLID-DIP-CONCRETE-DEPENDENCY` 0.1.0 in
+  `src/rules/project/SolidRules.ts`, nur mit `--solid`, nur Dart (die
+  E5a-Schichtklassifikation ist nur Dart) (experimentell, `semantic-heuristic`
+  0,5, `low`, `marcus.cooperation`, `dependencies`): eine UI-Klasse (E5a), deren
+  EIGENE Member eine konkrete Projektklasse erzeugen, eine ihrer statischen
+  Methoden aufrufen oder einen ihrer statischen Member lesen (`Api.instance`),
+  wobei diese Klasse per Identität (TypeModel) auf eine nicht abstrakte
+  `class` in einer Bibliothek mit der Rolle Datenzugriff auflöst, die weder UI
+  noch State-Halter ist. Dart schreibt benannten Konstruktor und statischen
+  Aufruf gleich (`Api.x()`): die Member-Tabelle des Ziels entscheidet — ein
+  deklarierter Konstruktor erzeugt, eine deklarierte statische Methode ist ein
+  Aufruf, alles andere ist unbekannt und wird nicht beurteilt. Ein Befund je
+  (UI-Klasse, Zielklasse) an der ersten Stelle; die Evidenz nennt jede Stelle.
+  Nie ein Befund: die Klasse selbst, abstrakte Ziele (Factory-Konstruktor einer
+  Abstraktion), Modelle ohne Datenzugriff, State-Halter, DI-Lookups
+  (`GetIt.I`, `context.read`), mehrdeutige oder unaufgelöste Namen, geerbte
+  Member. Statische Methodenaufrufe gehen über den Planwortlaut hinaus
+  („erzeugt … oder greift statisch auf ihr `instance` zu“) — sie sind dieselbe
+  konkrete Bindung und das vorherrschende Muster in swipemeister. Mit
+  `--solid`: swipemeister 21 (2 Erzeugungen, 40 statische Aufrufe, 2 statische
+  Lesezugriffe — `ApiService`, `PreferencesManager`, `AvatarCacheManager`),
+  mwpa 3 (`MwpaApi()`, `SyncMwpaService()`, `Preference()`), velyo 0,
+  movinder 0; ohne `--solid` ist jede Ausgabe byte-identisch. Nebenbei
+  behoben (E4): `typeModelOf` cachte nur nach Fact-Array, sodass dasselbe Array
+  ohne den Dart-Index der Pipeline deren Modell erhielt; der Schlüssel ist jetzt
+  Fact-Array, Dart-Index und ModuleGraph. Tests:
+  `test/SolidDipConcreteRule.test.ts` (`test/fixtures/solid/dip-concrete`), der
+  Cache-Fall in `test/TypeModel.test.ts`, dazu die Lossless-Kinds-Prüfung in
+  `test/ProjectRuleCategorization.test.ts`.
 - **Flutter-State-Lifecycle (Flutter-Analyse, Phase 3):** `src/analysis/dart/FlutterLifecycle.ts`
   erzeugt je Klasse, die direkt `extends State<…>` ist, einen neutralen
   `dart.stateLifecycle`-Fact: Felder, denen genau ein Aufruf zugewiesen wird

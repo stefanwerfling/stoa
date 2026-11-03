@@ -100,17 +100,25 @@ export interface ProjectRule {
     evaluate(input: ProjectRuleInput): Finding[];
 }
 
-const typeModelCache = new WeakMap<readonly unknown[], TypeModel>();
+// facts → dartLibraryIndex (or NONE) → moduleGraph (or NONE) → model: the
+// same fact array evaluated with and without the pipeline's index must not
+// share a model (the index decides `package:` resolution).
+const NONE = {};
+const typeModelCache = new WeakMap<readonly unknown[], WeakMap<object, WeakMap<object, TypeModel>>>();
 
-/** The input's type model, or one built from its facts (memoized per fact array, so several rules share it). */
+/** The input's type model, or one built from its facts (memoized per fact array, index and module graph, so several rules share it). */
 export const typeModelOf = (input: ProjectRuleInput): TypeModel => {
     if (input.typeModel !== undefined) {
         return input.typeModel;
     }
-    let model = typeModelCache.get(input.facts);
+    const byIndex = typeModelCache.get(input.facts) ?? new WeakMap<object, WeakMap<object, TypeModel>>();
+    typeModelCache.set(input.facts, byIndex);
+    const byGraph = byIndex.get(input.dartLibraryIndex ?? NONE) ?? new WeakMap<object, TypeModel>();
+    byIndex.set(input.dartLibraryIndex ?? NONE, byGraph);
+    let model = byGraph.get(input.moduleGraph ?? NONE);
     if (model === undefined) {
         model = buildTypeModel(input.facts, input.analyzedFiles, input.dartLibraryIndex, input.moduleGraph);
-        typeModelCache.set(input.facts, model);
+        byGraph.set(input.moduleGraph ?? NONE, model);
     }
     return model;
 };

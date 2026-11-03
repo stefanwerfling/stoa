@@ -358,6 +358,35 @@
   (`test/fixtures/solid/contracts/{dart,ts}`: positive, negative, unknown,
   test-path and test-double cases, a run without `--solid`), plus the
   lossless-kinds check in `test/ProjectRuleCategorization.test.ts`.
+- **SOLID, DIP concrete dependency (Flutter quality track, E6c):**
+  `R-SOLID-DIP-CONCRETE-DEPENDENCY` 0.1.0 in `src/rules/project/SolidRules.ts`,
+  only with `--solid`, Dart only (the E5a layer classification is Dart only)
+  (experimental, `semantic-heuristic` 0.5, `low`, `marcus.cooperation`,
+  `dependencies`): a UI class (E5a) whose OWN members create a concrete
+  project class, call one of its static methods or read one of its static
+  members (`Api.instance`), where that class resolves by identity (TypeModel)
+  to a non-abstract `class` in a library with the role data access that is
+  neither UI nor a state holder. Dart spells a named constructor and a static
+  call alike (`Api.x()`): the target's member table decides — a declared
+  constructor creates, a declared static method is a call, anything else is
+  unknown and not judged. One finding per (UI class, target class) at the
+  first site; the evidence lists every site. Never a finding: the class
+  itself, abstract targets (a factory constructor of an abstraction), models
+  without data access, state holders, DI lookups (`GetIt.I`, `context.read`),
+  ambiguous or unresolved names, inherited members. Static method calls go
+  beyond the plan wording ("creates … or accesses its `instance`
+  statically") — they are the same concrete binding and the dominant pattern
+  on swipemeister. With `--solid`: swipemeister 21 (2 creations, 40 static
+  calls, 2 static reads — `ApiService`, `PreferencesManager`,
+  `AvatarCacheManager`), mwpa 3 (`MwpaApi()`, `SyncMwpaService()`,
+  `Preference()`), velyo 0, movinder 0; without `--solid` every output is
+  byte-identical. Fixed on the way (E4): `typeModelOf` memoized per fact
+  array only, so the same array evaluated without the pipeline's Dart index
+  received the pipeline's model; it is now keyed by fact array, Dart index
+  and module graph. Tests: `test/SolidDipConcreteRule.test.ts`
+  (`test/fixtures/solid/dip-concrete`), the memo case in
+  `test/TypeModel.test.ts`, plus the lossless-kinds check in
+  `test/ProjectRuleCategorization.test.ts`.
 - **Flutter State lifecycle (Flutter analysis, Phase 3):** `src/analysis/dart/FlutterLifecycle.ts`
   emits one neutral `dart.stateLifecycle` fact per class that directly
   `extends State<…>`: fields assigned exactly one call (field initializer or

@@ -96,7 +96,7 @@ test('E4: deterministic under reversed fact order', () => {
     assert.equal(summary(build([...facts].reverse())), summary(model));
 });
 
-test('E4: typeModelOf builds the model once per fact array and prefers the pipeline\'s', () => {
+test('E4: typeModelOf builds the model once per fact array, Dart index and module graph, and prefers the pipeline\'s', () => {
     const input: ProjectRuleInput = {
         facts,
         analyzedFiles: new Set(facts.map((fact) => fact.subject.file)),
@@ -107,5 +107,10 @@ test('E4: typeModelOf builds the model once per fact array and prefers the pipel
     const first = typeModelOf(input);
     assert.equal(typeModelOf({...input}), first, 'same fact array → same model');
     assert.equal(typeModelOf({...input, typeModel: model}), model);
+    // the same fact array with a (different) Dart index is a different model — the index decides package: resolution
+    const index = flutterAwareIndex(facts);
+    const withIndex = typeModelOf({...input, dartLibraryIndex: index});
+    assert.notEqual(withIndex, first);
+    assert.equal(typeModelOf({...input, dartLibraryIndex: index}), withIndex);
     assert.ok(first.typeAt(join(project, 'ts/sub.ts'), 'S1') !== undefined);
 });

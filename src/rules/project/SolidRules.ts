@@ -4,10 +4,10 @@ import {localize, type LocalizedText} from '../../i18n/Localized.js';
 import {flutterAwareIndex} from '../../analysis/dart/FlutterCatalog.js';
 import {ModuleResolver} from '../../analysis/ModuleResolution.js';
 import {EMPTY_PROJECT_CONFIG} from '../../config/ProjectConfig.js';
-import {buildLayerClassification, type ModuleClassification, type UiDeclaration} from '../../model/LayerClassification.js';
+import {buildLayerClassification, classificationOf, type LayerClassification, type ModuleClassification, type UiDeclaration} from '../../model/LayerClassification.js';
 import {buildModuleGraph, type ModuleGraph} from '../../model/ModuleGraph.js';
 import type {TypeModel, TypeNode} from '../../model/TypeModel.js';
-import type {StructMember} from '../../analysis/StructFacts.js';
+import type {StructMember, StructTypeRef} from '../../analysis/StructFacts.js';
 import {typeModelOf, type ProjectRule, type ProjectRuleInput} from '../ProjectRule.js';
 import {resolvePrinciple} from './FlutterLayoutRules.js';
 
@@ -483,5 +483,177 @@ export class SolidIspInterfaceCohesionRule implements ProjectRule {
     }
 }
 
+/*
+ * E6c — `R-SOLID-DIP-CONCRETE-DEPENDENCY` (experimental), Dart only (the
+ * layer classification of E5a is Dart only).
+ */
+
+const DIP_CONCRETE_TEXT = {
+    statement: {
+        en: 'UI class {type} binds itself to the concrete data-access class {target} ({targetFile}): {sites}.',
+        de: 'UI-Klasse {type} bindet sich an die konkrete Datenzugriffsklasse {target} ({targetFile}): {sites}.'
+    } as LocalizedText,
+    suggestion: {
+        en: 'Let {type} receive what it needs from {target} — through its constructor, the state-management layer or a provider — typed as an abstraction, instead of creating or reaching for the concrete class itself.',
+        de: '{type} das, was es von {target} braucht, übergeben lassen — per Konstruktor, über die State-Management-Schicht oder einen Provider —, typisiert als Abstraktion, statt die konkrete Klasse selbst zu erzeugen oder zu greifen.'
+    } as LocalizedText,
+    drawbacks: {
+        en: 'In a small app a direct singleton is often the simplest working choice; an abstraction pays off once the widget should be tested or the data source exchanged.',
+        de: 'In einer kleinen App ist ein direkter Singleton oft die einfachste funktionierende Wahl; eine Abstraktion lohnt sich, sobald das Widget getestet oder die Datenquelle ausgetauscht werden soll.'
+    } as LocalizedText,
+    missingContext: {
+        en: 'UI = a resolved Flutter StatelessWidget/StatefulWidget/State base; target = a concrete (non-abstract) project class, resolved by identity, whose library imports a catalogued data-access package and is neither UI nor a state holder. Seen in the UI class\'s own members: constructor calls, static method calls and static property reads (`{target}.instance`, any static member) — a `{target}.name()` whose name is neither a declared constructor nor a static method is not judged; DI containers (GetIt, context.read, Provider.of) and inherited members are not seen; ambiguous or unresolved names are never judged.',
+        de: 'UI = eine aufgelöste Flutter-Basis StatelessWidget/StatefulWidget/State; Ziel = eine konkrete (nicht abstrakte) Projektklasse, per Identität aufgelöst, deren Bibliothek ein katalogisiertes Datenzugriffs-Paket importiert und weder UI noch State-Halter ist. Gesehen in den eigenen Membern der UI-Klasse: Konstruktoraufrufe, statische Methodenaufrufe und statische Property-Zugriffe (`{target}.instance`, jeder statische Member) — ein `{target}.name()`, dessen Name weder ein deklarierter Konstruktor noch eine statische Methode ist, wird nicht beurteilt; DI-Container (GetIt, context.read, Provider.of) und geerbte Member werden nicht gesehen; mehrdeutige oder unaufgelöste Namen werden nie beurteilt.'
+    } as LocalizedText,
+    rationale: {
+        en: '{type} reaches into how data is fetched or stored instead of receiving a collaborator; each part should serve the whole through its own task (marcus.cooperation — dependency inversion).',
+        de: '{type} greift in die Art, wie Daten geladen oder gespeichert werden, statt einen Mitarbeiter zu erhalten; jeder Teil soll dem Ganzen durch seine eigene Aufgabe dienen (marcus.cooperation — Dependency Inversion).'
+    } as LocalizedText
+};
+
+interface ConcreteSite {
+    member: StructMember;
+    /** `creates` = a constructor; `calls` = a static method (Dart spells both `Type.name()`); `reads` = a static property. */
+    how: 'creates' | 'calls' | 'reads';
+    /** As written: `Repo()`, `Repo.named()`, `Repo.fetch()`, `Repo.instance`. */
+    text: string;
+}
+
+interface ConcreteDependency {
+    ui: UiDeclaration;
+    node: TypeNode;
+    target: TypeNode;
+    sites: ConcreteSite[];
+}
+
+const refText = (ref: StructTypeRef & {member: string | null}, how: ConcreteSite['how']): string =>
+    `${ref.prefix === null ? '' : `${ref.prefix}.`}${ref.name}${ref.member === null ? '' : `.${ref.member}`}${how === 'reads' ? '' : '()'}`;
+
+/**
+ * What `Type()` / `Type.name()` is on `target`: the unnamed constructor, a
+ * declared constructor, or a declared static method — anything else (an
+ * inherited or undeclared name) is unknown, so null.
+ */
+const callKindOf = (target: TypeNode, member: string | null): 'creates' | 'calls' | null => {
+    const constructors = target.members.filter((entry) => entry.memberKind === 'constructor');
+    if (member === null) {
+        return constructors.length === 0 || constructors.some((entry) => entry.name === target.name) ? 'creates' : null;
+    }
+    if (constructors.some((entry) => entry.name === member)) {
+        return 'creates';
+    }
+    return target.members.some((entry) => entry.isStatic && entry.memberKind === 'method' && entry.name === member) ? 'calls' : null;
+};
+
+/** A concrete project class in a data-access library that is neither UI nor a state holder, else undefined. */
+const dataAccessTarget = (model: TypeModel, classification: LayerClassification, node: TypeNode, ref: StructTypeRef): TypeNode | undefined => {
+    const resolution = model.resolveRef(node.file, ref);
+    const target = resolution.status === 'project' && resolution.target !== null ? model.get(resolution.target) : undefined;
+    if (target === undefined || target.key === node.key || target.declKind !== 'class' || target.hasParseError) {
+        return undefined;
+    }
+    const roles = classificationOf(classification, target.file)?.roles ?? [];
+    return roles.includes('data-access') && !roles.includes('ui') && !roles.includes('state-holder') ? target : undefined;
+};
+
+/** Per target class, every site in `node`'s own members, in member order. */
+const concreteDependenciesOf = (model: TypeModel, classification: LayerClassification, ui: UiDeclaration, node: TypeNode): ConcreteDependency[] => {
+    const byTarget = new Map<string, ConcreteDependency>();
+    const add = (member: StructMember, ref: StructTypeRef & {member: string | null}, kind: 'call' | 'reads'): void => {
+        const target = dataAccessTarget(model, classification, node, ref);
+        const how = target === undefined ? null : kind === 'reads' ? 'reads' : callKindOf(target, ref.member);
+        if (target !== undefined && how !== null) {
+            const entry = byTarget.get(target.key) ?? {ui, node, target, sites: []};
+            entry.sites.push({member, how, text: refText(ref, how)});
+            byTarget.set(target.key, entry);
+        }
+    };
+    for (const member of node.members) {
+        member.instantiates.forEach((ref) => add(member, ref, 'call'));
+        member.staticAccess.forEach((ref) => add(member, ref, 'reads'));
+    }
+    return [...byTarget.values()];
+};
+
+/**
+ * E6c `R-SOLID-DIP-CONCRETE-DEPENDENCY`: a UI class (E5a) that creates a
+ * concrete project class of a data-access library, calls one of its static
+ * methods or reads one of its static members (`Api.instance`), in its own
+ * members. One finding per (UI class,
+ * target class) at the first site. The class creating itself, abstract
+ * targets (a factory constructor of an abstraction is the intended pattern),
+ * state holders, UI targets and unresolved or ambiguous names never lead to
+ * a finding; DI lookups are not instantiations and stay unseen.
+ */
+export class SolidDipConcreteDependencyRule implements ProjectRule {
+    public readonly id = 'R-SOLID-DIP-CONCRETE-DEPENDENCY';
+    public readonly version = '0.1.0';
+    public readonly maturity = 'experimental' as const;
+    public readonly requiredFactKinds = TYPE_MODEL_FACT_KINDS;
+
+    public evaluate(input: ProjectRuleInput): Finding[] {
+        if (!input.facts.some((fact) => fact.kind === 'dart.classDecl')) {
+            return [];
+        }
+        const classification = buildLayerClassification(input.facts, input.dartLibraryIndex ?? flutterAwareIndex(input.facts));
+        const model = typeModelOf(input);
+        const findings: Finding[] = [];
+        for (const module of classification.modules) {
+            for (const ui of module.ui) {
+                const node = model.typeAt(module.file, ui.name);
+                if (node === undefined || node.hasParseError) {
+                    continue;
+                }
+                findings.push(...concreteDependenciesOf(model, classification, ui, node).map((dependency) => this.buildFinding(dependency, input)));
+            }
+        }
+        return findings;
+    }
+
+    private buildFinding({ui, node, target, sites}: ConcreteDependency, input: ProjectRuleInput): Finding {
+        const first = sites[0] as ConcreteSite;
+        const range = rangeOf(first.member.range);
+        const fill = (text: LocalizedText): string =>
+            localize(text, input.lang)
+                .replaceAll('{type}', node.name)
+                .replaceAll('{target}', target.name)
+                .replaceAll('{targetFile}', basename(target.file))
+                .replaceAll('{sites}', [...new Set(sites.map((site) => site.text))].join(', '));
+        return {
+            id: `finding:${this.id}:${node.file}:${range.startLine}:${range.startCol}:${target.name}`,
+            rule: {id: this.id, version: this.version},
+            ruleSet: input.ruleSetId,
+            location: {file: node.file, range, symbol: `${node.name}.${first.member.name}`, structure: 'class'},
+            observation: {
+                statement: fill(DIP_CONCRETE_TEXT.statement),
+                evidence: [
+                    {fact: 'dart.classDecl', value: `${ui.name} extends ${[...ui.chain, ui.base].join(' → ')} (package:flutter)`, certainty: 'syntactic' as const},
+                    {fact: 'struct.typeDecl', value: `${typeLabel(target)} — concrete class in a data-access library`, certainty: 'semantic-heuristic' as const},
+                    ...sites.map((site) => ({
+                        fact: 'struct.typeDecl',
+                        value: `${basename(node.file)}:${site.member.range[0]} ${memberLabel(site.member)} ${site.how} ${site.text}`,
+                        certainty: 'syntactic' as const
+                    }))
+                ]
+            },
+            interpretation: {
+                principles: resolvePrinciple(input.knowledgeBase, input.lang, fill(DIP_CONCRETE_TEXT.rationale), 'marcus.cooperation'),
+                dimensions: ['dependencies']
+            },
+            severity: 'low',
+            confidence: 0.5,
+            certaintyBasis: 'semantic-heuristic',
+            remediation: {suggestion: fill(DIP_CONCRETE_TEXT.suggestion), drawbacks: fill(DIP_CONCRETE_TEXT.drawbacks)},
+            missingContext: [fill(DIP_CONCRETE_TEXT.missingContext)],
+            source: 'deterministic'
+        };
+    }
+}
+
 /** The SOLID rules registered with `--solid`, in a fixed order. */
-export const solidRules = (): ProjectRule[] => [new SolidDipLayerDirectionRule(), new SolidLspContractCompatibilityRule(), new SolidIspInterfaceCohesionRule()];
+export const solidRules = (): ProjectRule[] => [
+    new SolidDipLayerDirectionRule(),
+    new SolidLspContractCompatibilityRule(),
+    new SolidIspInterfaceCohesionRule(),
+    new SolidDipConcreteDependencyRule()
+];
