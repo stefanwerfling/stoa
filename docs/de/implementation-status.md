@@ -70,7 +70,16 @@
   tree-sitter-dart 1.0.0 kein Dart-3-Syntax kennt (Records, Patterns,
   Switch-Expressions, Klassenmodifikatoren): Eine solche Datei „parst“ trotzdem,
   Teile ihres Baums sind aber rekonstruiert. Keine Regel liest den Fact; der
-  Coverage-Status bleibt unverändert.
+  Coverage-Status bleibt unverändert. Der Grammatik fehlen außerdem erweiterte
+  Enums (Dart 2.17: `enum E with M`, `implements`, Enum-Konstruktoren).
+  `src/analysis/dart/DartDeclarations.ts` erzeugt die Eingaben für die spätere
+  Widget-Identität: `dart.importSpec` pro Bibliotheks-Direktive (`import`/`export`/
+  `part`/`part-of`; URI, Prefix, `deferred`, `show`/`hide`, konfigurierbare URIs) und
+  `dart.classDecl` pro Klasse/Mixin/Enum (Oberklasse mit Prefix und Typargumenten,
+  Mixins, Interfaces, `on` eines Mixins). Eine Deklaration, deren Kopf die Grammatik
+  nicht parsen konnte, erzeugt keinen Fact statt eines womöglich falschen Namens.
+  Bewusst weiterhin kein `deps.import` für Dart (das brächte Dart-Dateien in
+  R-DEP-CYCLE/R-DEP-UNUSED — eine eigene Entscheidung). Keine Regel liest `dart.*`.
 - **Pipeline:** Ingestion → Fact-Extraktion → Regel-Engine → Befunde → Reporter.
   Keine Uhr/kein Zufall/kein Netz im Kern; gleiche Eingabe + Versionen + Sprache ⇒
   byte-identische Befunde.
@@ -935,7 +944,7 @@ zu liefern.
 
 ## Erzeugte Facts
 
-`file.lineCount`, `file.parseErrors` (Dart), `metric.exportCount`, `metric.cyclomaticComplexity`,
+`file.lineCount`, `file.parseErrors` (Dart), `dart.importSpec`, `dart.classDecl`, `metric.exportCount`, `metric.cyclomaticComplexity`,
 `metric.cognitiveComplexity`, `metric.nestingDepth`, `metric.parameterCount`,
 `metric.functionLength`, `doc.hasComplexityRationale`, `ast.usesNondeterminism`,
 `ast.emptyCatch`, `ast.catchSwallowsError`, `doc.catchHasRationale`, `deps.import`, `deps.importUnused`,

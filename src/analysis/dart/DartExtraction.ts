@@ -2,6 +2,7 @@ import type {Node} from 'web-tree-sitter';
 import type {Fact, SourceRange, SubjectKind} from '../../Types.js';
 import {factBuilder, type AdapterInfo} from '../FactBuilder.js';
 import {parseErrorCount} from './DartCallSite.js';
+import {extractDartDeclarationFacts} from './DartDeclarations.js';
 import {extractFlutterA11yFacts} from './FlutterA11y.js';
 
 /**
@@ -76,6 +77,9 @@ export const extractFacts = (root: Node, content: string, filePath: string, info
         facts.push(build({kind: 'ast.catchSwallowsError', kindOf: 'catch-clause', symbol, range, value: !hasThrow && !hasCall && !catchReadsError(clause, block)}));
         facts.push(build({kind: 'doc.catchHasRationale', kindOf: 'catch-clause', symbol, range, value: block !== null && descendants(block, COMMENT_TYPES).length > 0}));
     });
+
+    // Library directives and type declarations (inputs for widget identity).
+    facts.push(...extractDartDeclarationFacts(root, build));
 
     // Flutter widget-tree accessibility facts (Image/IconButton labelling).
     facts.push(...extractFlutterA11yFacts(root, build));

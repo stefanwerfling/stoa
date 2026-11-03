@@ -64,6 +64,16 @@
   that tree-sitter-dart 1.0.0 does not know Dart 3 syntax (records, patterns,
   switch expressions, class modifiers): such a file still "parses", but parts of
   its tree are recovered. No rule reads the fact; coverage status is unchanged.
+  The grammar also lacks enhanced enums (Dart 2.17: `enum E with M`, `implements`,
+  enum constructors).
+  `src/analysis/dart/DartDeclarations.ts` emits the inputs for later widget
+  identity: `dart.importSpec` per library directive (`import`/`export`/`part`/
+  `part-of`; URI, prefix, `deferred`, `show`/`hide`, configurable URIs) and
+  `dart.classDecl` per class/mixin/enum (superclass with prefix and type
+  arguments, mixins, interfaces, a mixin's `on`). A declaration whose header the
+  grammar could not parse yields no fact rather than a possibly wrong name.
+  Deliberately still no `deps.import` for Dart (it would put Dart files into
+  R-DEP-CYCLE/R-DEP-UNUSED — a separate decision). No rule reads `dart.*`.
 - **Pipeline:** ingestion → fact extraction → rule engine → findings → reporter.
   No clock/randomness/network in the core; same input + versions + language ⇒
   byte-identical findings.
@@ -833,7 +843,7 @@ fails fast (exit 1, concrete errors) instead of silently yielding 0 findings.
 
 ## Facts produced
 
-`file.lineCount`, `file.parseErrors` (Dart), `metric.exportCount`, `metric.cyclomaticComplexity`,
+`file.lineCount`, `file.parseErrors` (Dart), `dart.importSpec`, `dart.classDecl`, `metric.exportCount`, `metric.cyclomaticComplexity`,
 `metric.cognitiveComplexity`, `metric.nestingDepth`, `metric.parameterCount`,
 `metric.functionLength`, `doc.hasComplexityRationale`, `ast.usesNondeterminism`,
 `ast.emptyCatch`, `ast.catchSwallowsError`, `doc.catchHasRationale`, `deps.import`, `deps.importUnused`,
