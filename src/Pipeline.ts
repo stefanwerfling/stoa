@@ -13,6 +13,7 @@ import {loadProjectConfig} from './config/ProjectConfig.js';
 import {ModuleResolver} from './analysis/ModuleResolution.js';
 import {buildModuleGraph} from './model/ModuleGraph.js';
 import {buildSymbolGraph} from './model/SymbolGraph.js';
+import {buildFlutterWidgetGraph} from './model/FlutterWidgetGraph.js';
 import {KnowledgeBase} from './knowledge/KnowledgeBase.js';
 import {isMemoryCritical, takeMemorySnapshot, type MemorySnapshot} from './MemoryGuard.js';
 import {RuleEngine} from './rules/RuleEngine.js';
@@ -256,7 +257,11 @@ export const analyze = (options: AnalyzeOptions): AnalysisResult => {
     // copy), lives only for this evaluate() call. No rule consumes it yet, so
     // it changes no finding — carried via ProjectRuleInput for a later step.
     const symbolGraph = buildSymbolGraph(facts, moduleGraph);
-    const findings: Finding[] = ruleEngine.evaluate(facts, moduleGraph, symbolGraph);
+    // Flutter Phase 1: the widget graph, same discipline (facts in, strings/
+    // fact-ids out, lives only for this evaluate() call). Passed only when the
+    // run actually produced widget trees; no rule consumes it yet.
+    const flutterWidgetGraph = buildFlutterWidgetGraph(facts);
+    const findings: Finding[] = ruleEngine.evaluate(facts, moduleGraph, symbolGraph, flutterWidgetGraph.nodes.length > 0 ? flutterWidgetGraph : undefined);
     // RuleEngine.evaluate() is one atomic, synchronous pass with no internal
     // checkpointing — it cannot be partially applied or safely interrupted
     // (declarative rules iterate per-subject; project rules need the full

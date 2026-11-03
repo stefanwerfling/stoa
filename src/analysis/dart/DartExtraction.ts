@@ -1,8 +1,9 @@
 import type {Node} from 'web-tree-sitter';
 import type {Fact, SourceRange, SubjectKind} from '../../Types.js';
 import {factBuilder, type AdapterInfo} from '../FactBuilder.js';
-import {parseErrorCount} from './DartCallSite.js';
+import {importPrefixes, parseErrorCount} from './DartCallSite.js';
 import {extractDartDeclarationFacts} from './DartDeclarations.js';
+import {extractWidgetTree} from './FlutterWidgets.js';
 import {extractFlutterA11yFacts} from './FlutterA11y.js';
 
 /**
@@ -43,6 +44,7 @@ export const extractFacts = (root: Node, content: string, filePath: string, info
         facts.push(build({kind: 'file.parseErrors', kindOf: 'file', range: fileRange(lines), value: parseErrors}));
     }
 
+    const prefixes = importPrefixes(root);
     for (const signature of descendants(root, 'function_signature')) {
         const parent = signature.parent;
         const owner = parent !== null && parent.type === 'method_signature' ? parent : signature;
@@ -62,6 +64,14 @@ export const extractFacts = (root: Node, content: string, filePath: string, info
         facts.push(build({kind: 'metric.functionLength', kindOf, symbol, range, value: range.endLine - range.startLine + 1}));
         facts.push(build({kind: 'doc.hasComplexityRationale', kindOf, symbol, range, value: leadingHasMarker(lines, range.startLine)}));
         facts.push(build({kind: 'ast.usesNondeterminism', kindOf, symbol, range, value: usesNondeterminism(body)}));
+
+        // Flutter widget structure of this body (Phase 1) — one compact fact
+        // per function that builds widgets; the FlutterWidgetGraph is rebuilt
+        // from these facts after extraction (and on a FactCache hit).
+        const tree = extractWidgetTree(body, prefixes, returnsWidget(signature));
+        if (tree !== null) {
+            facts.push(build({kind: 'ui.flutterWidgetTree', kindOf, symbol, range, value: tree}));
+        }
     }
 
     descendants(root, 'catch_clause').forEach((clause, index) => {
@@ -120,6 +130,14 @@ const isIdentifierRead = (identifier: Node): boolean => {
         return !(assignment !== null && assignment.type === 'assignment_expression' && assignment.childForFieldName('left')?.id === parent.id);
     }
     return true;
+};
+
+// The declared return type is `Widget` or a `…Widget` subtype name
+// (`PreferredSizeWidget`) — the type written before the function's name.
+const returnsWidget = (signature: Node): boolean => {
+    const name = signature.childForFieldName('name');
+    const type = namedChildren(signature).find((child) => child.type === 'type_identifier' && (name === null || child.endIndex <= name.startIndex));
+    return type !== undefined && /Widget$/.test(type.text);
 };
 
 const descendants = (node: Node, types: string | string[]): Node[] => {

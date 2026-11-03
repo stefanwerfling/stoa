@@ -74,6 +74,27 @@
   grammar could not parse yields no fact rather than a possibly wrong name.
   Deliberately still no `deps.import` for Dart (it would put Dart files into
   R-DEP-CYCLE/R-DEP-UNUSED — a separate decision). No rule reads `dart.*`.
+- **FlutterWidgetGraph (Flutter analysis, Phase 1):** `src/analysis/dart/FlutterWidgets.ts`
+  extracts, during the one AST pass, the widget structure of every function/method
+  body as one compact `ui.flutterWidgetTree` fact (node table: parent, slot label,
+  index, kind, name/prefix/constructor, argument names, position, status — no source
+  text). `src/model/FlutterWidgetGraph.ts` rebuilds the project-wide graph from facts
+  alone after extraction (identical on a FactCache hit, which never re-parses) and
+  hands it to project rules via `ProjectRuleInput.flutterWidgetGraph`; it is not part
+  of `AnalysisResult`, and no rule reads it yet. Node kinds: `widget`, `reference`
+  (variable/helper call), `builder` (`*builder` closures, all `return` paths),
+  `conditional` (`if`/ternary), `repeat` (`for`), `spread`, `list`, `dynamic`
+  (unmodelled expression), `unparsed` (tree-sitter could not parse — e.g. Dart 3
+  syntax; localized to the affected slot/element). Child edges follow only a curated
+  catalog of widget slots (`child`, `children`, `body`, `appBar`, `title`, `actions`,
+  …) and `*builder` closures; callbacks (`onTap:`) are not children — widgets built in
+  them are roots. A root is a call outside any tree with a slot/builder argument, or
+  what a `Widget`-returning function returns. Identity per widget: `verified`
+  (declared in the same file), `heuristic` (import candidates by prefix/show/hide,
+  listed), `unresolved` — never by name alone, and a Flutter class is never
+  `verified` (no cross-file library index yet). Measured on a 203-file Flutter app:
+  2733 nodes, tree facts 9.3 % of all facts, graph build ~16 ms, findings
+  byte-identical.
 - **Pipeline:** ingestion → fact extraction → rule engine → findings → reporter.
   No clock/randomness/network in the core; same input + versions + language ⇒
   byte-identical findings.
@@ -843,7 +864,7 @@ fails fast (exit 1, concrete errors) instead of silently yielding 0 findings.
 
 ## Facts produced
 
-`file.lineCount`, `file.parseErrors` (Dart), `dart.importSpec`, `dart.classDecl`, `metric.exportCount`, `metric.cyclomaticComplexity`,
+`file.lineCount`, `file.parseErrors` (Dart), `dart.importSpec`, `dart.classDecl`, `ui.flutterWidgetTree`, `metric.exportCount`, `metric.cyclomaticComplexity`,
 `metric.cognitiveComplexity`, `metric.nestingDepth`, `metric.parameterCount`,
 `metric.functionLength`, `doc.hasComplexityRationale`, `ast.usesNondeterminism`,
 `ast.emptyCatch`, `ast.catchSwallowsError`, `doc.catchHasRationale`, `deps.import`, `deps.importUnused`,

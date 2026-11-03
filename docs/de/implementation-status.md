@@ -80,6 +80,28 @@
   nicht parsen konnte, erzeugt keinen Fact statt eines womöglich falschen Namens.
   Bewusst weiterhin kein `deps.import` für Dart (das brächte Dart-Dateien in
   R-DEP-CYCLE/R-DEP-UNUSED — eine eigene Entscheidung). Keine Regel liest `dart.*`.
+- **FlutterWidgetGraph (Flutter-Analyse, Phase 1):** `src/analysis/dart/FlutterWidgets.ts`
+  extrahiert im einen AST-Durchlauf die Widget-Struktur jedes Funktions-/Methodenrumpfs
+  als einen kompakten `ui.flutterWidgetTree`-Fact (Knotentabelle: Elternteil,
+  Slot-Label, Index, Art, Name/Prefix/Konstruktor, Argumentnamen, Position, Status —
+  kein Quelltext). `src/model/FlutterWidgetGraph.ts` baut den projektweiten Graphen
+  nach der Extraktion allein aus Facts (identisch bei einem FactCache-Treffer, der nie
+  neu parst) und reicht ihn über `ProjectRuleInput.flutterWidgetGraph` an
+  Projektregeln; er ist nicht Teil von `AnalysisResult`, und noch keine Regel liest
+  ihn. Knotenarten: `widget`, `reference` (Variable/Helper-Aufruf), `builder`
+  (`*builder`-Closures, alle `return`-Pfade), `conditional` (`if`/Ternary), `repeat`
+  (`for`), `spread`, `list`, `dynamic` (nicht modellierter Ausdruck), `unparsed`
+  (tree-sitter konnte nicht parsen — z. B. Dart-3-Syntax; auf den betroffenen
+  Slot/das Element begrenzt). Kind-Kanten folgen nur einem kuratierten Katalog von
+  Widget-Slots (`child`, `children`, `body`, `appBar`, `title`, `actions`, …) und
+  `*builder`-Closures; Callbacks (`onTap:`) sind keine Kinder — darin gebaute Widgets
+  sind Wurzeln. Eine Wurzel ist ein Aufruf außerhalb eines Baums mit Slot-/Builder-
+  Argument oder das, was eine `Widget`-Funktion zurückgibt. Identität je Widget:
+  `verified` (in derselben Datei deklariert), `heuristic` (Import-Kandidaten nach
+  Prefix/show/hide, aufgelistet), `unresolved` — nie allein über den Namen, und eine
+  Flutter-Klasse ist nie `verified` (noch kein dateiübergreifender Bibliotheks-Index).
+  Gemessen an einer Flutter-App mit 203 Dateien: 2733 Knoten, Tree-Facts 9,3 % aller
+  Facts, Graph-Aufbau ~16 ms, Befunde byte-identisch.
 - **Pipeline:** Ingestion → Fact-Extraktion → Regel-Engine → Befunde → Reporter.
   Keine Uhr/kein Zufall/kein Netz im Kern; gleiche Eingabe + Versionen + Sprache ⇒
   byte-identische Befunde.
@@ -944,7 +966,7 @@ zu liefern.
 
 ## Erzeugte Facts
 
-`file.lineCount`, `file.parseErrors` (Dart), `dart.importSpec`, `dart.classDecl`, `metric.exportCount`, `metric.cyclomaticComplexity`,
+`file.lineCount`, `file.parseErrors` (Dart), `dart.importSpec`, `dart.classDecl`, `ui.flutterWidgetTree`, `metric.exportCount`, `metric.cyclomaticComplexity`,
 `metric.cognitiveComplexity`, `metric.nestingDepth`, `metric.parameterCount`,
 `metric.functionLength`, `doc.hasComplexityRationale`, `ast.usesNondeterminism`,
 `ast.emptyCatch`, `ast.catchSwallowsError`, `doc.catchHasRationale`, `deps.import`, `deps.importUnused`,

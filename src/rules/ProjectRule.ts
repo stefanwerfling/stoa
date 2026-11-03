@@ -2,6 +2,7 @@ import type {Fact, Finding} from '../Types.js';
 import type {KnowledgeBase} from '../knowledge/KnowledgeBase.js';
 import type {ModuleGraph} from '../model/ModuleGraph.js';
 import type {SymbolGraph} from '../model/SymbolGraph.js';
+import type {FlutterWidgetGraph} from '../model/FlutterWidgetGraph.js';
 
 export interface ProjectRuleInput {
     facts: Fact[];
@@ -23,6 +24,14 @@ export interface ProjectRuleInput {
      * finding on its own.
      */
     symbolGraph?: SymbolGraph;
+    /**
+     * The project-wide Flutter widget graph (Flutter Phase 1), built once by
+     * the pipeline from `ui.flutterWidgetTree` + `dart.classDecl` +
+     * `dart.importSpec` facts. OPTIONAL and additive, like `symbolGraph`: no
+     * rule reads it yet, and it is passed only when the run produced widget
+     * trees (a run without Flutter code omits it).
+     */
+    flutterWidgetGraph?: FlutterWidgetGraph;
     /**
      * Every file that contributed at least one fact to this run — computed
      * by the caller directly from the analyzed file list, independent of
