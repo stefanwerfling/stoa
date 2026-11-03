@@ -93,6 +93,8 @@ export const FLUTTER_CATALOG: Readonly<Record<string, readonly [string, string]>
     Spacer: ['src/widgets/spacer.dart', 'wmc'],
     Stack: ['src/widgets/basic.dart', 'wmc'],
     State: ['src/widgets/framework.dart', 'wmc'],
+    StatefulWidget: ['src/widgets/framework.dart', 'wmc'],
+    StatelessWidget: ['src/widgets/framework.dart', 'wmc'],
     TabController: ['src/material/tab_controller.dart', 'm'],
     TextEditingController: ['src/widgets/editable_text.dart', 'wmc'],
     TextField: ['src/material/text_field.dart', 'm'],

@@ -224,6 +224,30 @@
   0 / 2 strongly connected components (largest 15 files), graph build ≤ 6 ms;
   findings byte-identical on the apps, the golden corpus and the TS projects.
   Tests: `test/ModuleGraph.test.ts` (`test/fixtures/dart-modulegraph`).
+- **Layer classification (Flutter quality track, E5a):**
+  `src/model/LayerClassification.ts` (`buildLayerClassification(facts,
+  dartLibraryIndex)`), Dart only, from facts and the index — no AST. **UI:** a
+  class whose superclass resolves to `StatelessWidget`/`StatefulWidget`/`State`
+  of `package:flutter/src/widgets/framework.dart`, directly or through project
+  classes (`chain`), cycle-safe; base classes of other packages (`GetView`,
+  `ConsumerWidget`) and ambiguous/unresolved names never count. **Data access:**
+  the module itself imports a package of the versioned catalog
+  `src/analysis/dart/DataAccessCatalog.ts` (`http`, `dio`, `shared_preferences`,
+  `sqflite`, `cloud_firestore`, `firebase_database`, `firebase_storage`, `hive`,
+  `isar`, `drift`, `supabase_flutter`, `graphql_flutter`), or `dart:io` with a
+  `show` of file/socket/HTTP/process names; `dart:io` without `show` is
+  `undecided` and does not count; one level only, never transitive. Roles belong
+  to a library (file + parts); a module without a role is unknown.
+  `StatelessWidget`/`StatefulWidget` were added to the Flutter catalog (checked
+  against the SDK). Not yet wired into the pipeline — no rule consumes it until
+  E6a, so every output is unchanged (verified byte-identical on four real apps,
+  the golden corpus and the Flutter fixtures). Measured on the four apps (185 /
+  74 / 66 / 35 Dart files): UI modules 76 / 12 / 30 / 14, data-access modules
+  5 / 10 / 2 / 0, both in one module 0 / 4 / 0 / 0 (mwpa pages importing
+  `shared_preferences`), `dart:io` undecided in 6 / 4 / 8 / 0 files, ≤ 9 ms. UI
+  classes not seen: 1 (swipemeister) and 5 (velyo), all in files whose Dart 3
+  syntax the grammar cannot structure. Tests: `test/LayerClassification.test.ts`
+  (`test/fixtures/dart-layers`).
 - **Flutter State lifecycle (Flutter analysis, Phase 3):** `src/analysis/dart/FlutterLifecycle.ts`
   emits one neutral `dart.stateLifecycle` fact per class that directly
   `extends State<…>`: fields assigned exactly one call (field initializer or

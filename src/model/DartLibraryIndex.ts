@@ -168,7 +168,8 @@ export class DartLibraryIndex {
         return target !== null && this.files.has(target) ? target : null;
     }
 
-    private libraryOf(file: string): string {
+    /** The library a file belongs to: the owner of a `part`, else the file itself. */
+    public libraryOf(file: string): string {
         return this.ownerOf.get(file) ?? file;
     }
 

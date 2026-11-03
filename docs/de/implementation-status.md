@@ -243,6 +243,31 @@
   ≤ 6 ms; Befunde auf den Apps, dem Golden-Korpus und den TS-Projekten
   byte-identisch. Tests: `test/ModuleGraph.test.ts`
   (`test/fixtures/dart-modulegraph`).
+- **Schichtklassifikation (Flutter-Qualitätsstrang, E5a):**
+  `src/model/LayerClassification.ts` (`buildLayerClassification(facts,
+  dartLibraryIndex)`), nur Dart, aus Facts und dem Index — kein AST. **UI:** eine
+  Klasse, deren Oberklasse auf `StatelessWidget`/`StatefulWidget`/`State` aus
+  `package:flutter/src/widgets/framework.dart` auflöst, direkt oder über
+  Projektklassen (`chain`), zyklensicher; Basisklassen anderer Pakete
+  (`GetView`, `ConsumerWidget`) und mehrdeutige/unaufgelöste Namen zählen nie.
+  **Datenzugriff:** das Modul importiert selbst ein Paket des versionierten
+  Katalogs `src/analysis/dart/DataAccessCatalog.ts` (`http`, `dio`,
+  `shared_preferences`, `sqflite`, `cloud_firestore`, `firebase_database`,
+  `firebase_storage`, `hive`, `isar`, `drift`, `supabase_flutter`,
+  `graphql_flutter`) oder `dart:io` mit einem `show` von Datei-/Socket-/HTTP-/
+  Prozess-Namen; `dart:io` ohne `show` ist `undecided` und zählt nicht; nur eine
+  Ebene, nie transitiv. Rollen gehören zu einer Bibliothek (Datei + Parts); ein
+  Modul ohne Rolle ist unbekannt. `StatelessWidget`/`StatefulWidget` wurden in
+  den Flutter-Katalog aufgenommen (gegen das SDK geprüft). Noch nicht in der
+  Pipeline verdrahtet — bis E6a liest sie keine Regel, jede Ausgabe bleibt
+  unverändert (byte-identisch geprüft auf vier echten Apps, dem Golden-Korpus
+  und den Flutter-Fixtures). Gemessen auf den vier Apps (185 / 74 / 66 / 35
+  Dart-Dateien): UI-Module 76 / 12 / 30 / 14, Datenzugriffs-Module 5 / 10 / 2 /
+  0, beides in einem Modul 0 / 4 / 0 / 0 (mwpa-Seiten mit `shared_preferences`),
+  `dart:io` unentschieden in 6 / 4 / 8 / 0 Dateien, ≤ 9 ms. Nicht erkannte
+  UI-Klassen: 1 (swipemeister) und 5 (velyo), alle in Dateien, deren Dart-3-
+  Syntax die Grammatik nicht strukturieren kann. Tests:
+  `test/LayerClassification.test.ts` (`test/fixtures/dart-layers`).
 - **Flutter-State-Lifecycle (Flutter-Analyse, Phase 3):** `src/analysis/dart/FlutterLifecycle.ts`
   erzeugt je Klasse, die direkt `extends State<…>` ist, einen neutralen
   `dart.stateLifecycle`-Fact: Felder, denen genau ein Aufruf zugewiesen wird
