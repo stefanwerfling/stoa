@@ -1,6 +1,7 @@
 import type {Node} from 'web-tree-sitter';
 import type {Fact, SourceRange, SubjectKind} from '../../Types.js';
 import {factBuilder, type AdapterInfo} from '../FactBuilder.js';
+import {parseErrorCount} from './DartCallSite.js';
 import {extractFlutterA11yFacts} from './FlutterA11y.js';
 
 /**
@@ -32,6 +33,14 @@ export const extractFacts = (root: Node, content: string, filePath: string, info
     const lines = content.split('\n');
 
     facts.push(build({kind: 'file.lineCount', kindOf: 'file', range: fileRange(lines), value: lineCount(content)}));
+    // Emitted only when tree-sitter had to recover (absent = a clean parse), so
+    // the silent degradation on syntax the grammar lacks (Dart 3 records,
+    // patterns, switch expressions, class modifiers) is visible as a fact. No
+    // rule reads it; the parse itself still counts as successful, unchanged.
+    const parseErrors = parseErrorCount(root);
+    if (parseErrors > 0) {
+        facts.push(build({kind: 'file.parseErrors', kindOf: 'file', range: fileRange(lines), value: parseErrors}));
+    }
 
     for (const signature of descendants(root, 'function_signature')) {
         const parent = signature.parent;

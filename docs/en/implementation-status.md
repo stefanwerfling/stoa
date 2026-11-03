@@ -53,6 +53,17 @@
   `Semantics(value:/hint:)`/`MergeSemantics`, or a decoration built elsewhere
   (variable, `copyWith`) is not resolved (noted in `missingContext`), so the checks
   stay conservative.
+- **Dart foundations (Flutter analysis, Phase 0b):** `src/analysis/dart/DartCallSite.ts`
+  normalizes every Dart call / instance-creation shape — a bare call (tree-sitter-dart
+  has no call node: a primary identifier plus `selector` siblings), `const`/`new`,
+  import prefixes (only when the file declares them via `import … as p`; `p.Foo(…)`
+  vs `Foo.named(…)` is otherwise syntactically ambiguous), named constructors and
+  type arguments — into one record, for the upcoming widget-structure extraction.
+  Not yet used by the Flutter a11y checks (their results are unchanged).
+  `file.parseErrors` (ERROR + MISSING nodes, emitted only when > 0) makes visible
+  that tree-sitter-dart 1.0.0 does not know Dart 3 syntax (records, patterns,
+  switch expressions, class modifiers): such a file still "parses", but parts of
+  its tree are recovered. No rule reads the fact; coverage status is unchanged.
 - **Pipeline:** ingestion → fact extraction → rule engine → findings → reporter.
   No clock/randomness/network in the core; same input + versions + language ⇒
   byte-identical findings.
@@ -822,7 +833,7 @@ fails fast (exit 1, concrete errors) instead of silently yielding 0 findings.
 
 ## Facts produced
 
-`file.lineCount`, `metric.exportCount`, `metric.cyclomaticComplexity`,
+`file.lineCount`, `file.parseErrors` (Dart), `metric.exportCount`, `metric.cyclomaticComplexity`,
 `metric.cognitiveComplexity`, `metric.nestingDepth`, `metric.parameterCount`,
 `metric.functionLength`, `doc.hasComplexityRationale`, `ast.usesNondeterminism`,
 `ast.emptyCatch`, `ast.catchSwallowsError`, `doc.catchHasRationale`, `deps.import`, `deps.importUnused`,

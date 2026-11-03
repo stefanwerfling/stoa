@@ -58,6 +58,19 @@
   `Semantics(value:/hint:)`/`MergeSemantics` oder eine anderswo (Variable,
   `copyWith`) gebaute Decoration wird nicht aufgelöst (im `missingContext` vermerkt),
   damit die Prüfungen konservativ bleiben.
+- **Dart-Grundlagen (Flutter-Analyse, Phase 0b):** `src/analysis/dart/DartCallSite.ts`
+  normalisiert jede Dart-Aufruf-/Instanzerzeugungsform — einen nackten Aufruf
+  (tree-sitter-dart hat keinen Call-Knoten: primärer Identifier plus
+  `selector`-Geschwister), `const`/`new`, Import-Prefixe (nur wenn die Datei sie per
+  `import … as p` deklariert; `p.Foo(…)` vs. `Foo.named(…)` ist sonst syntaktisch
+  mehrdeutig), benannte Konstruktoren und Typargumente — zu einem Datensatz, als
+  Basis für die kommende Widget-Struktur-Extraktion. Von den Flutter-A11y-Prüfungen
+  noch nicht genutzt (deren Ergebnisse unverändert). `file.parseErrors`
+  (ERROR- + MISSING-Knoten, nur bei > 0 erzeugt) macht sichtbar, dass
+  tree-sitter-dart 1.0.0 kein Dart-3-Syntax kennt (Records, Patterns,
+  Switch-Expressions, Klassenmodifikatoren): Eine solche Datei „parst“ trotzdem,
+  Teile ihres Baums sind aber rekonstruiert. Keine Regel liest den Fact; der
+  Coverage-Status bleibt unverändert.
 - **Pipeline:** Ingestion → Fact-Extraktion → Regel-Engine → Befunde → Reporter.
   Keine Uhr/kein Zufall/kein Netz im Kern; gleiche Eingabe + Versionen + Sprache ⇒
   byte-identische Befunde.
@@ -922,7 +935,7 @@ zu liefern.
 
 ## Erzeugte Facts
 
-`file.lineCount`, `metric.exportCount`, `metric.cyclomaticComplexity`,
+`file.lineCount`, `file.parseErrors` (Dart), `metric.exportCount`, `metric.cyclomaticComplexity`,
 `metric.cognitiveComplexity`, `metric.nestingDepth`, `metric.parameterCount`,
 `metric.functionLength`, `doc.hasComplexityRationale`, `ast.usesNondeterminism`,
 `ast.emptyCatch`, `ast.catchSwallowsError`, `doc.catchHasRationale`, `deps.import`, `deps.importUnused`,
