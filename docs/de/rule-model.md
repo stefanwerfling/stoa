@@ -328,6 +328,7 @@ Prozedurale Regeln (`ProjectRule`, cross-file):
 | `R-SOLID-DIP-CONCRETE-DEPENDENCY` | TypeModel + LayerClassification: die eigenen Member einer UI-Klasse erzeugen eine konkrete Projektklasse einer Datenzugriffs-Bibliothek, rufen sie statisch auf oder lesen sie statisch | `marcus.cooperation` | Abhängigkeiten | `--solid`, experimentell, semantic-heuristic 0,5, Dart; Composition Roots ausgenommen |
 | `R-SOLID-LSP-CONTRACT-COMPATIBILITY` | TypeModel: ein Override, der nur „unsupported“ wirft, gegen einen konkreten Member eines aufgelösten Projekt-Supertyps | `marcus.judgment` | Verantwortungsgrenzen | `--solid`, experimentell (noch kein realer Treffer), syntactic 0,8; Dart + TS |
 | `R-SOLID-ISP-INTERFACE-COHESION` | TypeModel: ≥ 2 abstrakte Member einer Projekt-Schnittstelle/abstrakten Klasse leer oder nur werfend erfüllt | `marcus.purpose` | Verantwortungsgrenzen | `--solid`, experimentell (noch kein realer Treffer), syntactic 0,7; Dart + TS |
+| `R-SOLID-SRP-RESPONSIBILITY-COHESION` | TypeModel: die eigenen Instanz-Member einer Klasse zerfallen in ≥ 2 Verweisgruppen, jede mit Methode, eigenem Feld und aufgelöster Abhängigkeit, paarweise disjunkt in Feldern und Abhängigkeiten | `marcus.purpose` | Verantwortungsgrenzen | **nicht registriert** (auch nicht mit `--solid`), bis OQ-6 entschieden ist; experimentell, semantic-heuristic 0,4, info; nur Klassen ohne geerbte/Framework-Member; Dart + TS |
 
 > Die Flutter-Layoutregeln (`src/rules/project/FlutterLayoutRules.ts`) melden
 > Layouts, die das Framework zur Laufzeit ablehnt. Sie gehen nur durch

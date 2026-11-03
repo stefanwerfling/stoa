@@ -354,6 +354,40 @@
   (`test/fixtures/architecture`: Loader-Fehler, Zuordnung inkl. Mehrfachtreffer
   und Dateien außerhalb der Wurzel, alle vier Kantenurteile, Paketverbote und
   -namen, Report-Zusammenfassung und Markdown, CLI-Fail-fast und JSON).
+- **SOLID, SRP-Verantwortungskohäsion (Flutter-Qualitätsstrang, E6e):**
+  `src/rules/project/SolidSrpRule.ts`, `R-SOLID-SRP-RESPONSIBILITY-COHESION`
+  0.1.0 (experimentell, `semantic-heuristic` 0,4, `info`, `marcus.purpose`,
+  `responsibility-boundaries`). **Nicht registriert** — auch nicht mit
+  `--solid` —, bis die Kandidaten von Hand klassifiziert sind (Plan, OQ-6); die
+  Ausgaben sind mit und ohne `--solid` byte-identisch. Gruppen = Zusammenhangs-
+  komponenten von „eigener Instanz-Member verweist auf eigenen Member“
+  (Konstruktoren und statische Member ausgenommen, Getter + Setter eine
+  Eigenschaft). Gemeldet, wenn ≥ 2 Gruppen je eine Methode, ein eigenes Feld
+  und eine Abhängigkeit haben und die Gruppen paarweise disjunkt in Feldern UND
+  Abhängigkeiten sind; eine Abhängigkeit ist ein Importname, über das TypeModel
+  aufgelöst zu einer Projektdatei, einem externen Paket (`packageNameOf`), einem
+  Dart-Importpräfix oder einem mehrdeutigen Namen — Namen, die zu nichts
+  auflösen (dart:core, Typparameter), sind kein Beleg. Die Evidenz listet jede
+  Gruppe (Methoden, Felder, Abhängigkeiten), nie eine Zahl. Beurteilt nur, wo
+  die Kohäsion vollständig sichtbar ist: Klassen/abstrakte Klassen ohne geerbte
+  oder Framework-Member (Verweise auf `widget`, `setState` oder eine
+  Basismethode werden nicht erfasst — die Artefakte aus Phase D), ohne
+  Parse-Fehler, kein Testpfad, kein Test-Double. Gemessen (vier Apps, stoa/src,
+  flyingfish): **0 Kandidaten**. Trichter: 394 beurteilbare Klassen
+  (swipemeister 92, velyo 52, movinder 15, mwpa 45, flyingfish 158, stoa 32);
+  414 wegen geerbter/Framework-Member ausgeschlossen; 56 zerfallen in ≥ 2
+  Methodengruppen — in der Durchsicht alle kein SRP-Verstoß: Datenklassen mit
+  Zugriffsmethoden je Feld (velyo-Modelle), l10n-Tabellen, TypeORM-
+  `up`/`down`-Migrationen, zustandslose Provider/Manager ohne eigene Felder
+  (flyingfish), die Sprachadapter (`id`/`version`/`extractFacts` gegenüber
+  `parse` — getrennt durch die Adapter-Schnittstelle), stoas `TypeModel`
+  (Nachschlagen gegenüber Auflösen; die Gruppen teilen Abhängigkeiten),
+  ein Varianten-Werthalter (mwpa `DynInputValue`, seine Gruppen
+  teilen `flutter`). Tests: `test/SolidSrpRule.test.ts`
+  (`test/fixtures/solid/srp`, Dart + TS: Positivfall, Getter/Setter, geteilter
+  Zustand, geteilte Abhängigkeit, reine Daten, Gruppe nur mit dart:core,
+  Unterklasse, Widget, Test-Double, Testpfad, nicht registriert, deutscher
+  Text) und der Lossless-Fall in `test/ProjectRuleCategorization.test.ts`.
 - **SOLID-Auswertung, Präzisions-Gate (Flutter-Qualitätsstrang, E7):**
   - **SOLID-Golden-Korpus** `test/corpus/solid` (außerhalb von
     `test/corpus/project`, der Hauptkorpus bleibt also unverändert): ein kleines
@@ -386,9 +420,7 @@
     `package:<name>`; ein Test prüft die Eindeutigkeit auf jeder SOLID-Fixture.
     (Die Flutter-Lifecycle-Regeln haben solche Duplikate weiterhin — etwa zwei
     `setState`-nach-`await`-Stellen in einem State —, außerhalb dieses Strangs.)
-  - **SRP (E6e)** ist nicht gebaut: laut Plan erst nach E7, und erst hinter
-    `--solid`, wenn die markierten Klassen der Apps von Hand klassifiziert sind
-    (OQ-6).
+  - **SRP (E6e)** folgte nach E7, siehe den Eintrag darüber.
   - Docs: `rule-model` (die SOLID-Regeln; `R-ARCH-LAYER-VIOLATION` als Stufe 2
     umgesetzt), `finding-model` (Berichtsfeld `architecture`, Identität),
     `evaluation` (SOLID-Korpus), `open-questions` (OQ-6), README.
