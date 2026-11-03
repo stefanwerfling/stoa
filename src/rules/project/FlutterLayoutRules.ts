@@ -377,8 +377,8 @@ export class FlutterNestedScrollRule extends FlutterLayoutRule {
 /** The Flutter layout rules, in a fixed order (findings are sorted by the engine anyway). */
 export const flutterLayoutRules = (): ProjectRule[] => [new FlutterParentDataMisuseRule(), new FlutterUnboundedScrollableRule(), new FlutterTextFieldInRowRule(), new FlutterNestedScrollRule()];
 
-const resolvePrinciple = (knowledgeBase: KnowledgeBase, lang: string, rationale: string): PrincipleInterpretationRef[] => {
-    const principle = knowledgeBase.get(PRINCIPLE_ID);
+export const resolvePrinciple = (knowledgeBase: KnowledgeBase, lang: string, rationale: string, principleId: string = PRINCIPLE_ID): PrincipleInterpretationRef[] => {
+    const principle = knowledgeBase.get(principleId);
     if (principle === null) {
         return [];
     }

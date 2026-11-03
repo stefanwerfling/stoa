@@ -16,7 +16,8 @@ type Build = (spec: FactSpec) => Fact;
  *
  * Deliberately NOT emitted here: `deps.import`. That would put Dart files into
  * the ModuleGraph and with it into R-DEP-CYCLE / R-DEP-UNUSED — a finding change
- * that needs its own decision. No rule reads the facts below.
+ * that needs its own decision. Rules read the facts below only for identity
+ * (FlutterWidgetGraph, the Flutter layout and lifecycle rules).
  */
 
 /** A type as written: `m.StatelessWidget` → prefix `m`, name `StatelessWidget`; `State<Bar>` → typeArguments `['Bar']`. */

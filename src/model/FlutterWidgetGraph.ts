@@ -180,7 +180,13 @@ const edgeKind = (parentKind: WidgetNodeKind | undefined, label: string): Widget
     }
 };
 
-const identityOf = (name: string, prefix: string | null, declared: ReadonlySet<string> | undefined, directives: readonly DartDirectiveValue[]): WidgetIdentity => {
+/**
+ * Grades what `prefix.name` refers to in one file, from that file's
+ * `dart.classDecl` names and `dart.importSpec` directives — see WidgetIdentity.
+ * Exported for rules that grade non-widget names (`State`, `Theme`, `Timer`)
+ * the same way.
+ */
+export const identityOf = (name: string, prefix: string | null, declared: ReadonlySet<string> | undefined, directives: readonly DartDirectiveValue[]): WidgetIdentity => {
     if (prefix === null && declared?.has(name) === true) {
         return {status: 'verified', source: 'local', candidates: []};
     }
@@ -190,4 +196,22 @@ const identityOf = (name: string, prefix: string | null, declared: ReadonlySet<s
         .map((directive) => directive.uri as string);
     const unique = [...new Set(candidates)].sort(compareText);
     return unique.length === 0 ? {status: 'unresolved', source: null, candidates: []} : {status: 'heuristic', source: 'import', candidates: unique};
+};
+
+/** A per-file identity lookup built from the same facts the graph uses. */
+export const dartIdentityResolver = (facts: readonly Fact[]): ((file: string, name: string, prefix: string | null) => WidgetIdentity) => {
+    const declaredByFile = new Map<string, Set<string>>();
+    const directivesByFile = new Map<string, DartDirectiveValue[]>();
+    for (const fact of facts) {
+        if (fact.kind === 'dart.classDecl') {
+            const names = declaredByFile.get(fact.subject.file) ?? new Set<string>();
+            names.add((fact.value as unknown as DartTypeDeclValue).name);
+            declaredByFile.set(fact.subject.file, names);
+        } else if (fact.kind === 'dart.importSpec') {
+            const directives = directivesByFile.get(fact.subject.file) ?? [];
+            directives.push(fact.value as unknown as DartDirectiveValue);
+            directivesByFile.set(fact.subject.file, directives);
+        }
+    }
+    return (file, name, prefix) => identityOf(name, prefix, declaredByFile.get(file), directivesByFile.get(file) ?? []);
 };

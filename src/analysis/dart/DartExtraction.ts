@@ -5,6 +5,7 @@ import {importPrefixes, parseErrorCount} from './DartCallSite.js';
 import {extractDartDeclarationFacts} from './DartDeclarations.js';
 import {extractWidgetTree} from './FlutterWidgets.js';
 import {extractFlutterA11yFacts} from './FlutterA11y.js';
+import {extractStateLifecycleFacts} from './FlutterLifecycle.js';
 
 /**
  * Extracts the language-neutral fact set from a Dart (Flutter) source tree,
@@ -93,6 +94,9 @@ export const extractFacts = (root: Node, content: string, filePath: string, info
 
     // Flutter widget-tree accessibility facts (Image/IconButton labelling).
     facts.push(...extractFlutterA11yFacts(root, build));
+
+    // State lifecycle members (Phase 3): one neutral fact per `extends State<…>` class.
+    facts.push(...extractStateLifecycleFacts(root, prefixes, build));
 
     return facts;
 };

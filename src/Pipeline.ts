@@ -20,6 +20,7 @@ import {RuleEngine} from './rules/RuleEngine.js';
 import {RuleSet} from './rules/RuleSet.js';
 import {DependencyCycleRule} from './rules/project/DependencyCycleRule.js';
 import {flutterLayoutRules} from './rules/project/FlutterLayoutRules.js';
+import {flutterLifecycleRules} from './rules/project/FlutterLifecycleRules.js';
 import {DeadExportRule} from './rules/project/DeadExportRule.js';
 import {ValidationContractRule} from './rules/project/ValidationContractRule.js';
 import type {ProjectRule} from './rules/ProjectRule.js';
@@ -118,7 +119,7 @@ export const analyze = (options: AnalyzeOptions): AnalysisResult => {
         .register(new VueAdapter());
     const knowledgeBase = KnowledgeBase.loadFromDirectory(options.knowledgeDir, options.config.knowledgeBase);
     const ruleSet = RuleSet.loadFromDirectory(options.ruleSetDir, options.config.ruleSet);
-    const projectRules: ProjectRule[] = [new DependencyCycleRule(), ...flutterLayoutRules()];
+    const projectRules: ProjectRule[] = [new DependencyCycleRule(), ...flutterLayoutRules(), ...flutterLifecycleRules()];
     if (options.deadExports === true) {
         projectRules.push(new DeadExportRule());
     }

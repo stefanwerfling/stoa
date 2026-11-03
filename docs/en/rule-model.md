@@ -311,6 +311,10 @@ Procedural rules (`ProjectRule`, cross-file):
 | `R-FLUTTER-UNBOUNDED-SCROLLABLE` | FlutterWidgetGraph: `ListView`/`GridView`/`CustomScrollView`/`PageView` directly in `Row`/`Column`/`Flex` without `shrinkWrap` | `marcus.judgment` | Robustness | as above |
 | `R-FLUTTER-TEXTFIELD-UNBOUNDED-WIDTH` | FlutterWidgetGraph: `TextField`/`TextFormField` directly in a `Row` | `marcus.judgment` | Robustness | as above |
 | `R-FLUTTER-NESTED-SCROLL-UNBOUNDED` | FlutterWidgetGraph: vertical scrollable directly in a vertical `SingleChildScrollView`/`ListView` without `shrinkWrap` | `marcus.judgment` | Robustness | as above; axis inferred from absent `scrollDirection` |
+| `R-FLUTTER-UNDISPOSED-CONTROLLER` | `dart.stateLifecycle`: framework controller/`FocusNode` field never mentioned in `dispose()` | `marcus.control` | Robustness | syntactic, identity via `package:flutter` import |
+| `R-FLUTTER-UNCANCELLED-SUBSCRIPTION` | `dart.stateLifecycle`: `Timer`/`Timer.periodic` (`dart:async`) or `….listen(…)` field never mentioned in `dispose()` | `marcus.control` | Robustness | as above |
+| `R-FLUTTER-SETSTATE-AFTER-AWAIT` | `dart.stateLifecycle`: `setState` after an `await` in the same function body, no `mounted` in between | `marcus.control` | Robustness | source order, not control flow |
+| `R-FLUTTER-INHERITED-IN-INITSTATE` | `dart.stateLifecycle`: `Theme.of(context)`/`MediaQuery.*Of(context)`/… directly in `initState()` | `marcus.judgment` | Robustness | syntactic, closures excluded |
 
 > The Flutter layout rules (`src/rules/project/FlutterLayoutRules.ts`) report
 > layouts the framework rejects at runtime. They walk up only through

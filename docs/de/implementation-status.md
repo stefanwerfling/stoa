@@ -79,7 +79,7 @@
   Mixins, Interfaces, `on` eines Mixins). Eine Deklaration, deren Kopf die Grammatik
   nicht parsen konnte, erzeugt keinen Fact statt eines womöglich falschen Namens.
   Bewusst weiterhin kein `deps.import` für Dart (das brächte Dart-Dateien in
-  R-DEP-CYCLE/R-DEP-UNUSED — eine eigene Entscheidung). Keine Regel liest `dart.*`.
+  R-DEP-CYCLE/R-DEP-UNUSED — eine eigene Entscheidung). `dart.*`-Facts dienen der Identität (Widget-Graph, Flutter-Regeln), `dart.stateLifecycle` den Lifecycle-Regeln (Phase 3).
 - **FlutterWidgetGraph (Flutter-Analyse, Phase 1):** `src/analysis/dart/FlutterWidgets.ts`
   extrahiert im einen AST-Durchlauf die Widget-Struktur jedes Funktions-/Methodenrumpfs
   als einen kompakten `ui.flutterWidgetTree`-Fact (Knotentabelle: Elternteil,
@@ -118,6 +118,26 @@
   Layouts sind korrekt; den Recall zeigen nur die Fixtures
   (`test/FlutterLayout.test.ts`) sowie ein echter Fehler im Graph-Fixture aus
   Phase 1 (`ListView.builder` direkt in einer `Column`).
+- **Flutter-State-Lifecycle (Flutter-Analyse, Phase 3):** `src/analysis/dart/FlutterLifecycle.ts`
+  erzeugt je Klasse, die direkt `extends State<…>` ist, einen neutralen
+  `dart.stateLifecycle`-Fact: Felder, denen genau ein Aufruf zugewiesen wird
+  (Feld-Initialisierer oder `feld = …` irgendwo in der Klasse, Kaskaden erlaubt;
+  `a ?? Foo()` ist keine Erzeugung), die Feldnamen, die `dispose()` erwähnt
+  (transitiv über von dort aufgerufene Methoden derselben Klasse), Aufrufe in
+  `initState()` (außerhalb von Closures) mit `context` als Positionsargument, und
+  je `setState`-Aufruf, ob im selben Funktionsrumpf (Methode oder Closure) ein
+  `await` vorausgeht und ob `mounted` dazwischen vorkommt. Vier `ProjectRule`s in
+  `src/rules/project/FlutterLifecycleRules.ts` lesen ihn:
+  `R-FLUTTER-UNDISPOSED-CONTROLLER`, `R-FLUTTER-UNCANCELLED-SUBSCRIPTION`,
+  `R-FLUTTER-SETSTATE-AFTER-AWAIT`, `R-FLUTTER-INHERITED-IN-INITSTATE`. `State` und
+  Framework-Namen brauchen einen `package:flutter/`-Import-Kandidaten (`Timer`:
+  `dart:async`); jede Erwähnung in `dispose()` gilt als Freigabe; eine Klasse mit
+  einem Mixin außerhalb einer bekannten Framework-Liste oder mit eigener
+  Basisklasse wird übersprungen. Erprobt an vier echten Flutter-Apps (86
+  State-Klassen, 202 `setState`-Aufrufe, 60 nach einem `await`, davon 49
+  abgesichert): 16 Befunde, alle als echt geprüft (5 nicht freigegebene
+  `TextEditingController`/`ScrollController`, 11× `setState` nach `await` ohne
+  `mounted`), keine Fehlalarme gefunden.
 - **Pipeline:** Ingestion → Fact-Extraktion → Regel-Engine → Befunde → Reporter.
   Keine Uhr/kein Zufall/kein Netz im Kern; gleiche Eingabe + Versionen + Sprache ⇒
   byte-identische Befunde.

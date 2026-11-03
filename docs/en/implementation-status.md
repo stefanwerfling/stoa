@@ -73,7 +73,7 @@
   arguments, mixins, interfaces, a mixin's `on`). A declaration whose header the
   grammar could not parse yields no fact rather than a possibly wrong name.
   Deliberately still no `deps.import` for Dart (it would put Dart files into
-  R-DEP-CYCLE/R-DEP-UNUSED — a separate decision). No rule reads `dart.*`.
+  R-DEP-CYCLE/R-DEP-UNUSED — a separate decision). `dart.*` facts are read for identity (widget graph, Flutter rules); `dart.stateLifecycle` by the lifecycle rules (Phase 3).
 - **FlutterWidgetGraph (Flutter analysis, Phase 1):** `src/analysis/dart/FlutterWidgets.ts`
   extracts, during the one AST pass, the widget structure of every function/method
   body as one compact `ui.flutterWidgetTree` fact (node table: parent, slot label,
@@ -110,6 +110,24 @@
   with a known parent, 0 findings — those layouts are correct; recall is shown
   only by fixtures (`test/FlutterLayout.test.ts`), plus one genuine error in the
   Phase-1 graph fixture (`ListView.builder` directly in a `Column`).
+- **Flutter State lifecycle (Flutter analysis, Phase 3):** `src/analysis/dart/FlutterLifecycle.ts`
+  emits one neutral `dart.stateLifecycle` fact per class that directly
+  `extends State<…>`: fields assigned exactly one call (field initializer or
+  `field = …` anywhere in the class, cascades allowed; `a ?? Foo()` is not a
+  creation), the field names `dispose()` mentions (transitively through
+  same-class methods it calls), calls in `initState()` (outside closures) with a
+  positional `context`, and per `setState` call whether an `await` precedes it in
+  the same function body (method or closure) and whether `mounted` occurs in
+  between. Four `ProjectRule`s in `src/rules/project/FlutterLifecycleRules.ts`
+  read it: `R-FLUTTER-UNDISPOSED-CONTROLLER`, `R-FLUTTER-UNCANCELLED-SUBSCRIPTION`,
+  `R-FLUTTER-SETSTATE-AFTER-AWAIT`, `R-FLUTTER-INHERITED-IN-INITSTATE`. `State`
+  and framework names need a `package:flutter/` (`Timer`: `dart:async`) import
+  candidate; any mention in `dispose()` counts as released; a class with a mixin
+  outside a known framework list, or a custom base state, is skipped. Dogfooded
+  on four real Flutter apps (86 State classes, 202 `setState` calls, 60 after an
+  `await`, 49 of them guarded): 16 findings, all verified genuine (5 undisposed
+  `TextEditingController`/`ScrollController`, 11 `setState` after `await` without
+  `mounted`), 0 false positives found.
 - **Pipeline:** ingestion → fact extraction → rule engine → findings → reporter.
   No clock/randomness/network in the core; same input + versions + language ⇒
   byte-identical findings.
