@@ -248,6 +248,32 @@
   classes not seen: 1 (swipemeister) and 5 (velyo), all in files whose Dart 3
   syntax the grammar cannot structure. Tests: `test/LayerClassification.test.ts`
   (`test/fixtures/dart-layers`).
+- **Class-model facts (Flutter quality track, E3):** one neutral
+  `struct.typeDecl` fact per Dart class/mixin/enum
+  (`src/analysis/dart/DartMembers.ts`) and per top-level TS class/interface
+  (`src/analysis/typescript/TsMembers.ts`): `declKind`, supertypes as written
+  (`extends`/`implements`/`with`/`on`, with prefix), `hasParseError`, and the
+  members embedded as a compact table (user decision: one fact per member grew
+  the facts by 34–43 %; defaults omitted, `expandMembers` restores them —
+  `src/analysis/StructFacts.ts`). Per member: kind (method/getter/setter/field/
+  constructor), static/abstract/override, body shape (`abstract`, `empty`,
+  `throws-unsupported` — Dart `UnsupportedError`/`UnimplementedError`, TS
+  `NotImplementedError`-like types or an Error whose message says not
+  implemented/supported — or `normal`), declared type, parameters (field
+  formals: Dart `this.x`, TS parameter properties, which are also fields),
+  referenced own members, referenced import prefixes/imported names (Dart: also
+  UpperCamel names not declared in the file, as candidates), constructor calls
+  (incl. initializer lists and field initializers) and static property reads.
+  Syntactic and file-local, cached like every fact. No rule reads them yet, so
+  findings are unchanged (verified on four apps, stoa/src and
+  flyingfish/backend with `--dead-exports`, the golden corpus); the report's
+  `coverage.factCount` grows. Cost: Dart apps +4.0–5.6 % facts / +19–23 %
+  bytes, TS projects +1.1–1.8 % / +2.9–4.1 %; analysis time +10–21 % on the Dart
+  apps, ≤ 3 % on TS (single runs). Classes with a parse error: 2 / 316
+  (swipemeister), 15 / 206 (velyo), 0 elsewhere — flagged, never to be judged.
+  Not modelled: enhanced-enum members (unparseable), extensions, class
+  expressions/nested classes in TS, shadowing beyond parameters and locals.
+  Tests: `test/StructFacts.test.ts` (`test/fixtures/struct`).
 - **SOLID, DIP layer direction stage 1 (Flutter quality track, E6a):**
   `src/rules/project/SolidRules.ts`, registered only with `--solid` (pipeline
   option `solid`). `R-SOLID-DIP-LAYER-DIRECTION` 0.1.0 (experimental,
@@ -1088,7 +1114,7 @@ fails fast (exit 1, concrete errors) instead of silently yielding 0 findings.
 
 ## Facts produced
 
-`file.lineCount`, `file.parseErrors` (Dart), `dart.importSpec`, `dart.classDecl`, `ui.flutterWidgetTree`, `metric.exportCount`, `metric.cyclomaticComplexity`,
+`file.lineCount`, `file.parseErrors` (Dart), `dart.importSpec`, `dart.classDecl`, `struct.typeDecl` (Dart, TS), `ui.flutterWidgetTree`, `metric.exportCount`, `metric.cyclomaticComplexity`,
 `metric.cognitiveComplexity`, `metric.nestingDepth`, `metric.parameterCount`,
 `metric.functionLength`, `doc.hasComplexityRationale`, `ast.usesNondeterminism`,
 `ast.emptyCatch`, `ast.catchSwallowsError`, `doc.catchHasRationale`, `deps.import`, `deps.importUnused`,

@@ -7,6 +7,7 @@ import {extractWidgetTree} from './FlutterWidgets.js';
 import {extractFlutterA11yFacts, type FileResolution} from './FlutterA11y.js';
 import {flutterAwareIndex} from './FlutterCatalog.js';
 import {extractStateLifecycleFacts} from './FlutterLifecycle.js';
+import {extractDartMemberFacts} from './DartMembers.js';
 
 /**
  * Extracts the language-neutral fact set from a Dart (Flutter) source tree,
@@ -100,6 +101,9 @@ export const extractFacts = (root: Node, content: string, filePath: string, info
 
     // State lifecycle members (Phase 3): one neutral fact per `extends State<…>` class.
     facts.push(...extractStateLifecycleFacts(root, prefixes, build));
+
+    // Class model (E3): neutral struct.typeDecl / struct.member facts.
+    facts.push(...extractDartMemberFacts(root, prefixes, build));
 
     return facts;
 };

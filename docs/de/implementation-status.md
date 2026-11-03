@@ -268,6 +268,35 @@
   UI-Klassen: 1 (swipemeister) und 5 (velyo), alle in Dateien, deren Dart-3-
   Syntax die Grammatik nicht strukturieren kann. Tests:
   `test/LayerClassification.test.ts` (`test/fixtures/dart-layers`).
+- **Klassenmodell-Facts (Flutter-Qualitätsstrang, E3):** ein neutrales
+  `struct.typeDecl`-Fact je Dart-Klasse/-Mixin/-Enum
+  (`src/analysis/dart/DartMembers.ts`) und je Top-Level-TS-Klasse/-Interface
+  (`src/analysis/typescript/TsMembers.ts`): `declKind`, Supertypen wie
+  geschrieben (`extends`/`implements`/`with`/`on`, mit Präfix),
+  `hasParseError` und die Member als kompakte Tabelle eingebettet
+  (Nutzerentscheidung: ein Fact je Member vergrößerte die Facts um 34–43 %;
+  Standardwerte weggelassen, `expandMembers` stellt sie wieder her —
+  `src/analysis/StructFacts.ts`). Je Member: Art (method/getter/setter/field/
+  constructor), static/abstract/override, Rumpfform (`abstract`, `empty`,
+  `throws-unsupported` — Dart `UnsupportedError`/`UnimplementedError`, TS
+  `NotImplementedError`-artige Typen oder ein Error, dessen Nachricht „not
+  implemented/supported" sagt — oder `normal`), deklarierter Typ, Parameter
+  (Field-Formals: Dart `this.x`, TS-Parameter-Properties, die zugleich Felder
+  sind), referenzierte eigene Member, referenzierte Import-Präfixe/importierte
+  Namen (Dart: zusätzlich UpperCamel-Namen, die nicht in der Datei deklariert
+  sind, als Kandidaten), Konstruktoraufrufe (auch in Initialisierer-Listen und
+  Feld-Initialisierern) und statische Property-Lesezugriffe. Syntaktisch und
+  dateilokal, gecacht wie jedes Fact. Noch liest sie keine Regel, die Befunde
+  sind daher unverändert (geprüft auf vier Apps, stoa/src und
+  flyingfish/backend mit `--dead-exports`, dem Golden-Korpus); im Bericht
+  steigt `coverage.factCount`. Kosten: Dart-Apps +4,0–5,6 % Facts / +19–23 %
+  Bytes, TS-Projekte +1,1–1,8 % / +2,9–4,1 %; Analysezeit +10–21 % auf den
+  Dart-Apps, ≤ 3 % bei TS (Einzelläufe). Klassen mit Parse-Fehler: 2 / 316
+  (swipemeister), 15 / 206 (velyo), sonst 0 — markiert, nie zu beurteilen.
+  Nicht modelliert: Member von Enhanced Enums (nicht parsebar), Extensions,
+  Klassenausdrücke/verschachtelte Klassen in TS, Shadowing über Parameter und
+  lokale Variablen hinaus. Tests: `test/StructFacts.test.ts`
+  (`test/fixtures/struct`).
 - **SOLID, DIP-Schichtrichtung Stufe 1 (Flutter-Qualitätsstrang, E6a):**
   `src/rules/project/SolidRules.ts`, registriert nur mit `--solid`
   (Pipeline-Option `solid`). `R-SOLID-DIP-LAYER-DIRECTION` 0.1.0
@@ -1210,7 +1239,7 @@ zu liefern.
 
 ## Erzeugte Facts
 
-`file.lineCount`, `file.parseErrors` (Dart), `dart.importSpec`, `dart.classDecl`, `ui.flutterWidgetTree`, `metric.exportCount`, `metric.cyclomaticComplexity`,
+`file.lineCount`, `file.parseErrors` (Dart), `dart.importSpec`, `dart.classDecl`, `struct.typeDecl` (Dart, TS), `ui.flutterWidgetTree`, `metric.exportCount`, `metric.cyclomaticComplexity`,
 `metric.cognitiveComplexity`, `metric.nestingDepth`, `metric.parameterCount`,
 `metric.functionLength`, `doc.hasComplexityRationale`, `ast.usesNondeterminism`,
 `ast.emptyCatch`, `ast.catchSwallowsError`, `doc.catchHasRationale`, `deps.import`, `deps.importUnused`,
