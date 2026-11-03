@@ -1,6 +1,6 @@
 {
   "id": "R-A11Y-FLUTTER-IMAGE-LABEL",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "title": "Flutter image has no semantic label",
   "feature": "ui.flutterImageNoSemanticLabel",
   "appliesTo": ["statement"],
@@ -34,6 +34,10 @@
     {
       "en": "This Image's own constructor arguments are inspected, plus a wrapping Semantics(label: …) which names it (so a widget inside such a wrapper is not flagged). A name via Semantics(value:/hint:), a MergeSemantics, a forwarded/const label, or a label computed at runtime is not resolved and may make this a false positive.",
       "de": "Geprüft werden die eigenen Konstruktor-Argumente dieses Image sowie ein umschließendes Semantics(label: …), das es benennt (ein Widget darin wird dann nicht gemeldet). Ein Name über Semantics(value:/hint:), ein MergeSemantics, ein weitergereichtes/const Label oder ein zur Laufzeit berechnetes Label wird nicht aufgelöst und kann einen Fehlalarm bedeuten."
+    },
+    {
+      "en": "A wrapping ExcludeSemantics also counts as hidden (since 1.1.0). All call forms are recognised (Widget(…), const/new, prefix.Widget(…)), but only when the file imports package:flutter (a same-file class of that name shadows it); a widget reached only through a project barrel re-exporting Flutter is not seen. A wrapper does not reach into callback closures (onTap: …), only into *builder closures.",
+      "de": "Ein umschließendes ExcludeSemantics gilt ebenfalls als ausgeblendet (seit 1.1.0). Alle Aufrufformen werden erkannt (Widget(…), const/new, prefix.Widget(…)), aber nur, wenn die Datei package:flutter importiert (eine gleichnamige Klasse in derselben Datei verdeckt es); ein Widget, das nur über ein projekteigenes Barrel mit Flutter-Re-Export kommt, wird nicht gesehen. Ein Wrapper wirkt nicht in Callback-Closures (onTap: …), nur in *builder-Closures."
     }
   ],
   "tests": "test/FlutterA11y.test.ts"

@@ -87,3 +87,41 @@ test('Flutter golden corpus: precision/recall 100% over the widget a11y rules', 
     const rules = result.perRule.map((item) => item.rule).sort();
     assert.deepEqual(rules, ['R-A11Y-FLUTTER-ICONBUTTON-LABEL', 'R-A11Y-FLUTTER-IMAGE-LABEL', 'R-A11Y-FLUTTER-TEXTFIELD-LABEL']);
 });
+
+// Phase 4 hardening (rule version 1.1.0).
+const hardening = join(here, 'fixtures', 'flutter-a11y-hardening');
+const a11yLines = (path: string): string[] =>
+    analyzePath(path)
+        .filter((f) => f.rule.id.startsWith('R-A11Y-FLUTTER-'))
+        .map((f) => `${f.rule.id.replace('R-A11Y-FLUTTER-', '')} ${f.location.range.startLine}:${f.location.range.startCol} ${String(f.observation.evidence[0]?.value)}`);
+
+test('1.1.0: const / new / prefixed call forms and a const InputDecoration are recognised', () => {
+    assert.deepEqual(a11yLines(join(hardening, 'Forms.dart')), [
+        "IMAGE-LABEL 6:12 const Image(image: AssetImage('a.png'))",
+        'ICONBUTTON-LABEL 7:10 new IconButton(onPressed: null, icon: Icon(Icons.add))',
+        "IMAGE-LABEL 8:6 m.Image.asset('b.png')",
+        'TEXTFIELD-LABEL 9:6 TextField(decoration: const InputDecoration(border: OutlineInputBorder()))'
+    ]);
+});
+
+test('1.1.0: Tooltip names an IconButton, ExcludeSemantics hides; empty message, excluding: false, MergeSemantics and callbacks do not', () => {
+    assert.deepEqual(a11yLines(join(hardening, 'Wrappers.dart')), [
+        "IMAGE-LABEL 6:48 Image.asset('shown.png')",
+        'ICONBUTTON-LABEL 7:34 IconButton(onPressed: null, icon: Icon(Icons.add))',
+        "IMAGE-LABEL 8:37 Image.asset('t.png')",
+        'ICONBUTTON-LABEL 9:43 IconButton(onPressed: null, icon: Icon(Icons.add))',
+        'ICONBUTTON-LABEL 14:68 IconButton(onPressed: null, icon: Icon(Icons.close))'
+    ]);
+});
+
+test('1.1.0: identity — a same-file class shadows Flutter\'s, and without a Flutter import nothing is claimed', () => {
+    assert.deepEqual(a11yLines(join(hardening, 'Identity.dart')), []);
+    assert.deepEqual(a11yLines(join(hardening, 'NoFlutter.dart')), []);
+});
+
+test('the three Flutter a11y rules are at version 1.1.0', () => {
+    const versions = analyzePath(join(hardening, 'Forms.dart'))
+        .filter((f) => f.rule.id.startsWith('R-A11Y-FLUTTER-'))
+        .map((f) => `${f.rule.id}@${f.rule.version}`);
+    assert.deepEqual([...new Set(versions)].sort(), ['R-A11Y-FLUTTER-ICONBUTTON-LABEL@1.1.0', 'R-A11Y-FLUTTER-IMAGE-LABEL@1.1.0', 'R-A11Y-FLUTTER-TEXTFIELD-LABEL@1.1.0']);
+});

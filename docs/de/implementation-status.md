@@ -64,8 +64,8 @@
   `selector`-Geschwister), `const`/`new`, Import-Prefixe (nur wenn die Datei sie per
   `import … as p` deklariert; `p.Foo(…)` vs. `Foo.named(…)` ist sonst syntaktisch
   mehrdeutig), benannte Konstruktoren und Typargumente — zu einem Datensatz, als
-  Basis für die kommende Widget-Struktur-Extraktion. Von den Flutter-A11y-Prüfungen
-  noch nicht genutzt (deren Ergebnisse unverändert). `file.parseErrors`
+  Basis für die kommende Widget-Struktur-Extraktion. Seit Phase 4 auch von
+  den Flutter-A11y-Prüfungen genutzt (siehe unten). `file.parseErrors`
   (ERROR- + MISSING-Knoten, nur bei > 0 erzeugt) macht sichtbar, dass
   tree-sitter-dart 1.0.0 kein Dart-3-Syntax kennt (Records, Patterns,
   Switch-Expressions, Klassenmodifikatoren): Eine solche Datei „parst“ trotzdem,
@@ -138,6 +138,23 @@
   abgesichert): 16 Befunde, alle als echt geprüft (5 nicht freigegebene
   `TextEditingController`/`ScrollController`, 11× `setState` nach `await` ohne
   `mounted`), keine Fehlalarme gefunden.
+- **Flutter-A11y-Härtung (Flutter-Analyse, Phase 4; Regelversion 1.1.0):** die drei
+  `R-A11Y-FLUTTER-*`-Prüfungen behalten ihre AST-Suche über die ganze Datei
+  (Nutzerentscheidung: keine Migration auf den Widget-Graphen — gemessen an vier
+  echten Apps liegen 4 von 44 echten Befunden außerhalb des Graphen: Methoden mit
+  Dart-3-Syntax, die die 1.0.0-Grammatik nicht strukturieren kann, und Widgets in
+  Nicht-Slot-Argumenten wie `suffixIcon:`). Stattdessen gehärtet: Kandidaten kommen
+  aus `DartCallSite`, daher werden `const`/`new`/`prefix.Widget(…)` und
+  `const InputDecoration(…)` erkannt; ein Widget zählt nur mit einem
+  `package:flutter/`-Import-Kandidaten in seiner eigenen Datei
+  (`src/analysis/dart/DartIdentity.ts`, gemeinsam mit dem Widget-Graphen; eine
+  gleichnamige Klasse in derselben Datei verdeckt es); `ExcludeSemantics` blendet
+  aus (nicht mit `excluding: false`), `Tooltip(message:)` benennt einen IconButton,
+  und die Vorfahren-Suche endet an Callback-Closures (nur `*builder`-Closures werden
+  durchlaufen). `MergeSemantics` wird weiter gemeldet (Nutzerentscheidung).
+  Befund-Delta auf den vier Apps gegen einen frischen Worktree des vorigen Commits:
+  genau ein Befund entfällt (ein IconButton in `Tooltip(message: …)`, ein
+  Fehlalarm), die übrigen 147 Befunde sind byte-identisch.
 - **Pipeline:** Ingestion → Fact-Extraktion → Regel-Engine → Befunde → Reporter.
   Keine Uhr/kein Zufall/kein Netz im Kern; gleiche Eingabe + Versionen + Sprache ⇒
   byte-identische Befunde.

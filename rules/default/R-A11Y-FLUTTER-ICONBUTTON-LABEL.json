@@ -1,6 +1,6 @@
 {
   "id": "R-A11Y-FLUTTER-ICONBUTTON-LABEL",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "title": "Flutter IconButton has no tooltip",
   "feature": "ui.flutterIconButtonNoTooltip",
   "appliesTo": ["statement"],
@@ -34,6 +34,10 @@
     {
       "en": "This IconButton's own arguments are inspected, plus a wrapping Semantics(label: …) which names it. A name via Semantics(value:/hint:), a MergeSemantics, or a semanticLabel on the child Icon is not resolved and may make this a false positive.",
       "de": "Geprüft werden die eigenen Argumente dieses IconButton sowie ein umschließendes Semantics(label: …), das es benennt. Ein Name über Semantics(value:/hint:), ein MergeSemantics oder ein semanticLabel am Kind-Icon wird nicht aufgelöst und kann einen Fehlalarm bedeuten."
+    },
+    {
+      "en": "A wrapping ExcludeSemantics or Tooltip(message: …) also counts as named/hidden (since 1.1.0). All call forms are recognised (Widget(…), const/new, prefix.Widget(…)), but only when the file imports package:flutter (a same-file class of that name shadows it); a widget reached only through a project barrel re-exporting Flutter is not seen. A wrapper does not reach into callback closures (onTap: …), only into *builder closures.",
+      "de": "Ein umschließendes ExcludeSemantics oder Tooltip(message: …) gilt ebenfalls als benannt/ausgeblendet (seit 1.1.0). Alle Aufrufformen werden erkannt (Widget(…), const/new, prefix.Widget(…)), aber nur, wenn die Datei package:flutter importiert (eine gleichnamige Klasse in derselben Datei verdeckt es); ein Widget, das nur über ein projekteigenes Barrel mit Flutter-Re-Export kommt, wird nicht gesehen. Ein Wrapper wirkt nicht in Callback-Closures (onTap: …), nur in *builder-Closures."
     }
   ],
   "tests": "test/FlutterA11y.test.ts"

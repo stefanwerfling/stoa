@@ -59,7 +59,7 @@
   import prefixes (only when the file declares them via `import … as p`; `p.Foo(…)`
   vs `Foo.named(…)` is otherwise syntactically ambiguous), named constructors and
   type arguments — into one record, for the upcoming widget-structure extraction.
-  Not yet used by the Flutter a11y checks (their results are unchanged).
+  Since Phase 4 also used by the Flutter a11y checks (see below).
   `file.parseErrors` (ERROR + MISSING nodes, emitted only when > 0) makes visible
   that tree-sitter-dart 1.0.0 does not know Dart 3 syntax (records, patterns,
   switch expressions, class modifiers): such a file still "parses", but parts of
@@ -128,6 +128,22 @@
   `await`, 49 of them guarded): 16 findings, all verified genuine (5 undisposed
   `TextEditingController`/`ScrollController`, 11 `setState` after `await` without
   `mounted`), 0 false positives found.
+- **Flutter a11y hardening (Flutter analysis, Phase 4; rule version 1.1.0):** the
+  three `R-A11Y-FLUTTER-*` checks keep their whole-file AST search (user decision:
+  not migrated onto the widget graph — measured on four real apps, 4 of 44
+  genuine findings lie outside the graph: method bodies with Dart 3 syntax the
+  1.0.0 grammar cannot structure, and widgets in non-slot arguments such as
+  `suffixIcon:`). Hardened instead: candidates come from `DartCallSite`, so
+  `const`/`new`/`prefix.Widget(…)` and `const InputDecoration(…)` are recognised;
+  a widget counts only with a `package:flutter/` import candidate in its own file
+  (`src/analysis/dart/DartIdentity.ts`, shared with the widget graph; a same-file
+  class shadows it); `ExcludeSemantics` hides (not with `excluding: false`),
+  `Tooltip(message:)` names an IconButton, and the ancestor walk stops at callback
+  closures (only `*builder` closures are passed through). `MergeSemantics` is
+  still reported (user decision). Finding delta on the four apps against a fresh
+  worktree of the previous commit: exactly one finding removed (an IconButton
+  inside `Tooltip(message: …)`, a false positive), the other 147 findings
+  byte-identical.
 - **Pipeline:** ingestion → fact extraction → rule engine → findings → reporter.
   No clock/randomness/network in the core; same input + versions + language ⇒
   byte-identical findings.

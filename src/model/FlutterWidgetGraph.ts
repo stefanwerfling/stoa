@@ -1,6 +1,9 @@
 import type {Fact, SourceRange} from '../Types.js';
 import {decodeWidgetTree, type WidgetNodeKind, type WidgetNodeStatus, type WidgetTreeValue} from '../analysis/dart/FlutterWidgets.js';
 import type {DartDirectiveValue, DartTypeDeclValue} from '../analysis/dart/DartDeclarations.js';
+import {identityOf, type WidgetIdentity} from '../analysis/dart/DartIdentity.js';
+
+export {identityOf, type WidgetIdentity};
 
 /**
  * The project-wide Flutter widget graph (Phase 1 of the Flutter analysis).
@@ -20,25 +23,6 @@ import type {DartDirectiveValue, DartTypeDeclValue} from '../analysis/dart/DartD
  */
 
 export type WidgetEdgeKind = 'child' | 'children' | 'slot' | 'branch' | 'repeat' | 'element' | 'builds' | 'return';
-
-/**
- * What a widget name refers to, decided per file from `dart.classDecl` +
- * `dart.importSpec` facts — never from the name alone:
- * - `verified` / `local`: a class/mixin/enum of that name is declared in the
- *   same file (Dart: a local declaration shadows every import).
- * - `heuristic` / `import`: the name is not declared locally but at least one
- *   import could provide it (prefix matches, show/hide permit it);
- *   `candidates` lists those import URIs. Which one actually exports it is not
- *   resolved here (no cross-file library index yet), so a Flutter class is
- *   never `verified`.
- * - `unresolved`: no local declaration and no import that could provide it
- *   (e.g. an undeclared prefix, a `show` list excluding it, a `part` file).
- */
-export interface WidgetIdentity {
-    status: 'verified' | 'heuristic' | 'unresolved';
-    source: 'local' | 'import' | null;
-    candidates: string[];
-}
 
 export interface WidgetNode {
     /** Stable, position-independent within its function: `<file>#<function>@<line>/r<root>/<label>[<index>]/…`. */
@@ -178,24 +162,6 @@ const edgeKind = (parentKind: WidgetNodeKind | undefined, label: string): Widget
             }
             return /builder$/i.test(label) ? 'builds' : 'slot';
     }
-};
-
-/**
- * Grades what `prefix.name` refers to in one file, from that file's
- * `dart.classDecl` names and `dart.importSpec` directives — see WidgetIdentity.
- * Exported for rules that grade non-widget names (`State`, `Theme`, `Timer`)
- * the same way.
- */
-export const identityOf = (name: string, prefix: string | null, declared: ReadonlySet<string> | undefined, directives: readonly DartDirectiveValue[]): WidgetIdentity => {
-    if (prefix === null && declared?.has(name) === true) {
-        return {status: 'verified', source: 'local', candidates: []};
-    }
-    const candidates = directives
-        .filter((directive) => directive.kind === 'import' && directive.uri !== null && directive.prefix === prefix)
-        .filter((directive) => (directive.show.length === 0 || directive.show.includes(name)) && !directive.hide.includes(name))
-        .map((directive) => directive.uri as string);
-    const unique = [...new Set(candidates)].sort(compareText);
-    return unique.length === 0 ? {status: 'unresolved', source: null, candidates: []} : {status: 'heuristic', source: 'import', candidates: unique};
 };
 
 /** A per-file identity lookup built from the same facts the graph uses. */
