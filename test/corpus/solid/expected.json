@@ -1,0 +1,12 @@
+{
+  "description": "SOLID golden corpus (E7), scored with `stoa eval test/corpus/solid/project --expected test/corpus/solid/expected.json --solid`. Each entry is a finding that SHOULD be produced; any other produced finding is a false positive. Negatives in the project: state holder and model dependencies (StatePage), other exceptions (Tired), test doubles (MockBird), a single empty member (Mostly), the composition root (lib/main.dart: a library with a top-level main()).",
+  "findings": [
+    { "file": "lib/ui/direct_page.dart", "rule": "R-SOLID-DIP-LAYER-DIRECTION", "symbol": "DirectPage" },
+    { "file": "lib/ui/api_page.dart", "rule": "R-SOLID-DIP-LAYER-DIRECTION", "symbol": "ApiPage" },
+    { "file": "lib/ui/api_page.dart", "rule": "R-SOLID-DIP-CONCRETE-DEPENDENCY", "symbol": "ApiPage:Api" },
+    { "file": "lib/contracts/bird.dart", "rule": "R-SOLID-LSP-CONTRACT-COMPATIBILITY", "symbol": "Penguin.fly" },
+    { "file": "web/store.ts", "rule": "R-SOLID-LSP-CONTRACT-COMPATIBILITY", "symbol": "ReadOnlyStore.save" },
+    { "file": "lib/contracts/listener.dart", "rule": "R-SOLID-ISP-INTERFACE-COHESION", "symbol": "Partial:Listener" },
+    { "file": "web/store.ts", "rule": "R-SOLID-ISP-INTERFACE-COHESION", "symbol": "Some:Handler" }
+  ]
+}

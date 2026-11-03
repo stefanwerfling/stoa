@@ -51,7 +51,7 @@ test('E6b LSP: abstract base members, other throws, test doubles, test paths and
 });
 
 test('E6b ISP: ≥ 2 abstract contract members fulfilled empty or only-throwing → one finding per (class, contract)', () => {
-    assert.deepEqual(brief(ISP), ['dart/lib/listener.dart:16 Partial', 'dart/lib/listener.dart:56 Refuses', 'ts/impl.ts:23 Some']);
+    assert.deepEqual(brief(ISP), ['dart/lib/listener.dart:16 Partial:Listener', 'dart/lib/listener.dart:56 Refuses:Listener', 'ts/impl.ts:23 Some:Handler']);
     assert.equal(of(ISP)[0]?.observation.statement, 'Partial implements Listener but fulfils 2 of its members only formally: onStop, onPause.');
     // Mostly (1 empty), Quiet (concrete hooks), StubListener (name), Adapter (package interface), Silent (test path), Most (1 empty): none
 });
@@ -65,7 +65,7 @@ test('E6b: finding shape — certainty, severity, confidence, maturity, principl
         'Penguin (birds.dart):7 fly (override) — body only throws UnsupportedError',
         'Bird (bird.dart):2 fly — concrete (normal body)'
     ]);
-    const isp = of(ISP).find((finding) => finding.location.symbol === 'Some') as Finding;
+    const isp = of(ISP).find((finding) => finding.location.symbol === 'Some:Handler') as Finding;
     assert.deepEqual([isp.certaintyBasis, isp.severity, isp.confidence, isp.ruleMaturity], ['syntactic', 'info', 0.7, 'experimental']);
     assert.deepEqual(isp.interpretation.principles.map((principle) => principle.id), ['marcus.purpose']);
     assert.deepEqual(isp.observation.evidence.map((entry) => entry.value), ['Some (impl.ts) → Handler (base.ts) (interface)', 'impl.ts:24 a — empty body', 'impl.ts:26 b — empty body']);

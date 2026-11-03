@@ -354,6 +354,46 @@
   (`test/fixtures/architecture`: Loader-Fehler, Zuordnung inkl. Mehrfachtreffer
   und Dateien außerhalb der Wurzel, alle vier Kantenurteile, Paketverbote und
   -namen, Report-Zusammenfassung und Markdown, CLI-Fail-fast und JSON).
+- **SOLID-Auswertung, Präzisions-Gate (Flutter-Qualitätsstrang, E7):**
+  - **SOLID-Golden-Korpus** `test/corpus/solid` (außerhalb von
+    `test/corpus/project`, der Hauptkorpus bleibt also unverändert): ein kleines
+    Flutter-/TS-Projekt mit einem Positiv- und einem Negativfall je Regel und der
+    Composition Root; zwei Manifeste — `expected.json` (`--solid`, Stufe 1) und
+    `expected-architecture.json` (`--solid --architecture
+    test/corpus/solid/stoa.architecture.json`, Stufe 2). `stoa eval` akzeptiert
+    jetzt `--solid` und `--architecture` (dieselben Loader wie `analyze`). Beide:
+    Präzision und Recall 100 % (7 TP, 0 FP, 0 FN); ohne `--solid` erzeugt der
+    Korpus keinen Befund.
+  - **Präzisions-Gate auf den echten Projekten** (manuelle Durchsicht jedes
+    SOLID-Befunds, vier Apps + stoa/src + flyingfish, ohne `--architecture`):
+    die einzigen Fehlbefunde waren Hinweise in `main.dart`, der Composition
+    Root, in der das Verdrahten konkreter Klassen genau das ist, was Dependency
+    Inversion verlangt (Stufe 1: 2 von 19, E6c: 2 von 24). Nutzerentscheidung:
+    eine Dart-Bibliothek mit top-level `main()` (ein `function`-Subjekt in
+    `metric.functionLength`, kein Dateinamensmuster) ist von Stufe 1 und E6c
+    ausgenommen. Danach: swipemeister Stufe 1 13, E6c 19; mwpa Stufe 1 4, E6c 3;
+    velyo, movinder, stoa/src, flyingfish 0; in der Durchsicht kein Fehlbefund
+    mehr. LSP/ISP: 0 Befunde auf allen sechs Projekten (dort wirft kein Member
+    nur „unsupported“, kein abstrakter Projekt-Member wird leer erfüllt) —
+    Nutzerentscheidung: sie bleiben `experimental`, bis echte Befunde
+    geprüft sind, obwohl das Gate formal bestanden ist. Stufe 1 und E6c bleiben
+    `experimental` (semantische Heuristiken, wie geplant); Stufe 2 ist `stable`.
+  - **Eindeutige Identitäten:** mehrere SOLID-Befunde einer Klasse oder Datei
+    teilten eine Identität (Datei, Regel, Symbol) — 21 Duplikate auf
+    swipemeister mit `--architecture` —, sodass Baseline und `--only-new` sie
+    zusammenlegten. Die Symbole tragen jetzt das Ziel: E6c `Klasse:Ziel`, ISP
+    `Klasse:Vertrag`, Stufe 2 den relativen Pfad der importierten Datei bzw.
+    `package:<name>`; ein Test prüft die Eindeutigkeit auf jeder SOLID-Fixture.
+    (Die Flutter-Lifecycle-Regeln haben solche Duplikate weiterhin — etwa zwei
+    `setState`-nach-`await`-Stellen in einem State —, außerhalb dieses Strangs.)
+  - **SRP (E6e)** ist nicht gebaut: laut Plan erst nach E7, und erst hinter
+    `--solid`, wenn die markierten Klassen der Apps von Hand klassifiziert sind
+    (OQ-6).
+  - Docs: `rule-model` (die SOLID-Regeln; `R-ARCH-LAYER-VIOLATION` als Stufe 2
+    umgesetzt), `finding-model` (Berichtsfeld `architecture`, Identität),
+    `evaluation` (SOLID-Korpus), `open-questions` (OQ-6), README.
+  - Tests: `test/SolidCorpus.test.ts` (beide Manifeste, kein Befund ohne
+    `--solid`, eindeutige Identitäten, `eval`-CLI).
 - **SOLID, DIP-Schichtrichtung Stufe 2 (Flutter-Qualitätsstrang, E6d):**
   `src/rules/project/SolidArchitectureRule.ts`, `R-SOLID-DIP-LAYER-DIRECTION`
   0.2.0 (stabil, `syntactic` 0,9, `medium`, `marcus.cooperation`,
@@ -537,7 +577,7 @@ stoa analyze <pfad> [--format markdown|json|sarif] [--lang en|de]
                     [--baseline <datei>] [--update-baseline] [--only-new]
                     [--min-confidence <0..1>] [--certainty <liste>]... [--no-experimental]
                     [--config <datei>] [--knowledge <dir>] [--rules <dir>]
-stoa eval <pfad> --expected <datei> [--format markdown|json] [--contracts <datei>]
+stoa eval <pfad> --expected <datei> [--format markdown|json] [--solid] [--architecture <datei>] [--contracts <datei>]
                     [--knowledge <dir>] [--rules <dir>]
 ```
 

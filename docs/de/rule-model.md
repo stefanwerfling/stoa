@@ -323,6 +323,11 @@ Prozedurale Regeln (`ProjectRule`, cross-file):
 | `R-FLUTTER-UNCANCELLED-SUBSCRIPTION` | `dart.stateLifecycle`: `Timer`/`Timer.periodic` oder ein `….listen(…)` in einem als `StreamSubscription` deklarierten Feld (beide `dart:async`), das `dispose()` nie erwähnt | `marcus.control` | Robustheit | wie oben; 1.2.0: ein untypisiertes Feld oder eine eigene `listen()`-API ist keine Subscription |
 | `R-FLUTTER-SETSTATE-AFTER-AWAIT` | `dart.stateLifecycle`: `setState` nach einem `await` im selben Funktionsrumpf ohne `mounted`-Prüfung, die den Aufruf dominiert | `marcus.control` | Robustheit | 1.2.0: strukturelle Guard-Analyse (früher Ausstieg / umschließendes `if (mounted)` / `?:`); nicht modellierte `mounted`-Verwendungen schweigen; awaits in einem ausschließenden Zweig zählen nicht |
 | `R-FLUTTER-INHERITED-IN-INITSTATE` | `dart.stateLifecycle`: `Theme.of(context)`/`MediaQuery.*Of(context)`/… direkt in `initState()` | `marcus.judgment` | Robustheit | syntaktisch, Closures ausgenommen |
+| `R-SOLID-DIP-LAYER-DIRECTION` 0.1.0 (Stufe 1) | LayerClassification (E5a) + Dart-ModuleGraph-Kanten: eine UI-Bibliothek, die ein Datenzugriffs-Paket oder ein Datenzugriffs-Modul des Projekts (nicht UI, kein State-Halter) importiert | `marcus.cooperation` + `marcus.control` | Abhängigkeiten | `--solid`, experimentell, semantic-heuristic 0,5; Composition Roots (Bibliothek mit top-level `main()`) ausgenommen |
+| `R-SOLID-DIP-LAYER-DIRECTION` 0.2.0 (Stufe 2) | deklarierte Architektur (`--architecture`): ModuleGraph-Kante zwischen Schichten, die nicht in `allow` steht, oder ein für die Schicht verbotenes Paket | `marcus.cooperation` | Abhängigkeiten | `--solid --architecture`, stabil, syntactic 0,9; ersetzt Stufe 1; Dateien ohne Schicht werden nie beurteilt |
+| `R-SOLID-DIP-CONCRETE-DEPENDENCY` | TypeModel + LayerClassification: die eigenen Member einer UI-Klasse erzeugen eine konkrete Projektklasse einer Datenzugriffs-Bibliothek, rufen sie statisch auf oder lesen sie statisch | `marcus.cooperation` | Abhängigkeiten | `--solid`, experimentell, semantic-heuristic 0,5, Dart; Composition Roots ausgenommen |
+| `R-SOLID-LSP-CONTRACT-COMPATIBILITY` | TypeModel: ein Override, der nur „unsupported“ wirft, gegen einen konkreten Member eines aufgelösten Projekt-Supertyps | `marcus.judgment` | Verantwortungsgrenzen | `--solid`, experimentell (noch kein realer Treffer), syntactic 0,8; Dart + TS |
+| `R-SOLID-ISP-INTERFACE-COHESION` | TypeModel: ≥ 2 abstrakte Member einer Projekt-Schnittstelle/abstrakten Klasse leer oder nur werfend erfüllt | `marcus.purpose` | Verantwortungsgrenzen | `--solid`, experimentell (noch kein realer Treffer), syntactic 0,7; Dart + TS |
 
 > Die Flutter-Layoutregeln (`src/rules/project/FlutterLayoutRules.ts`) melden
 > Layouts, die das Framework zur Laufzeit ablehnt. Sie gehen nur durch
@@ -332,8 +337,9 @@ Prozedurale Regeln (`ProjectRule`, cross-file):
 > Framework-Allowlists.
 
 > **Noch nicht umgesetzt** (als Ideen dokumentiert): `R-RESP-MIXED-CONCERNS`
-> (Schicht-/Namespace-Mischung, `marcus.purpose`) und `R-ARCH-LAYER-VIOLATION`
-> (Import gegen deklarierte Schichtregel, `marcus.judgment`).
+> (Schicht-/Namespace-Mischung, `marcus.purpose`). Die frühere Idee
+> `R-ARCH-LAYER-VIOLATION` (Import gegen deklarierte Schichtregel) ist als
+> Stufe 2 von `R-SOLID-DIP-LAYER-DIRECTION` umgesetzt (`--solid --architecture`).
 
 > Reine Stilregeln (Einrückung, Anführungszeichen, Namenslänge) sind
 > **ausgeschlossen**. Solche Prüfungen bleiben bei ESLint/CS-Fixer.

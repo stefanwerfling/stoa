@@ -175,6 +175,18 @@ shows it in the header, SARIF in `invocations[0].properties.filter`. Findings of
 experimental rules are tagged `[experimental]` (Markdown) or
 `properties.maturity` (SARIF).
 
+**Declared architecture** (`--architecture <file>`, E5b): the report gains
+`AnalysisReport.architecture` — `{path, version, layers: [{name, files}],
+unassignedFiles, warnings: {multipleMatchCount, multipleMatchSample,
+emptyLayers, unknownLayerReferences}}`; Markdown shows it in the header, SARIF in
+`invocations[0].properties.architecture`. Absent without a config.
+
+**Identity:** a finding's identity for the baseline and the corpus evaluation is
+(project-relative file, rule id, `location.symbol`). Rules that report several
+targets from one place put the target into the symbol (SOLID: `Class:Target`,
+`Class:Contract`, the imported file's path or `package:<name>`), so two
+findings never share one identity.
+
 ## 7. Limits
 
 - Scores are **technical operationalizations**, not a measurement of

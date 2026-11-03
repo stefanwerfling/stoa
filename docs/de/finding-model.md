@@ -175,6 +175,18 @@ excludeExperimental?, hiddenCount}`); Markdown zeigt das im Kopf, SARIF in
 `invocations[0].properties.filter`. Befunde experimenteller Regeln sind mit
 `[experimental]` (Markdown) bzw. `properties.maturity` (SARIF) markiert.
 
+**Deklarierte Architektur** (`--architecture <datei>`, E5b): der Bericht erhält
+`AnalysisReport.architecture` — `{path, version, layers: [{name, files}],
+unassignedFiles, warnings: {multipleMatchCount, multipleMatchSample,
+emptyLayers, unknownLayerReferences}}`; Markdown zeigt das im Kopf, SARIF in
+`invocations[0].properties.architecture`. Ohne Konfiguration fehlt das Feld.
+
+**Identität:** die Identität eines Befunds für Baseline und Korpusbewertung ist
+(projektrelative Datei, Regel-ID, `location.symbol`). Regeln, die mehrere Ziele
+von einer Stelle melden, tragen das Ziel ins Symbol ein (SOLID: `Klasse:Ziel`,
+`Klasse:Vertrag`, der Pfad der importierten Datei oder `package:<name>`), sodass
+zwei Befunde nie dieselbe Identität teilen.
+
 ## 7. Grenzen
 
 - Scores sind **technische Operationalisierungen**, keine Messung

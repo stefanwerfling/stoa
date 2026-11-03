@@ -328,6 +328,46 @@
   (`test/fixtures/architecture`: loader errors, assignment incl. multiple
   matches and outside-root files, all four edge verdicts, package bans and
   names, report summary and markdown, CLI fail-fast and JSON).
+- **SOLID evaluation, precision gate (Flutter quality track, E7):**
+  - **SOLID golden corpus** `test/corpus/solid` (outside `test/corpus/project`,
+    so the main corpus is unchanged): a small Flutter/TS project with a
+    positive and a negative case per rule and the composition root; two
+    manifests — `expected.json` (`--solid`, stage 1) and
+    `expected-architecture.json` (`--solid --architecture
+    test/corpus/solid/stoa.architecture.json`, stage 2). `stoa eval` now
+    accepts `--solid` and `--architecture` (same loaders as `analyze`). Both:
+    precision and recall 100 % (7 TP, 0 FP, 0 FN); without `--solid` the corpus
+    produces no finding.
+  - **Precision gate on the real projects** (manual review of every SOLID
+    finding, four apps + stoa/src + flyingfish, without `--architecture`): the
+    only false positives were hints in `main.dart`, the composition root, where
+    wiring concrete classes is what dependency inversion asks for (stage 1: 2 of
+    19, E6c: 2 of 24). User decision: a Dart library with a top-level `main()`
+    (a `function` subject in `metric.functionLength`, no file-name pattern) is
+    excluded from stage 1 and E6c. After that: swipemeister stage 1 13, E6c 19;
+    mwpa stage 1 4, E6c 3; velyo, movinder, stoa/src, flyingfish 0; no false
+    positive left in the review. LSP/ISP: 0 findings on all six projects (no
+    member there only throws unsupported, no abstract project member is
+    fulfilled empty) — user decision: they stay `experimental` until real
+    findings were reviewed, although the gate is formally passed. Stage 1 and
+    E6c stay `experimental` (semantic heuristics, as planned); stage 2 is
+    `stable`.
+  - **Unique identities:** several SOLID findings of one class or file shared
+    one identity (file, rule, symbol) — 21 duplicates on swipemeister with
+    `--architecture` — so a baseline or `--only-new` merged them. Symbols now
+    carry the target: E6c `Class:Target`, ISP `Class:Contract`, stage 2 the
+    imported file's relative path or `package:<name>`; a test checks
+    uniqueness on every SOLID fixture. (The Flutter lifecycle rules still have
+    such duplicates — e.g. two `setState`-after-`await` sites in one State —
+    outside this track.)
+  - **SRP (E6e)** is not built: per plan only after E7, and only behind
+    `--solid` once the labelled classes of the apps are classified by hand
+    (OQ-6).
+  - Docs: `rule-model` (the SOLID rules; `R-ARCH-LAYER-VIOLATION` realized as
+    stage 2), `finding-model` (`architecture` report field, identity),
+    `evaluation` (SOLID corpus), `open-questions` (OQ-6), README.
+  - Tests: `test/SolidCorpus.test.ts` (both manifests, no finding without
+    `--solid`, unique identities, `eval` CLI).
 - **SOLID, DIP layer direction stage 2 (Flutter quality track, E6d):**
   `src/rules/project/SolidArchitectureRule.ts`, `R-SOLID-DIP-LAYER-DIRECTION`
   0.2.0 (stable, `syntactic` 0.9, `medium`, `marcus.cooperation`,
@@ -499,8 +539,8 @@ stoa analyze <path> [--format markdown|json|sarif] [--lang en|de]
                     [--baseline <file>] [--update-baseline] [--only-new]
                     [--min-confidence <0..1>] [--certainty <list>]... [--no-experimental]
                     [--config <file>] [--knowledge <dir>] [--rules <dir>]
-stoa eval <path> --expected <file> [--format markdown|json] [--contracts <file>]
-                    [--knowledge <dir>] [--rules <dir>]
+stoa eval <path> --expected <file> [--format markdown|json] [--solid] [--architecture <file>]
+                    [--contracts <file>] [--knowledge <dir>] [--rules <dir>]
 ```
 
 - **Formats:** Markdown (human), JSON (machine), SARIF 2.1.0 (CI / code scanning).

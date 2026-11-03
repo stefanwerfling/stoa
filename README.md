@@ -142,10 +142,12 @@ node dist/Cli.js analyze . --cache              # cache per-file facts under .st
 node dist/Cli.js analyze . --baseline .stoa/baseline.json --update-baseline  # accept current findings as the baseline
 node dist/Cli.js analyze . --baseline .stoa/baseline.json --only-new         # CI: report only what's new since then
 node dist/Cli.js analyze . --min-confidence 0.7 --no-experimental            # hide low-confidence / experimental findings (count stays in the report)
-node dist/Cli.js analyze . --solid                                            # opt-in SOLID hints (experimental; Dart: UI → data access)
+node dist/Cli.js analyze . --solid                                            # opt-in SOLID hints (DIP/LSP/ISP; experimental heuristics)
+node dist/Cli.js analyze . --solid --architecture stoa.architecture.json      # + declared layers (schemas/architecture.schema.json): certain layer violations
 
 # evaluate the engine against the golden corpus (precision/recall)
 node dist/Cli.js eval test/corpus/project --expected test/corpus/expected.json
+node dist/Cli.js eval test/corpus/solid/project --expected test/corpus/solid/expected.json --solid
 
 # optional: augment findings with a grounded LLM second opinion (off by default;
 # needs ANTHROPIC_API_KEY or an `ant auth login` profile). Deterministic output

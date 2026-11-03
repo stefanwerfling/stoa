@@ -316,6 +316,11 @@ Procedural rules (`ProjectRule`, cross-file):
 | `R-FLUTTER-UNCANCELLED-SUBSCRIPTION` | `dart.stateLifecycle`: `Timer`/`Timer.periodic` or a `….listen(…)` stored in a field declared `StreamSubscription` (both `dart:async`), never mentioned in `dispose()` | `marcus.control` | Robustness | as above; 1.2.0: an untyped field or an own `listen()` API is not a subscription |
 | `R-FLUTTER-SETSTATE-AFTER-AWAIT` | `dart.stateLifecycle`: `setState` after an `await` in the same function body with no `mounted` check that dominates it | `marcus.control` | Robustness | 1.2.0: structural guard analysis (early exit / enclosing `if (mounted)` / `?:`); unmodelled uses of `mounted` stay silent; awaits in an exclusive branch do not count |
 | `R-FLUTTER-INHERITED-IN-INITSTATE` | `dart.stateLifecycle`: `Theme.of(context)`/`MediaQuery.*Of(context)`/… directly in `initState()` | `marcus.judgment` | Robustness | syntactic, closures excluded |
+| `R-SOLID-DIP-LAYER-DIRECTION` 0.1.0 (stage 1) | LayerClassification (E5a) + Dart ModuleGraph edges: a UI library importing a data-access package or a project data-access module (not UI, not a state holder) | `marcus.cooperation` + `marcus.control` | Dependencies | `--solid`, experimental, semantic-heuristic 0.5; composition roots (library with a top-level `main()`) excluded |
+| `R-SOLID-DIP-LAYER-DIRECTION` 0.2.0 (stage 2) | declared architecture (`--architecture`): ModuleGraph edge between layers not in `allow`, or a package banned for the layer | `marcus.cooperation` | Dependencies | `--solid --architecture`, stable, syntactic 0.9; replaces stage 1; files without a layer never judged |
+| `R-SOLID-DIP-CONCRETE-DEPENDENCY` | TypeModel + LayerClassification: a UI class's own members create, statically call or read a concrete project class of a data-access library | `marcus.cooperation` | Dependencies | `--solid`, experimental, semantic-heuristic 0.5, Dart; composition roots excluded |
+| `R-SOLID-LSP-CONTRACT-COMPATIBILITY` | TypeModel: an override that only throws unsupported against a concrete member of a resolved project supertype | `marcus.judgment` | Responsibility boundaries | `--solid`, experimental (no real-world hit yet), syntactic 0.8; Dart + TS |
+| `R-SOLID-ISP-INTERFACE-COHESION` | TypeModel: ≥ 2 abstract members of a project interface/abstract class fulfilled empty or only-throwing | `marcus.purpose` | Responsibility boundaries | `--solid`, experimental (no real-world hit yet), syntactic 0.7; Dart + TS |
 
 > The Flutter layout rules (`src/rules/project/FlutterLayoutRules.ts`) report
 > layouts the framework rejects at runtime. They walk up only through
@@ -324,8 +329,9 @@ Procedural rules (`ProjectRule`, cross-file):
 > widget means *no finding*. Parent sets are curated framework allowlists.
 
 > **Not yet implemented** (documented as ideas): `R-RESP-MIXED-CONCERNS`
-> (layer/namespace mixing, `marcus.purpose`) and `R-ARCH-LAYER-VIOLATION`
-> (import against a declared layer rule, `marcus.judgment`).
+> (layer/namespace mixing, `marcus.purpose`). The former idea
+> `R-ARCH-LAYER-VIOLATION` (import against a declared layer rule) is realized as
+> stage 2 of `R-SOLID-DIP-LAYER-DIRECTION` (`--solid --architecture`).
 
 > Pure style rules (indentation, quotation marks, name length) are
 > **excluded**. Such checks remain with ESLint/CS-Fixer.

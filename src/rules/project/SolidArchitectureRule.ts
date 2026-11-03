@@ -67,6 +67,8 @@ interface Violation {
     /** edge: the imported file's layer; package: the package name. */
     toLayer: string;
     target: string;
+    /** The identity within the file (FindingIdentity): the imported file's path relative to the root, or `package:<name>`. */
+    symbol: string;
     evidence: ImportEvidence[];
     detail: {fact: string; value: string}[];
 }
@@ -86,6 +88,7 @@ const edgeViolations = (graph: ModuleGraph, model: ArchitectureModel): Violation
             fromLayer: model.layerOf(edge.from) as string,
             toLayer: model.layerOf(edge.to) as string,
             target: basename(edge.to),
+            symbol: model.relativePath(edge.to),
             evidence: edge.evidence,
             detail: edge.evidence.map((site) => ({
                 fact: factOf(edge.origin),
@@ -102,7 +105,7 @@ const packageViolations = (graph: ModuleGraph, model: ArchitectureModel): Violat
             continue;
         }
         const key = `${entry.from}\n${name}`;
-        const violation = byKey.get(key) ?? {kind: 'package' as const, file: entry.from, fromLayer: layer, toLayer: name, target: name, evidence: [], detail: []};
+        const violation = byKey.get(key) ?? {kind: 'package' as const, file: entry.from, fromLayer: layer, toLayer: name, target: name, symbol: `package:${name}`, evidence: [], detail: []};
         violation.evidence.push(...entry.evidence);
         violation.detail.push(...entry.evidence.map((site) => ({fact: factOf(entry.origin), value: `${basename(entry.from)}:${site.range.startLine} ${entry.dartDirective ?? 'import'} '${entry.specifier}' (package ${name})`})));
         byKey.set(key, violation);
@@ -142,7 +145,7 @@ export class SolidDipLayerDeclaredRule implements ProjectRule {
             id: `finding:${this.id}:${violation.file}:${range.startLine}:${range.startCol}:${violation.kind}:${violation.target}`,
             rule: {id: this.id, version: this.version},
             ruleSet: input.ruleSetId,
-            location: {file: violation.file, range, structure: 'module'},
+            location: {file: violation.file, range, symbol: violation.symbol, structure: 'module'},
             observation: {
                 statement: fill(isEdge ? TEXT.edgeStatement : TEXT.packageStatement),
                 evidence: [

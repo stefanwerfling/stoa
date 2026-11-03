@@ -45,6 +45,12 @@ Jede Regel hat einen Testkatalog (siehe [rule-model.md §7](./rule-model.md#7-te
   **bekannten Nicht-Problemen** (annotierte Erwartung je Datei/Zeile).
 - Pro Regel mindestens ein realistisches Positiv- und Negativszenario.
 - Reproduzierbarer Gesamtlauf: Snapshot des kompletten Berichts; Diff = Regression.
+- SOLID-Korpus (`test/corpus/solid`, E7): bewertet mit denselben Opt-ins wie
+  `analyze` — `stoa eval test/corpus/solid/project --expected
+  test/corpus/solid/expected.json --solid`, und mit deklarierter Architektur
+  `--expected …/expected-architecture.json --solid --architecture
+  test/corpus/solid/stoa.architecture.json`. Er liegt außerhalb von
+  `test/corpus/project`, der Hauptkorpus bleibt also unverändert.
 
 ## 4. Fehlalarme messen
 

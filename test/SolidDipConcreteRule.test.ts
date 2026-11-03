@@ -30,7 +30,7 @@ const findings = (): Finding[] => withSolid.report.findings.filter((finding) => 
 test('E6c: a UI class creating, statically calling or reading a concrete data-access class is reported once per target, at the first site, listing every site', () => {
     assert.deepEqual(
         findings().map((finding) => `${finding.location.file.slice(project.length + 1)}:${finding.location.range.startLine} ${finding.location.symbol}`),
-        ['lib/ui/page.dart:18 _ApiPageState.api']
+        ['lib/ui/page.dart:18 _ApiPageState:Api']
     );
     const [finding] = findings() as [Finding];
     assert.equal(finding.observation.statement, 'UI class _ApiPageState binds itself to the concrete data-access class Api (api.dart): Api(), data.Api(), Api.avatarUrl(), Api.base, Api.instance.');
@@ -46,10 +46,10 @@ test('E6c: a UI class creating, statically calling or reading a concrete data-ac
     assert.ok(!finding.observation.statement.includes('mystery'), 'a Type.name() that is neither a constructor nor a static method is unknown');
 });
 
-test('E6c: abstractions (factory of an abstract class), models without data access, state holders, DI lookups, ambiguous names and non-UI classes are never reported', () => {
+test('E6c: abstractions (factory of an abstract class), models without data access, state holders, DI lookups, ambiguous names, non-UI classes and the composition root (a library with a top-level main) are never reported', () => {
     const symbols = findings().map((finding) => finding.location.symbol ?? '');
-    for (const excluded of ['CleanPage', 'AmbiguousPage', 'Sync']) {
-        assert.ok(!symbols.some((symbol) => symbol.startsWith(`${excluded}.`)), excluded);
+    for (const excluded of ['CleanPage', 'AmbiguousPage', 'Sync', 'RootApp']) {
+        assert.ok(!symbols.some((symbol) => symbol.startsWith(`${excluded}:`)), excluded);
     }
 });
 

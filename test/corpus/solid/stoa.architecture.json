@@ -1,0 +1,11 @@
+{
+  "version": "1.0.0",
+  "layers": [
+    { "name": "ui", "include": ["lib/ui/**"] },
+    { "name": "data", "include": ["lib/data/**"] },
+    { "name": "state", "include": ["lib/state/**"] },
+    { "name": "model", "include": ["lib/model/**"] }
+  ],
+  "allow": [ { "from": "ui", "to": "state" }, { "from": "ui", "to": "model" }, { "from": "state", "to": "model" }, { "from": "data", "to": "model" } ],
+  "forbidPackages": [ { "layer": "ui", "packages": ["http", "dio", "sqflite", "shared_preferences"] } ]
+}

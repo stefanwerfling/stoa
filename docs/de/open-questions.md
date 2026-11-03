@@ -15,7 +15,7 @@
 | OQ-3 | **PHP-Parser** | Subprozess (`nikic/php-parser`) · reiner JS-Parser (`php-parser`/glayzzle) · eigener Parser | **Entschieden (M6): `php-parser`/glayzzle** — in-process, kein PHP/Composer, deterministisch testbar. Fact-Schema identisch, daher revidierbar. |
 | OQ-4 | **Interprozeduraler Datenfluss** | nur lokal · projektweit | **✅ Umgesetzt (lokal):** Metriken/Facts je Funktion lokal. Projektweiter Datenfluss weiterhin spätere Stufe. |
 | OQ-5 | **Default-Single-Score** | an · aus | **✅ Entschieden:** kein Default-Single-Score; Befunde tragen Dimensionen. Ein aggregiertes Dimensionen-Profil ist noch nicht gebaut. |
-| OQ-6 | **Kohäsionsmetrik** | LCOM-Variante · eigene Heuristik | offen; mit Experten/Empirie am Korpus kalibrieren (Risiko Fehlalarm). |
+| OQ-6 | **Kohäsionsmetrik** | LCOM-Variante · eigene Heuristik | offen; mit Experten/Empirie am Korpus kalibrieren (Risiko Fehlalarm). SOLID-Strang (E7): die SRP-Regel (E6e, Member-Gruppen mit disjunkten Feldern **und** disjunkten Importen über das TypeModel) ist noch nicht gebaut — sie darf erst hinter `--solid` erscheinen, wenn die markierten Klassen der vier Apps von Hand klassifiziert sind. |
 | OQ-7 | **Prinzip-Benennung** | `marcus.*` · `stoic.*` | **✅ Umgesetzt:** `marcus.*`. Umbenennung zu `stoic.*` erst, wenn Epiktet als Quelle dazukommt (offen). |
 | OQ-8 | **LLM-Default** | lokal · extern · aus | **Aus** (implementiert): No-Op-Default; optionaler Anthropic-Adapter (Opus 4.8), anbieterneutral, groundedness-geprüft, außerhalb des deterministischen Kerns. |
 | OQ-9 | **Lizenz der Engine** | — | **✅ Entschieden:** MIT. Translationslizenzen getrennt (nur gemeinfreie Texte verbatim). |

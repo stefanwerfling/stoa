@@ -1,11 +1,12 @@
 import {basename} from 'node:path';
-import type {Finding, SourceRange} from '../../Types.js';
+import type {Fact, Finding, SourceRange} from '../../Types.js';
 import {localize, type LocalizedText} from '../../i18n/Localized.js';
 import {flutterAwareIndex} from '../../analysis/dart/FlutterCatalog.js';
 import {ModuleResolver} from '../../analysis/ModuleResolution.js';
 import {EMPTY_PROJECT_CONFIG} from '../../config/ProjectConfig.js';
 import {buildLayerClassification, classificationOf, type LayerClassification, type ModuleClassification, type UiDeclaration} from '../../model/LayerClassification.js';
 import {buildModuleGraph, type ModuleGraph} from '../../model/ModuleGraph.js';
+import type {DartLibraryIndex} from '../../model/DartLibraryIndex.js';
 import type {TypeModel, TypeNode} from '../../model/TypeModel.js';
 import type {StructMember, StructTypeRef} from '../../analysis/StructFacts.js';
 import {typeModelOf, type ProjectRule, type ProjectRuleInput} from '../ProjectRule.js';
@@ -63,6 +64,20 @@ const RULE_TEXT = {
     } as LocalizedText
 };
 
+/**
+ * Composition roots (E7 precision gate, user decision): Dart libraries that
+ * declare a top-level `main()` (a `function` subject, not a method — read
+ * from `metric.functionLength`, emitted for every function). Wiring concrete
+ * classes there is exactly what dependency inversion asks for, so neither
+ * DIP hint (E6a stage 1, E6c) reports them. No name pattern on files.
+ */
+const compositionRoots = (facts: readonly Fact[], index: DartLibraryIndex): Set<string> =>
+    new Set(
+        facts
+            .filter((fact) => fact.kind === 'metric.functionLength' && fact.subject.kindOf === 'function' && fact.subject.symbol === 'main' && fact.subject.file.endsWith('.dart'))
+            .map((fact) => index.libraryOf(fact.subject.file))
+    );
+
 interface Dependency {
     /** Shown in the statement/evidence: a package name, `dart:io`, or a project file name. */
     label: string;
@@ -80,7 +95,7 @@ export class SolidDipLayerDirectionRule implements ProjectRule {
     public readonly id = 'R-SOLID-DIP-LAYER-DIRECTION';
     public readonly version = '0.1.0';
     public readonly maturity = 'experimental' as const;
-    public readonly requiredFactKinds = ['dart.classDecl', 'dart.importSpec'];
+    public readonly requiredFactKinds = ['dart.classDecl', 'dart.importSpec', 'metric.functionLength'];
 
     public evaluate(input: ProjectRuleInput): Finding[] {
         if (!input.facts.some((fact) => fact.kind === 'dart.classDecl')) {
@@ -96,8 +111,9 @@ export class SolidDipLayerDirectionRule implements ProjectRule {
             libraries.set(module.library, [...(libraries.get(module.library) ?? []), module]);
         }
 
+        const roots = compositionRoots(input.facts, index);
         const findings: Finding[] = [];
-        for (const [library, members] of [...libraries].sort(([a], [b]) => compareText(a, b))) {
+        for (const [library, members] of [...libraries].filter(([candidate]) => !roots.has(candidate)).sort(([a], [b]) => compareText(a, b))) {
             const ui = members.flatMap((module) => module.ui);
             if (ui.length === 0) {
                 continue;
@@ -459,7 +475,8 @@ export class SolidIspInterfaceCohesionRule implements ProjectRule {
             id: `finding:${this.id}:${node.file}:${range.startLine}:${range.startCol}:${contract.name}`,
             rule: {id: this.id, version: this.version},
             ruleSet: input.ruleSetId,
-            location: {file: node.file, range, symbol: node.name, structure: 'class'},
+            // one finding per (class, contract): both in the symbol, so the identity (FindingIdentity) is unique
+            location: {file: node.file, range, symbol: `${node.name}:${contract.name}`, structure: 'class'},
             observation: {
                 statement: fill(ISP_TEXT.statement),
                 evidence: [
@@ -591,16 +608,18 @@ export class SolidDipConcreteDependencyRule implements ProjectRule {
     public readonly id = 'R-SOLID-DIP-CONCRETE-DEPENDENCY';
     public readonly version = '0.1.0';
     public readonly maturity = 'experimental' as const;
-    public readonly requiredFactKinds = TYPE_MODEL_FACT_KINDS;
+    public readonly requiredFactKinds = [...TYPE_MODEL_FACT_KINDS, 'metric.functionLength'];
 
     public evaluate(input: ProjectRuleInput): Finding[] {
         if (!input.facts.some((fact) => fact.kind === 'dart.classDecl')) {
             return [];
         }
-        const classification = buildLayerClassification(input.facts, input.dartLibraryIndex ?? flutterAwareIndex(input.facts));
+        const index = input.dartLibraryIndex ?? flutterAwareIndex(input.facts);
+        const classification = buildLayerClassification(input.facts, index);
+        const roots = compositionRoots(input.facts, index);
         const model = typeModelOf(input);
         const findings: Finding[] = [];
-        for (const module of classification.modules) {
+        for (const module of classification.modules.filter((candidate) => !roots.has(candidate.library))) {
             for (const ui of module.ui) {
                 const node = model.typeAt(module.file, ui.name);
                 if (node === undefined || node.hasParseError) {
@@ -625,7 +644,8 @@ export class SolidDipConcreteDependencyRule implements ProjectRule {
             id: `finding:${this.id}:${node.file}:${range.startLine}:${range.startCol}:${target.name}`,
             rule: {id: this.id, version: this.version},
             ruleSet: input.ruleSetId,
-            location: {file: node.file, range, symbol: `${node.name}.${first.member.name}`, structure: 'class'},
+            // one finding per (UI class, target): both in the symbol, so the identity (FindingIdentity) is unique
+            location: {file: node.file, range, symbol: `${node.name}:${target.name}`, structure: 'class'},
             observation: {
                 statement: fill(DIP_CONCRETE_TEXT.statement),
                 evidence: [

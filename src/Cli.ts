@@ -112,7 +112,7 @@ const USAGE = [
     '',
     'Usage:',
     '  stoa analyze <path> [--format markdown|json|sarif] [--lang en|de] [--include <glob>]... [--exclude <glob>]... [--typecheck] [--dead-exports] [--solid] [--architecture <file>] [--contracts <file>] [--semantic noop|anthropic] [--config <file>] [--knowledge <dir>] [--rules <dir>] [--memory-stats] [--cache] [--baseline <file>] [--update-baseline] [--only-new] [--min-confidence <0..1>] [--certainty <list>]... [--no-experimental]',
-    '  stoa eval <path> --expected <file> [--format markdown|json] [--contracts <file>] [--knowledge <dir>] [--rules <dir>]',
+    '  stoa eval <path> --expected <file> [--format markdown|json] [--solid] [--architecture <file>] [--contracts <file>] [--knowledge <dir>] [--rules <dir>]',
     ''
 ].join('\n');
 
@@ -335,8 +335,8 @@ const runEval = async (values: CliValues, target: string): Promise<number> => {
         process.stdout.write(`${USAGE}\n`);
         return 1;
     }
-    const loadedContract = loadContractOrFail(values);
-    if (loadedContract === null) {
+    const inputs = loadAnalyzeInputsOrFail(values);
+    if (inputs === null) {
         return 1;
     }
     // Load the tree-sitter grammars so eval covers Dart and C/C++ too, not only
@@ -359,7 +359,10 @@ const runEval = async (values: CliValues, target: string): Promise<number> => {
         knowledgeDir: knowledgeDirOf(values),
         ruleSetDir: ruleSetDirOf(values),
         config: configFor(values),
-        validationContract: loadedContract.contract
+        validationContract: inputs.contract,
+        // E7: the SOLID corpus is scored with the same opt-ins as `analyze`
+        solid: values.solid === true,
+        architecture: inputs.architecture
     });
     // `eval`'s exit code means precision/recall pass/fail, not analysis
     // completeness (that is `analyze`'s 0/1/2 — see EXIT_INCOMPLETE above) —

@@ -45,6 +45,12 @@ Each rule has a test catalog (see [rule-model.md §7](./rule-model.md#7-testbark
   **known non-problems** (annotated expectation per file/line).
 - At least one realistic positive and negative scenario per rule.
 - Reproducible overall run: snapshot of the complete report; diff = regression.
+- SOLID corpus (`test/corpus/solid`, E7): scored with the same opt-ins as
+  `analyze` — `stoa eval test/corpus/solid/project --expected
+  test/corpus/solid/expected.json --solid`, and with the declared architecture
+  `--expected …/expected-architecture.json --solid --architecture
+  test/corpus/solid/stoa.architecture.json`. It lies outside
+  `test/corpus/project`, so the main corpus is unchanged.
 
 ## 4. Measuring False Positives
 

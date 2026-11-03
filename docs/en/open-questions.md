@@ -15,7 +15,7 @@
 | OQ-3 | **PHP parser** | Subprocess (`nikic/php-parser`) · pure-JS parser (`php-parser`/glayzzle) · own parser | **Decided (M6): `php-parser`/glayzzle** — in-process, no PHP/Composer, deterministically testable. Fact schema identical, so revisable. |
 | OQ-4 | **Interprocedural data flow** | local only · project-wide | **✅ Implemented (local):** metrics/facts per function are local. Project-wide data flow remains a later stage. |
 | OQ-5 | **Default single score** | on · off | **✅ Decided:** no default single score; findings carry dimensions. An aggregated dimension profile is not built yet. |
-| OQ-6 | **Cohesion metric** | LCOM variant · own heuristic | open; calibrate with experts/empirical data on the corpus (risk of false positives). |
+| OQ-6 | **Cohesion metric** | LCOM variant · own heuristic | open; calibrate with experts/empirical data on the corpus (risk of false positives). SOLID track (E7): the SRP rule (E6e, member groups with disjoint fields **and** disjoint imports via the TypeModel) is not built yet — it may only appear behind `--solid` after the labelled classes of the four apps have been classified by hand. |
 | OQ-7 | **Principle naming** | `marcus.*` · `stoic.*` | **✅ Implemented:** `marcus.*`. Rename to `stoic.*` only once Epictetus is added as a source (open). |
 | OQ-8 | **LLM default** | local · external · off | **Off** (implemented): no-op default; optional Anthropic adapter (Opus 4.8), vendor-neutral, groundedness-validated, outside the deterministic core. |
 | OQ-9 | **License of the engine** | — | **✅ Decided:** MIT. Translation licenses handled separately (only public-domain texts verbatim). |
