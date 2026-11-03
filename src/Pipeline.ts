@@ -228,21 +228,11 @@ export const analyze = (options: AnalyzeOptions): AnalysisResult => {
             parsed.release?.();
         }
 
-        // Independent of the adapter cache above: TypeDiagnosticsExtractor
-        // builds its own ts-morph Project from `file` directly (not from
-        // `parsed.handle`), so it has its own cache entry under a distinct
-        // adapter id ('tsc') and works correctly whether or not the main
-        // adapter facts were a cache hit.
+        // Deliberately NOT cached: tsc diagnostics depend on the file's
+        // tsconfig and on every file it imports, so the FactCache's
+        // content-of-this-file key cannot tell when they are stale.
         if (typeExtractor !== null && TS_EXTENSIONS.some((ext) => file.path.endsWith(ext))) {
-            const cachedTscFacts = cache?.get('tsc', file) ?? null;
-            if (cachedTscFacts !== null) {
-                facts.push(...cachedTscFacts);
-                cacheHits += 1;
-            } else {
-                const tscFacts = typeExtractor.extract(file);
-                facts.push(...tscFacts);
-                cache?.set('tsc', file, tscFacts);
-            }
+            facts.push(...typeExtractor.extract(file));
         }
         analyzed += 1;
         analyzedPaths.add(meta.path);

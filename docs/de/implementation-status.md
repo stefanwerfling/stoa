@@ -63,6 +63,17 @@
   byte-identische Befunde.
 - **Optionale, abschaltbare Schichten:** Typprüfer-Facts (`--typecheck`),
   tote-Export-Analyse (`--dead-exports`), LLM-Deutung (`--semantic anthropic`).
+- **`--typecheck` deckungsgleich mit `tsc -p`:** jede TS-Datei wird im Projekt
+  der nächstgelegenen `tsconfig.json` geprüft (geladen mit
+  `ts.parseJsonConfigFileContent` — `extends`, `lib`, `module`/
+  `moduleResolution`, `paths`, `include`/`exclude`, `references`), auf dem echten
+  Dateisystem, sodass Importe wie beim Compiler aufgelöst werden. Eine Datei, für
+  die zwar eine tsconfig existiert, die aber kein erreichbares Projekt enthält
+  (z. B. Tests außerhalb von `include`), wird nicht geprüft — `tsc -p` prüft sie
+  auch nicht; eine Datei ohne tsconfig darüber wird mit strikten Defaults geprüft
+  (`tsc --strict <datei>`). Geprüft wird mit stoas mitgelieferter
+  TypeScript-Version, nicht der des Projekts. `tsc`-Facts werden nicht im
+  `--cache` abgelegt (sie hängen von anderen Dateien ab).
 
 ## CLI
 
@@ -914,7 +925,7 @@ zu liefern.
 `file.lineCount`, `metric.exportCount`, `metric.cyclomaticComplexity`,
 `metric.cognitiveComplexity`, `metric.nestingDepth`, `metric.parameterCount`,
 `metric.functionLength`, `doc.hasComplexityRationale`, `ast.usesNondeterminism`,
-`ast.emptyCatch`, `ast.catchSwallowsError`, `deps.import`, `deps.importUnused`,
+`ast.emptyCatch`, `ast.catchSwallowsError`, `doc.catchHasRationale`, `deps.import`, `deps.importUnused`,
 `deps.importDeep`, `deps.export`, `deps.importName`, `orm.synchronizeEnabled`,
 `orm.syncWithMigrations`, `orm.entityNoPrimaryKey`, `orm.eagerRelation`,
 `migration.unguardedDdl`, `migration.noDown`, `migration.dataLoss`,

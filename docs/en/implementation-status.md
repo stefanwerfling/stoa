@@ -58,6 +58,16 @@
   byte-identical findings.
 - **Optional, switchable layers:** type-checker facts (`--typecheck`), dead-export
   analysis (`--dead-exports`), LLM interpretation (`--semantic anthropic`).
+- **`--typecheck` parity with `tsc -p`:** each TS file is checked inside the
+  project of its nearest `tsconfig.json` (parsed with
+  `ts.parseJsonConfigFileContent` — `extends`, `lib`, `module`/
+  `moduleResolution`, `paths`, `include`/`exclude`, `references`), on the real
+  file system, so imports resolve as the compiler resolves them. A file that a
+  tsconfig exists for but no reachable project lists (e.g. tests outside
+  `include`) is not checked — `tsc -p` does not check it either; a file with no
+  tsconfig above it is checked with strict defaults (`tsc --strict <file>`).
+  The checker is stoa's bundled TypeScript, not the project's own version.
+  `tsc` facts are not stored in the `--cache` (they depend on other files).
 
 ## CLI
 
@@ -815,7 +825,7 @@ fails fast (exit 1, concrete errors) instead of silently yielding 0 findings.
 `file.lineCount`, `metric.exportCount`, `metric.cyclomaticComplexity`,
 `metric.cognitiveComplexity`, `metric.nestingDepth`, `metric.parameterCount`,
 `metric.functionLength`, `doc.hasComplexityRationale`, `ast.usesNondeterminism`,
-`ast.emptyCatch`, `ast.catchSwallowsError`, `deps.import`, `deps.importUnused`,
+`ast.emptyCatch`, `ast.catchSwallowsError`, `doc.catchHasRationale`, `deps.import`, `deps.importUnused`,
 `deps.importDeep`, `deps.export`, `deps.importName`, `orm.synchronizeEnabled`,
 `orm.syncWithMigrations`, `orm.entityNoPrimaryKey`, `orm.eagerRelation`,
 `migration.unguardedDdl`, `migration.noDown`, `migration.dataLoss`,
