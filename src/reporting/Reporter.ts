@@ -33,6 +33,14 @@ export const toMarkdown = (report: AnalysisReport, options: ReportOptions = {}):
     if (report.baseline !== undefined) {
         lines.push(`- ${t.baseline}: ${report.baseline.newCount} ${t.baselineNew}, ${report.baseline.knownCount} ${t.baselineKnown}, ${report.baseline.fixedCount} ${t.baselineFixed}`);
     }
+    if (report.filter !== undefined) {
+        const criteria = [
+            ...(report.filter.minConfidence !== undefined ? [`${t.filterMinConfidence} ${report.filter.minConfidence.toFixed(2)}`] : []),
+            ...(report.filter.certainty !== undefined ? [`${t.filterCertainty} ${report.filter.certainty.join('/')}`] : []),
+            ...(report.filter.excludeExperimental === true ? [t.filterNoExperimental] : [])
+        ];
+        lines.push(`- ${t.filter}: ${criteria.join(', ')} — ${report.filter.hiddenCount} ${t.filterHidden}`);
+    }
     lines.push('');
 
     if (report.findings.length === 0) {
@@ -47,8 +55,9 @@ export const toMarkdown = (report: AnalysisReport, options: ReportOptions = {}):
         const principles = finding.interpretation.principles.map((ref) => ref.name).join(', ');
         const dimensions = finding.interpretation.dimensions.map((dimension) => dimensionLabel(dimension, lang)).join(', ');
         const baselineTag = finding.baselineStatus !== undefined ? ` [${finding.baselineStatus === 'new' ? t.baselineNew : t.baselineKnown}]` : '';
+        const maturityTag = finding.ruleMaturity === 'experimental' ? ` [${t.experimental}]` : '';
         lines.push('');
-        lines.push(`### ${finding.rule.id} – ${finding.location.file}:${finding.location.range.startLine}${symbol}${baselineTag}`);
+        lines.push(`### ${finding.rule.id} – ${finding.location.file}:${finding.location.range.startLine}${symbol}${baselineTag}${maturityTag}`);
         lines.push(`- ${t.observation}: ${finding.observation.statement}`);
         lines.push(`- ${t.severity}: **${finding.severity}** · ${t.confidence}: ${finding.confidence.toFixed(2)} (${finding.certaintyBasis})`);
         lines.push(`- ${t.dimensions}: ${dimensions}`);

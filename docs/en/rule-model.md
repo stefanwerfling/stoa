@@ -113,6 +113,7 @@ certainty*. Model:
 | `severity` / `confidence` | derived **separately**; confidence capped by `certainty` |
 | `principles` / `dimensions` | coupling to KB & evaluation model |
 | `tests` | mandatory test catalog per rule |
+| `maturity` | optional `stable` (default) or `experimental`; findings of an experimental rule carry `ruleMaturity: "experimental"` and can be hidden with `--no-experimental`. Project rules declare it via `ProjectRule.maturity`; when the same finding comes from a stable and an experimental rule, stable wins |
 
 ## 4. Execution Model
 

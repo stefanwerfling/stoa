@@ -113,6 +113,7 @@ Sicherheit*. Modell:
 | `severity` / `confidence` | **getrennt** abgeleitet; Konfidenz durch `certainty` gedeckelt |
 | `principles` / `dimensions` | Kopplung an KB & Bewertungsmodell |
 | `tests` | verpflichtender Testkatalog je Regel |
+| `maturity` | optional `stable` (Standard) oder `experimental`; Befunde einer experimentellen Regel tragen `ruleMaturity: "experimental"` und lassen sich mit `--no-experimental` ausblenden. Project Rules deklarieren es über `ProjectRule.maturity`; liefern eine stabile und eine experimentelle Regel denselben Befund, gewinnt stabil |
 
 ## 4. Ausführungsmodell
 

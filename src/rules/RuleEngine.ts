@@ -70,7 +70,7 @@ export class RuleEngine {
                 lang: this.lang
             });
             for (const finding of findings) {
-                keyed.push({dedupKey: finding.id, finding});
+                keyed.push({dedupKey: finding.id, finding: governProjectFinding(finding, projectRule)});
             }
         }
 
@@ -139,6 +139,9 @@ export class RuleEngine {
         };
         if (rule.missingContext !== undefined) {
             finding.missingContext = rule.missingContext.map((text) => localize(text, this.lang));
+        }
+        if (rule.maturity === 'experimental') {
+            finding.ruleMaturity = 'experimental';
         }
 
         const dedupKey = `${subject.file}:${subject.range.startLine}:${subject.range.startCol}:${rule.feature}`;
@@ -216,6 +219,20 @@ const deriveConfidence = (rule: Rule, unit: FactUnit, evidence: Fact[]): number 
 };
 
 /**
+ * The engine-side guarantees for a project rule's finding (E1), applied
+ * centrally so no rule can bypass them:
+ * - E1b: confidence never exceeds the cap of its certainty basis — the same
+ *   table declarative rules use via `capBy: 'certainty'`
+ *   (`semantic-heuristic` ≤ 0.6, `external-tool` ≤ 0.9, `syntactic` ≤ 1);
+ * - E1a: an `experimental` rule marks every finding it produces.
+ */
+const governProjectFinding = (finding: Finding, rule: ProjectRule): Finding => {
+    const capped = Math.min(finding.confidence, certaintyCap(finding.certaintyBasis));
+    const governed: Finding = capped === finding.confidence ? finding : {...finding, confidence: capped};
+    return rule.maturity === 'experimental' ? {...governed, ruleMaturity: 'experimental'} : governed;
+};
+
+/**
  * Merges findings that describe the same technical problem (same subject and
  * feature) so it is counted once, unioning their principle interpretations and
  * dimensions and keeping the highest severity and confidence.
@@ -235,6 +252,10 @@ const dedupe = (keyed: KeyedFinding[]): Finding[] => {
         ]);
         existing.severity = maxSeverity(existing.severity, finding.severity);
         existing.confidence = Math.max(existing.confidence, finding.confidence);
+        // Stable wins: a problem also reported by an established rule is not experimental.
+        if (existing.ruleMaturity === 'experimental' && finding.ruleMaturity !== 'experimental') {
+            delete existing.ruleMaturity;
+        }
     }
     return [...byKey.values()];
 };

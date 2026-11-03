@@ -1,4 +1,4 @@
-import type {Fact, Finding} from '../Types.js';
+import type {Fact, Finding, RuleMaturity} from '../Types.js';
 import type {KnowledgeBase} from '../knowledge/KnowledgeBase.js';
 import type {ModuleGraph} from '../model/ModuleGraph.js';
 import type {SymbolGraph} from '../model/SymbolGraph.js';
@@ -83,5 +83,11 @@ export interface ProjectRule {
      * a verified, truthful starting point instead of having to guess.
      */
     readonly requiredFactKinds?: readonly string[];
+    /**
+     * E1a: `experimental` marks every finding of this rule
+     * (`Finding.ruleMaturity`); absent = `stable`. Set by the engine, so a
+     * rule cannot forget it on one of its findings.
+     */
+    readonly maturity?: RuleMaturity;
     evaluate(input: ProjectRuleInput): Finding[];
 }

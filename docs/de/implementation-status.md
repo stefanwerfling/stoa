@@ -209,6 +209,21 @@
   `ValueNotifier` (kein Vorkommen in den Apps) und Controller von Drittpaketen
   (kein Identitätswissen). Tests: `test/FlutterLifecycle.test.ts`
   (`test/fixtures/flutter-lifecycle-phase-c`).
+- **Regel-Governance (Flutter-Qualitätsstrang, E1 — Vorarbeit für SOLID):**
+  (a) Regelreife: `Rule.maturity` / `ProjectRule.maturity` (`stable` |
+  `experimental`, schema-validiert); Befunde experimenteller Regeln tragen
+  `ruleMaturity: "experimental"`; derzeit ist keine Regel experimentell. (b) Die
+  Regel-Engine deckelt die Konfidenz jedes Project-Rule-Befunds nach seiner
+  `certaintyBasis` (`certaintyCap`), wie es für deklarative Regeln immer galt.
+  Wirkung: zwei Regeln mit deklarierten 0,7 bei `semantic-heuristic` melden nun
+  0,6 — `R-UNUSED-EXPORT` (nur mit `--dead-exports`) und
+  `R-VALIDATION-CONTRACT-MISMATCH` (nur mit `--contracts`); kein Befund
+  hinzugefügt oder entfernt, die Standardausgabe auf vier echten Apps und das
+  Golden-Korpus sind byte-identisch. (c) Ausgabefilter `--min-confidence`,
+  `--certainty`, `--no-experimental` (`src/FindingFilter.ts`), angewendet in der
+  CLI nach dem Baseline-Schritt, sodass `analyze()` und die Baseline ungefiltert
+  bleiben; `AnalysisReport.filter` hält Kriterien und Zahl der ausgeblendeten
+  Befunde fest. Tests: `test/RuleGovernance.test.ts`.
 - **Flutter-State-Lifecycle (Flutter-Analyse, Phase 3):** `src/analysis/dart/FlutterLifecycle.ts`
   erzeugt je Klasse, die direkt `extends State<…>` ist, einen neutralen
   `dart.stateLifecycle`-Fact: Felder, denen genau ein Aufruf zugewiesen wird
@@ -271,6 +286,7 @@ stoa analyze <pfad> [--format markdown|json|sarif] [--lang en|de]
                     [--typecheck] [--dead-exports] [--contracts <datei>]
                     [--semantic noop|anthropic] [--memory-stats] [--cache]
                     [--baseline <datei>] [--update-baseline] [--only-new]
+                    [--min-confidence <0..1>] [--certainty <liste>]... [--no-experimental]
                     [--config <datei>] [--knowledge <dir>] [--rules <dir>]
 stoa eval <pfad> --expected <datei> [--format markdown|json] [--contracts <datei>]
                     [--knowledge <dir>] [--rules <dir>]
@@ -306,6 +322,12 @@ stoa eval <pfad> --expected <datei> [--format markdown|json] [--contracts <datei
   "Baseline-/Diff-Modus" unten. Standardmäßig aus; ohne `--baseline` bleibt
   jeder Befund exakt wie vorher (kein `baselineStatus`, kein
   `AnalysisReport.baseline`).
+- `--min-confidence <0..1>` / `--certainty <liste>` (wiederholbar oder
+  kommagetrennt: `syntactic`, `semantic-heuristic`, `external-tool`) /
+  `--no-experimental` — Ausgabefilter, angewendet nach dem Baseline-Schritt; der
+  Bericht hält Kriterien und Zahl der ausgeblendeten Befunde fest
+  (`AnalysisReport.filter`). Ungültige Werte sind Aufruffehler (Exit 1).
+  Standardmäßig aus — ohne sie ist die Ausgabe byte-identisch zur vorherigen.
 
 ## Memory-Bounded Analysis Pipeline
 

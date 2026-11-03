@@ -64,7 +64,12 @@ and the **philosophical interpretation is marked as an interpretation** (guiding
 - **Required:** `location`, `observation(+evidence)`, `interpretation.principles`,
   `severity`, `confidence`, `certaintyBasis`, `remediation.suggestion`, `source`.
 - **Optional:** `remediation.patch` (always only a suggestion), `missingContext`
-  (recommended), `baselineStatus`.
+  (recommended), `baselineStatus`, `ruleMaturity` (only the value
+  `"experimental"`; absent = stable rule).
+- **Confidence cap:** `confidence` never exceeds the cap of its `certaintyBasis`
+  (`syntactic` 1.0, `external-tool` 0.9, `semantic-heuristic` 0.6). Declarative
+  rules always applied it; since Flutter quality track E1b the rule engine
+  applies the same cap to project-rule findings centrally.
 
 ### Rules for Presentation
 - The `interpretation` is rendered in reports **linguistically as an interpretation**
@@ -159,6 +164,16 @@ flowchart LR
 
 All formats stamp engine, rule-set, KB and adapter versions as well as the
 analysis coverage.
+
+**Output filters** (`--min-confidence <0..1>`, `--certainty <list>`,
+`--no-experimental`) act on the rendered report only, after any baseline
+comparison: a baseline written in the same run still contains every finding,
+and a filter never makes a finding look `fixed`. A filtered report records the
+active criteria and the number of hidden findings in `AnalysisReport.filter`
+(`{minConfidence?, certainty?, excludeExperimental?, hiddenCount}`); Markdown
+shows it in the header, SARIF in `invocations[0].properties.filter`. Findings of
+experimental rules are tagged `[experimental]` (Markdown) or
+`properties.maturity` (SARIF).
 
 ## 7. Limits
 

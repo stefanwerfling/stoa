@@ -193,6 +193,20 @@
   Not added: `StreamController`/`ValueNotifier` (no occurrence in the apps) and
   third-party controllers (no identity knowledge). Tests:
   `test/FlutterLifecycle.test.ts` (`test/fixtures/flutter-lifecycle-phase-c`).
+- **Rule governance (Flutter quality track, E1 — groundwork for SOLID):**
+  (a) rule maturity: `Rule.maturity` / `ProjectRule.maturity` (`stable` |
+  `experimental`, schema-validated); findings of experimental rules carry
+  `ruleMaturity: "experimental"`; no current rule is experimental. (b) The rule
+  engine caps every project-rule finding's confidence by its `certaintyBasis`
+  (`certaintyCap`), as declarative rules always were. Effect: two rules declared
+  0.7 at `semantic-heuristic` now report 0.6 — `R-UNUSED-EXPORT` (only with
+  `--dead-exports`) and `R-VALIDATION-CONTRACT-MISMATCH` (only with
+  `--contracts`); no finding added or removed, the default output on four real
+  apps and the golden corpus is byte-identical. (c) Output filters
+  `--min-confidence`, `--certainty`, `--no-experimental`
+  (`src/FindingFilter.ts`), applied in the CLI after the baseline step so
+  `analyze()` and the baseline stay unfiltered; `AnalysisReport.filter` records
+  criteria and hidden count. Tests: `test/RuleGovernance.test.ts`.
 - **Flutter State lifecycle (Flutter analysis, Phase 3):** `src/analysis/dart/FlutterLifecycle.ts`
   emits one neutral `dart.stateLifecycle` fact per class that directly
   `extends State<…>`: fields assigned exactly one call (field initializer or
@@ -251,6 +265,7 @@ stoa analyze <path> [--format markdown|json|sarif] [--lang en|de]
                     [--typecheck] [--dead-exports] [--contracts <file>]
                     [--semantic noop|anthropic] [--memory-stats] [--cache]
                     [--baseline <file>] [--update-baseline] [--only-new]
+                    [--min-confidence <0..1>] [--certainty <list>]... [--no-experimental]
                     [--config <file>] [--knowledge <dir>] [--rules <dir>]
 stoa eval <path> --expected <file> [--format markdown|json] [--contracts <file>]
                     [--knowledge <dir>] [--rules <dir>]
@@ -282,6 +297,12 @@ stoa eval <path> --expected <file> [--format markdown|json] [--contracts <file>]
 - `--baseline <file>` / `--update-baseline` / `--only-new` — see "Baseline /
   diff mode" below. Off by default; omitting `--baseline` leaves every
   finding exactly as before (no `baselineStatus`, no `AnalysisReport.baseline`).
+- `--min-confidence <0..1>` / `--certainty <list>` (repeatable or
+  comma-separated: `syntactic`, `semantic-heuristic`, `external-tool`) /
+  `--no-experimental` — output filters, applied after the baseline step; the
+  report records the criteria and the hidden count (`AnalysisReport.filter`).
+  Invalid values are usage errors (exit 1). Off by default — omitting them is
+  byte-for-byte the previous output.
 
 ## Memory-bounded analysis pipeline
 

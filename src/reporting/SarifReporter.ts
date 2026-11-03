@@ -69,7 +69,8 @@ const toResult = (finding: Finding, baseDir: string, ruleIndex: Map<string, numb
         dimensions: finding.interpretation.dimensions,
         principles: finding.interpretation.principles.map((ref) => ref.id),
         ruleSet: finding.ruleSet,
-        source: finding.source
+        source: finding.source,
+        ...(finding.ruleMaturity !== undefined ? {maturity: finding.ruleMaturity} : {})
     }
 });
 
@@ -109,7 +110,7 @@ export const toSarif = (report: AnalysisReport, options: SarifOptions = {}): str
                 invocations: [
                     {
                         executionSuccessful: report.coverage.status !== 'failed',
-                        properties: {analysisStatus: report.coverage.status}
+                        properties: {analysisStatus: report.coverage.status, ...(report.filter !== undefined ? {filter: report.filter} : {})}
                     }
                 ],
                 results

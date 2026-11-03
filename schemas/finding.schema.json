@@ -112,6 +112,7 @@
     },
     "source": { "enum": ["deterministic", "semantic"] },
     "suppressed": { "type": "boolean" },
-    "baselineStatus": { "enum": ["new", "known", "fixed"] }
+    "baselineStatus": { "enum": ["new", "known", "fixed"] },
+    "ruleMaturity": { "enum": ["experimental"], "description": "Present only when the producing rule is experimental." }
   }
 }

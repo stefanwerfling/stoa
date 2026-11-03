@@ -42,6 +42,12 @@ export interface ReportLabels {
     baselineNew: string;
     baselineKnown: string;
     baselineFixed: string;
+    filter: string;
+    filterHidden: string;
+    filterMinConfidence: string;
+    filterCertainty: string;
+    filterNoExperimental: string;
+    experimental: string;
 }
 
 const LABELS: Record<string, ReportLabels> = {
@@ -69,7 +75,13 @@ const LABELS: Record<string, ReportLabels> = {
         baseline: 'Baseline',
         baselineNew: 'new',
         baselineKnown: 'known',
-        baselineFixed: 'fixed'
+        baselineFixed: 'fixed',
+        filter: 'Filter',
+        filterHidden: 'findings hidden',
+        filterMinConfidence: 'min. confidence',
+        filterCertainty: 'certainty',
+        filterNoExperimental: 'without experimental rules',
+        experimental: 'experimental'
     },
     de: {
         title: 'stoa – Analysebericht',
@@ -95,7 +107,13 @@ const LABELS: Record<string, ReportLabels> = {
         baseline: 'Baseline',
         baselineNew: 'neu',
         baselineKnown: 'bekannt',
-        baselineFixed: 'behoben'
+        baselineFixed: 'behoben',
+        filter: 'Filter',
+        filterHidden: 'Befunde ausgeblendet',
+        filterMinConfidence: 'min. Konfidenz',
+        filterCertainty: 'Sicherheit',
+        filterNoExperimental: 'ohne experimentelle Regeln',
+        experimental: 'experimentell'
     }
 };
 

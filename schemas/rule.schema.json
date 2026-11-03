@@ -23,6 +23,7 @@
   "properties": {
     "id": { "type": "string", "pattern": "^R-[A-Z0-9-]+$" },
     "version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+    "maturity": { "enum": ["stable", "experimental"], "description": "How established the rule is; `experimental` findings are marked (Finding.ruleMaturity). Absent = stable." },
     "title": { "type": "string", "minLength": 1 },
     "feature": { "type": "string", "minLength": 1 },
     "appliesTo": {

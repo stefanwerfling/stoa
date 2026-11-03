@@ -64,7 +64,12 @@ und die **philosophische Deutung ist als Deutung markiert** (Leitprinzipien L2, 
 - **Pflicht:** `location`, `observation(+evidence)`, `interpretation.principles`,
   `severity`, `confidence`, `certaintyBasis`, `remediation.suggestion`, `source`.
 - **Optional:** `remediation.patch` (immer nur Vorschlag), `missingContext`
-  (empfohlen), `baselineStatus`.
+  (empfohlen), `baselineStatus`, `ruleMaturity` (nur der Wert
+  `"experimental"`; fehlt = stabile Regel).
+- **Konfidenz-Deckel:** `confidence` überschreitet nie den Deckel ihrer
+  `certaintyBasis` (`syntactic` 1,0, `external-tool` 0,9, `semantic-heuristic`
+  0,6). Deklarative Regeln wendeten ihn schon immer an; seit Flutter-Qualitätsstrang
+  E1b wendet die Regel-Engine denselben Deckel zentral auf Project-Rule-Befunde an.
 
 ### Regeln für die Darstellung
 - Die `interpretation` wird in Berichten **sprachlich als Deutung** ausgegeben
@@ -159,6 +164,16 @@ flowchart LR
 
 Alle Formate stempeln Engine-, Regelsatz-, KB- und Adapterversionen sowie die
 Analyse-Abdeckung.
+
+**Ausgabefilter** (`--min-confidence <0..1>`, `--certainty <liste>`,
+`--no-experimental`) wirken nur auf den gerenderten Bericht, nach einem etwaigen
+Baseline-Vergleich: Eine im selben Lauf geschriebene Baseline enthält weiterhin
+alle Befunde, und ein Filter lässt nie einen Befund `fixed` erscheinen. Ein
+gefilterter Bericht hält die aktiven Kriterien und die Zahl der ausgeblendeten
+Befunde in `AnalysisReport.filter` fest (`{minConfidence?, certainty?,
+excludeExperimental?, hiddenCount}`); Markdown zeigt das im Kopf, SARIF in
+`invocations[0].properties.filter`. Befunde experimenteller Regeln sind mit
+`[experimental]` (Markdown) bzw. `properties.maturity` (SARIF) markiert.
 
 ## 7. Grenzen
 

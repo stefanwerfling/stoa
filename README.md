@@ -141,6 +141,7 @@ node dist/Cli.js analyze . --memory-stats       # progress + heap/RSS to stderr 
 node dist/Cli.js analyze . --cache              # cache per-file facts under .stoa/cache for faster re-runs
 node dist/Cli.js analyze . --baseline .stoa/baseline.json --update-baseline  # accept current findings as the baseline
 node dist/Cli.js analyze . --baseline .stoa/baseline.json --only-new         # CI: report only what's new since then
+node dist/Cli.js analyze . --min-confidence 0.7 --no-experimental            # hide low-confidence / experimental findings (count stays in the report)
 
 # evaluate the engine against the golden corpus (precision/recall)
 node dist/Cli.js eval test/corpus/project --expected test/corpus/expected.json

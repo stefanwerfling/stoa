@@ -6,6 +6,7 @@ import {initCpp} from './analysis/CppAdapter.js';
 import {initDart} from './analysis/DartAdapter.js';
 import {initHtml} from './analysis/HtmlAdapter.js';
 import {applyBaseline, IncompleteAnalysisError, loadBaseline, onlyNewFindings, saveBaseline} from './Baseline.js';
+import {applyFindingFilter, parseFindingFilter} from './FindingFilter.js';
 import {loadConfig} from './Config.js';
 import {loadValidationContract} from './contracts/ValidationContract.js';
 import {loadExpected} from './evaluation/Corpus.js';
@@ -71,6 +72,9 @@ type CliValues = {
     baseline?: string;
     'update-baseline'?: boolean;
     'only-new'?: boolean;
+    'min-confidence'?: string;
+    certainty?: string[];
+    'no-experimental'?: boolean;
     help?: boolean;
 };
 
@@ -104,7 +108,7 @@ const USAGE = [
     'stoa – Stoic Code Analysis Engine',
     '',
     'Usage:',
-    '  stoa analyze <path> [--format markdown|json|sarif] [--lang en|de] [--include <glob>]... [--exclude <glob>]... [--typecheck] [--dead-exports] [--contracts <file>] [--semantic noop|anthropic] [--config <file>] [--knowledge <dir>] [--rules <dir>] [--memory-stats] [--cache] [--baseline <file>] [--update-baseline] [--only-new]',
+    '  stoa analyze <path> [--format markdown|json|sarif] [--lang en|de] [--include <glob>]... [--exclude <glob>]... [--typecheck] [--dead-exports] [--contracts <file>] [--semantic noop|anthropic] [--config <file>] [--knowledge <dir>] [--rules <dir>] [--memory-stats] [--cache] [--baseline <file>] [--update-baseline] [--only-new] [--min-confidence <0..1>] [--certainty <list>]... [--no-experimental]',
     '  stoa eval <path> --expected <file> [--format markdown|json] [--contracts <file>] [--knowledge <dir>] [--rules <dir>]',
     ''
 ].join('\n');
@@ -158,6 +162,15 @@ const runAnalyze = async (values: CliValues, target: string): Promise<number> =>
     }
     if (values['update-baseline'] === true && values.baseline === undefined) {
         process.stderr.write('error: --update-baseline requires --baseline <file>\n');
+        return EXIT_ERROR;
+    }
+    const findingFilter = parseFindingFilter({
+        ...(values['min-confidence'] !== undefined ? {minConfidence: values['min-confidence']} : {}),
+        ...(values.certainty !== undefined ? {certainty: values.certainty} : {}),
+        noExperimental: values['no-experimental'] === true
+    });
+    if ('error' in findingFilter) {
+        process.stderr.write(`${findingFilter.error}\n`);
         return EXIT_ERROR;
     }
 
@@ -283,6 +296,10 @@ const runAnalyze = async (values: CliValues, target: string): Promise<number> =>
         result = {...result, report};
     }
 
+    // E1c: output filters act last — after the baseline comparison and after
+    // any baseline update above, both of which saw every finding.
+    result = {...result, report: applyFindingFilter(result.report, findingFilter)};
+
     process.stdout.write(`${render(values.format, result.report, lang)}\n`);
     return result.report.coverage.status === 'complete' ? EXIT_OK : EXIT_INCOMPLETE;
 };
@@ -357,6 +374,9 @@ const main = async (): Promise<number> => {
             baseline: {type: 'string'},
             'update-baseline': {type: 'boolean', default: false},
             'only-new': {type: 'boolean', default: false},
+            'min-confidence': {type: 'string'},
+            certainty: {type: 'string', multiple: true},
+            'no-experimental': {type: 'boolean', default: false},
             help: {type: 'boolean', default: false}
         }
     });

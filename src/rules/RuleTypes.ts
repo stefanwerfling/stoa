@@ -1,4 +1,4 @@
-import type {QualityDimension, Severity} from '../Types.js';
+import type {QualityDimension, RuleMaturity, Severity} from '../Types.js';
 import type {LocalizedText} from '../i18n/Localized.js';
 
 export type ConditionOp = '==' | '!=' | '>' | '>=' | '<' | '<=';
@@ -62,4 +62,6 @@ export interface Rule {
     missingContext?: LocalizedText[];
     remediationRef?: string;
     tests: string;
+    /** E1a: `experimental` marks every finding of this rule; absent = `stable`. */
+    maturity?: RuleMaturity;
 }

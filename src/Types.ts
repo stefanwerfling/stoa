@@ -164,6 +164,14 @@ export interface FindingLocation {
 
 export type FindingSource = 'deterministic' | 'semantic';
 
+/**
+ * How established a rule is (Flutter quality track E1a). `experimental`
+ * rules are new or heuristic and not yet past a precision gate; their
+ * findings carry `ruleMaturity: 'experimental'` so reports and filters can
+ * keep them apart from established ones. Absent = `stable`.
+ */
+export type RuleMaturity = 'stable' | 'experimental';
+
 export type BaselineStatus = 'new' | 'known' | 'fixed';
 
 /**
@@ -205,6 +213,8 @@ export interface Finding {
     baselineStatus?: BaselineStatus;
     /** Present only when the optional semantic layer augmented this finding. */
     semantic?: SemanticAugmentation;
+    /** Present only when the rule that produced this finding is `experimental` (E1a); absent = stable. */
+    ruleMaturity?: 'experimental';
 }
 
 /** Stamped into every report so results are reproducible and attributable. */
@@ -309,12 +319,26 @@ export interface BaselineSummary {
     incomplete?: boolean;
 }
 
+/**
+ * Present only when an output filter was applied (E1c, see FindingFilter.ts):
+ * which criteria were active and how many findings they hid — a filter never
+ * hides findings silently. Filters act on the OUTPUT only; a baseline written
+ * in the same run still holds every finding.
+ */
+export interface FilterSummary {
+    minConfidence?: number;
+    certainty?: Certainty[];
+    excludeExperimental?: boolean;
+    hiddenCount: number;
+}
+
 /** The user-facing report. Intermediate facts stay out of it by default. */
 export interface AnalysisReport {
     versions: VersionStamp;
     coverage: CoverageSummary;
     findings: Finding[];
     baseline?: BaselineSummary;
+    filter?: FilterSummary;
     /** Present only when `coverage.status === 'failed'` (see Cli.ts) — the caught error that prevented a real analysis from running at all. */
     error?: string;
 }
