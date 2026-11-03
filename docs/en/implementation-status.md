@@ -248,6 +248,33 @@
   classes not seen: 1 (swipemeister) and 5 (velyo), all in files whose Dart 3
   syntax the grammar cannot structure. Tests: `test/LayerClassification.test.ts`
   (`test/fixtures/dart-layers`).
+- **TypeModel (Flutter quality track, E4):** `src/model/TypeModel.ts`
+  (`buildTypeModel(facts, analyzedFiles, dartIndex?, moduleGraph?)`; rules read
+  it via `typeModelOf(input)` — `ProjectRuleInput.typeModel?`, built from the
+  facts once per fact array when absent). Per declared type: every supertype
+  resolved to `project` (target declaration), `external` (Dart: resolved
+  library URI; TS: a non-analyzed module), `ambiguous` or `unresolved` (Dart:
+  opaque candidates listed); inherited members through `extends`/`with`/`on`
+  (not `implements`), most-derived first — own members hide, the last mixin
+  wins, no constructors or statics — cycle-safe; catalogued framework members
+  (`FLUTTER_FRAMEWORK_MEMBERS`, SDK 3.29.2: `State`, `StatelessWidget`,
+  `StatefulWidget`, the ticker/keep-alive mixins, `CustomPainter`);
+  `hierarchyComplete` only when every base is a project or catalogued framework
+  type. Dart resolves through the DartLibraryIndex (prefixes, barrels, parts);
+  TS through a same-file declaration or the new file-local
+  `struct.importBindings` fact (local name → module, exported name: aliases,
+  default and namespace imports — `deps.importName` has no local name) plus the
+  ModuleGraph; TS re-export barrels are not followed. `TickerProviderStateMixin`,
+  `SingleTickerProviderStateMixin`, `AutomaticKeepAliveClientMixin` and
+  `CustomPainter` were added to the Flutter catalog (SDK-checked). Not wired
+  into the pipeline (no rule reads it before E6b/c); findings byte-identical
+  on four apps, golden corpus and Flutter fixtures (also with `--solid`).
+  `struct.importBindings` adds 0.6–1.0 % facts on the TS projects (none on Dart).
+  Measured: complete hierarchies among types with extends/with/on 213/221
+  (swipemeister), 34/44 (mwpa: `GetxController`), 132/145 (velyo: parse
+  errors), 21/22 (movinder), 15/17 (stoa/src), 7/61 (flyingfish: framework
+  bases from `@stefanwerfling/figtree`, `typeorm`); build ≤ 22 ms. Tests:
+  `test/TypeModel.test.ts` (`test/fixtures/typemodel`).
 - **Class-model facts (Flutter quality track, E3):** one neutral
   `struct.typeDecl` fact per Dart class/mixin/enum
   (`src/analysis/dart/DartMembers.ts`) and per top-level TS class/interface
@@ -1114,7 +1141,7 @@ fails fast (exit 1, concrete errors) instead of silently yielding 0 findings.
 
 ## Facts produced
 
-`file.lineCount`, `file.parseErrors` (Dart), `dart.importSpec`, `dart.classDecl`, `struct.typeDecl` (Dart, TS), `ui.flutterWidgetTree`, `metric.exportCount`, `metric.cyclomaticComplexity`,
+`file.lineCount`, `file.parseErrors` (Dart), `dart.importSpec`, `dart.classDecl`, `struct.typeDecl` (Dart, TS), `struct.importBindings` (TS), `ui.flutterWidgetTree`, `metric.exportCount`, `metric.cyclomaticComplexity`,
 `metric.cognitiveComplexity`, `metric.nestingDepth`, `metric.parameterCount`,
 `metric.functionLength`, `doc.hasComplexityRationale`, `ast.usesNondeterminism`,
 `ast.emptyCatch`, `ast.catchSwallowsError`, `doc.catchHasRationale`, `deps.import`, `deps.importUnused`,

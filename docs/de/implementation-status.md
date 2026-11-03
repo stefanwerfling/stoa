@@ -268,6 +268,35 @@
   UI-Klassen: 1 (swipemeister) und 5 (velyo), alle in Dateien, deren Dart-3-
   Syntax die Grammatik nicht strukturieren kann. Tests:
   `test/LayerClassification.test.ts` (`test/fixtures/dart-layers`).
+- **TypeModel (Flutter-Qualitätsstrang, E4):** `src/model/TypeModel.ts`
+  (`buildTypeModel(facts, analyzedFiles, dartIndex?, moduleGraph?)`; Regeln
+  lesen es über `typeModelOf(input)` — `ProjectRuleInput.typeModel?`, ohne
+  Vorgabe einmal je Fact-Array aus den Facts gebaut). Je deklariertem Typ: jeder
+  Supertyp aufgelöst zu `project` (Zieldeklaration), `external` (Dart:
+  aufgelöste Bibliotheks-URI; TS: ein nicht analysiertes Modul), `ambiguous`
+  oder `unresolved` (Dart: opake Kandidaten gelistet); geerbte Member über
+  `extends`/`with`/`on` (nicht `implements`), am stärksten abgeleitet zuerst —
+  eigene Member verdecken, das letzte Mixin gewinnt, keine Konstruktoren oder
+  statischen Member — zyklensicher; katalogisierte Framework-Member
+  (`FLUTTER_FRAMEWORK_MEMBERS`, SDK 3.29.2: `State`, `StatelessWidget`,
+  `StatefulWidget`, die Ticker-/Keep-Alive-Mixins, `CustomPainter`);
+  `hierarchyComplete` nur, wenn jede Basis ein Projekt- oder katalogisierter
+  Framework-Typ ist. Dart löst über den DartLibraryIndex auf (Präfixe, Barrels,
+  Parts); TS über eine Deklaration in derselben Datei oder das neue dateilokale
+  Fact `struct.importBindings` (lokaler Name → Modul, exportierter Name:
+  Aliase, Default- und Namespace-Importe — `deps.importName` kennt keinen
+  lokalen Namen) plus den ModuleGraph; TS-Re-Export-Barrels werden nicht
+  verfolgt. `TickerProviderStateMixin`, `SingleTickerProviderStateMixin`,
+  `AutomaticKeepAliveClientMixin` und `CustomPainter` wurden in den
+  Flutter-Katalog aufgenommen (gegen das SDK geprüft). Nicht in der Pipeline
+  verdrahtet (vor E6b/c liest es keine Regel); Befunde byte-identisch auf vier
+  Apps, Golden-Korpus und Flutter-Fixtures (auch mit `--solid`).
+  `struct.importBindings` fügt auf den TS-Projekten 0,6–1,0 % Facts hinzu (auf
+  Dart keine). Gemessen: vollständige Hierarchien unter Typen mit
+  extends/with/on 213/221 (swipemeister), 34/44 (mwpa: `GetxController`),
+  132/145 (velyo: Parse-Fehler), 21/22 (movinder), 15/17 (stoa/src), 7/61
+  (flyingfish: Framework-Basen aus `@stefanwerfling/figtree`, `typeorm`);
+  Aufbau ≤ 22 ms. Tests: `test/TypeModel.test.ts` (`test/fixtures/typemodel`).
 - **Klassenmodell-Facts (Flutter-Qualitätsstrang, E3):** ein neutrales
   `struct.typeDecl`-Fact je Dart-Klasse/-Mixin/-Enum
   (`src/analysis/dart/DartMembers.ts`) und je Top-Level-TS-Klasse/-Interface
@@ -1239,7 +1268,7 @@ zu liefern.
 
 ## Erzeugte Facts
 
-`file.lineCount`, `file.parseErrors` (Dart), `dart.importSpec`, `dart.classDecl`, `struct.typeDecl` (Dart, TS), `ui.flutterWidgetTree`, `metric.exportCount`, `metric.cyclomaticComplexity`,
+`file.lineCount`, `file.parseErrors` (Dart), `dart.importSpec`, `dart.classDecl`, `struct.typeDecl` (Dart, TS), `struct.importBindings` (TS), `ui.flutterWidgetTree`, `metric.exportCount`, `metric.cyclomaticComplexity`,
 `metric.cognitiveComplexity`, `metric.nestingDepth`, `metric.parameterCount`,
 `metric.functionLength`, `doc.hasComplexityRationale`, `ast.usesNondeterminism`,
 `ast.emptyCatch`, `ast.catchSwallowsError`, `doc.catchHasRationale`, `deps.import`, `deps.importUnused`,

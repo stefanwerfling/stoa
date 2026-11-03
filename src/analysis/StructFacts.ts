@@ -95,6 +95,28 @@ export interface StructTypeDeclValue {
     members: StructMemberEntry[];
 }
 
+/**
+ * One local name bound by an import (TS, E4): `struct.importBindings` lists
+ * them per file that declares a class or interface, so the TypeModel can map
+ * a written name (`B`, `ns.Base`, a default import) to its module and the
+ * name that module exports — `deps.importName` carries no local alias.
+ */
+export interface StructImportBinding {
+    [key: string]: unknown;
+    local: string;
+    module: string;
+    /** The exported name: the original name of a named import, `default`, or `*` for a namespace import. */
+    importedName: string;
+    kind: 'named' | 'default' | 'namespace';
+}
+
+export interface StructImportBindingsValue {
+    [key: string]: unknown;
+    v: 1;
+    /** Sorted by local name. */
+    bindings: StructImportBinding[];
+}
+
 const compareText = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
 
 const refKey = (ref: StructTypeRef & {member?: string | null}): string => `${ref.prefix ?? ''}\u0000${ref.name}\u0000${ref.member ?? ''}`;

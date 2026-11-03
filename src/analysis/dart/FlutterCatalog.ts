@@ -37,6 +37,7 @@ export const FLUTTER_CATALOG: Readonly<Record<string, readonly [string, string]>
     AnimatedPositionedDirectional: ['src/widgets/implicit_animations.dart', 'wmc'],
     AnimationController: ['src/animation/animation_controller.dart', 'wmc'],
     AspectRatio: ['src/widgets/basic.dart', 'wmc'],
+    AutomaticKeepAliveClientMixin: ['src/widgets/automatic_keep_alive.dart', 'wmc'],
     Axis: ['src/painting/basic_types.dart', 'wmc'],
     Baseline: ['src/widgets/basic.dart', 'wmc'],
     Card: ['src/material/card.dart', 'm'],
@@ -50,6 +51,7 @@ export const FLUTTER_CATALOG: Readonly<Record<string, readonly [string, string]>
     ConstrainedBox: ['src/widgets/basic.dart', 'wmc'],
     CupertinoLocalizations: ['src/cupertino/localizations.dart', 'c'],
     CupertinoTheme: ['src/cupertino/theme.dart', 'c'],
+    CustomPainter: ['src/rendering/custom_paint.dart', 'wmc'],
     CustomScrollView: ['src/widgets/scroll_view.dart', 'wmc'],
     DecoratedBox: ['src/widgets/container.dart', 'wmc'],
     DefaultTextStyle: ['src/widgets/text.dart', 'wmc'],
@@ -89,6 +91,7 @@ export const FLUTTER_CATALOG: Readonly<Record<string, readonly [string, string]>
     SearchController: ['src/material/search_anchor.dart', 'm'],
     Semantics: ['src/widgets/basic.dart', 'wmc'],
     SingleChildScrollView: ['src/widgets/single_child_scroll_view.dart', 'wmc'],
+    SingleTickerProviderStateMixin: ['src/widgets/ticker_provider.dart', 'wmc'],
     SizedBox: ['src/widgets/basic.dart', 'wmc'],
     Spacer: ['src/widgets/spacer.dart', 'wmc'],
     Stack: ['src/widgets/basic.dart', 'wmc'],
@@ -98,6 +101,7 @@ export const FLUTTER_CATALOG: Readonly<Record<string, readonly [string, string]>
     TabController: ['src/material/tab_controller.dart', 'm'],
     TextEditingController: ['src/widgets/editable_text.dart', 'wmc'],
     TextField: ['src/material/text_field.dart', 'm'],
+    TickerProviderStateMixin: ['src/widgets/ticker_provider.dart', 'wmc'],
     TextFormField: ['src/material/text_form_field.dart', 'm'],
     Theme: ['src/material/theme.dart', 'm'],
     Tooltip: ['src/material/tooltip.dart', 'm'],
@@ -132,3 +136,51 @@ const NO_PACKAGES: DartPackageMap = new Map();
  * of the project itself stay opaque; relative imports still resolve.
  */
 export const flutterAwareIndex = (facts: readonly Fact[], packages: DartPackageMap = NO_PACKAGES): DartLibraryIndex => new DartLibraryIndex(facts, packages, flutterLibraries);
+
+/**
+ * Known members of Flutter framework base classes (Flutter quality track E4,
+ * SDK `FLUTTER_SDK_VERSION`): the TypeModel lists them as inherited
+ * framework members of a project class extending such a base, so a class
+ * reading `widget`/`context`/`mounted` or overriding a lifecycle hook is not
+ * read as using something foreign. Keyed by `origin#name`; flat (each entry
+ * already includes what its own framework bases contribute that matters here).
+ */
+export const FLUTTER_FRAMEWORK_MEMBERS: Readonly<Record<string, readonly (readonly [string, 'method' | 'getter' | 'field'])[]>> = {
+    'package:flutter/src/widgets/framework.dart#State': [
+        ['widget', 'getter'],
+        ['context', 'getter'],
+        ['mounted', 'getter'],
+        ['setState', 'method'],
+        ['initState', 'method'],
+        ['didChangeDependencies', 'method'],
+        ['didUpdateWidget', 'method'],
+        ['reassemble', 'method'],
+        ['deactivate', 'method'],
+        ['activate', 'method'],
+        ['dispose', 'method'],
+        ['build', 'method']
+    ],
+    'package:flutter/src/widgets/framework.dart#StatelessWidget': [
+        ['key', 'field'],
+        ['build', 'method'],
+        ['createElement', 'method']
+    ],
+    'package:flutter/src/widgets/framework.dart#StatefulWidget': [
+        ['key', 'field'],
+        ['createState', 'method'],
+        ['createElement', 'method']
+    ],
+    'package:flutter/src/widgets/ticker_provider.dart#SingleTickerProviderStateMixin': [['createTicker', 'method']],
+    'package:flutter/src/widgets/ticker_provider.dart#TickerProviderStateMixin': [['createTicker', 'method']],
+    'package:flutter/src/widgets/automatic_keep_alive.dart#AutomaticKeepAliveClientMixin': [
+        ['wantKeepAlive', 'getter'],
+        ['updateKeepAlive', 'method']
+    ],
+    'package:flutter/src/rendering/custom_paint.dart#CustomPainter': [
+        ['paint', 'method'],
+        ['shouldRepaint', 'method'],
+        ['shouldRebuildSemantics', 'method'],
+        ['hitTest', 'method'],
+        ['semanticsBuilder', 'getter']
+    ]
+};

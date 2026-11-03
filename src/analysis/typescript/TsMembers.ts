@@ -7,6 +7,8 @@ import {
     sortedRefs,
     sortedUnique,
     type StructBody,
+    type StructImportBinding,
+    type StructImportBindingsValue,
     type StructInstantiation,
     type StructMember,
     type StructMemberKind,
@@ -33,6 +35,8 @@ type Build = (spec: FactSpec) => Fact;
  * - `refsImports`: identifiers in the body bound by this file's imports
  *   (default, named — local alias — and namespace names).
  * - Interface members are abstract.
+ * - E4: a file that declares a class or interface and imports something also
+ *   gets one `struct.importBindings` fact (local name → module, exported name).
  *
  * Not modelled (documented limits): class expressions, classes nested in
  * functions or namespaces, index signatures, object-literal "classes", and
@@ -72,7 +76,31 @@ export const extractTsMemberFacts = (sourceFile: SourceFile, build: Build): Fact
         };
         facts.push(build({kind: 'struct.typeDecl', kindOf: 'class', symbol: declaration.getName(), range: rangeOf(sourceFile, declaration), value}));
     }
+    const bindings = importBindings(sourceFile);
+    if (facts.length > 0 && bindings.length > 0) {
+        const value: StructImportBindingsValue = {v: 1, bindings};
+        facts.push(build({kind: 'struct.importBindings', kindOf: 'file', range: rangeOf(sourceFile, sourceFile), value}));
+    }
     return facts;
+};
+
+const importBindings = (sourceFile: SourceFile): StructImportBinding[] => {
+    const bindings: StructImportBinding[] = [];
+    for (const declaration of sourceFile.getImportDeclarations()) {
+        const module = declaration.getModuleSpecifierValue();
+        const defaultImport = declaration.getDefaultImport();
+        if (defaultImport !== undefined) {
+            bindings.push({local: defaultImport.getText(), module, importedName: 'default', kind: 'default'});
+        }
+        const namespace = declaration.getNamespaceImport();
+        if (namespace !== undefined) {
+            bindings.push({local: namespace.getText(), module, importedName: '*', kind: 'namespace'});
+        }
+        for (const named of declaration.getNamedImports()) {
+            bindings.push({local: named.getAliasNode()?.getText() ?? named.getName(), module, importedName: named.getName(), kind: 'named'});
+        }
+    }
+    return bindings.sort((a, b) => (a.local < b.local ? -1 : a.local > b.local ? 1 : 0) || (a.module < b.module ? -1 : a.module > b.module ? 1 : 0));
 };
 
 // Start positions of the top-level statements a syntax error belongs to. TS

@@ -168,3 +168,13 @@ test('E3: deterministic across runs and identical from the FactCache', () => {
         rmSync(cacheDir, {recursive: true, force: true});
     }
 });
+
+test('E4: struct.importBindings — one per TS file with types and imports, local name → module and exported name', () => {
+    const bindings = facts.filter((fact) => fact.kind === 'struct.importBindings');
+    assert.deepEqual(bindings.map((fact) => fact.subject.file), [join(fixtures, 'ts/repo.ts')], 'broken.ts has no imports; Dart files never get one');
+    assert.deepEqual((bindings[0]?.value as {bindings: unknown[]}).bindings, [
+        {local: 'Http', module: './http', importedName: 'Http', kind: 'named'},
+        {local: 'Logger', module: './logger', importedName: 'default', kind: 'default'},
+        {local: 'db', module: './db', importedName: '*', kind: 'namespace'}
+    ]);
+});

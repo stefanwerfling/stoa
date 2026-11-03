@@ -4,6 +4,7 @@ import type {ModuleGraph} from '../model/ModuleGraph.js';
 import type {SymbolGraph} from '../model/SymbolGraph.js';
 import type {FlutterWidgetGraph} from '../model/FlutterWidgetGraph.js';
 import type {DartLibraryIndex} from '../model/DartLibraryIndex.js';
+import {buildTypeModel, type TypeModel} from '../model/TypeModel.js';
 
 export interface ProjectRuleInput {
     facts: Fact[];
@@ -42,6 +43,13 @@ export interface ProjectRuleInput {
      * `facts` alone (own `package:` URIs opaque) when it is absent.
      */
     dartLibraryIndex?: DartLibraryIndex;
+    /**
+     * The project type model (Flutter quality track E4): supertype
+     * resolution and inherited members, from `struct.typeDecl` facts.
+     * OPTIONAL and additive; a rule reads it through `typeModelOf(input)`,
+     * which builds it from `facts` when absent (once per fact array).
+     */
+    typeModel?: TypeModel;
     /**
      * Every file that contributed at least one fact to this run — computed
      * by the caller directly from the analyzed file list, independent of
@@ -91,3 +99,18 @@ export interface ProjectRule {
     readonly maturity?: RuleMaturity;
     evaluate(input: ProjectRuleInput): Finding[];
 }
+
+const typeModelCache = new WeakMap<readonly unknown[], TypeModel>();
+
+/** The input's type model, or one built from its facts (memoized per fact array, so several rules share it). */
+export const typeModelOf = (input: ProjectRuleInput): TypeModel => {
+    if (input.typeModel !== undefined) {
+        return input.typeModel;
+    }
+    let model = typeModelCache.get(input.facts);
+    if (model === undefined) {
+        model = buildTypeModel(input.facts, input.analyzedFiles, input.dartLibraryIndex, input.moduleGraph);
+        typeModelCache.set(input.facts, model);
+    }
+    return model;
+};
