@@ -10,6 +10,8 @@ import type {TypeModel, TypeNode} from '../../model/TypeModel.js';
 import type {StructMember, StructTypeRef} from '../../analysis/StructFacts.js';
 import {typeModelOf, type ProjectRule, type ProjectRuleInput} from '../ProjectRule.js';
 import {resolvePrinciple} from './FlutterLayoutRules.js';
+import {SolidDipLayerDeclaredRule} from './SolidArchitectureRule.js';
+import type {ArchitectureModel} from '../../architecture/ArchitectureConfig.js';
 
 /**
  * SOLID rules (Flutter quality track E6). Registered by the pipeline only with
@@ -650,9 +652,13 @@ export class SolidDipConcreteDependencyRule implements ProjectRule {
     }
 }
 
-/** The SOLID rules registered with `--solid`, in a fixed order. */
-export const solidRules = (): ProjectRule[] => [
-    new SolidDipLayerDirectionRule(),
+/**
+ * The SOLID rules registered with `--solid`, in a fixed order. With a
+ * declared architecture (E5b) the DIP layer rule runs as stage 2 (E6d)
+ * INSTEAD of the stage-1 heuristic (user decision).
+ */
+export const solidRules = (architecture?: ArchitectureModel): ProjectRule[] => [
+    architecture === undefined ? new SolidDipLayerDirectionRule() : new SolidDipLayerDeclaredRule(architecture),
     new SolidLspContractCompatibilityRule(),
     new SolidIspInterfaceCohesionRule(),
     new SolidDipConcreteDependencyRule()

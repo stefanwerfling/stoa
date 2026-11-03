@@ -328,6 +328,30 @@
   (`test/fixtures/architecture`: loader errors, assignment incl. multiple
   matches and outside-root files, all four edge verdicts, package bans and
   names, report summary and markdown, CLI fail-fast and JSON).
+- **SOLID, DIP layer direction stage 2 (Flutter quality track, E6d):**
+  `src/rules/project/SolidArchitectureRule.ts`, `R-SOLID-DIP-LAYER-DIRECTION`
+  0.2.0 (stable, `syntactic` 0.9, `medium`, `marcus.cooperation`,
+  `dependencies`). Only with `--solid --architecture`, and then INSTEAD of
+  stage 1 (user decision: one semantics per run under the id; without a config
+  stage 1 0.1.0 runs as before). Findings: a resolved ModuleGraph edge — TS
+  `deps.import` (type-only included, marked `import type` in the evidence) and
+  Dart `import`/`export` (E2) — between two different layers whose direction
+  `allow` does not list, one per (importing file, imported file) at its first
+  site; and an unresolved (package) import whose `packageNameOf` name is banned
+  for the importing file's layer, one per (file, package). A file without a
+  layer never leads to a finding. Evidence: the file's layer (config name and
+  version) and every import site. Maturity stable as planned: the finding is
+  a fact relative to the user's declaration, not a heuristic. Tried with
+  scratch configs: swipemeister with the plan's example layers (`lib/Service/**`
+  includes the API response models) 92 edge findings, 0 package findings (no
+  UI file imports http/dio/sqflite); mwpa with `shared_preferences` banned for
+  `lib/Pages/**`: the same 4 pages E6a found. Without `--architecture` every
+  output is byte-identical. Tests: `test/SolidArchitectureRule.test.ts`
+  (`test/fixtures/solid/dip-declared`: forbidden Dart import/export and TS
+  (type) imports in both directions, Dart/`dart:`/npm/scoped package bans,
+  allowed, same-layer and unknown edges, replacement of stage 1, no finding
+  without `--solid`), plus the lossless-kinds check in
+  `test/ProjectRuleCategorization.test.ts`.
 - **SOLID, DIP layer direction stage 1 (Flutter quality track, E6a):**
   `src/rules/project/SolidRules.ts`, registered only with `--solid` (pipeline
   option `solid`). `R-SOLID-DIP-LAYER-DIRECTION` 0.1.0 (experimental,
@@ -495,7 +519,8 @@ stoa eval <path> --expected <file> [--format markdown|json] [--contracts <file>]
 - `--architecture <file>` (E5b) loads a declared architecture
   (`stoa.architecture.json`, `schemas/architecture.schema.json`); a broken file
   fails fast the same way (exit 1). It adds the `architecture` summary to the
-  report; no finding changes before E6d.
+  report; together with `--solid` it switches the DIP layer rule to stage 2
+  (E6d).
 - `--memory-stats` prints one progress line to stderr every 100 files —
   current phase (`analysis`/`evaluation`), files processed/selected, facts
   extracted so far, heap used/limit/total, RSS, external memory, elapsed

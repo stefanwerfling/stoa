@@ -134,6 +134,7 @@ export const analyze = (options: AnalyzeOptions): AnalysisResult => {
         .register(new VueAdapter());
     const knowledgeBase = KnowledgeBase.loadFromDirectory(options.knowledgeDir, options.config.knowledgeBase);
     const ruleSet = RuleSet.loadFromDirectory(options.ruleSetDir, options.config.ruleSet);
+    const architectureModel = architectureModelOf(options);
     const projectRules: ProjectRule[] = [new DependencyCycleRule(), ...flutterLayoutRules(), ...flutterLifecycleRules()];
     if (options.deadExports === true) {
         projectRules.push(new DeadExportRule());
@@ -142,7 +143,7 @@ export const analyze = (options: AnalyzeOptions): AnalysisResult => {
         projectRules.push(new ValidationContractRule(options.validationContract));
     }
     if (options.solid === true) {
-        projectRules.push(...solidRules());
+        projectRules.push(...solidRules(architectureModel));
     }
     const ruleEngine = new RuleEngine(knowledgeBase, ruleSet, options.lang ?? 'en', projectRules);
 
@@ -332,7 +333,7 @@ export const analyze = (options: AnalyzeOptions): AnalysisResult => {
             ...(cache !== null ? {cacheHits} : {})
         },
         findings,
-        ...architectureSummaryOf(options, analyzedPaths)
+        ...architectureSummaryOf(architectureModel, analyzedPaths)
     };
 
     return {report, facts};
@@ -341,6 +342,10 @@ export const analyze = (options: AnalyzeOptions): AnalysisResult => {
 /** The directory the architecture globs are relative to: the analysis root, or the directory of a single-file root. */
 const architectureRootOf = (rootPath: string): string => (statSync(rootPath).isFile() ? dirname(rootPath) : rootPath);
 
-/** `{architecture}` for the report when a config was given (E5b), else nothing — the report shape is unchanged without one. */
-const architectureSummaryOf = (options: AnalyzeOptions, analyzedPaths: ReadonlySet<string>): Pick<AnalysisReport, 'architecture'> =>
-    options.architecture === undefined || options.architecture === null ? {} : {architecture: new ArchitectureModel(options.architecture, architectureRootOf(options.rootPath)).summarize(analyzedPaths)};
+/** The declared architecture (E5b) as a model, or undefined without `--architecture`. */
+const architectureModelOf = (options: AnalyzeOptions): ArchitectureModel | undefined =>
+    options.architecture === undefined || options.architecture === null ? undefined : new ArchitectureModel(options.architecture, architectureRootOf(options.rootPath));
+
+/** `{architecture}` for the report when a config was given, else nothing — the report shape is unchanged without one. */
+const architectureSummaryOf = (model: ArchitectureModel | undefined, analyzedPaths: ReadonlySet<string>): Pick<AnalysisReport, 'architecture'> =>
+    model === undefined ? {} : {architecture: model.summarize(analyzedPaths)};

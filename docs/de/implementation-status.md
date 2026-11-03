@@ -354,6 +354,31 @@
   (`test/fixtures/architecture`: Loader-Fehler, Zuordnung inkl. Mehrfachtreffer
   und Dateien außerhalb der Wurzel, alle vier Kantenurteile, Paketverbote und
   -namen, Report-Zusammenfassung und Markdown, CLI-Fail-fast und JSON).
+- **SOLID, DIP-Schichtrichtung Stufe 2 (Flutter-Qualitätsstrang, E6d):**
+  `src/rules/project/SolidArchitectureRule.ts`, `R-SOLID-DIP-LAYER-DIRECTION`
+  0.2.0 (stabil, `syntactic` 0,9, `medium`, `marcus.cooperation`,
+  `dependencies`). Nur mit `--solid --architecture`, und dann ANSTELLE von
+  Stufe 1 (Nutzerentscheidung: eine Semantik je Lauf unter der ID; ohne
+  Konfiguration läuft Stufe 1 0.1.0 wie bisher). Befunde: eine aufgelöste
+  ModuleGraph-Kante — TS `deps.import` (type-only eingeschlossen, in der Evidenz
+  als `import type` markiert) und Dart `import`/`export` (E2) — zwischen zwei
+  verschiedenen Schichten, deren Richtung `allow` nicht nennt, einer je
+  (importierende Datei, importierte Datei) an der ersten Stelle; und ein
+  unaufgelöster (Paket-)Import, dessen `packageNameOf`-Name für die Schicht der
+  importierenden Datei verboten ist, einer je (Datei, Paket). Eine Datei ohne
+  Schicht führt nie zu einem Befund. Evidenz: die Schicht der Datei
+  (Konfigurationsname und -version) und jede Importstelle. Reife wie geplant
+  stabil: der Befund ist eine Tatsache relativ zur Deklaration des Nutzers,
+  keine Heuristik. Erprobt mit Probe-Konfigurationen: swipemeister mit den
+  Schichten des Planbeispiels (`lib/Service/**` umfasst die API-Response-Modelle)
+  92 Kantenbefunde, 0 Paketbefunde (keine UI-Datei importiert http/dio/sqflite);
+  mwpa mit verbotenem `shared_preferences` für `lib/Pages/**`: dieselben 4
+  Seiten, die E6a fand. Ohne `--architecture` ist jede Ausgabe byte-identisch.
+  Tests: `test/SolidArchitectureRule.test.ts` (`test/fixtures/solid/dip-declared`:
+  verbotene Dart-Import/Export- und TS-(Typ-)Importe in beide Richtungen,
+  Dart-/`dart:`-/npm-/Scoped-Paketverbote, erlaubte, schichtinterne und
+  unbekannte Kanten, Ersetzung von Stufe 1, kein Befund ohne `--solid`), dazu
+  die Lossless-Kinds-Prüfung in `test/ProjectRuleCategorization.test.ts`.
 - **SOLID, DIP-Schichtrichtung Stufe 1 (Flutter-Qualitätsstrang, E6a):**
   `src/rules/project/SolidRules.ts`, registriert nur mit `--solid`
   (Pipeline-Option `solid`). `R-SOLID-DIP-LAYER-DIRECTION` 0.1.0
@@ -534,7 +559,8 @@ stoa eval <pfad> --expected <datei> [--format markdown|json] [--contracts <datei
 - `--architecture <datei>` (E5b) lädt eine deklarierte Architektur
   (`stoa.architecture.json`, `schemas/architecture.schema.json`); eine
   fehlerhafte Datei schlägt ebenso sofort fehl (Exit 1). Sie ergänzt den Report
-  um die Zusammenfassung `architecture`; vor E6d ändert sich kein Befund.
+  um die Zusammenfassung `architecture`; zusammen mit `--solid` schaltet sie die
+  DIP-Schichtregel auf Stufe 2 (E6d) um.
 - `--memory-stats` gibt alle 100 Dateien eine Fortschrittszeile auf stderr
   aus — aktuelle Phase (`analysis`/`evaluation`), verarbeitete/ausgewählte
   Dateien, bisher extrahierte Facts, Heap genutzt/Limit/gesamt, RSS,

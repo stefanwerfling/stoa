@@ -1,0 +1,10 @@
+{
+  "version": "1.0.0",
+  "layers": [
+    { "name": "ui", "include": ["lib/ui/**", "web/ui/**"] },
+    { "name": "data", "include": ["lib/data/**", "web/data/**"] },
+    { "name": "domain", "include": ["lib/domain/**"] }
+  ],
+  "allow": [ { "from": "ui", "to": "domain" }, { "from": "data", "to": "domain" } ],
+  "forbidPackages": [ { "layer": "ui", "packages": ["http", "dart:io", "axios", "@scope/net"] } ]
+}
