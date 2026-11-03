@@ -326,6 +326,34 @@
   Klassenausdrücke/verschachtelte Klassen in TS, Shadowing über Parameter und
   lokale Variablen hinaus. Tests: `test/StructFacts.test.ts`
   (`test/fixtures/struct`).
+- **Architektur-Konfiguration R6 (Flutter-Qualitätsstrang, E5b):**
+  `src/architecture/ArchitectureConfig.ts`, Schema
+  `schemas/architecture.schema.json`, CLI `--architecture <datei>`
+  (Pipeline-Option `architecture`). Loader nach dem Muster des Validation
+  Contract (ajv 2020; ungültiges JSON, Schemaverletzungen und doppelte
+  Schichtnamen schlagen mit klarer Meldung fehl, Exit 1). Ein Verweis auf eine
+  nicht deklarierte Schicht in `allow`/`forbidPackages` (das Planbeispiel
+  erlaubt `ui → domain`, ohne `domain` zu deklarieren) ist eine Warnung, kein
+  Fehler — er trifft nie zu. `ArchitectureModel`: eine Datei gehört zur ERSTEN
+  Schicht, deren `include`-Globs (picomatch, Dotfiles, POSIX-Pfade relativ zur
+  Analysewurzel — bei einer Einzeldatei deren Verzeichnis) passen;
+  `edgeVerdict(from, to)` = `same-layer` | `allowed` (in `allow` gelistet) |
+  `forbidden` | `unknown` (ein Ende ohne Schicht — nie ein Verstoß);
+  `isPackageForbidden(datei, paket)` je Schicht; `packageNameOf(specifier)`
+  normalisiert `package:http/…` → `http`, `dart:io`, `axios/x` → `axios`,
+  `@scope/name/x` → `@scope/name`, relative und eigene Paket-Specifier → null.
+  Der Report erhält `architecture` (nur mit Konfiguration; Markdown-Zeile,
+  SARIF-Invocation-Property): Schichtgrößen über die analysierten Dateien,
+  Dateien ohne Schicht und die Konfigurationswarnungen — Dateien in mehreren
+  Schichten (Anzahl + die ersten 20), leere Schichten, nicht deklarierte
+  Schichtverweise. Noch liest keine Regel sie (E6d); ohne `--architecture` ist
+  jede Ausgabe einschließlich des vollständigen CLI-JSON-Reports
+  byte-identisch. Erprobt an swipemeister mit den Schichten des Planbeispiels
+  plus `domain` (`lib/Model/**`): ui 77, data 51, domain 11, 64 Dateien ohne
+  Schicht. Tests: `test/ArchitectureConfig.test.ts`
+  (`test/fixtures/architecture`: Loader-Fehler, Zuordnung inkl. Mehrfachtreffer
+  und Dateien außerhalb der Wurzel, alle vier Kantenurteile, Paketverbote und
+  -namen, Report-Zusammenfassung und Markdown, CLI-Fail-fast und JSON).
 - **SOLID, DIP-Schichtrichtung Stufe 1 (Flutter-Qualitätsstrang, E6a):**
   `src/rules/project/SolidRules.ts`, registriert nur mit `--solid`
   (Pipeline-Option `solid`). `R-SOLID-DIP-LAYER-DIRECTION` 0.1.0
@@ -479,7 +507,7 @@
 ```
 stoa analyze <pfad> [--format markdown|json|sarif] [--lang en|de]
                     [--include <glob>]... [--exclude <glob>]...
-                    [--typecheck] [--dead-exports] [--solid] [--contracts <datei>]
+                    [--typecheck] [--dead-exports] [--solid] [--architecture <datei>] [--contracts <datei>]
                     [--semantic noop|anthropic] [--memory-stats] [--cache]
                     [--baseline <datei>] [--update-baseline] [--only-new]
                     [--min-confidence <0..1>] [--certainty <liste>]... [--no-experimental]
@@ -503,6 +531,10 @@ stoa eval <pfad> --expected <datei> [--format markdown|json] [--contracts <datei
   (zuvor von `eval` stillschweigend ignoriert) — ein fehlerhafter/unlesbarer
   Vertrag schlägt bei beiden Befehlen sofort fehl (Exit 1), nie ein
   stillschweigend verschlechtertes Ergebnis.
+- `--architecture <datei>` (E5b) lädt eine deklarierte Architektur
+  (`stoa.architecture.json`, `schemas/architecture.schema.json`); eine
+  fehlerhafte Datei schlägt ebenso sofort fehl (Exit 1). Sie ergänzt den Report
+  um die Zusammenfassung `architecture`; vor E6d ändert sich kein Befund.
 - `--memory-stats` gibt alle 100 Dateien eine Fortschrittszeile auf stderr
   aus — aktuelle Phase (`analysis`/`evaluation`), verarbeitete/ausgewählte
   Dateien, bisher extrahierte Facts, Heap genutzt/Limit/gesamt, RSS,

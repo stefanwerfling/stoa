@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stoa.dev/schemas/architecture.schema.json",
+  "title": "Stoa Architecture Config",
+  "description": "The declared layers of the project under analysis, supplied via `stoa analyze --architecture <file>` (stoa.architecture.json). Files are assigned to the FIRST layer whose include globs match their path relative to the analysis root; edges between different layers are allowed only when listed in `allow`; `forbidPackages` bans external packages per layer. A file without a layer is unknown and never judged. It describes the INTENDED architecture; it proves nothing about the code.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "layers"],
+  "properties": {
+    "version": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Config version, for change tracking; not tied to Stoa's own versions."
+    },
+    "layers": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/layer" },
+      "description": "In priority order: a file belongs to the first layer that matches it."
+    },
+    "allow": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/allowEdge" },
+      "description": "Permitted dependency directions between DIFFERENT layers; edges within one layer are always allowed."
+    },
+    "forbidPackages": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/packageBan" }
+    }
+  },
+  "$defs": {
+    "layerName": {
+      "type": "string",
+      "pattern": "^[A-Za-z][A-Za-z0-9_-]*$"
+    },
+    "layer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "include"],
+      "properties": {
+        "name": { "$ref": "#/$defs/layerName" },
+        "include": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 },
+          "description": "POSIX globs (picomatch), relative to the analysis root, e.g. lib/Pages/**."
+        }
+      }
+    },
+    "allowEdge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["from", "to"],
+      "properties": {
+        "from": { "$ref": "#/$defs/layerName" },
+        "to": { "$ref": "#/$defs/layerName" }
+      }
+    },
+    "packageBan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["layer", "packages"],
+      "properties": {
+        "layer": { "$ref": "#/$defs/layerName" },
+        "packages": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Package names: a Dart package (`http` for package:http/…), `dart:io`, or an npm package (`axios`, `@scope/name`)."
+        }
+      }
+    }
+  }
+}

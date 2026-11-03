@@ -1,5 +1,5 @@
-import {DEFAULT_LANG, dimensionLabel, labelsFor} from '../i18n/Localized.js';
-import type {AnalysisReport} from '../Types.js';
+import {DEFAULT_LANG, dimensionLabel, labelsFor, type ReportLabels} from '../i18n/Localized.js';
+import type {AnalysisReport, ArchitectureSummary} from '../Types.js';
 
 export interface ReportOptions {
     lang?: string;
@@ -8,6 +8,22 @@ export interface ReportOptions {
 /** Machine-readable report. Stable key order via the fixed object shape. */
 export const toJson = (report: AnalysisReport): string => {
     return JSON.stringify(report, null, 2);
+};
+
+/** The architecture summary (E5b): one line with the layer sizes, one per configuration warning; nothing without a config. */
+const architectureLines = (summary: ArchitectureSummary | undefined, t: ReportLabels): string[] => {
+    if (summary === undefined) {
+        return [];
+    }
+    const {layers, unassignedFiles, warnings} = summary;
+    return [
+        `- ${t.architecture}: ${layers.map((layer) => `${layer.name} ${layer.files}`).join(', ')}; ${unassignedFiles} ${t.architectureUnassigned}`,
+        ...(warnings.multipleMatchCount > 0
+            ? [`  - ${warnings.multipleMatchCount} ${t.architectureMultiple}: ${warnings.multipleMatchSample.map((entry) => `${entry.file} (${entry.layers.join(', ')})`).join('; ')}`]
+            : []),
+        ...(warnings.emptyLayers.length > 0 ? [`  - ${t.architectureEmpty}: ${warnings.emptyLayers.join(', ')}`] : []),
+        ...(warnings.unknownLayerReferences.length > 0 ? [`  - ${t.architectureUnknownRefs}: ${warnings.unknownLayerReferences.join(', ')}`] : [])
+    ];
 };
 
 /** Human-readable summary for the CLI and for sharing (e.g. a PR comment). */
@@ -41,6 +57,7 @@ export const toMarkdown = (report: AnalysisReport, options: ReportOptions = {}):
         ];
         lines.push(`- ${t.filter}: ${criteria.join(', ')} — ${report.filter.hiddenCount} ${t.filterHidden}`);
     }
+    lines.push(...architectureLines(report.architecture, t));
     lines.push('');
 
     if (report.findings.length === 0) {

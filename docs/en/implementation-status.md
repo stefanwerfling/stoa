@@ -301,6 +301,33 @@
   Not modelled: enhanced-enum members (unparseable), extensions, class
   expressions/nested classes in TS, shadowing beyond parameters and locals.
   Tests: `test/StructFacts.test.ts` (`test/fixtures/struct`).
+- **Architecture config R6 (Flutter quality track, E5b):**
+  `src/architecture/ArchitectureConfig.ts`, schema
+  `schemas/architecture.schema.json`, CLI `--architecture <file>` (pipeline
+  option `architecture`). Loader after the Validation Contract pattern (ajv
+  2020; invalid JSON, schema violations and duplicate layer names fail with a
+  clear message, exit 1). A reference to an undeclared layer in
+  `allow`/`forbidPackages` (the plan's own example allows `ui → domain` without
+  declaring `domain`) is a warning, not an error — it never matches.
+  `ArchitectureModel`: a file belongs to the FIRST layer whose `include` globs
+  (picomatch, dotfiles, POSIX paths relative to the analysis root — the
+  directory of a single-file root) match; `edgeVerdict(from, to)` =
+  `same-layer` | `allowed` (listed in `allow`) | `forbidden` | `unknown` (an end
+  without a layer — never a violation); `isPackageForbidden(file, package)` per
+  layer; `packageNameOf(specifier)` normalizes `package:http/…` → `http`,
+  `dart:io`, `axios/x` → `axios`, `@scope/name/x` → `@scope/name`, relative and
+  own-package specifiers → null. The report gets `architecture` (only with a
+  config; markdown line, SARIF invocation property): layer sizes over the
+  analyzed files, files without a layer, and the configuration warnings —
+  files matching several layers (count + the first 20), empty layers,
+  undeclared layer references. No rule reads it yet (E6d); without
+  `--architecture` every output, incl. the full CLI JSON report, is
+  byte-identical. Tried on swipemeister with the plan's example layers plus
+  `domain` (`lib/Model/**`): ui 77, data 51, domain 11, 64 files without a
+  layer. Tests: `test/ArchitectureConfig.test.ts`
+  (`test/fixtures/architecture`: loader errors, assignment incl. multiple
+  matches and outside-root files, all four edge verdicts, package bans and
+  names, report summary and markdown, CLI fail-fast and JSON).
 - **SOLID, DIP layer direction stage 1 (Flutter quality track, E6a):**
   `src/rules/project/SolidRules.ts`, registered only with `--solid` (pipeline
   option `solid`). `R-SOLID-DIP-LAYER-DIRECTION` 0.1.0 (experimental,
@@ -443,8 +470,8 @@
 ```
 stoa analyze <path> [--format markdown|json|sarif] [--lang en|de]
                     [--include <glob>]... [--exclude <glob>]...
-                    [--typecheck] [--dead-exports] [--solid] [--contracts <file>]
-                    [--semantic noop|anthropic] [--memory-stats] [--cache]
+                    [--typecheck] [--dead-exports] [--solid] [--architecture <file>]
+                    [--contracts <file>] [--semantic noop|anthropic] [--memory-stats] [--cache]
                     [--baseline <file>] [--update-baseline] [--only-new]
                     [--min-confidence <0..1>] [--certainty <list>]... [--no-experimental]
                     [--config <file>] [--knowledge <dir>] [--rules <dir>]
@@ -465,6 +492,10 @@ stoa eval <path> --expected <file> [--format markdown|json] [--contracts <file>]
 - `--contracts <file>` is accepted by BOTH `analyze` and `eval` (previously
   silently ignored by `eval`) — a malformed/unreadable contract fails fast
   (exit 1) for either command, never a silently-degraded result.
+- `--architecture <file>` (E5b) loads a declared architecture
+  (`stoa.architecture.json`, `schemas/architecture.schema.json`); a broken file
+  fails fast the same way (exit 1). It adds the `architecture` summary to the
+  report; no finding changes before E6d.
 - `--memory-stats` prints one progress line to stderr every 100 files —
   current phase (`analysis`/`evaluation`), files processed/selected, facts
   extracted so far, heap used/limit/total, RSS, external memory, elapsed

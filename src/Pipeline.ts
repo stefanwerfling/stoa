@@ -1,3 +1,5 @@
+import {statSync} from 'node:fs';
+import {dirname} from 'node:path';
 import {AdapterRegistry} from './analysis/AdapterRegistry.js';
 import {CppAdapter} from './analysis/CppAdapter.js';
 import {DartAdapter} from './analysis/DartAdapter.js';
@@ -28,6 +30,7 @@ import {solidRules} from './rules/project/SolidRules.js';
 import {ValidationContractRule} from './rules/project/ValidationContractRule.js';
 import type {ProjectRule} from './rules/ProjectRule.js';
 import type {ValidationContract} from './contracts/ValidationContract.js';
+import {ArchitectureModel, type ArchitectureConfig} from './architecture/ArchitectureConfig.js';
 import {ENGINE_VERSION} from './Version.js';
 import type {AnalysisReport, AnalysisResult, AnalysisStatus, ExcludedFile, ExclusionReason, Fact, Finding, StoaConfig, VersionStamp} from './Types.js';
 
@@ -52,6 +55,13 @@ export interface AnalyzeOptions {
      * interpreted, so the feature is fully inert by default.
      */
     validationContract?: ValidationContract | null;
+    /**
+     * Opt-in (Flutter quality track E5b): a loaded architecture config
+     * (`--architecture`, see architecture/ArchitectureConfig.ts). Adds the
+     * `architecture` summary (layer sizes, configuration warnings) to the
+     * report; no rule reads it before E6d. Absent = inert.
+     */
+    architecture?: ArchitectureConfig | null;
     /**
      * Opt-in diagnostic hook, called every `MEMORY_CHECK_INTERVAL` files with a
      * memory snapshot and progress (see MemoryGuard.ts / CLI
@@ -321,8 +331,16 @@ export const analyze = (options: AnalyzeOptions): AnalysisResult => {
             ...(stoppedAtFile !== undefined ? {abortReason: 'memory_limit' as const, stoppedAtFile} : {}),
             ...(cache !== null ? {cacheHits} : {})
         },
-        findings
+        findings,
+        ...architectureSummaryOf(options, analyzedPaths)
     };
 
     return {report, facts};
 };
+
+/** The directory the architecture globs are relative to: the analysis root, or the directory of a single-file root. */
+const architectureRootOf = (rootPath: string): string => (statSync(rootPath).isFile() ? dirname(rootPath) : rootPath);
+
+/** `{architecture}` for the report when a config was given (E5b), else nothing — the report shape is unchanged without one. */
+const architectureSummaryOf = (options: AnalyzeOptions, analyzedPaths: ReadonlySet<string>): Pick<AnalysisReport, 'architecture'> =>
+    options.architecture === undefined || options.architecture === null ? {} : {architecture: new ArchitectureModel(options.architecture, architectureRootOf(options.rootPath)).summarize(analyzedPaths)};

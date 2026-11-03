@@ -9,6 +9,7 @@ import {applyBaseline, IncompleteAnalysisError, loadBaseline, onlyNewFindings, s
 import {applyFindingFilter, parseFindingFilter} from './FindingFilter.js';
 import {loadConfig} from './Config.js';
 import {loadValidationContract} from './contracts/ValidationContract.js';
+import {loadArchitectureConfig, type ArchitectureConfig} from './architecture/ArchitectureConfig.js';
 import {loadExpected} from './evaluation/Corpus.js';
 import {evaluate} from './evaluation/Evaluator.js';
 import {toMarkdown as evaluationMarkdown} from './evaluation/EvaluationReporter.js';
@@ -66,6 +67,7 @@ type CliValues = {
     'dead-exports'?: boolean;
     solid?: boolean;
     contracts?: string;
+    architecture?: string;
     include?: string[];
     exclude?: string[];
     'memory-stats'?: boolean;
@@ -109,7 +111,7 @@ const USAGE = [
     'stoa – Stoic Code Analysis Engine',
     '',
     'Usage:',
-    '  stoa analyze <path> [--format markdown|json|sarif] [--lang en|de] [--include <glob>]... [--exclude <glob>]... [--typecheck] [--dead-exports] [--solid] [--contracts <file>] [--semantic noop|anthropic] [--config <file>] [--knowledge <dir>] [--rules <dir>] [--memory-stats] [--cache] [--baseline <file>] [--update-baseline] [--only-new] [--min-confidence <0..1>] [--certainty <list>]... [--no-experimental]',
+    '  stoa analyze <path> [--format markdown|json|sarif] [--lang en|de] [--include <glob>]... [--exclude <glob>]... [--typecheck] [--dead-exports] [--solid] [--architecture <file>] [--contracts <file>] [--semantic noop|anthropic] [--config <file>] [--knowledge <dir>] [--rules <dir>] [--memory-stats] [--cache] [--baseline <file>] [--update-baseline] [--only-new] [--min-confidence <0..1>] [--certainty <list>]... [--no-experimental]',
     '  stoa eval <path> --expected <file> [--format markdown|json] [--contracts <file>] [--knowledge <dir>] [--rules <dir>]',
     ''
 ].join('\n');
@@ -153,6 +155,27 @@ const loadContractOrFail = (values: CliValues): {contract: ReturnType<typeof loa
     }
 };
 
+// Same fail-fast discipline for --architecture (E5b): a broken config is an
+// explicit error, never a silently layer-less run.
+const loadArchitectureOrFail = (values: CliValues): {config: ArchitectureConfig | null} | null => {
+    if (values.architecture === undefined) {
+        return {config: null};
+    }
+    try {
+        return {config: loadArchitectureConfig(resolve(values.architecture))};
+    } catch (error) {
+        process.stderr.write(`${(error as Error).message}\n`);
+        return null;
+    }
+};
+
+// Both user-supplied inputs of `analyze`; null = one of them failed (already reported).
+const loadAnalyzeInputsOrFail = (values: CliValues): {contract: ReturnType<typeof loadValidationContract> | null; architecture: ArchitectureConfig | null} | null => {
+    const loadedContract = loadContractOrFail(values);
+    const loadedArchitecture = loadedContract === null ? null : loadArchitectureOrFail(values);
+    return loadedContract === null || loadedArchitecture === null ? null : {contract: loadedContract.contract, architecture: loadedArchitecture.config};
+};
+
 const runAnalyze = async (values: CliValues, target: string): Promise<number> => {
     // Option-combination validation up front, before any analysis work —
     // an invalid combination is a usage error, not something that should
@@ -176,11 +199,11 @@ const runAnalyze = async (values: CliValues, target: string): Promise<number> =>
     }
 
     const lang = values.lang ?? 'en';
-    const loadedContract = loadContractOrFail(values);
-    if (loadedContract === null) {
+    const inputs = loadAnalyzeInputsOrFail(values);
+    if (inputs === null) {
         return EXIT_ERROR;
     }
-    const validationContract = loadedContract.contract;
+    const validationContract = inputs.contract;
     // Load the tree-sitter (WASM) grammars once before the synchronous pipeline
     // runs. Sequentially, not concurrently: both call the shared web-tree-sitter
     // Parser.init(), which is not safe to race. On failure those files are skipped.
@@ -201,6 +224,7 @@ const runAnalyze = async (values: CliValues, target: string): Promise<number> =>
             deadExports: values['dead-exports'] === true,
             solid: values.solid === true,
             validationContract,
+            architecture: inputs.architecture,
             ...(values.cache === true ? {cacheDir: join(rootPath, '.stoa', 'cache')} : {}),
             ...(memoryStats
                 ? {
@@ -370,6 +394,7 @@ const main = async (): Promise<number> => {
             'dead-exports': {type: 'boolean', default: false},
             solid: {type: 'boolean', default: false},
             contracts: {type: 'string'},
+            architecture: {type: 'string'},
             include: {type: 'string', multiple: true},
             exclude: {type: 'string', multiple: true},
             'memory-stats': {type: 'boolean', default: false},

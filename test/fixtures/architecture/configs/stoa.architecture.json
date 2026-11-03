@@ -1,0 +1,10 @@
+{
+  "version": "1.0.0",
+  "layers": [
+    { "name": "ui", "include": ["lib/Pages/**", "lib/Widgets/**"] },
+    { "name": "data", "include": ["lib/**/Service/**", "lib/Db/**"] },
+    { "name": "tools", "include": ["tool/**"] }
+  ],
+  "allow": [ { "from": "ui", "to": "domain" }, { "from": "data", "to": "domain" }, { "from": "ui", "to": "tools" } ],
+  "forbidPackages": [ { "layer": "ui", "packages": ["http", "dio", "sqflite", "dart:io", "@scope/net"] } ]
+}

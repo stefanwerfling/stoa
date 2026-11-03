@@ -48,6 +48,11 @@ export interface ReportLabels {
     filterCertainty: string;
     filterNoExperimental: string;
     experimental: string;
+    architecture: string;
+    architectureUnassigned: string;
+    architectureMultiple: string;
+    architectureEmpty: string;
+    architectureUnknownRefs: string;
 }
 
 const LABELS: Record<string, ReportLabels> = {
@@ -78,6 +83,11 @@ const LABELS: Record<string, ReportLabels> = {
         baselineFixed: 'fixed',
         filter: 'Filter',
         filterHidden: 'findings hidden',
+        architecture: 'Architecture',
+        architectureUnassigned: 'files without a layer',
+        architectureMultiple: 'files matching several layers (first wins)',
+        architectureEmpty: 'empty layers',
+        architectureUnknownRefs: 'undeclared layers referenced',
         filterMinConfidence: 'min. confidence',
         filterCertainty: 'certainty',
         filterNoExperimental: 'without experimental rules',
@@ -110,6 +120,11 @@ const LABELS: Record<string, ReportLabels> = {
         baselineFixed: 'behoben',
         filter: 'Filter',
         filterHidden: 'Befunde ausgeblendet',
+        architecture: 'Architektur',
+        architectureUnassigned: 'Dateien ohne Schicht',
+        architectureMultiple: 'Dateien in mehreren Schichten (die erste gilt)',
+        architectureEmpty: 'leere Schichten',
+        architectureUnknownRefs: 'nicht deklarierte Schichten referenziert',
         filterMinConfidence: 'min. Konfidenz',
         filterCertainty: 'Sicherheit',
         filterNoExperimental: 'ohne experimentelle Regeln',

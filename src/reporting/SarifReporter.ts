@@ -110,7 +110,11 @@ export const toSarif = (report: AnalysisReport, options: SarifOptions = {}): str
                 invocations: [
                     {
                         executionSuccessful: report.coverage.status !== 'failed',
-                        properties: {analysisStatus: report.coverage.status, ...(report.filter !== undefined ? {filter: report.filter} : {})}
+                        properties: {
+                            analysisStatus: report.coverage.status,
+                            ...(report.filter !== undefined ? {filter: report.filter} : {}),
+                            ...(report.architecture !== undefined ? {architecture: report.architecture} : {})
+                        }
                     }
                 ],
                 results

@@ -332,6 +332,29 @@ export interface FilterSummary {
     hiddenCount: number;
 }
 
+/**
+ * The declared architecture (E5b, `--architecture`): layer sizes over the
+ * analyzed files and configuration warnings. Present only with a config.
+ */
+export interface ArchitectureSummary {
+    path: string;
+    version: string;
+    /** In config order. */
+    layers: {name: string; files: number}[];
+    /** Analyzed files outside every layer (unknown — never judged). */
+    unassignedFiles: number;
+    warnings: {
+        /** Files matching more than one layer (they belong to the first). */
+        multipleMatchCount: number;
+        /** The first of them by path, relative to the analysis root. */
+        multipleMatchSample: {file: string; layers: string[]}[];
+        /** Declared layers no analyzed file belongs to. */
+        emptyLayers: string[];
+        /** Layer names used in `allow`/`forbidPackages` but never declared. */
+        unknownLayerReferences: string[];
+    };
+}
+
 /** The user-facing report. Intermediate facts stay out of it by default. */
 export interface AnalysisReport {
     versions: VersionStamp;
@@ -339,6 +362,8 @@ export interface AnalysisReport {
     findings: Finding[];
     baseline?: BaselineSummary;
     filter?: FilterSummary;
+    /** Present only with `--architecture` (E5b). */
+    architecture?: ArchitectureSummary;
     /** Present only when `coverage.status === 'failed'` (see Cli.ts) — the caught error that prevented a real analysis from running at all. */
     error?: string;
 }
