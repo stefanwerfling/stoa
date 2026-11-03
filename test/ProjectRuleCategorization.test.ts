@@ -10,7 +10,7 @@ import {analyze} from '../src/Pipeline.js';
 import {DeadExportRule} from '../src/rules/project/DeadExportRule.js';
 import {DependencyCycleRule} from '../src/rules/project/DependencyCycleRule.js';
 import {ValidationContractRule} from '../src/rules/project/ValidationContractRule.js';
-import {SolidDipLayerDirectionRule} from '../src/rules/project/SolidRules.js';
+import {SolidDipLayerDirectionRule, SolidIspInterfaceCohesionRule, SolidLspContractCompatibilityRule} from '../src/rules/project/SolidRules.js';
 import {initDart} from '../src/analysis/DartAdapter.js';
 import type {ProjectRule, ProjectRuleInput} from '../src/rules/ProjectRule.js';
 import type {Fact} from '../src/Types.js';
@@ -139,4 +139,19 @@ test('SolidDipLayerDirectionRule (E6a) produces identical findings with the full
     const rule = new SolidDipLayerDirectionRule();
     assertFilteringToDeclaredKindsIsLossless(rule, facts);
     assert.ok(rule.evaluate(buildInput(facts, new Set(facts.map((fact) => fact.subject.file)))).length > 0);
+});
+
+test('SolidLspContractCompatibilityRule and SolidIspInterfaceCohesionRule (E6b) produce identical findings with the full fact set and with only their declared kinds, and the fixture exercises them', async () => {
+    await initDart();
+    const {facts} = analyze({
+        rootPath: join(here, 'fixtures', 'solid', 'contracts'),
+        knowledgeDir: join(root, 'knowledge', 'marcus'),
+        ruleSetDir: join(root, 'rules', 'default'),
+        config: DEFAULT_CONFIG,
+        solid: true
+    });
+    for (const rule of [new SolidLspContractCompatibilityRule(), new SolidIspInterfaceCohesionRule()]) {
+        assertFilteringToDeclaredKindsIsLossless(rule, facts);
+        assert.ok(rule.evaluate(buildInput(facts, new Set(facts.map((fact) => fact.subject.file)))).length > 0, rule.id);
+    }
 });

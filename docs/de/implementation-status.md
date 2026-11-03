@@ -289,7 +289,7 @@
   verfolgt. `TickerProviderStateMixin`, `SingleTickerProviderStateMixin`,
   `AutomaticKeepAliveClientMixin` und `CustomPainter` wurden in den
   Flutter-Katalog aufgenommen (gegen das SDK geprüft). Nicht in der Pipeline
-  verdrahtet (vor E6b/c liest es keine Regel); Befunde byte-identisch auf vier
+  verdrahtet (E6b liest es über `typeModelOf`); Befunde byte-identisch auf vier
   Apps, Golden-Korpus und Flutter-Fixtures (auch mit `--solid`).
   `struct.importBindings` fügt auf den TS-Projekten 0,6–1,0 % Facts hinzu (auf
   Dart keine). Gemessen: vollständige Hierarchien unter Typen mit
@@ -358,6 +358,37 @@
   State-Halter-Fälle, ein Lauf ohne `--solid`), `test/LayerClassification.test.ts`
   (State-Halter), dazu die Lossless-Kinds-Prüfung in
   `test/ProjectRuleCategorization.test.ts`.
+- **SOLID, LSP- und ISP-Vertragsregeln (Flutter-Qualitätsstrang, E6b):** in
+  `src/rules/project/SolidRules.ts`, nur mit `--solid`, Dart und TypeScript,
+  über das TypeModel (`typeModelOf`). `R-SOLID-LSP-CONTRACT-COMPATIBILITY`
+  0.1.0 (`syntactic` 0,8, `low`, `marcus.judgment`,
+  `responsibility-boundaries`): eine Methode/ein Getter/Setter, deren Rumpf
+  nur einen Unsupported-/Unimplemented-Fehler wirft und die einen KONKRETEN
+  Member (nicht abstrakt, mit Rumpf) eines aufgelösten Projekt-Supertyps
+  überschreibt — die nächste Deklaration entlang der Implementierungskette
+  (zuletzt angewendetes Mixin zuerst, dann Oberklasse/`on`), danach
+  `implements`; `@override` ist nicht nötig (die Hierarchie-Suche entscheidet).
+  `R-SOLID-ISP-INTERFACE-COHESION` 0.1.0 (`syntactic` 0,7, `info`,
+  `marcus.purpose`, `responsibility-boundaries`): eine Klasse, die eine
+  aufgelöste Projekt-Schnittstelle oder abstrakte Projektklasse implementiert,
+  erweitert oder einmischt und ≥ 2 ihrer ABSTRAKTEN Member (eigene und
+  geerbte) mit leerem oder nur werfendem Rumpf erfüllt; ein Befund je (Klasse,
+  Vertrag). Beide überspringen Framework-/Paketbasen (Member unbekannt),
+  Deklarationen mit Parse-Fehler, Klassen in Testpfaden (`test/`,
+  `integration_test/`, `*_test.dart`, `*.test.ts`/`*.spec.ts`, relativ zum
+  tiefsten gemeinsamen Verzeichnis der analysierten Dateien) und Typnamen mit
+  `Mock`/`Fake`/`Stub` (eine dokumentierte Namensausnahme, die nur
+  ausschließt); ein leeres oder werfendes Überschreiben eines abstrakten
+  Members ist kein LSP-Befund. Reife vorerst `experimental` — die Plantabelle
+  nennt `stable`, darüber entscheidet aber das Präzisions-Gate in E7. Ohne
+  `--solid` ist jede Ausgabe byte-identisch; mit `--solid` liefern die vier
+  Apps, stoa/src und flyingfish keinen LSP-/ISP-Befund — keines hat auch nur
+  einen Member, der nur „unsupported“ wirft, oder eine leere Implementierung
+  eines abstrakten Projekt-Members (die Messung aus Phase D ergab dasselbe).
+  Tests: `test/SolidContractRules.test.ts`
+  (`test/fixtures/solid/contracts/{dart,ts}`: positive, negative, unbekannte,
+  Testpfad- und Test-Double-Fälle, ein Lauf ohne `--solid`), dazu die
+  Lossless-Kinds-Prüfung in `test/ProjectRuleCategorization.test.ts`.
 - **Flutter-State-Lifecycle (Flutter-Analyse, Phase 3):** `src/analysis/dart/FlutterLifecycle.ts`
   erzeugt je Klasse, die direkt `extends State<…>` ist, einen neutralen
   `dart.stateLifecycle`-Fact: Felder, denen genau ein Aufruf zugewiesen wird
