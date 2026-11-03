@@ -118,6 +118,97 @@
   Layouts sind korrekt; den Recall zeigen nur die Fixtures
   (`test/FlutterLayout.test.ts`) sowie ein echter Fehler im Graph-Fixture aus
   Phase 1 (`ListView.builder` direkt in einer `Column`).
+- **Widget-Argumentwerte (Flutter-Qualitätsstrang, Phase A):** `src/analysis/dart/DartValues.ts`
+  ist ein wiederverwendbares, bewusst begrenztes Wertemodell für Dart-Aufrufargumente:
+  Literale (bool, null, int inkl. Hex, double inkl. führendem `-`, einfache Strings
+  bis 64 Zeichen ohne Interpolation/Escapes), statische Member-Referenzen
+  (`Axis.vertical`, `double.infinity`) und Konstruktoraufrufe als Objekte eine Ebene
+  tief (`BoxConstraints(maxHeight: 200)`, `EdgeInsets.all(8)`); alles andere ist
+  ausdrücklich unbekannt (`reference`, `expression`, `closure`, `widget`). Die Werte
+  liegen je Widget-Knoten in `ui.flutterWidgetTree` (Encoding v2, parallel zu
+  `argNames`) und werden über `argValueOf(node, name)` gelesen — `undefined` heißt
+  *nicht angegeben* (Framework-Standard gilt), was von unbekannt verschieden ist.
+  Entscheidung: das MODELL ist wiederverwendbar (nicht Flutter-spezifisch); die
+  ABLAGE ist der Widget-Knoten, weil eigene Facts je Argument die Fact-Zahl
+  vervielfachen und einen Positions-Join bräuchten, während der Knoten Evidence und
+  Range schon trägt. Kosten an vier echten Apps: Tree-Facts +27 %, alle Facts
+  +2,3 %; von 7857 benannten Argumenten sind 49 % Literal-, Member- oder
+  Objektwerte. `R-FLUTTER-UNBOUNDED-SCROLLABLE` und
+  `R-FLUTTER-NESTED-SCROLL-UNBOUNDED` (1.1.0) entscheiden jetzt nach diesen Werten:
+  ein Viewport wirft, wenn `shrinkWrap` false ist (geschrieben oder Standard) oder
+  wenn seine Scrollachse bekanntermaßen von der Achse abweicht, die der Elternteil
+  unbegrenzt lässt (ein shrinkWrap-Viewport braucht trotzdem eine begrenzte
+  Querachse); ein unbekannter Wert hält die Regel still, außer der Fehler ist
+  ohnehin sicher. Befunde auf den vier Apps unverändert (byte-identisch); die
+  Evidence nennt jetzt die entscheidenden Werte.
+- **Identitätsauflösung (Flutter-Qualitätsstrang, Phase B):** `src/model/DartLibraryIndex.ts`
+  löst auf, auf welche DEKLARATION `prefix.Name` in einer Datei verweist —
+  Dart-generisch, aus `dart.importSpec`- und `dart.classDecl`-Facts: eine Deklaration
+  in derselben Bibliothek (inkl. ihrer `part`-Dateien) überdeckt jeden Import; sonst
+  wird jeder Import mit diesem Präfix gefragt, dessen `show`/`hide` den Namen
+  zulassen — eine Projektbibliothek über ihren Export-Namensraum (eigene
+  Deklarationen + `export`-Direktiven, transitiv, zyklensicher), eine externe über
+  ein `ExternalLibraries`-Lookup. Status: `resolved` (genau ein Ursprung; nicht
+  einsehbare Importe stehen unter `possible`, machen ihn in kompilierendem Code aber
+  nicht mehrdeutig), `ambiguous` (zwei oder mehr Ursprünge — z. B. Material und ein
+  eigenes `Padding`), `unresolved`. Dieselbe Deklaration über Material und über ein
+  Projekt-Barrel ist ein Ursprung. `src/analysis/dart/DartPackages.ts` bildet die
+  eigenen pubspec-Namen des Projekts auf ihr `lib/` ab (damit ist
+  `package:my_app/…` eine Projektdatei; kein Pub-Cache, kein Netz);
+  `src/analysis/dart/FlutterCatalog.ts` ist das statische Flutter-Wissen (72 Namen →
+  deklarierende Bibliothek und welche von widgets/material/cupertino sie
+  exportieren, abgeleitet aus Flutter-SDK 3.29.2 und per Test gegen ein lokales SDK
+  geprüft) — ein Name außerhalb des Katalogs bleibt `unknown`, `TextField` aus
+  widgets.dart ist `absent`. Entscheidung: getrennt vom SymbolGraph (dessen
+  ES-Modul-Modell passt nicht zu Dart-Bibliotheken, `show`/`hide`, `part`), und das
+  Flutter-Wissen bleibt aus dem generischen Resolver heraus. Graph-Knoten tragen es
+  additiv als `WidgetNode.resolution` (`identity` bleibt);
+  `ProjectRuleInput.dartLibraryIndex` ist neu und optional. Alle Flutter-Regeln
+  verlangen jetzt `resolved` zu einem `package:flutter/`- (bzw. `dart:async`-)
+  Ursprung — Layout 1.1.0/1.2.0, Lifecycle 1.1.0, a11y 1.2.0. Der a11y-Extraktor
+  nutzt denselben Algorithmus DATEILOKAL (der FactCache ist pro Datei), ein nur über
+  ein Projekt-Barrel erreichtes Widget wird dort also nicht beansprucht. Nicht
+  modelliert: das implizite `dart:core`, Typedef-/Funktionsnamen, bedingte URIs,
+  Quellen anderer Pakete. An vier echten Apps: 1881 Widget-Knoten aus dem Katalog,
+  alle `resolved` zu Flutter, null Abweichungen zur alten Bewertung pro Datei;
+  Befunde byte-identisch; Index und Graph unter 100 ms je App. Tests:
+  `test/DartIdentity.test.ts` (`test/fixtures/dart-identity`).
+- **Lifecycle-Präzision (Flutter-Qualitätsstrang, Phase C):** `dart.stateLifecycle`
+  ist jetzt Fact v2 (additiv). **mounted:** jedes setState nach einem await
+  erhält einen strukturellen `guard` innerhalb seines Funktionsrumpfs —
+  `dominating` (`if (!mounted) return;`/`throw` inkl. `!context.mounted` und
+  `|| …` in einem Block, der den Aufruf umschließt, der Aufruf in
+  `if (mounted && …) {…}` oder im `else` von `if (!mounted)`,
+  `mounted ? setState(…) : …`), `non-dominating` (jede Erwähnung ist eine
+  `if`-Bedingung, die den Aufruf nachweislich nicht absichert: Erwähnung daneben,
+  kein unbedingter Ausstieg, Guard nur in einem Zweig, Ausstieg per `break`),
+  `unknown` (`final ok = mounted;`, `== false`, Schleifenbedingung, andere Closure
+  — die Regel schweigt) oder `none`. Ein await in einem anderen Zweig desselben
+  `if`/`?:`/`switch` als der Aufruf gilt nicht als vorangehend. Die Evidence nennt
+  die Zeilen von await, setState und entscheidendem `mounted`. Keine Dominanz über
+  Schleifen oder `try`/`finally` hinaus; awaits einer späteren
+  Schleifeniteration werden nicht modelliert. **Subscriptions:** ein
+  `.listen(…)` ist nur dann eine Subscription, wenn es in einem als
+  `StreamSubscription` DEKLARIERTEN Feld landet, aufgelöst zu `dart:async`
+  (Katalogeintrag); untypisierte Felder und eigene `listen()`-APIs werden nie
+  gemeldet; Subscriptions in Sammlungen werden nicht verfolgt. **Ressourcen:** je
+  Feld sicher erzeugt (aufgelöster Framework-Typ) / möglicherweise
+  (untypisiertes `listen`), anderweitig verwaltet (auch aus `widget.x`, einem
+  Parameter, `a ?? b` zugewiesen — übersprungen; `= null` zählt nicht), sicher
+  freigegeben (`.dispose()`/`.cancel()`/`.close()`, auch `?.`, `this.`, Kaskade —
+  `releaseCalls`) / erwähnt (gilt weiter als Freigabe, Nutzerentscheidung aus
+  Phase 3) / nicht nachweisbar freigegeben (der einzige gemeldete Zustand).
+  Controller-, Subscription- und setState-Regel auf 1.2.0. An vier echten Apps:
+  Befunde unverändert an denselben 148 Stellen (die setState-Evidence trägt jetzt
+  die Zeilen); 60 setState-nach-await-Aufrufe — 49 dominating, 11 none, 0
+  non-dominating/unknown; 50 Framework-Controller/Timer — 45 per explizitem
+  Aufruf freigegeben, 5 nicht freigegeben (die bestehenden Befunde); alle 4
+  `.listen`-Felder typisiert und gecancelt. Eine erste, strengere Guard-Prüfung
+  brachte 2 Fehlalarme (await und setState in sich ausschließenden `if`-Zweigen),
+  behoben durch die obige Zweigregel. Nicht ergänzt: `StreamController`/
+  `ValueNotifier` (kein Vorkommen in den Apps) und Controller von Drittpaketen
+  (kein Identitätswissen). Tests: `test/FlutterLifecycle.test.ts`
+  (`test/fixtures/flutter-lifecycle-phase-c`).
 - **Flutter-State-Lifecycle (Flutter-Analyse, Phase 3):** `src/analysis/dart/FlutterLifecycle.ts`
   erzeugt je Klasse, die direkt `extends State<…>` ist, einen neutralen
   `dart.stateLifecycle`-Fact: Felder, denen genau ein Aufruf zugewiesen wird

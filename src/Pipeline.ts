@@ -14,6 +14,8 @@ import {ModuleResolver} from './analysis/ModuleResolution.js';
 import {buildModuleGraph} from './model/ModuleGraph.js';
 import {buildSymbolGraph} from './model/SymbolGraph.js';
 import {buildFlutterWidgetGraph} from './model/FlutterWidgetGraph.js';
+import {loadDartPackages} from './analysis/dart/DartPackages.js';
+import {flutterAwareIndex} from './analysis/dart/FlutterCatalog.js';
 import {KnowledgeBase} from './knowledge/KnowledgeBase.js';
 import {isMemoryCritical, takeMemorySnapshot, type MemorySnapshot} from './MemoryGuard.js';
 import {RuleEngine} from './rules/RuleEngine.js';
@@ -263,8 +265,14 @@ export const analyze = (options: AnalyzeOptions): AnalysisResult => {
     // fact-ids out, lives only for this evaluate() call). Passed only when the
     // run actually produced widget trees; the Flutter layout rules (Phase 2,
     // rules/project/FlutterLayoutRules.ts) consume it.
-    const flutterWidgetGraph = buildFlutterWidgetGraph(facts);
-    const findings: Finding[] = ruleEngine.evaluate(facts, moduleGraph, symbolGraph, flutterWidgetGraph.nodes.length > 0 ? flutterWidgetGraph : undefined);
+    // Flutter quality Phase B: cross-file Dart name resolution (which
+    // declaration a widget/controller name refers to), built only when Dart
+    // files were analyzed — from facts + the project's own pubspec package
+    // names (read here, never cached) + the static Flutter catalog.
+    const dartPaths = [...analyzedPaths].filter((path) => path.endsWith('.dart')).sort();
+    const dartLibraryIndex = dartPaths.length > 0 ? flutterAwareIndex(facts, loadDartPackages(dartPaths)) : undefined;
+    const flutterWidgetGraph = buildFlutterWidgetGraph(facts, dartLibraryIndex);
+    const findings: Finding[] = ruleEngine.evaluate(facts, moduleGraph, symbolGraph, flutterWidgetGraph.nodes.length > 0 ? flutterWidgetGraph : undefined, dartLibraryIndex);
     // RuleEngine.evaluate() is one atomic, synchronous pass with no internal
     // checkpointing — it cannot be partially applied or safely interrupted
     // (declarative rules iterate per-subject; project rules need the full

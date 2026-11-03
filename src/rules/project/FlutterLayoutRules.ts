@@ -1,7 +1,9 @@
 import type {Finding, PrincipleInterpretationRef} from '../../Types.js';
 import {localize, type LocalizedText} from '../../i18n/Localized.js';
 import type {KnowledgeBase} from '../../knowledge/KnowledgeBase.js';
-import type {FlutterWidgetGraph, WidgetEdge, WidgetNode} from '../../model/FlutterWidgetGraph.js';
+import {argValueOf, type FlutterWidgetGraph, type WidgetEdge, type WidgetNode} from '../../model/FlutterWidgetGraph.js';
+import {axisLiteral, boolLiteral, type ArgValue} from '../../analysis/dart/DartValues.js';
+import {resolvedFrom} from '../../model/DartLibraryIndex.js';
 import type {ProjectRule, ProjectRuleInput} from '../ProjectRule.js';
 
 /**
@@ -11,10 +13,13 @@ import type {ProjectRule, ProjectRuleInput} from '../ProjectRule.js';
  * debug, a grey box in release), which `flutter analyze` does not report.
  *
  * Shared, deliberately conservative discipline:
- * - IDENTITY: a widget counts as the Flutter widget of that name only when the
- *   graph grades it `heuristic` with at least one `package:flutter/` import
- *   candidate. A same-file declaration of that name (`verified`/`local`)
- *   shadows the framework class; no Flutter import means no claim at all.
+ * - IDENTITY (Phase B, rules 1.1.0/1.2.0): a widget counts as the Flutter
+ *   widget of that name only when the DartLibraryIndex RESOLVES it to a
+ *   declaration below `package:flutter/` — through a Flutter import, a prefix,
+ *   or a project barrel re-exporting Flutter. A declaration of that name in
+ *   the same library (incl. its parts) shadows the framework class; a name
+ *   that two imports provide differently is `ambiguous` and an unprovable one
+ *   `unresolved` — neither is ever treated as a Flutter widget.
  * - STRUCTURE: the effective parent is found by walking up through the
  *   transparent nodes only (`conditional`, `repeat`, `spread`, `list` — they
  *   place their elements into the same slot). A `builder`, `reference`,
@@ -23,8 +28,11 @@ import type {ProjectRule, ProjectRuleInput} from '../ProjectRule.js';
  * - PARENT SETS are curated allowlists of framework widgets whose behaviour
  *   for that slot is fixed. An unknown/custom parent is never assumed to be
  *   wrong (a StatelessWidget wrapper may legitimately pass the child through).
- * - ARGUMENT VALUES are not in the graph (names only): a rule that depends on
- *   one (e.g. `scrollDirection`) stays silent when the argument is present.
+ * - ARGUMENT VALUES come from the graph's value semantics (DartValues): an
+ *   absent argument takes the framework default, a literal (`true`/`false`,
+ *   `Axis.vertical`/`Axis.horizontal`) is used as written, and anything else
+ *   (variable, expression) is UNKNOWN — a rule reports only what the known
+ *   values make certain.
  */
 
 const PRINCIPLE_ID = 'marcus.judgment';
@@ -81,9 +89,7 @@ export const isFlutterWidget = (node: WidgetNode, names: ReadonlySet<string>): b
     node.status === 'known' &&
     node.name !== null &&
     names.has(node.name) &&
-    node.identity !== null &&
-    node.identity.status === 'heuristic' &&
-    node.identity.candidates.some((candidate) => candidate.startsWith(FLUTTER_PACKAGE));
+    resolvedFrom(node.resolution, FLUTTER_PACKAGE);
 
 const displayName = (node: WidgetNode): string => `${node.name ?? '?'}${node.constructorName === null ? '' : `.${node.constructorName}`}`;
 
@@ -121,8 +127,77 @@ const STACKS = new Set(['Stack', 'IndexedStack']);
 const MULTI_CHILD_NON_FLEX = ['Wrap', 'ListView', 'GridView'];
 const SCROLLABLES = new Set(['ListView', 'GridView', 'CustomScrollView', 'PageView', 'ReorderableListView']);
 const SHRINKABLE_SCROLLABLES = new Set(['ListView', 'GridView', 'CustomScrollView', 'ReorderableListView']);
+const OUTER_SCROLLERS = new Set(['SingleChildScrollView', 'ListView']);
+
+type Axis = 'vertical' | 'horizontal';
+
+// `scrollDirection` defaults: every scrollable here is vertical except PageView.
+const DEFAULT_SCROLL_AXIS: Readonly<Record<string, Axis>> = {
+    ListView: 'vertical',
+    GridView: 'vertical',
+    CustomScrollView: 'vertical',
+    ReorderableListView: 'vertical',
+    SingleChildScrollView: 'vertical',
+    PageView: 'horizontal'
+};
+
+interface Resolved<T> {
+    value: T | null;
+    /** How the value was obtained, for the evidence: `default`, `literal`, `unknown`. */
+    source: 'default' | 'literal' | 'unknown';
+}
+
+const resolve = <T>(value: ArgValue | undefined, fallback: T, read: (value: ArgValue) => T | null): Resolved<T> => {
+    if (value === undefined) {
+        return {value: fallback, source: 'default'};
+    }
+    const literal = read(value);
+    return literal === null ? {value: null, source: 'unknown'} : {value: literal, source: 'literal'};
+};
+
+/** The scroll axis of a scrollable: its `scrollDirection` literal, the default when absent, unknown otherwise. */
+const scrollAxis = (node: WidgetNode): Resolved<Axis> =>
+    resolve<Axis>(argValueOf(node, 'scrollDirection'), DEFAULT_SCROLL_AXIS[node.name ?? ''] ?? 'vertical', (value) => axisLiteral(value));
+
+/** `shrinkWrap` (default false; PageView has none, so always false). */
+const shrinkWrap = (node: WidgetNode): Resolved<boolean> =>
+    SHRINKABLE_SCROLLABLES.has(node.name ?? '') ? resolve<boolean>(argValueOf(node, 'shrinkWrap'), false, (value) => boolLiteral(value)) : {value: false, source: 'default'};
+
+/** The main axis of a Flex: Row horizontal, Column vertical, Flex its required `direction` literal (unknown otherwise). */
+const flexAxis = (node: WidgetNode): Resolved<Axis> => {
+    if (node.name === 'Row') {
+        return {value: 'horizontal', source: 'default'};
+    }
+    if (node.name === 'Column') {
+        return {value: 'vertical', source: 'default'};
+    }
+    const direction = argValueOf(node, 'direction');
+    const axis = axisLiteral(direction);
+    return axis === null ? {value: null, source: 'unknown'} : {value: axis, source: 'literal'};
+};
+
+const describe = <T>(name: string, resolved: Resolved<T>): string => `${name}=${resolved.value === null ? '?' : String(resolved.value)} (${resolved.source})`;
+
+/**
+ * Whether a viewport placed where the parent leaves `parentAxis` UNBOUNDED
+ * (and bounds the other axis) certainly throws. A normal viewport needs both
+ * axes bounded; a shrink-wrapping one sizes itself along its own scroll axis
+ * but still needs a bounded cross axis (RenderShrinkWrappingViewport). So:
+ * - shrinkWrap false (written or default) → throws, whatever the axes;
+ * - shrinkWrap true or unknown → throws only when both axes are known and the
+ *   scroll axis differs from `parentAxis` (the unbounded axis is its cross axis);
+ * - otherwise not certain → no finding.
+ */
+const viewportThrows = (child: WidgetNode, parentAxis: Resolved<Axis>): {throws: boolean; detail: string} => {
+    const shrink = shrinkWrap(child);
+    const axis = scrollAxis(child);
+    const detail = `${describe('shrinkWrap', shrink)}, ${describe('scrollDirection', axis)}, parent axis=${parentAxis.value ?? '?'} (${parentAxis.source})`;
+    if (shrink.value === false) {
+        return {throws: true, detail};
+    }
+    return {throws: axis.value !== null && parentAxis.value !== null && axis.value !== parentAxis.value, detail};
+};
 const TEXT_FIELDS = new Set(['TextField', 'TextFormField']);
-const VERTICAL_OUTER_SCROLLERS = new Set(['SingleChildScrollView', 'ListView']);
 
 interface LayoutRuleText {
     statement: LocalizedText;
@@ -138,12 +213,14 @@ interface Match {
     slot: string;
     /** What the child needs instead (filled into `{expected}`); empty when the text does not use it. */
     expected: string;
+    /** The argument values the decision rests on, appended to the evidence; empty when none. */
+    detail?: string;
 }
 
 /** Common finding assembly for the layout rules; subclasses only find matches. */
 abstract class FlutterLayoutRule implements ProjectRule {
     public abstract readonly id: string;
-    public readonly version = '1.0.0';
+    public readonly version: string = '1.1.0';
     public readonly requiredFactKinds = ['ui.flutterWidgetTree', 'dart.classDecl', 'dart.importSpec'];
     protected abstract readonly text: LayoutRuleText;
     protected readonly confidence: number = 0.8;
@@ -173,7 +250,7 @@ abstract class FlutterLayoutRule implements ProjectRule {
             location: {file: child.file, range: child.range, symbol: child.owner.slice(0, child.owner.lastIndexOf('@')), structure: 'widget'},
             observation: {
                 statement: fill(this.text.statement),
-                evidence: [{fact: 'ui.flutterWidgetTree', value: `${displayName(parent)}.${slot} > ${displayName(child)}`, certainty: 'syntactic'}]
+                evidence: [{fact: 'ui.flutterWidgetTree', value: `${displayName(parent)}.${slot} > ${displayName(child)}${match.detail === undefined || match.detail === '' ? '' : ` [${match.detail}]`}`, certainty: 'syntactic'}]
             },
             interpretation: {principles: resolvePrinciple(input.knowledgeBase, input.lang, fill(this.text.rationale)), dimensions: ['robustness']},
             severity: 'high',
@@ -192,8 +269,8 @@ interface BilingualText {
 }
 
 const IDENTITY_CONTEXT: BilingualText = {
-    en: 'Widgets are identified by name plus a package:flutter import in the same file (no type resolution); a project class re-using a framework name and imported from elsewhere could make this a false positive.',
-    de: 'Widgets werden über den Namen plus einen package:flutter-Import in derselben Datei erkannt (keine Typauflösung); eine anderswo importierte Projektklasse mit einem Framework-Namen kann einen Fehlalarm bedeuten.'
+    en: 'Widgets are identified by resolving their name through the library\'s imports, prefixes and project re-exports to a package:flutter declaration (no type inference); names that are ambiguous or come through an uninspectable third-party library are not reported.',
+    de: 'Widgets werden erkannt, indem ihr Name über Importe, Präfixe und Re-Exporte des Projekts zu einer package:flutter-Deklaration aufgelöst wird (keine Typinferenz); mehrdeutige oder nur über eine nicht einsehbare Fremdbibliothek erreichbare Namen werden nicht gemeldet.'
 };
 
 const withIdentity = (text: BilingualText): LocalizedText => ({
@@ -258,16 +335,21 @@ export class FlutterParentDataMisuseRule extends FlutterLayoutRule {
 
 /**
  * R-FLUTTER-UNBOUNDED-SCROLLABLE: a ListView/GridView/CustomScrollView/
- * PageView placed directly in a Row/Column/Flex without `shrinkWrap` — a
- * Flex gives non-flexible children an unbounded main axis, so the viewport
- * throws "… viewport was given unbounded height/width".
+ * PageView placed directly in a Row/Column/Flex where the viewport certainly
+ * throws "… viewport was given unbounded height/width" — a Flex gives
+ * non-flexible children an unbounded main axis (see `viewportThrows`).
+ * 1.1.0: decided on the `shrinkWrap`/`scrollDirection` VALUES, not on the
+ * arguments' presence (`shrinkWrap: false` is reported; a cross-axis
+ * scrollable is reported even with `shrinkWrap: true`; unknown values that
+ * matter keep it silent).
  */
 export class FlutterUnboundedScrollableRule extends FlutterLayoutRule {
     public readonly id = 'R-FLUTTER-UNBOUNDED-SCROLLABLE';
+    public override readonly version = '1.2.0';
     protected readonly text: LayoutRuleText = {
         statement: {
-            en: '{child} is placed directly in {parent}.{slot} without Expanded/Flexible/SizedBox and without shrinkWrap.',
-            de: '{child} steht direkt in {parent}.{slot}, ohne Expanded/Flexible/SizedBox und ohne shrinkWrap.'
+            en: '{child} is placed directly in {parent}.{slot} without Expanded/Flexible/SizedBox, so its viewport gets an unbounded extent.',
+            de: '{child} steht direkt in {parent}.{slot}, ohne Expanded/Flexible/SizedBox, sodass sein Viewport eine unbegrenzte Ausdehnung bekommt.'
         },
         suggestion: {
             en: 'Wrap {child} in Expanded (or Flexible) to give it the remaining space, or in a SizedBox with a fixed extent.',
@@ -278,8 +360,8 @@ export class FlutterUnboundedScrollableRule extends FlutterLayoutRule {
             de: 'shrinkWrap: true beseitigt den Fehler ebenfalls, legt aber alle Einträge sofort an; für lange Listen Expanded bevorzugen.'
         },
         missingContext: withIdentity({
-            en: 'Only the direct (structural) parent is checked; a scrollable reaching the Flex through a helper method, variable or builder is not seen.',
-            de: 'Geprüft wird nur der direkte (strukturelle) Elternknoten; ein Scrollable, das über eine Hilfsmethode, Variable oder einen Builder in den Flex gelangt, wird nicht gesehen.'
+            en: 'Only the direct (structural) parent is checked; a scrollable reaching the Flex through a helper method, variable or builder is not seen. shrinkWrap/scrollDirection/direction are read as literals (absent = framework default); a variable or expression there keeps the rule silent unless the other values already make the error certain.',
+            de: 'Geprüft wird nur der direkte (strukturelle) Elternknoten; ein Scrollable, das über eine Hilfsmethode, Variable oder einen Builder in den Flex gelangt, wird nicht gesehen. shrinkWrap/scrollDirection/direction werden als Literale gelesen (fehlend = Framework-Standard); eine Variable oder ein Ausdruck dort hält die Regel still, außer die übrigen Werte machen den Fehler bereits sicher.'
         }),
         rationale: {
             en: 'A scrollable viewport needs a bounded extent, but a Row/Column gives its non-flexible children an unbounded main axis; the declared layout cannot be satisfied and Flutter throws at runtime (marcus.judgment).',
@@ -291,8 +373,11 @@ export class FlutterUnboundedScrollableRule extends FlutterLayoutRule {
         return collect(
             index,
             SCROLLABLES,
-            (child, parent, slot) => slot === 'children' && isFlutterWidget(parent, FLEX) && !(SHRINKABLE_SCROLLABLES.has(child.name ?? '') && child.argNames.includes('shrinkWrap'))
-        );
+            (child, parent, slot) => slot === 'children' && isFlutterWidget(parent, FLEX)
+        ).flatMap((match) => {
+            const verdict = viewportThrows(match.child, flexAxis(match.parent));
+            return verdict.throws ? [{...match, detail: verdict.detail}] : [];
+        });
     }
 }
 
@@ -327,19 +412,22 @@ export class FlutterTextFieldInRowRule extends FlutterLayoutRule {
 }
 
 /**
- * R-FLUTTER-NESTED-SCROLL-UNBOUNDED: a vertical ListView/GridView/
- * CustomScrollView placed directly in a vertical SingleChildScrollView or
- * ListView without `shrinkWrap` — the outer scroller gives an unbounded
- * height. The axis is inferred from the ABSENCE of `scrollDirection` on both
- * (its value is not in the graph); either one carrying it is not reported.
+ * R-FLUTTER-NESTED-SCROLL-UNBOUNDED: a ListView/GridView/CustomScrollView/
+ * ReorderableListView placed directly in a SingleChildScrollView or ListView
+ * where the inner viewport certainly throws — the outer scroller leaves its
+ * own scroll axis unbounded (see `viewportThrows`).
+ * 1.1.0: decided on the `scrollDirection`/`shrinkWrap` VALUES of both (absent
+ * = default vertical / false); previously any written `scrollDirection` or
+ * `shrinkWrap` silenced it.
  */
 export class FlutterNestedScrollRule extends FlutterLayoutRule {
     public readonly id = 'R-FLUTTER-NESTED-SCROLL-UNBOUNDED';
+    public override readonly version = '1.2.0';
     protected override readonly confidence = 0.75;
     protected readonly text: LayoutRuleText = {
         statement: {
-            en: '{child} is placed directly in the vertical scroller {parent}.{slot} without shrinkWrap or a bounded height.',
-            de: '{child} steht direkt im vertikalen Scroller {parent}.{slot}, ohne shrinkWrap oder begrenzte Höhe.'
+            en: '{child} is placed directly in the scroller {parent}.{slot} without a bounded size, so its viewport gets an unbounded extent.',
+            de: '{child} steht direkt im Scroller {parent}.{slot}, ohne begrenzte Größe, sodass sein Viewport eine unbegrenzte Ausdehnung bekommt.'
         },
         suggestion: {
             en: 'Merge both lists into one scrollable (e.g. a CustomScrollView with slivers), or give {child} a fixed height with SizedBox.',
@@ -350,12 +438,12 @@ export class FlutterNestedScrollRule extends FlutterLayoutRule {
             de: 'shrinkWrap: true plus NeverScrollableScrollPhysics funktioniert auch, legt aber alle Einträge sofort an.'
         },
         missingContext: withIdentity({
-            en: 'Both scroll directions are inferred from the absence of a scrollDirection argument (default vertical); argument values are not evaluated.',
-            de: 'Beide Scrollrichtungen werden aus dem Fehlen eines scrollDirection-Arguments abgeleitet (Standard vertikal); Argumentwerte werden nicht ausgewertet.'
+            en: 'scrollDirection and shrinkWrap are read as literals on both widgets (absent = default vertical / false); a variable or expression there keeps the rule silent unless the other values already make the error certain.',
+            de: 'scrollDirection und shrinkWrap werden an beiden Widgets als Literale gelesen (fehlend = Standard vertikal / false); eine Variable oder ein Ausdruck dort hält die Regel still, außer die übrigen Werte machen den Fehler bereits sicher.'
         }),
         rationale: {
-            en: 'An inner scrollable needs a bounded height, but a vertical scroller gives its content an unbounded one; the declared layout cannot be satisfied and Flutter throws at runtime (marcus.judgment).',
-            de: 'Ein inneres Scrollable braucht eine begrenzte Höhe, aber ein vertikaler Scroller gibt seinem Inhalt eine unbegrenzte; das deklarierte Layout ist nicht erfüllbar und Flutter wirft zur Laufzeit (marcus.judgment).'
+            en: 'An inner scrollable needs a bounded extent, but a scroller gives its content an unbounded one along its scroll axis; the declared layout cannot be satisfied and Flutter throws at runtime (marcus.judgment).',
+            de: 'Ein inneres Scrollable braucht eine begrenzte Ausdehnung, aber ein Scroller gibt seinem Inhalt entlang seiner Scrollachse eine unbegrenzte; das deklarierte Layout ist nicht erfüllbar und Flutter wirft zur Laufzeit (marcus.judgment).'
         }
     };
 
@@ -363,14 +451,11 @@ export class FlutterNestedScrollRule extends FlutterLayoutRule {
         return collect(
             index,
             SHRINKABLE_SCROLLABLES,
-            (child, parent, slot) =>
-                isFlutterWidget(parent, VERTICAL_OUTER_SCROLLERS) &&
-                parent.constructorName === null &&
-                (slot === 'child' || slot === 'children') &&
-                !parent.argNames.includes('scrollDirection') &&
-                !child.argNames.includes('scrollDirection') &&
-                !child.argNames.includes('shrinkWrap')
-        );
+            (_child, parent, slot) => isFlutterWidget(parent, OUTER_SCROLLERS) && parent.constructorName === null && (slot === 'child' || slot === 'children')
+        ).flatMap((match) => {
+            const verdict = viewportThrows(match.child, scrollAxis(match.parent));
+            return verdict.throws ? [{...match, detail: verdict.detail}] : [];
+        });
     }
 }
 

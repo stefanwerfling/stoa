@@ -16,6 +16,7 @@ import type {Rule} from './RuleTypes.js';
 import type {ModuleGraph} from '../model/ModuleGraph.js';
 import type {SymbolGraph} from '../model/SymbolGraph.js';
 import type {FlutterWidgetGraph} from '../model/FlutterWidgetGraph.js';
+import type {DartLibraryIndex} from '../model/DartLibraryIndex.js';
 
 interface Unit {
     key: string;
@@ -42,7 +43,7 @@ export class RuleEngine {
         private readonly projectRules: ProjectRule[] = [new DependencyCycleRule()]
     ) {}
 
-    public evaluate(facts: Fact[], moduleGraph?: ModuleGraph, symbolGraph?: SymbolGraph, flutterWidgetGraph?: FlutterWidgetGraph): Finding[] {
+    public evaluate(facts: Fact[], moduleGraph?: ModuleGraph, symbolGraph?: SymbolGraph, flutterWidgetGraph?: FlutterWidgetGraph, dartLibraryIndex?: DartLibraryIndex): Finding[] {
         const units = groupUnits(facts);
         const keyed: KeyedFinding[] = [];
 
@@ -63,6 +64,7 @@ export class RuleEngine {
                 ...(moduleGraph !== undefined ? {moduleGraph} : {}),
                 ...(symbolGraph !== undefined ? {symbolGraph} : {}),
                 ...(flutterWidgetGraph !== undefined ? {flutterWidgetGraph} : {}),
+                ...(dartLibraryIndex !== undefined ? {dartLibraryIndex} : {}),
                 ruleSetId: this.ruleSet.id,
                 knowledgeBase: this.knowledgeBase,
                 lang: this.lang

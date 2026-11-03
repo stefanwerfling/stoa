@@ -16,7 +16,7 @@ class Fine extends StatelessWidget {
       MyWrapper(child: Expanded(child: Text('d'))), // unknown parent: may pass through
       header, // reference
       LayoutBuilder(builder: (c, box) => Expanded(child: Text('e'))), // through a builder
-      SingleChildScrollView(scrollDirection: Axis.horizontal, child: ListView(children: [])), // axis unknown
+      SingleChildScrollView(scrollDirection: axis, child: ListView(shrinkWrap: true, children: [])), // axis unknown, shrinkWrap true
       SingleChildScrollView(child: ListView(shrinkWrap: true, children: [])), // shrinkWrap
       Expanded(child: ListView.builder(itemBuilder: (c, i) => ListView(children: []))), // inner via builder
       Flex(direction: Axis.vertical, children: [Expanded(child: Text('f'))]), // Flex

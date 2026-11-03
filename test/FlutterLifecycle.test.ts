@@ -35,8 +35,8 @@ test('positive fixture: each lifecycle defect is reported once, at the creation 
         'R-FLUTTER-UNDISPOSED-CONTROLLER 21 _BrokenState._anim = AnimationController; dispose: no mention',
         'R-FLUTTER-UNCANCELLED-SUBSCRIPTION 22 _BrokenState._timer = Timer.periodic; dispose: no mention',
         'R-FLUTTER-INHERITED-IN-INITSTATE 24 _BrokenState.initState: Theme.of(context)',
-        'R-FLUTTER-SETSTATE-AFTER-AWAIT 30 _BrokenState.load: await → setState, no mounted',
-        'R-FLUTTER-SETSTATE-AFTER-AWAIT 43 _BrokenState.build: await → setState, no mounted',
+        'R-FLUTTER-SETSTATE-AFTER-AWAIT 30 _BrokenState.load: await (line 29) → setState (line 30), no mounted',
+        'R-FLUTTER-SETSTATE-AFTER-AWAIT 43 _BrokenState.build: await (line 42) → setState (line 43), no mounted',
         'R-FLUTTER-UNCANCELLED-SUBSCRIPTION 56 _SubState._events = source.listen; dispose: absent',
         'R-FLUTTER-INHERITED-IN-INITSTATE 57 _SubState.initState: MediaQuery.sizeOf(context)'
     ]);
@@ -110,4 +110,77 @@ test('FactCache: a cache hit (no re-parse) yields identical lifecycle findings',
     } finally {
         rmSync(cacheDir, {recursive: true, force: true});
     }
+});
+
+// Flutter quality track, Phase C (rules 1.2.0): mounted guards, subscriptions, resource ownership.
+const phaseC = join(here, 'fixtures', 'flutter-lifecycle-phase-c');
+
+const stateFacts = (path: string): StateLifecycleValue[] =>
+    analyze({rootPath: path, knowledgeDir, ruleSetDir, config: DEFAULT_CONFIG})
+        .facts.filter((fact) => fact.kind === 'dart.stateLifecycle')
+        .map((fact) => fact.value as unknown as StateLifecycleValue);
+
+test('mounted: dominating guards are recognised; a mention that does not guard, a guard before the await or a break is reported', () => {
+    assert.deepEqual(brief(lifecycleFindings(join(phaseC, 'Guards.dart'))), [
+        'R-FLUTTER-SETSTATE-AFTER-AWAIT 54 _GuardsState.onlyMentioned: await (line 50) → setState (line 54), mounted (line 51) does not guard it',
+        'R-FLUTTER-SETSTATE-AFTER-AWAIT 62 _GuardsState.noExit: await (line 58) → setState (line 62), mounted (line 59) does not guard it',
+        'R-FLUTTER-SETSTATE-AFTER-AWAIT 70 _GuardsState.siblingBranch: await (line 66) → setState (line 70), mounted (line 68) does not guard it',
+        'R-FLUTTER-SETSTATE-AFTER-AWAIT 76 _GuardsState.guardBeforeAwait: await (line 75) → setState (line 76), no mounted',
+        'R-FLUTTER-SETSTATE-AFTER-AWAIT 86 _GuardsState.breakInExit: await (line 81) → setState (line 86), mounted (line 82) does not guard it'
+    ]);
+});
+
+test('mounted: guard classification per setState (dominating / non-dominating / unknown / none), exclusive branches are not "after" the await', () => {
+    const [guards] = stateFacts(join(phaseC, 'Guards.dart'));
+    assert.deepEqual(
+        guards?.setStateCalls.map((call) => `${call.method} ${call.afterAwait ? call.guard : 'not-after-await'}`),
+        [
+            'earlyReturn dominating',
+            'blockExitContext dominating',
+            'insideIf dominating',
+            'elseOfNegated dominating',
+            'ternary dominating',
+            'onlyMentioned non-dominating',
+            'noExit non-dominating',
+            'siblingBranch non-dominating',
+            'guardBeforeAwait none',
+            'breakInExit non-dominating',
+            'aliased unknown',
+            'compared unknown',
+            'exclusive not-after-await'
+        ]
+    );
+});
+
+test('resources: a typed StreamSubscription and an owned controller are reported; own listen(), untyped listen, cancel(), dispose() and external ownership are not', () => {
+    assert.deepEqual(brief(lifecycleFindings(join(phaseC, 'Resources.dart'))), [
+        'R-FLUTTER-UNCANCELLED-SUBSCRIPTION 31 _ResourcesState._typed = widget.stream.listen; dispose: no mention',
+        'R-FLUTTER-UNDISPOSED-CONTROLLER 35 _ResourcesState._owned = TextEditingController; dispose: no mention'
+    ]);
+});
+
+test('resources: fact v2 records declared field types, external ownership and certain release calls', () => {
+    const [resources] = stateFacts(join(phaseC, 'Resources.dart'));
+    assert.equal(resources?.v, 2);
+    const typeOf = (field: string): string | null => {
+        const type = resources?.fieldTypes[resources.fields.indexOf(field)] ?? null;
+        return type === null ? null : type[1];
+    };
+    assert.equal(typeOf('_typed'), 'StreamSubscription');
+    assert.equal(typeOf('_untyped'), null);
+    assert.equal(typeOf('_handle'), 'int');
+    assert.deepEqual(resources?.externalFields, ['_external', '_handle']);
+    // `?.cancel()`, `.dispose()`, `this.x.dispose()`, `?..cancel()`; `_timer = null` is not an external assignment.
+    assert.deepEqual(resources?.releaseCalls, ['_cancelled', '_focus', '_scroll', '_timer']);
+});
+
+test('Phase C versions: controller, subscription and setState rules at 1.2.0, inherited-in-initState at 1.1.0', () => {
+    const findings = [...lifecycleFindings(join(fixtures, 'Positive.dart')), ...lifecycleFindings(join(phaseC, 'Resources.dart'))];
+    const versions = [...new Set(findings.map((finding) => `${finding.rule.id}@${finding.rule.version}`))].sort();
+    assert.deepEqual(versions, [
+        'R-FLUTTER-INHERITED-IN-INITSTATE@1.1.0',
+        'R-FLUTTER-SETSTATE-AFTER-AWAIT@1.2.0',
+        'R-FLUTTER-UNCANCELLED-SUBSCRIPTION@1.2.0',
+        'R-FLUTTER-UNDISPOSED-CONTROLLER@1.2.0'
+    ]);
 });

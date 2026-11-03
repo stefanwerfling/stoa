@@ -1,7 +1,8 @@
 import type {Fact, Finding, Severity} from '../../Types.js';
 import {localize, type LocalizedText} from '../../i18n/Localized.js';
-import type {LifecycleCall, LifecycleRange, StateLifecycleValue} from '../../analysis/dart/FlutterLifecycle.js';
-import {dartIdentityResolver, type WidgetIdentity} from '../../model/FlutterWidgetGraph.js';
+import type {LifecycleCall, LifecycleCreation, LifecycleRange, StateLifecycleValue} from '../../analysis/dart/FlutterLifecycle.js';
+import {resolvedFrom, type DartNameResolution} from '../../model/DartLibraryIndex.js';
+import {flutterAwareIndex} from '../../analysis/dart/FlutterCatalog.js';
 import type {ProjectRule, ProjectRuleInput} from '../ProjectRule.js';
 import {resolvePrinciple} from './FlutterLayoutRules.js';
 
@@ -12,17 +13,37 @@ import {resolvePrinciple} from './FlutterLayoutRules.js';
  * (`dart.importSpec`, `dart.classDecl`) — no widget graph, no AST.
  *
  * Shared discipline:
- * - the class's `State` must be Flutter's: `heuristic` identity with a
- *   `package:flutter/` import candidate (a local `State` class shadows it);
+ * - the class's `State` must be Flutter's: the DartLibraryIndex (Phase B,
+ *   rules 1.1.0) must RESOLVE it to a `package:flutter/` declaration (a
+ *   `State` declared in the same library shadows it; ambiguous/unresolved
+ *   never counts);
  * - framework names the rules look for (`TextEditingController`, `Theme`,
- *   `Timer`) are graded the same way — Flutter names need a
- *   `package:flutter/` candidate, `Timer` a `dart:async` one;
+ *   `Timer`) are resolved the same way — Flutter names to a
+ *   `package:flutter/` declaration, `Timer` to `dart:async`;
  * - a class mixing in anything outside a small list of known framework
  *   mixins is skipped by the dispose rules: such a mixin may release fields
  *   in its own `dispose()`;
  * - DISPOSE = any mention of the field in `dispose()` or in a same-class
  *   method it calls (user decision: minimise false positives; a field that
  *   is mentioned but not actually released is a documented false negative).
+ *
+ * Resource model (Flutter quality track, Phase C — rules 1.2.0). Per field:
+ * - CREATED for certain: assigned exactly one call whose type the
+ *   DartLibraryIndex resolves (framework controller, `Timer`), or a
+ *   `.listen(…)` stored in a field DECLARED `StreamSubscription` (resolved to
+ *   dart:async); a `.listen(…)` into an untyped or otherwise-typed field is
+ *   only POSSIBLY a subscription (own `listen()` APIs) — never reported;
+ * - MANAGED ELSEWHERE: the field is also assigned from something else
+ *   (`widget.controller`, a parameter, `a ?? b`) — ownership cannot be judged,
+ *   the field is skipped;
+ * - RELEASED for certain: `.dispose()`/`.cancel()`/`.close()` on it in the
+ *   dispose() chain (`releaseCalls`); MENTIONED: any other mention there
+ *   (counts as released, see above); NOT PROVABLY RELEASED: neither — the
+ *   only state that is reported.
+ * setState after await (1.2.0) is reported only when no `mounted` check
+ * occurs after the await (`none`) or every check provably does not guard the
+ * call (`non-dominating`); a check the analysis cannot place (`unknown`) keeps
+ * the rule silent. See FlutterLifecycle.ts `MountedGuard`.
  */
 
 const FLUTTER_PACKAGE = 'package:flutter/';
@@ -64,10 +85,11 @@ const KNOWN_MIXINS: ReadonlySet<string> = new Set([
     'RouteAware'
 ]);
 
-type Resolve = (file: string, name: string, prefix: string | null) => WidgetIdentity;
+type Resolve = (file: string, name: string, prefix: string | null) => DartNameResolution;
 
-const fromSource = (identity: WidgetIdentity, source: string): boolean =>
-    identity.status === 'heuristic' && identity.candidates.some((candidate) => candidate.startsWith(source));
+// Phase B (rules 1.1.0): only a name the DartLibraryIndex RESOLVES to a
+// declaration below `source` counts — ambiguous/unresolved never does.
+const fromSource = (resolution: DartNameResolution, source: string): boolean => resolvedFrom(resolution, source);
 
 interface StateClass {
     fact: Fact;
@@ -93,7 +115,7 @@ interface Hit {
 
 abstract class FlutterLifecycleRule implements ProjectRule {
     public abstract readonly id: string;
-    public readonly version = '1.0.0';
+    public readonly version: string = '1.1.0';
     public readonly requiredFactKinds = ['dart.stateLifecycle', 'dart.classDecl', 'dart.importSpec'];
     protected abstract readonly text: LifecycleText;
     protected abstract readonly principleId: string;
@@ -107,7 +129,8 @@ abstract class FlutterLifecycleRule implements ProjectRule {
         if (states.length === 0) {
             return [];
         }
-        const resolve = dartIdentityResolver(input.facts);
+        const index = input.dartLibraryIndex ?? flutterAwareIndex(input.facts);
+        const resolve: Resolve = (file, name, prefix) => index.resolve(file, name, prefix);
         const findings: Finding[] = [];
         for (const fact of states) {
             const value = fact.value as unknown as StateLifecycleValue;
@@ -149,16 +172,17 @@ const callText = (call: LifecycleCall): string => `${call.prefix === null ? '' :
 const hasUnknownMixin = (value: StateLifecycleValue): boolean => value.mixins.some((mixin) => !KNOWN_MIXINS.has(mixin));
 
 /** Fields created by a call `accept`s and never mentioned in dispose(); one hit per field (its first creation). */
-const unreleased = (state: StateClass, accept: (call: LifecycleCall) => boolean): Hit[] => {
+const unreleased = (state: StateClass, accept: (call: LifecycleCreation) => boolean): Hit[] => {
     const {value} = state;
     if (hasUnknownMixin(value)) {
         return [];
     }
     const mentioned = new Set(value.disposeMentions);
+    const external = new Set(value.externalFields);
     const seen = new Set<string>();
     const hits: Hit[] = [];
     for (const creation of value.creations) {
-        if (seen.has(creation.field) || mentioned.has(creation.field) || !accept(creation)) {
+        if (seen.has(creation.field) || mentioned.has(creation.field) || external.has(creation.field) || !accept(creation)) {
             continue;
         }
         seen.add(creation.field);
@@ -172,14 +196,21 @@ const unreleased = (state: StateClass, accept: (call: LifecycleCall) => boolean)
     return hits;
 };
 
+/** True when `field` is declared with a type that resolves to `name` from `source` (e.g. `StreamSubscription<int>?` → dart:async). */
+const declaredAs = (state: StateClass, field: string, resolve: Resolve, name: string, source: string): boolean => {
+    const type = state.value.fieldTypes?.[state.value.fields.indexOf(field)] ?? null;
+    return type !== null && type[1] === name && fromSource(resolve(state.fact.subject.file, name, type[0]), source);
+};
+
 const DISPOSE_CONTEXT: LocalizedText = {
-    en: 'Any mention of the field in dispose() or in a same-class method it calls counts as released. A base class other than State, a mixin outside the known framework mixins, or ownership handed to another object is not followed; such classes are skipped or may be false positives.',
-    de: 'Jede Erwähnung des Felds in dispose() oder in einer von dort aufgerufenen Methode derselben Klasse gilt als Freigabe. Eine andere Basisklasse als State, ein Mixin außerhalb der bekannten Framework-Mixins oder eine an ein anderes Objekt übergebene Verantwortung werden nicht verfolgt; solche Klassen werden übersprungen oder können Fehlalarme sein.'
+    en: 'Any mention of the field in dispose() or in a same-class method it calls counts as released. A field also assigned from elsewhere (widget.controller, a parameter, a ?? b) is skipped: its ownership is not judged. A base class other than State, a mixin outside the known framework mixins, or ownership handed to another object after creation is not followed; such classes are skipped or may be false positives.',
+    de: 'Jede Erwähnung des Felds in dispose() oder in einer von dort aufgerufenen Methode derselben Klasse gilt als Freigabe. Ein Feld, das auch anderweitig zugewiesen wird (widget.controller, ein Parameter, a ?? b), wird übersprungen: seine Verantwortung wird nicht beurteilt. Eine andere Basisklasse als State, ein Mixin außerhalb der bekannten Framework-Mixins oder eine nach der Erzeugung an ein anderes Objekt übergebene Verantwortung werden nicht verfolgt; solche Klassen werden übersprungen oder können Fehlalarme sein.'
 };
 
 /** R-FLUTTER-UNDISPOSED-CONTROLLER: a framework controller/FocusNode held in a field and never released in dispose(). */
 export class FlutterUndisposedControllerRule extends FlutterLifecycleRule {
     public readonly id = 'R-FLUTTER-UNDISPOSED-CONTROLLER';
+    public override readonly version = '1.2.0';
     protected readonly principleId = 'marcus.control';
     protected readonly severity: Severity = 'medium';
     protected readonly text: LifecycleText = {
@@ -204,6 +235,7 @@ export class FlutterUndisposedControllerRule extends FlutterLifecycleRule {
 /** R-FLUTTER-UNCANCELLED-SUBSCRIPTION: a Timer or stream subscription held in a field and never cancelled in dispose(). */
 export class FlutterUncancelledSubscriptionRule extends FlutterLifecycleRule {
     public readonly id = 'R-FLUTTER-UNCANCELLED-SUBSCRIPTION';
+    public override readonly version = '1.2.0';
     protected readonly principleId = 'marcus.control';
     protected readonly severity: Severity = 'medium';
     protected readonly text: LifecycleText = {
@@ -211,8 +243,8 @@ export class FlutterUncancelledSubscriptionRule extends FlutterLifecycleRule {
         suggestion: {en: 'Call .cancel() on the field in the State\'s dispose().', de: 'In dispose() des State .cancel() auf dem Feld aufrufen.'},
         drawbacks: {en: 'None of note.', de: 'Keine nennenswerten.'},
         missingContext: {
-            en: `${localize(DISPOSE_CONTEXT, 'en')} A field assigned from any \`.listen(…)\` call is taken to be a subscription.`,
-            de: `${localize(DISPOSE_CONTEXT, 'de')} Ein Feld, dem ein beliebiger \`.listen(…)\`-Aufruf zugewiesen wird, gilt als Subscription.`
+            en: `${localize(DISPOSE_CONTEXT, 'en')} A \`.listen(…)\` result counts as a subscription only when the field is declared \`StreamSubscription\` (dart:async); an untyped field or an own listen() API is not reported, nor are subscriptions kept in a collection.`,
+            de: `${localize(DISPOSE_CONTEXT, 'de')} Ein \`.listen(…)\`-Ergebnis gilt nur als Subscription, wenn das Feld als \`StreamSubscription\` (dart:async) deklariert ist; ein untypisiertes Feld oder eine eigene listen()-API wird nicht gemeldet, ebenso wenig Subscriptions in einer Sammlung.`
         },
         rationale: {
             en: 'A timer or subscription keeps firing after the State is gone — typically into setState() after dispose(); the State must stop what it started (marcus.control).',
@@ -224,7 +256,7 @@ export class FlutterUncancelledSubscriptionRule extends FlutterLifecycleRule {
         return unreleased(state, (call) => {
             const [first] = call.names;
             const isTimer = first === 'Timer' && call.names.length <= 2 && (call.names[1] === undefined || call.names[1] === 'periodic') && fromSource(resolve(state.fact.subject.file, 'Timer', call.prefix), DART_ASYNC);
-            const isSubscription = call.names.length >= 2 && call.names.at(-1) === 'listen';
+            const isSubscription = call.names.length >= 2 && call.names.at(-1) === 'listen' && declaredAs(state, call.field, resolve, 'StreamSubscription', DART_ASYNC);
             return isTimer || isSubscription;
         });
     }
@@ -233,6 +265,7 @@ export class FlutterUncancelledSubscriptionRule extends FlutterLifecycleRule {
 /** R-FLUTTER-SETSTATE-AFTER-AWAIT: setState() after an await in the same function without a `mounted` check in between. */
 export class FlutterSetStateAfterAwaitRule extends FlutterLifecycleRule {
     public readonly id = 'R-FLUTTER-SETSTATE-AFTER-AWAIT';
+    public override readonly version = '1.2.0';
     protected readonly principleId = 'marcus.control';
     protected readonly severity: Severity = 'medium';
     protected override readonly confidence = 0.7;
@@ -241,8 +274,8 @@ export class FlutterSetStateAfterAwaitRule extends FlutterLifecycleRule {
         suggestion: {en: 'Add `if (!mounted) return;` after the await (before setState).', de: 'Nach dem await (vor setState) `if (!mounted) return;` einfügen.'},
         drawbacks: {en: 'None of note.', de: 'Keine nennenswerten.'},
         missingContext: {
-            en: 'Order is source order within one function body: an await in a loop after the setState, or a mounted check in a branch that does not dominate the call, is not modelled (false negatives). A guard via another flag than `mounted` is not recognised.',
-            de: 'Reihenfolge ist die Quelltextreihenfolge innerhalb eines Funktionsrumpfs: ein await in einer Schleife nach dem setState oder eine mounted-Prüfung in einem Zweig, der den Aufruf nicht dominiert, wird nicht modelliert. Eine Absicherung über ein anderes Flag als `mounted` wird nicht erkannt.'
+            en: 'Order is source order within one function body (an await in a loop after the setState is not modelled). A mounted check counts only as the condition of an if/?: in the same function that guards the call: `if (!mounted) return;` before it in an enclosing block, or the call inside `if (mounted) {…}`; any other use of mounted (a variable, a loop, `== true`, another closure) keeps the rule silent. A guard via another flag than `mounted` is not recognised.',
+            de: 'Reihenfolge ist die Quelltextreihenfolge innerhalb eines Funktionsrumpfs (ein await in einer Schleife nach dem setState wird nicht modelliert). Eine mounted-Prüfung zählt nur als Bedingung eines if/?: in derselben Funktion, das den Aufruf absichert: `if (!mounted) return;` davor in einem umschließenden Block oder der Aufruf innerhalb von `if (mounted) {…}`; jede andere Verwendung von mounted (Variable, Schleife, `== true`, andere Closure) lässt die Regel schweigen. Eine Absicherung über ein anderes Flag als `mounted` wird nicht erkannt.'
         },
         rationale: {
             en: 'While awaiting, the widget may be removed; calling setState() on a disposed State throws in debug. Whether the State still exists is outside its control and must be checked, not assumed (marcus.control).',
@@ -252,8 +285,17 @@ export class FlutterSetStateAfterAwaitRule extends FlutterLifecycleRule {
 
     protected hits(state: StateClass): Hit[] {
         return state.value.setStateCalls
-            .filter((call) => call.afterAwait && !call.mountedBetween)
-            .map((call) => ({state, range: call.range, subject: `${state.value.className}.${call.method}`, evidence: `${state.value.className}.${call.method}: await → setState, no mounted`}));
+            .filter((call) => call.afterAwait && (call.guard === 'none' || call.guard === 'non-dominating'))
+            .map((call) => {
+                const awaitAt = call.awaitRange === null ? '' : ` (line ${call.awaitRange.startLine})`;
+                const guard = call.guard === 'none' || call.mountedRange === null ? 'no mounted' : `mounted (line ${call.mountedRange.startLine}) does not guard it`;
+                return {
+                    state,
+                    range: call.range,
+                    subject: `${state.value.className}.${call.method}`,
+                    evidence: `${state.value.className}.${call.method}: await${awaitAt} → setState (line ${call.range.startLine}), ${guard}`
+                };
+            });
     }
 }
 

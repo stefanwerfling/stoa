@@ -1,5 +1,6 @@
 import type {Node} from 'web-tree-sitter';
 import {asConstructor, callSiteOf, type DartCallSite} from './DartCallSite.js';
+import {decodeArgValue, encodeArgValue, WIDGET_VALUE, type ArgValue, type EncodedArgValue} from './DartValues.js';
 
 /**
  * Flutter widget STRUCTURE (Phase 1): per function/method body, the widget
@@ -40,9 +41,12 @@ export type WidgetNodeStatus = 'known' | 'dynamic' | 'unparsed';
 
 /**
  * One encoded node: [parent, label, index, kind, name, prefix, constructor,
- * startLine, startCol, endLine, endCol, argNames, status]. Tuples instead of
- * objects keep a large build() method's fact small; `decodeWidgetTree` is the
- * single place that reads the layout.
+ * startLine, startCol, endLine, endCol, argNames, status, argValues]. Tuples
+ * instead of objects keep a large build() method's fact small;
+ * `decodeWidgetTree` is the single place that reads the layout. `argValues`
+ * (encoding v2) is aligned with `argNames` for `widget` nodes (see
+ * DartValues.ts) and empty for every other kind (a builder's `argNames` are
+ * its parameter names, which have no values).
  */
 export type EncodedWidgetNode = [
     number,
@@ -57,13 +61,14 @@ export type EncodedWidgetNode = [
     number,
     number,
     string[],
-    WidgetNodeStatus
+    WidgetNodeStatus,
+    EncodedArgValue[]
 ];
 
 export interface WidgetTreeValue {
     [key: string]: unknown;
-    /** Encoding version of `nodes`. */
-    v: 1;
+    /** Encoding version of `nodes` (2 = with argument values). */
+    v: 2;
     nodes: EncodedWidgetNode[];
     /** True when the node cap was hit and the rest of this function's tree was dropped. */
     truncated: boolean;
@@ -85,10 +90,12 @@ export interface DecodedWidgetNode {
     endCol: number;
     argNames: string[];
     status: WidgetNodeStatus;
+    /** Aligned with `argNames` for widget nodes; empty otherwise. */
+    argValues: ArgValue[];
 }
 
 export const decodeWidgetTree = (value: WidgetTreeValue): DecodedWidgetNode[] =>
-    value.nodes.map(([parent, label, index, kind, name, prefix, constructorName, startLine, startCol, endLine, endCol, argNames, status]) => ({
+    value.nodes.map(([parent, label, index, kind, name, prefix, constructorName, startLine, startCol, endLine, endCol, argNames, status, argValues]) => ({
         parent,
         label,
         index,
@@ -101,7 +108,8 @@ export const decodeWidgetTree = (value: WidgetTreeValue): DecodedWidgetNode[] =>
         endLine,
         endCol,
         argNames,
-        status
+        status,
+        argValues: argValues.map(decodeArgValue)
     }));
 
 // Argument names that hold a widget (or a list of widgets) in the Flutter
@@ -199,7 +207,7 @@ class TreeBuilder {
         if (this.nodes.length === 0) {
             return null;
         }
-        return {v: 1, nodes: this.nodes, truncated: this.truncated};
+        return {v: 2, nodes: this.nodes, truncated: this.truncated};
     }
 
     // Pre-order walk for ROOTS: every unclaimed constructor-like call site
@@ -240,7 +248,7 @@ class TreeBuilder {
         return site !== null && asConstructor(site) !== null ? site : null;
     }
 
-    private push(draft: Draft, kind: WidgetNodeKind, span: {from: Node; to: Node}, extra: {name?: string | null; prefix?: string | null; constructorName?: string | null; argNames?: string[]; status?: WidgetNodeStatus} = {}): number {
+    private push(draft: Draft, kind: WidgetNodeKind, span: {from: Node; to: Node}, extra: {name?: string | null; prefix?: string | null; constructorName?: string | null; argNames?: string[]; argValues?: EncodedArgValue[]; status?: WidgetNodeStatus} = {}): number {
         if (this.nodes.length >= MAX_NODES_PER_FUNCTION) {
             this.truncated = true;
             return -1;
@@ -258,7 +266,8 @@ class TreeBuilder {
             span.to.endPosition.row + 1,
             span.to.endPosition.column,
             extra.argNames ?? [],
-            extra.status ?? 'known'
+            extra.status ?? 'known',
+            extra.argValues ?? []
         ]);
         return this.nodes.length - 1;
     }
@@ -267,11 +276,13 @@ class TreeBuilder {
         this.claimed.add(site.head.id);
         const ref = asConstructor(site);
         const args = argumentsOf(site.arguments);
+        const named = args.filter((arg) => arg.label !== null);
         const index = this.push(draft, 'widget', {from: site.head, to: site.arguments}, {
             name: ref?.typeName ?? null,
             prefix: site.prefix,
             constructorName: ref?.constructorName ?? null,
-            argNames: args.filter((arg) => arg.label !== null).map((arg) => arg.label as string)
+            argNames: named.map((arg) => arg.label as string),
+            argValues: named.map((arg) => this.valueOf(arg))
         });
         if (index < 0) {
             return index;
@@ -290,6 +301,16 @@ class TreeBuilder {
             }
         }
         return index;
+    }
+
+    // A named argument's value (DartValues). A widget slot holding anything but
+    // a literal is a child (a graph node of its own), recorded only as `widget`.
+    private valueOf(arg: Argument): EncodedArgValue {
+        const encoded = encodeArgValue(arg.value, this.prefixes);
+        if (arg.label !== null && WIDGET_SLOTS.has(arg.label) && !['b', 'n', 'i', 'd', 's'].includes(encoded[0])) {
+            return WIDGET_VALUE;
+        }
+        return encoded;
     }
 
     // A slot value: a list literal fans out into indexed children, anything

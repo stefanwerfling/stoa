@@ -2,6 +2,9 @@ import type {Fact, SourceRange} from '../Types.js';
 import {decodeWidgetTree, type WidgetNodeKind, type WidgetNodeStatus, type WidgetTreeValue} from '../analysis/dart/FlutterWidgets.js';
 import type {DartDirectiveValue, DartTypeDeclValue} from '../analysis/dart/DartDeclarations.js';
 import {identityOf, type WidgetIdentity} from '../analysis/dart/DartIdentity.js';
+import type {ArgValue} from '../analysis/dart/DartValues.js';
+import {flutterAwareIndex} from '../analysis/dart/FlutterCatalog.js';
+import type {DartLibraryIndex, DartNameResolution} from './DartLibraryIndex.js';
 
 export {identityOf, type WidgetIdentity};
 
@@ -19,7 +22,11 @@ export {identityOf, type WidgetIdentity};
  * - `status` says how well the STRUCTURE at a node is known (`known`,
  *   `dynamic` for references/unmodelled expressions, `unparsed` where
  *   tree-sitter-dart could not parse — e.g. Dart 3 syntax);
- * - `identity` says how well a widget's TYPE is known (see WidgetIdentity).
+ * - `identity` says how well a widget's TYPE is known per file (see
+ *   WidgetIdentity — kept for compatibility);
+ * - `resolution` (Flutter quality Phase B) says which DECLARATION the name
+ *   refers to across files (DartLibraryIndex: `resolved` with an origin,
+ *   `ambiguous`, `unresolved`). Rules decide on `resolution`, never on a name.
  */
 
 export type WidgetEdgeKind = 'child' | 'children' | 'slot' | 'branch' | 'repeat' | 'element' | 'builds' | 'return';
@@ -39,9 +46,17 @@ export interface WidgetNode {
     constructorName: string | null;
     /** Named arguments written on a widget (or a builder's parameter names). */
     argNames: readonly string[];
+    /**
+     * The value of each named argument, aligned with `argNames` (widget nodes
+     * only; empty for others). Unknown stays unknown (`reference`/`expression`/
+     * `closure`/`widget`) — see analysis/dart/DartValues.ts. Read via `argValueOf`.
+     */
+    argValues: readonly ArgValue[];
     status: WidgetNodeStatus;
     /** Set for `widget` nodes only. */
     identity: WidgetIdentity | null;
+    /** Cross-file resolution of the widget's type name (`widget` nodes only); see DartLibraryIndex. */
+    resolution: DartNameResolution | null;
 }
 
 export interface WidgetEdge {
@@ -69,9 +84,11 @@ const compareText = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 
 
 /**
  * Builds the graph from the fact set. Deterministic: depends only on the facts
- * (not their order) — nodes, edges and roots are sorted by id.
+ * (not their order) — nodes, edges and roots are sorted by id. `index` is the
+ * pipeline's project-wide DartLibraryIndex (with the package map); without one
+ * a Flutter-aware index over `facts` alone is used (own `package:` URIs opaque).
  */
-export const buildFlutterWidgetGraph = (facts: readonly Fact[]): FlutterWidgetGraph => {
+export const buildFlutterWidgetGraph = (facts: readonly Fact[], index?: DartLibraryIndex): FlutterWidgetGraph => {
     const declaredByFile = new Map<string, Set<string>>();
     const directivesByFile = new Map<string, DartDirectiveValue[]>();
     const trees: Fact[] = [];
@@ -92,6 +109,7 @@ export const buildFlutterWidgetGraph = (facts: readonly Fact[]): FlutterWidgetGr
         return EMPTY_FLUTTER_WIDGET_GRAPH;
     }
 
+    const libraries = index ?? flutterAwareIndex(facts);
     const nodes: WidgetNode[] = [];
     const edges: WidgetEdge[] = [];
     const roots: string[] = [];
@@ -129,8 +147,10 @@ export const buildFlutterWidgetGraph = (facts: readonly Fact[]): FlutterWidgetGr
                 prefix: node.prefix,
                 constructorName: node.constructorName,
                 argNames: node.argNames,
+                argValues: node.kind === 'widget' ? node.argValues : [],
                 status: node.status,
-                identity: node.kind === 'widget' && node.name !== null ? identityOf(node.name, node.prefix, declaredByFile.get(file), directivesByFile.get(file) ?? []) : null
+                identity: node.kind === 'widget' && node.name !== null ? identityOf(node.name, node.prefix, declaredByFile.get(file), directivesByFile.get(file) ?? []) : null,
+                resolution: node.kind === 'widget' && node.name !== null ? libraries.resolve(file, node.name, node.prefix) : null
             });
         });
     }
@@ -180,4 +200,14 @@ export const dartIdentityResolver = (facts: readonly Fact[]): ((file: string, na
         }
     }
     return (file, name, prefix) => identityOf(name, prefix, declaredByFile.get(file), directivesByFile.get(file) ?? []);
+};
+
+/**
+ * The value of the named argument `name` on a widget node; `undefined` when the
+ * argument is not written (the caller applies the framework default — absent
+ * is not the same as unknown).
+ */
+export const argValueOf = (node: WidgetNode, name: string): ArgValue | undefined => {
+    const index = node.argNames.indexOf(name);
+    return index < 0 ? undefined : node.argValues[index];
 };

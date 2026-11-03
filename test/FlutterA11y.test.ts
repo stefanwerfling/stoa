@@ -119,9 +119,9 @@ test('1.1.0: identity — a same-file class shadows Flutter\'s, and without a Fl
     assert.deepEqual(a11yLines(join(hardening, 'NoFlutter.dart')), []);
 });
 
-test('the three Flutter a11y rules are at version 1.1.0', () => {
+test('the three Flutter a11y rules are at version 1.2.0 (Phase B identity)', () => {
     const versions = analyzePath(join(hardening, 'Forms.dart'))
         .filter((f) => f.rule.id.startsWith('R-A11Y-FLUTTER-'))
         .map((f) => `${f.rule.id}@${f.rule.version}`);
-    assert.deepEqual([...new Set(versions)].sort(), ['R-A11Y-FLUTTER-ICONBUTTON-LABEL@1.1.0', 'R-A11Y-FLUTTER-IMAGE-LABEL@1.1.0', 'R-A11Y-FLUTTER-TEXTFIELD-LABEL@1.1.0']);
+    assert.deepEqual([...new Set(versions)].sort(), ['R-A11Y-FLUTTER-ICONBUTTON-LABEL@1.2.0', 'R-A11Y-FLUTTER-IMAGE-LABEL@1.2.0', 'R-A11Y-FLUTTER-TEXTFIELD-LABEL@1.2.0']);
 });

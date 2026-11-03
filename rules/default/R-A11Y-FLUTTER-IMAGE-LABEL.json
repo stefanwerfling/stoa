@@ -1,6 +1,6 @@
 {
   "id": "R-A11Y-FLUTTER-IMAGE-LABEL",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "title": "Flutter image has no semantic label",
   "feature": "ui.flutterImageNoSemanticLabel",
   "appliesTo": ["statement"],

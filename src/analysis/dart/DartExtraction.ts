@@ -2,10 +2,10 @@ import type {Node} from 'web-tree-sitter';
 import type {Fact, SourceRange, SubjectKind} from '../../Types.js';
 import {factBuilder, type AdapterInfo} from '../FactBuilder.js';
 import {importPrefixes, parseErrorCount} from './DartCallSite.js';
-import {extractDartDeclarationFacts, type DartDirectiveValue, type DartTypeDeclValue} from './DartDeclarations.js';
-import {identityOf} from './DartIdentity.js';
+import {extractDartDeclarationFacts} from './DartDeclarations.js';
 import {extractWidgetTree} from './FlutterWidgets.js';
-import {extractFlutterA11yFacts, type FileIdentity} from './FlutterA11y.js';
+import {extractFlutterA11yFacts, type FileResolution} from './FlutterA11y.js';
+import {flutterAwareIndex} from './FlutterCatalog.js';
 import {extractStateLifecycleFacts} from './FlutterLifecycle.js';
 
 /**
@@ -96,7 +96,7 @@ export const extractFacts = (root: Node, content: string, filePath: string, info
 
     // Flutter widget-tree accessibility facts (Image/IconButton/TextField
     // labelling), graded against this file's own imports/declarations.
-    facts.push(...extractFlutterA11yFacts(root, build, fileIdentity(declarations), prefixes));
+    facts.push(...extractFlutterA11yFacts(root, build, fileResolution(filePath, declarations), prefixes));
 
     // State lifecycle members (Phase 3): one neutral fact per `extends State<…>` class.
     facts.push(...extractStateLifecycleFacts(root, prefixes, build));
@@ -296,17 +296,10 @@ const leadingHasMarker = (lines: string[], startLine: number): boolean => {
     return false;
 };
 
-// The identity grading of one file, from the declaration facts just extracted
-// for it — the same inputs the FlutterWidgetGraph uses after extraction.
-const fileIdentity = (declarations: readonly Fact[]): FileIdentity => {
-    const declared = new Set<string>();
-    const directives: DartDirectiveValue[] = [];
-    for (const fact of declarations) {
-        if (fact.kind === 'dart.classDecl') {
-            declared.add((fact.value as unknown as DartTypeDeclValue).name);
-        } else if (fact.kind === 'dart.importSpec') {
-            directives.push(fact.value as unknown as DartDirectiveValue);
-        }
-    }
-    return (name, prefix) => identityOf(name, prefix, declared, directives);
+// The name resolution of one file, from the declaration facts just extracted
+// for it — the same algorithm (DartLibraryIndex + Flutter catalog) the
+// FlutterWidgetGraph uses after extraction, restricted to this one file.
+const fileResolution = (file: string, declarations: readonly Fact[]): FileResolution => {
+    const index = flutterAwareIndex(declarations);
+    return (name, prefix) => index.resolve(file, name, prefix);
 };

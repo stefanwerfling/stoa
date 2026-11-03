@@ -7,7 +7,8 @@ import {fileURLToPath} from 'node:url';
 import {initDart} from '../src/analysis/DartAdapter.js';
 import {DEFAULT_CONFIG} from '../src/Config.js';
 import {KnowledgeBase} from '../src/knowledge/KnowledgeBase.js';
-import {buildFlutterWidgetGraph, type FlutterWidgetGraph, type WidgetNode} from '../src/model/FlutterWidgetGraph.js';
+import {numberLiteral} from '../src/analysis/dart/DartValues.js';
+import {argValueOf, buildFlutterWidgetGraph, type FlutterWidgetGraph, type WidgetNode} from '../src/model/FlutterWidgetGraph.js';
 import {analyze, type AnalyzeOptions} from '../src/Pipeline.js';
 import type {ProjectRule, ProjectRuleInput} from '../src/rules/ProjectRule.js';
 import {RuleEngine} from '../src/rules/RuleEngine.js';
@@ -201,12 +202,12 @@ test('project rules receive the graph via ProjectRuleInput; without Flutter code
     assert.equal(seen[1], undefined);
 });
 
-test('graph findings on the Phase-1 fixtures: only the one real layout error (ListView.builder directly in a Column)', () => {
+test('graph findings on the graph fixtures: only the real layout errors (ListView.builder in a Column; a horizontal shrink-wrapped ListView in a Column)', () => {
     const findings = analyze({rootPath: fixtures, knowledgeDir, ruleSetDir, config: DEFAULT_CONFIG}).report.findings;
     const graphFindings = findings.filter((finding) => finding.observation.evidence.some((evidence) => evidence.fact === 'ui.flutterWidgetTree'));
     assert.deepEqual(
         graphFindings.map((finding) => `${finding.rule.id} ${finding.location.file.slice(finding.location.file.lastIndexOf('/') + 1)}:${finding.location.range.startLine}`),
-        ['R-FLUTTER-UNBOUNDED-SCROLLABLE Complex.dart:13']
+        ['R-FLUTTER-UNBOUNDED-SCROLLABLE Complex.dart:13', 'R-FLUTTER-UNBOUNDED-SCROLLABLE Values.dart:5']
     );
 });
 
@@ -230,5 +231,85 @@ test('literals in a slot are provably not widgets (no node); list values in bran
     // `children: wide ? [...] : [...]` is ONE expression in the slot (no index).
     for (const expected of ['r0/children[2]/children conditional', 'r0/children[2]/children/then list', 'r0/children[2]/children/then/element[0] widget Text', 'r0/children[2]/children/then/element[1] widget Text', 'r0/children[2]/children/else/element[0] widget Text']) {
         assert.ok(build.some((line) => line.includes(expected)), `missing ${expected} in\n${build.join('\n')}`);
+    }
+});
+
+// Phase A: value semantics of widget arguments.
+const valueGraph = (): FlutterWidgetGraph => run(join(fixtures, 'Values.dart')).graph;
+const widgetNamed = (graph: FlutterWidgetGraph, name: string, nth = 0): WidgetNode => {
+    const found = graph.nodes.filter((node) => node.kind === 'widget' && node.name === name)[nth];
+    assert.ok(found !== undefined, `${name}#${nth} present`);
+    return found;
+};
+
+test('values: typed literals (bool, null, int, double incl. negative, string) are recognised, unknowns stay unknown', () => {
+    const list = widgetNamed(valueGraph(), 'ListView');
+    assert.deepEqual(argValueOf(list, 'shrinkWrap'), {kind: 'bool', value: true});
+    assert.deepEqual(argValueOf(list, 'primary'), {kind: 'bool', value: false});
+    assert.deepEqual(argValueOf(list, 'itemExtent'), {kind: 'double', value: 48});
+    assert.deepEqual(argValueOf(list, 'cacheExtent'), {kind: 'double', value: -1.5});
+    assert.deepEqual(argValueOf(list, 'semanticChildCount'), {kind: 'int', value: 3});
+    assert.deepEqual(argValueOf(list, 'restorationId'), {kind: 'string', value: 'list'});
+    assert.deepEqual(argValueOf(list, 'controller'), {kind: 'null'});
+    assert.deepEqual(argValueOf(list, 'physics'), {kind: 'object', type: 'NeverScrollableScrollPhysics', constructorName: null, args: []});
+    assert.deepEqual(argValueOf(list, 'scrollDirection'), {kind: 'member', target: 'Axis', name: 'horizontal'}, 'declared prefix m. is dropped');
+    assert.deepEqual(argValueOf(list, 'clipBehavior'), {kind: 'expression'}, 'a conditional is not evaluated');
+    assert.deepEqual(argValueOf(list, 'key'), {kind: 'reference'}, 'a property access is unknown');
+    assert.deepEqual(argValueOf(list, 'children'), {kind: 'widget'});
+    assert.equal(argValueOf(list, 'reverse'), undefined, 'absent is not unknown');
+    assert.equal(list.argValues.length, list.argNames.length);
+});
+
+test('values: strings only as plain literals; hex, parenthesised and closures', () => {
+    const text = widgetNamed(valueGraph(), 'Text');
+    assert.deepEqual(argValueOf(text, 'semanticsLabel'), {kind: 'string', value: null}, 'an escape keeps the type, not the content');
+    assert.deepEqual(argValueOf(text, 'textScaleFactor'), {kind: 'int', value: 255});
+    assert.deepEqual(argValueOf(text, 'maxLines'), {kind: 'int', value: 2});
+    assert.deepEqual(argValueOf(widgetNamed(valueGraph(), 'IconButton'), 'onPressed'), {kind: 'closure'});
+});
+
+test('values: constraint groundwork — SizedBox extents, double.infinity, BoxConstraints one level deep', () => {
+    const graph = valueGraph();
+    const fixed = widgetNamed(graph, 'SizedBox', 0);
+    assert.equal(numberLiteral(argValueOf(fixed, 'width')), 100);
+    assert.equal(numberLiteral(argValueOf(fixed, 'height')), Number.POSITIVE_INFINITY);
+    assert.equal(numberLiteral(argValueOf(widgetNamed(graph, 'SizedBox', 1), 'height')), null, 'a variable height is unknown');
+    assert.deepEqual(argValueOf(widgetNamed(graph, 'ConstrainedBox', 0), 'constraints'), {
+        kind: 'object',
+        type: 'BoxConstraints',
+        constructorName: null,
+        args: [
+            {name: 'maxHeight', value: {kind: 'int', value: 200}},
+            {name: 'minWidth', value: {kind: 'double', value: 0.5}}
+        ]
+    });
+    assert.deepEqual(argValueOf(widgetNamed(graph, 'ConstrainedBox', 1), 'constraints'), {
+        kind: 'object',
+        type: 'BoxConstraints',
+        constructorName: 'tightFor',
+        args: [{name: 'width', value: {kind: 'expression'}}]
+    });
+    assert.deepEqual(argValueOf(widgetNamed(graph, 'Padding'), 'padding'), {kind: 'object', type: 'EdgeInsets', constructorName: 'all', args: [{name: '#0', value: {kind: 'int', value: 8}}]});
+});
+
+test('values: deterministic, plain JSON in the fact, identical after a FactCache hit', () => {
+    const cacheDir = mkdtempSync(join(tmpdir(), 'stoa-values-cache-'));
+    try {
+        const path = join(fixtures, 'Values.dart');
+        const cold = run(path, {cacheDir});
+        const warm = analyze({rootPath: path, knowledgeDir, ruleSetDir, config: DEFAULT_CONFIG, cacheDir});
+        assert.ok((warm.report.coverage.cacheHits ?? 0) > 0);
+        assert.equal(JSON.stringify(buildFlutterWidgetGraph(warm.facts)), JSON.stringify(cold.graph));
+        assert.equal(JSON.stringify(run(path).graph), JSON.stringify(cold.graph));
+        for (const fact of cold.facts.filter((candidate) => candidate.kind === 'ui.flutterWidgetTree')) {
+            const value = fact.value as unknown as {v: number; nodes: unknown[][]};
+            assert.equal(value.v, 2);
+            assert.deepEqual(JSON.parse(JSON.stringify(value)), value, 'round-trips through JSON (no AST, no functions)');
+            for (const node of value.nodes) {
+                assert.equal((node[13] as unknown[]).length, node[3] === 'widget' ? (node[11] as unknown[]).length : 0, 'argValues aligned with argNames on widgets, empty elsewhere');
+            }
+        }
+    } finally {
+        rmSync(cacheDir, {recursive: true, force: true});
     }
 });

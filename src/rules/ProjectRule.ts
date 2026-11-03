@@ -3,6 +3,7 @@ import type {KnowledgeBase} from '../knowledge/KnowledgeBase.js';
 import type {ModuleGraph} from '../model/ModuleGraph.js';
 import type {SymbolGraph} from '../model/SymbolGraph.js';
 import type {FlutterWidgetGraph} from '../model/FlutterWidgetGraph.js';
+import type {DartLibraryIndex} from '../model/DartLibraryIndex.js';
 
 export interface ProjectRuleInput {
     facts: Fact[];
@@ -33,6 +34,14 @@ export interface ProjectRuleInput {
      * widget trees (a run without Flutter code omits it).
      */
     flutterWidgetGraph?: FlutterWidgetGraph;
+    /**
+     * Cross-file Dart name resolution (Flutter quality Phase B), built once by
+     * the pipeline from `dart.importSpec` + `dart.classDecl` facts, the
+     * project's pubspec package names and the Flutter catalog. OPTIONAL and
+     * additive: the Flutter lifecycle rules fall back to an index over
+     * `facts` alone (own `package:` URIs opaque) when it is absent.
+     */
+    dartLibraryIndex?: DartLibraryIndex;
     /**
      * Every file that contributed at least one fact to this run — computed
      * by the caller directly from the analyzed file list, independent of

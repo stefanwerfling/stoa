@@ -31,16 +31,34 @@ test('positive fixture: every runtime layout error is reported exactly once, wit
         'R-FLUTTER-PARENTDATA-MISUSE 9 Stack.children > Flexible',
         'R-FLUTTER-PARENTDATA-MISUSE 10 Row.children > Positioned',
         'R-FLUTTER-PARENTDATA-MISUSE 11 Center.child > Positioned.fill',
-        'R-FLUTTER-UNBOUNDED-SCROLLABLE 12 Column.children > ListView',
-        'R-FLUTTER-UNBOUNDED-SCROLLABLE 13 Column.children > GridView.count',
+        'R-FLUTTER-UNBOUNDED-SCROLLABLE 12 Column.children > ListView [shrinkWrap=false (default), scrollDirection=vertical (default), parent axis=vertical (default)]',
+        'R-FLUTTER-UNBOUNDED-SCROLLABLE 13 Column.children > GridView.count [shrinkWrap=false (default), scrollDirection=vertical (default), parent axis=vertical (default)]',
         'R-FLUTTER-TEXTFIELD-UNBOUNDED-WIDTH 14 Row.children > TextField',
-        'R-FLUTTER-NESTED-SCROLL-UNBOUNDED 15 SingleChildScrollView.child > ListView.builder',
-        'R-FLUTTER-NESTED-SCROLL-UNBOUNDED 22 ListView.children > ListView'
+        'R-FLUTTER-NESTED-SCROLL-UNBOUNDED 15 SingleChildScrollView.child > ListView.builder [shrinkWrap=false (default), scrollDirection=vertical (default), parent axis=vertical (default)]',
+        'R-FLUTTER-NESTED-SCROLL-UNBOUNDED 22 ListView.children > ListView [shrinkWrap=false (default), scrollDirection=vertical (default), parent axis=vertical (default)]'
     ]);
 });
 
 test('negative fixture: valid or undecidable layouts (wrapped, shrinkWrap, unknown parent, reference, builder, explicit axis) stay silent', () => {
     assert.deepEqual(brief(layoutFindings(join(fixtures, 'Negative.dart'))), []);
+});
+
+test('values (1.1.0): shrinkWrap / scrollDirection / Flex direction decide by literal value; unknown stays silent unless the error is certain anyway', () => {
+    const lines = layoutFindings(join(fixtures, 'Values.dart')).map((finding) => `${finding.rule.id.replace('R-FLUTTER-', '')} ${finding.location.range.startLine} ${String(finding.observation.evidence[0]?.value)}`);
+    assert.deepEqual(lines, [
+        'UNBOUNDED-SCROLLABLE 5 Column.children > ListView [shrinkWrap=false (literal), scrollDirection=vertical (default), parent axis=vertical (default)]',
+        'UNBOUNDED-SCROLLABLE 8 Column.children > ListView [shrinkWrap=true (literal), scrollDirection=horizontal (literal), parent axis=vertical (default)]',
+        'UNBOUNDED-SCROLLABLE 9 Column.children > ListView [shrinkWrap=false (default), scrollDirection=? (unknown), parent axis=vertical (default)]',
+        'UNBOUNDED-SCROLLABLE 11 Row.children > ListView [shrinkWrap=true (literal), scrollDirection=vertical (default), parent axis=horizontal (default)]',
+        'UNBOUNDED-SCROLLABLE 15 Flex.children > ListView [shrinkWrap=false (default), scrollDirection=vertical (default), parent axis=? (unknown)]',
+        'UNBOUNDED-SCROLLABLE 16 Column.children > PageView [shrinkWrap=false (default), scrollDirection=horizontal (default), parent axis=vertical (default)]',
+        'NESTED-SCROLL-UNBOUNDED 20 SingleChildScrollView.child > ListView [shrinkWrap=false (literal), scrollDirection=vertical (default), parent axis=vertical (default)]',
+        'NESTED-SCROLL-UNBOUNDED 22 SingleChildScrollView.child > ListView [shrinkWrap=false (default), scrollDirection=vertical (literal), parent axis=vertical (literal)]',
+        'NESTED-SCROLL-UNBOUNDED 23 SingleChildScrollView.child > ListView [shrinkWrap=true (literal), scrollDirection=vertical (default), parent axis=horizontal (literal)]'
+    ]);
+    for (const finding of layoutFindings(join(fixtures, 'Values.dart'))) {
+        assert.equal(finding.rule.version, finding.rule.id === 'R-FLUTTER-UNBOUNDED-SCROLLABLE' || finding.rule.id === 'R-FLUTTER-NESTED-SCROLL-UNBOUNDED' ? '1.2.0' : '1.1.0');
+    }
 });
 
 test('identity: a locally declared widget name shadows the framework class, and without a Flutter import nothing is claimed', () => {

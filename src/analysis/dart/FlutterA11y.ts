@@ -2,12 +2,21 @@ import type {Node} from 'web-tree-sitter';
 import type {Fact, SourceRange} from '../../Types.js';
 import type {FactSpec} from '../FactBuilder.js';
 import {asConstructor, callSiteOf, callSites, type DartCallSite} from './DartCallSite.js';
-import {identityFrom, type WidgetIdentity} from './DartIdentity.js';
+import type {WidgetIdentity} from './DartIdentity.js';
+import {resolvedFrom, type DartNameResolution} from '../../model/DartLibraryIndex.js';
 
 type Build = (spec: FactSpec) => Fact;
 
-/** Grades `prefix.name` in the file being extracted (see DartIdentity.identityOf). */
+/** Grades `prefix.name` in the file being extracted (see DartIdentity.identityOf). Kept for compatibility; the extractor uses FileResolution. */
 export type FileIdentity = (name: string, prefix: string | null) => WidgetIdentity;
+
+/**
+ * Resolves `prefix.name` in the file being extracted (Phase B): a
+ * DartLibraryIndex over that file's own declaration facts plus the Flutter
+ * catalog — the same algorithm the widget graph uses, but FILE-LOCAL (the
+ * FactCache is per file): other project files are opaque here.
+ */
+export type FileResolution = (name: string, prefix: string | null) => DartNameResolution;
 
 const FLUTTER_PACKAGE = 'package:flutter/';
 const A11Y_WIDGETS: ReadonlySet<string> = new Set(['Image', 'IconButton', 'TextField', 'TextFormField']);
@@ -23,9 +32,12 @@ const A11Y_WIDGETS: ReadonlySet<string> = new Set(['Image', 'IconButton', 'TextF
  *
  * Candidates (Phase 4 hardening, rule version 1.1.0):
  * - every call-site form counts — `Image(…)`, `const Image(…)`, `new Image(…)`,
- *   `m.Image(…)` (DartCallSite) — and only when the name is Flutter's: graded
- *   per file from its own imports/declarations, a `package:flutter/` import
- *   candidate is required (a same-file class of that name shadows it);
+ *   `m.Image(…)` (DartCallSite) — and only when the name is Flutter's
+ *   (Phase B, rules 1.2.0): it must RESOLVE, from the file's own imports and
+ *   declarations, to a `package:flutter/` declaration — a same-file class of
+ *   that name shadows it, `TextField` from widgets.dart alone is absent, and
+ *   an ambiguous/unresolved name is skipped. File-local limit: a name reached
+ *   only through a project barrel (another file) is not resolved here;
  * - the search stays over the WHOLE file, not the widget graph: a widget in an
  *   argument that is not a graph slot (`suffixIcon:`) or in a method the grammar
  *   cannot structure (Dart 3 syntax) is still found.
@@ -41,7 +53,7 @@ const A11Y_WIDGETS: ReadonlySet<string> = new Set(['Image', 'IconButton', 'TextF
  * decoration built elsewhere (variable, `copyWith`), `Semantics(value:/hint:)`
  * and `MergeSemantics` (still reported — a sibling may or may not name it).
  */
-export const extractFlutterA11yFacts = (root: Node, build: Build, identity: FileIdentity, prefixes: ReadonlySet<string>): Fact[] => {
+export const extractFlutterA11yFacts = (root: Node, build: Build, identity: FileResolution, prefixes: ReadonlySet<string>): Fact[] => {
     const facts: Fact[] = [];
     let imageIndex = 0;
     let iconButtonIndex = 0;
@@ -58,7 +70,7 @@ export const extractFlutterA11yFacts = (root: Node, build: Build, identity: File
         if (ctor.constructorName !== null && NON_WIDGET_FACTORIES.has(ctor.constructorName)) {
             continue;
         }
-        if (!identityFrom(identity(ctor.typeName, site.prefix), FLUTTER_PACKAGE)) {
+        if (!resolvedFrom(identity(ctor.typeName, site.prefix), FLUTTER_PACKAGE)) {
             continue;
         }
         const widget = ctor.typeName;
