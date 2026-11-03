@@ -10,6 +10,8 @@ import {analyze} from '../src/Pipeline.js';
 import {DeadExportRule} from '../src/rules/project/DeadExportRule.js';
 import {DependencyCycleRule} from '../src/rules/project/DependencyCycleRule.js';
 import {ValidationContractRule} from '../src/rules/project/ValidationContractRule.js';
+import {SolidDipLayerDirectionRule} from '../src/rules/project/SolidRules.js';
+import {initDart} from '../src/analysis/DartAdapter.js';
 import type {ProjectRule, ProjectRuleInput} from '../src/rules/ProjectRule.js';
 import type {Fact} from '../src/Types.js';
 import type {ValidationContract} from '../src/contracts/ValidationContract.js';
@@ -123,4 +125,18 @@ test('control: the fixture actually exercises all three rules (a non-empty findi
     } finally {
         rmSync(dir, {recursive: true, force: true});
     }
+});
+
+test('SolidDipLayerDirectionRule (E6a) produces identical findings with the full fact set and with only its declared kinds, and the fixture exercises it', async () => {
+    await initDart();
+    const {facts} = analyze({
+        rootPath: join(here, 'fixtures', 'solid', 'dip-layer'),
+        knowledgeDir: join(root, 'knowledge', 'marcus'),
+        ruleSetDir: join(root, 'rules', 'default'),
+        config: DEFAULT_CONFIG,
+        solid: true
+    });
+    const rule = new SolidDipLayerDirectionRule();
+    assertFilteringToDeclaredKindsIsLossless(rule, facts);
+    assert.ok(rule.evaluate(buildInput(facts, new Set(facts.map((fact) => fact.subject.file)))).length > 0);
 });

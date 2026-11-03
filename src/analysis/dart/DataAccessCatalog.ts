@@ -74,3 +74,23 @@ export const dataAccessOf = (directive: DartDirectiveValue): DataAccessVerdict =
     const name = packageOfUri(directive.uri);
     return name !== null && DATA_ACCESS_PACKAGES.has(name) ? {package: name, status: 'data-access'} : null;
 };
+
+/**
+ * State-holder base classes (E6a, user decision): a project module declaring
+ * a class that extends or mixes in one of these is a state-management holder.
+ * A UI depending on it is the intended state-management pattern, so the DIP
+ * layer rule does not count such a module as a data-access target, even when
+ * it persists data itself. Name → library URI prefixes that provide it.
+ */
+export const STATE_HOLDER_CATALOG_VERSION = '1.0.0';
+
+export const STATE_HOLDER_BASES: ReadonlyMap<string, readonly string[]> = new Map([
+    ['ChangeNotifier', ['package:flutter/']],
+    ['ValueNotifier', ['package:flutter/']],
+    ['GetxController', ['package:get/']],
+    ['Cubit', ['package:bloc/', 'package:flutter_bloc/']],
+    ['Bloc', ['package:bloc/', 'package:flutter_bloc/']],
+    ['StateNotifier', ['package:state_notifier/', 'package:riverpod/', 'package:flutter_riverpod/', 'package:hooks_riverpod/']],
+    ['Notifier', ['package:riverpod/', 'package:flutter_riverpod/', 'package:hooks_riverpod/']],
+    ['AsyncNotifier', ['package:riverpod/', 'package:flutter_riverpod/', 'package:hooks_riverpod/']]
+]);

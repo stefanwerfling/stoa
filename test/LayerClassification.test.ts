@@ -3,7 +3,7 @@ import {dirname, join} from 'node:path';
 import {before, test} from 'node:test';
 import {fileURLToPath} from 'node:url';
 import {initDart} from '../src/analysis/DartAdapter.js';
-import {DATA_ACCESS_CATALOG_VERSION, dataAccessOf, packageOfUri} from '../src/analysis/dart/DataAccessCatalog.js';
+import {DATA_ACCESS_CATALOG_VERSION, STATE_HOLDER_CATALOG_VERSION, dataAccessOf, packageOfUri} from '../src/analysis/dart/DataAccessCatalog.js';
 import type {DartDirectiveValue} from '../src/analysis/dart/DartDeclarations.js';
 import {loadDartPackages} from '../src/analysis/dart/DartPackages.js';
 import {flutterAwareIndex} from '../src/analysis/dart/FlutterCatalog.js';
@@ -90,4 +90,19 @@ test('E5a: dart:io counts only with a show of I/O names; packages outside the ca
     assert.equal(packageOfUri('package:http/http.dart'), 'http');
     assert.equal(packageOfUri('dart:io'), null);
     assert.equal(packageOfUri('package:broken'), null);
+});
+
+test('E6a: state holders — a ChangeNotifier subclass or mixin and a GetxController are state holders; a project class named ChangeNotifier is not', async () => {
+    const dipProject = join(here, 'fixtures', 'solid', 'dip-layer');
+    const dipFacts = analyze({rootPath: dipProject, knowledgeDir: join(root, 'knowledge', 'marcus'), ruleSetDir: join(root, 'rules', 'default'), config: DEFAULT_CONFIG}).facts;
+    const classification = classify(dipFacts);
+    assert.equal(classification.stateHolderCatalogVersion, STATE_HOLDER_CATALOG_VERSION);
+    const summary = (file: string): string => {
+        const module = classificationOf(classification, join(dipProject, file));
+        return `${module?.roles.join('+')} ${module?.stateHolders.map((holder) => `${holder.name}:${holder.base}`).join(',')}`;
+    };
+    assert.equal(summary('lib/state/app_state.dart'), 'data-access+state-holder AppState:ChangeNotifier (package:flutter/foundation.dart)');
+    assert.equal(summary('lib/state/mixed_in.dart'), 'data-access+state-holder Favorites:ChangeNotifier (package:flutter/foundation.dart)');
+    assert.equal(summary('lib/state/get_controller.dart'), 'data-access+state-holder SessionController:GetxController (package:get/get.dart)');
+    assert.equal(summary('lib/state/fake_notifier.dart'), 'data-access ');
 });

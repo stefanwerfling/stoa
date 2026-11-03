@@ -248,6 +248,34 @@
   classes not seen: 1 (swipemeister) and 5 (velyo), all in files whose Dart 3
   syntax the grammar cannot structure. Tests: `test/LayerClassification.test.ts`
   (`test/fixtures/dart-layers`).
+- **SOLID, DIP layer direction stage 1 (Flutter quality track, E6a):**
+  `src/rules/project/SolidRules.ts`, registered only with `--solid` (pipeline
+  option `solid`). `R-SOLID-DIP-LAYER-DIRECTION` 0.1.0 (experimental,
+  `semantic-heuristic` 0.5, `low`, `marcus.cooperation` + `marcus.control`,
+  `dependencies`): a Dart library declaring a UI class (E5a) that imports a
+  data-access package itself or a project data-access module that is neither UI
+  (reported on its own) nor a state holder (Dart edges of the E2 ModuleGraph).
+  State holder (user decision): a class extending or mixing in a catalogued
+  state-management base — `ChangeNotifier`/`ValueNotifier` (`package:flutter/`),
+  `GetxController`, `Cubit`/`Bloc`, `StateNotifier`/`Notifier`/`AsyncNotifier`
+  (`STATE_HOLDER_BASES`, versioned) — that is not a project declaration; a UI
+  depending on its state layer is the intended pattern, even when that layer
+  persists data. One finding per library at its first such import; evidence lists the
+  UI classes with their Flutter base and every import. Library level only —
+  whether the UI class uses the imported names is not checked before E3. The
+  rule builds the layer classification itself from the facts and the
+  DartLibraryIndex, so without `--solid` nothing extra is computed and every
+  output is byte-identical (verified on four real apps, golden corpus,
+  fixtures). With `--solid` on the four apps: 14 / 5 / 0 / 0 hints (before the
+  state-holder exclusion 14 / 9 / 13 / 0 — velyo's `AppState extends
+  ChangeNotifier` and mwpa's `GetxController`s dropped out). The remaining
+  targets are services/wrappers doing I/O (swipemeister `ApiService`,
+  `PreferencesManager`, `AvatarCacheManager`; mwpa `DBHelper`, `MwpaAPI`,
+  `SyncMwpaService`, `Preference`); 4 mwpa pages import `shared_preferences`
+  directly. Tests: `test/SolidRules.test.ts` (`test/fixtures/solid/dip-layer`:
+  positive, negative, unknown and state-holder cases, a run without `--solid`),
+  `test/LayerClassification.test.ts` (state holders), plus the lossless-kinds
+  check in `test/ProjectRuleCategorization.test.ts`.
 - **Flutter State lifecycle (Flutter analysis, Phase 3):** `src/analysis/dart/FlutterLifecycle.ts`
   emits one neutral `dart.stateLifecycle` fact per class that directly
   `extends State<…>`: fields assigned exactly one call (field initializer or
@@ -286,7 +314,8 @@
   No clock/randomness/network in the core; same input + versions + language ⇒
   byte-identical findings.
 - **Optional, switchable layers:** type-checker facts (`--typecheck`), dead-export
-  analysis (`--dead-exports`), LLM interpretation (`--semantic anthropic`).
+  analysis (`--dead-exports`), SOLID hints (`--solid`), LLM interpretation
+  (`--semantic anthropic`).
 - **`--typecheck` parity with `tsc -p`:** each TS file is checked inside the
   project of its nearest `tsconfig.json` (parsed with
   `ts.parseJsonConfigFileContent` — `extends`, `lib`, `module`/
@@ -303,7 +332,7 @@
 ```
 stoa analyze <path> [--format markdown|json|sarif] [--lang en|de]
                     [--include <glob>]... [--exclude <glob>]...
-                    [--typecheck] [--dead-exports] [--contracts <file>]
+                    [--typecheck] [--dead-exports] [--solid] [--contracts <file>]
                     [--semantic noop|anthropic] [--memory-stats] [--cache]
                     [--baseline <file>] [--update-baseline] [--only-new]
                     [--min-confidence <0..1>] [--certainty <list>]... [--no-experimental]
@@ -727,6 +756,7 @@ Procedural rules (`ProjectRule`, cross-file):
 |------|-----------|-----------|------|
 | R-DEP-CYCLE | marcus.cooperation | dependencies | Tarjan SCC over relative imports; type-only imports skipped |
 | R-UNUSED-EXPORT | marcus.cooperation | dependencies | opt-in `--dead-exports`; only sound for whole-project scans |
+| R-SOLID-DIP-LAYER-DIRECTION | marcus.cooperation, marcus.control | dependencies | opt-in `--solid`; **experimental**, semantic-heuristic 0.5, low; Dart: a UI library (resolved Flutter widget/State base) imports a data-access package or a project data-access module (stage 1, library level) |
 | R-VALIDATION-CONTRACT-INVALID-ID | marcus.purpose | robustness | opt-in `--contracts <file>`; a `stoa:validation` annotation does not match the Trace ID format |
 | R-VALIDATION-CONTRACT-UNKNOWN-ID | marcus.purpose | robustness | opt-in `--contracts`; valid ID, but not in the loaded contract |
 | R-VALIDATION-CONTRACT-UNRESOLVED | marcus.judgment | robustness, decision-evidence | opt-in `--contracts`; construct not resolvable as a scalar Zod chain (Insufficient Evidence) |

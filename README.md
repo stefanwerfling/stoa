@@ -142,6 +142,7 @@ node dist/Cli.js analyze . --cache              # cache per-file facts under .st
 node dist/Cli.js analyze . --baseline .stoa/baseline.json --update-baseline  # accept current findings as the baseline
 node dist/Cli.js analyze . --baseline .stoa/baseline.json --only-new         # CI: report only what's new since then
 node dist/Cli.js analyze . --min-confidence 0.7 --no-experimental            # hide low-confidence / experimental findings (count stays in the report)
+node dist/Cli.js analyze . --solid                                            # opt-in SOLID hints (experimental; Dart: UI → data access)
 
 # evaluate the engine against the golden corpus (precision/recall)
 node dist/Cli.js eval test/corpus/project --expected test/corpus/expected.json

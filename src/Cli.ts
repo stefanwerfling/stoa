@@ -64,6 +64,7 @@ type CliValues = {
     lang?: string;
     typecheck?: boolean;
     'dead-exports'?: boolean;
+    solid?: boolean;
     contracts?: string;
     include?: string[];
     exclude?: string[];
@@ -108,7 +109,7 @@ const USAGE = [
     'stoa – Stoic Code Analysis Engine',
     '',
     'Usage:',
-    '  stoa analyze <path> [--format markdown|json|sarif] [--lang en|de] [--include <glob>]... [--exclude <glob>]... [--typecheck] [--dead-exports] [--contracts <file>] [--semantic noop|anthropic] [--config <file>] [--knowledge <dir>] [--rules <dir>] [--memory-stats] [--cache] [--baseline <file>] [--update-baseline] [--only-new] [--min-confidence <0..1>] [--certainty <list>]... [--no-experimental]',
+    '  stoa analyze <path> [--format markdown|json|sarif] [--lang en|de] [--include <glob>]... [--exclude <glob>]... [--typecheck] [--dead-exports] [--solid] [--contracts <file>] [--semantic noop|anthropic] [--config <file>] [--knowledge <dir>] [--rules <dir>] [--memory-stats] [--cache] [--baseline <file>] [--update-baseline] [--only-new] [--min-confidence <0..1>] [--certainty <list>]... [--no-experimental]',
     '  stoa eval <path> --expected <file> [--format markdown|json] [--contracts <file>] [--knowledge <dir>] [--rules <dir>]',
     ''
 ].join('\n');
@@ -198,6 +199,7 @@ const runAnalyze = async (values: CliValues, target: string): Promise<number> =>
             lang,
             typecheck: values.typecheck === true,
             deadExports: values['dead-exports'] === true,
+            solid: values.solid === true,
             validationContract,
             ...(values.cache === true ? {cacheDir: join(rootPath, '.stoa', 'cache')} : {}),
             ...(memoryStats
@@ -366,6 +368,7 @@ const main = async (): Promise<number> => {
             lang: {type: 'string', default: 'en'},
             typecheck: {type: 'boolean', default: false},
             'dead-exports': {type: 'boolean', default: false},
+            solid: {type: 'boolean', default: false},
             contracts: {type: 'string'},
             include: {type: 'string', multiple: true},
             exclude: {type: 'string', multiple: true},

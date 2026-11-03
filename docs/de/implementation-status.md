@@ -268,6 +268,38 @@
   UI-Klassen: 1 (swipemeister) und 5 (velyo), alle in Dateien, deren Dart-3-
   Syntax die Grammatik nicht strukturieren kann. Tests:
   `test/LayerClassification.test.ts` (`test/fixtures/dart-layers`).
+- **SOLID, DIP-Schichtrichtung Stufe 1 (Flutter-Qualitätsstrang, E6a):**
+  `src/rules/project/SolidRules.ts`, registriert nur mit `--solid`
+  (Pipeline-Option `solid`). `R-SOLID-DIP-LAYER-DIRECTION` 0.1.0
+  (experimentell, `semantic-heuristic` 0,5, `low`, `marcus.cooperation` +
+  `marcus.control`, `dependencies`): eine Dart-Bibliothek, die eine UI-Klasse
+  (E5a) deklariert und selbst ein Datenzugriffs-Paket importiert oder ein
+  Datenzugriffs-Modul des Projekts, das weder UI (wird für sich gemeldet) noch
+  State-Halter ist (Dart-Kanten des E2-ModuleGraph). State-Halter
+  (Nutzerentscheidung): eine Klasse, die eine katalogisierte
+  State-Management-Basis erweitert oder einmischt — `ChangeNotifier`/
+  `ValueNotifier` (`package:flutter/`), `GetxController`, `Cubit`/`Bloc`,
+  `StateNotifier`/`Notifier`/`AsyncNotifier` (`STATE_HOLDER_BASES`,
+  versioniert) — und keine Projektdeklaration ist; eine UI, die von ihrer
+  State-Schicht abhängt, ist das gewollte Muster, auch wenn diese Schicht Daten
+  persistiert. Ein
+  Befund je Bibliothek an ihrem ersten solchen Import; die Evidenz nennt die
+  UI-Klassen mit ihrer Flutter-Basis und jeden Import. Nur Bibliotheksebene — ob
+  die UI-Klasse die importierten Namen nutzt, wird vor E3 nicht geprüft. Die
+  Regel baut die Schichtklassifikation selbst aus den Facts und dem
+  DartLibraryIndex, ohne `--solid` wird also nichts zusätzlich berechnet und jede
+  Ausgabe ist byte-identisch (geprüft auf vier echten Apps, Golden-Korpus,
+  Fixtures). Mit `--solid` auf den vier Apps: 14 / 5 / 0 / 0 Hinweise (vor dem
+  State-Halter-Ausschluss 14 / 9 / 13 / 0 — velyos `AppState extends
+  ChangeNotifier` und mwpas `GetxController` fielen heraus). Die übrigen Ziele
+  sind Services/Wrapper mit I/O (swipemeister `ApiService`,
+  `PreferencesManager`, `AvatarCacheManager`; mwpa `DBHelper`, `MwpaAPI`,
+  `SyncMwpaService`, `Preference`); 4 mwpa-Seiten importieren
+  `shared_preferences` direkt. Tests: `test/SolidRules.test.ts`
+  (`test/fixtures/solid/dip-layer`: positive, negative, unbekannte und
+  State-Halter-Fälle, ein Lauf ohne `--solid`), `test/LayerClassification.test.ts`
+  (State-Halter), dazu die Lossless-Kinds-Prüfung in
+  `test/ProjectRuleCategorization.test.ts`.
 - **Flutter-State-Lifecycle (Flutter-Analyse, Phase 3):** `src/analysis/dart/FlutterLifecycle.ts`
   erzeugt je Klasse, die direkt `extends State<…>` ist, einen neutralen
   `dart.stateLifecycle`-Fact: Felder, denen genau ein Aufruf zugewiesen wird
@@ -309,7 +341,8 @@
   Keine Uhr/kein Zufall/kein Netz im Kern; gleiche Eingabe + Versionen + Sprache ⇒
   byte-identische Befunde.
 - **Optionale, abschaltbare Schichten:** Typprüfer-Facts (`--typecheck`),
-  tote-Export-Analyse (`--dead-exports`), LLM-Deutung (`--semantic anthropic`).
+  tote-Export-Analyse (`--dead-exports`), SOLID-Hinweise (`--solid`), LLM-Deutung
+  (`--semantic anthropic`).
 - **`--typecheck` deckungsgleich mit `tsc -p`:** jede TS-Datei wird im Projekt
   der nächstgelegenen `tsconfig.json` geprüft (geladen mit
   `ts.parseJsonConfigFileContent` — `extends`, `lib`, `module`/
@@ -327,7 +360,7 @@
 ```
 stoa analyze <pfad> [--format markdown|json|sarif] [--lang en|de]
                     [--include <glob>]... [--exclude <glob>]...
-                    [--typecheck] [--dead-exports] [--contracts <datei>]
+                    [--typecheck] [--dead-exports] [--solid] [--contracts <datei>]
                     [--semantic noop|anthropic] [--memory-stats] [--cache]
                     [--baseline <datei>] [--update-baseline] [--only-new]
                     [--min-confidence <0..1>] [--certainty <liste>]... [--no-experimental]
@@ -807,6 +840,7 @@ Prozedurale Regeln (`ProjectRule`, cross-file):
 |-------|---------|-----------|---------|
 | R-DEP-CYCLE | marcus.cooperation | Abhängigkeiten | Tarjan-SCC über relative Importe; type-only-Importe übersprungen |
 | R-UNUSED-EXPORT | marcus.cooperation | Abhängigkeiten | opt-in `--dead-exports`; nur bei Ganzprojekt-Scans sinnvoll |
+| R-SOLID-DIP-LAYER-DIRECTION | marcus.cooperation, marcus.control | Abhängigkeiten | opt-in `--solid`; **experimentell**, semantic-heuristic 0,5, low; Dart: eine UI-Bibliothek (aufgelöste Flutter-Widget-/State-Basis) importiert ein Datenzugriffs-Paket oder ein Datenzugriffs-Modul des Projekts (Stufe 1, Bibliotheksebene) |
 | R-VALIDATION-CONTRACT-INVALID-ID | marcus.purpose | Robustheit | opt-in `--contracts <datei>`; `stoa:validation`-Annotation entspricht nicht dem Trace-ID-Format |
 | R-VALIDATION-CONTRACT-UNKNOWN-ID | marcus.purpose | Robustheit | opt-in `--contracts`; gültige ID, aber nicht im geladenen Vertrag |
 | R-VALIDATION-CONTRACT-UNRESOLVED | marcus.judgment | Robustheit, Belegbarkeit | opt-in `--contracts`; Konstrukt nicht als skalare Zod-Kette auswertbar (Insufficient Evidence) |

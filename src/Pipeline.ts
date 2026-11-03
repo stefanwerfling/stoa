@@ -24,6 +24,7 @@ import {DependencyCycleRule} from './rules/project/DependencyCycleRule.js';
 import {flutterLayoutRules} from './rules/project/FlutterLayoutRules.js';
 import {flutterLifecycleRules} from './rules/project/FlutterLifecycleRules.js';
 import {DeadExportRule} from './rules/project/DeadExportRule.js';
+import {solidRules} from './rules/project/SolidRules.js';
 import {ValidationContractRule} from './rules/project/ValidationContractRule.js';
 import type {ProjectRule} from './rules/ProjectRule.js';
 import type {ValidationContract} from './contracts/ValidationContract.js';
@@ -41,6 +42,8 @@ export interface AnalyzeOptions {
     typecheck?: boolean;
     /** Opt-in: flag exports used nowhere in the analyzed set (whole-project scans only). */
     deadExports?: boolean;
+    /** Opt-in (Flutter quality track E6): run the SOLID rules (`--solid`); without it no SOLID rule runs. */
+    solid?: boolean;
     /**
      * Opt-in: a loaded, schema-validated Validation Contract (see
      * contracts/ValidationContract.ts). When supplied, stoa:validation
@@ -127,6 +130,9 @@ export const analyze = (options: AnalyzeOptions): AnalysisResult => {
     }
     if (options.validationContract !== undefined && options.validationContract !== null) {
         projectRules.push(new ValidationContractRule(options.validationContract));
+    }
+    if (options.solid === true) {
+        projectRules.push(...solidRules());
     }
     const ruleEngine = new RuleEngine(knowledgeBase, ruleSet, options.lang ?? 'en', projectRules);
 
