@@ -207,6 +207,23 @@
   (`src/FindingFilter.ts`), applied in the CLI after the baseline step so
   `analyze()` and the baseline stay unfiltered; `AnalysisReport.filter` records
   criteria and hidden count. Tests: `test/RuleGovernance.test.ts`.
+- **Dart in the ModuleGraph (Flutter quality track, E2):** `buildModuleGraph`
+  takes an optional `DartLibraryIndex` (the pipeline now builds the index before
+  the graph). Every Dart `import`/`export` directive whose URI resolves to an
+  analyzed file (relative, or a `package:` URI of the project's own packages)
+  becomes an edge with `origin: 'dart.importSpec'`, `dartDirective` and
+  `resolution` `relative` | `package`; every other one (`dart:`, third-party
+  packages, excluded/generated files) is an unresolved import with its URI.
+  `part`/`part of` add no edge (one library); a configurable import contributes
+  its default URI only. Pre-E2 entries carry no `origin` and are byte-identical.
+  `cycleAdjacency` and the SymbolGraph ignore Dart edges, so `R-DEP-CYCLE` is
+  unchanged — Dart cycles are legal and common; whether to report them is a
+  separate decision. Measured on four real apps (185/74/66/35 Dart files): 548 /
+  210 / 294 / 77 edges, 277 / 133 / 95 / 65 unresolved (all external: Flutter,
+  `dart:`, third-party; no own-package URI unresolved), import cycles in 3 / 1 /
+  0 / 2 strongly connected components (largest 15 files), graph build ≤ 6 ms;
+  findings byte-identical on the apps, the golden corpus and the TS projects.
+  Tests: `test/ModuleGraph.test.ts` (`test/fixtures/dart-modulegraph`).
 - **Flutter State lifecycle (Flutter analysis, Phase 3):** `src/analysis/dart/FlutterLifecycle.ts`
   emits one neutral `dart.stateLifecycle` fact per class that directly
   `extends State<…>`: fields assigned exactly one call (field initializer or

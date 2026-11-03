@@ -1,5 +1,7 @@
 import type {Fact, SourceRange} from '../Types.js';
 import type {ModuleResolver, ResolutionMethod} from '../analysis/ModuleResolution.js';
+import type {DartDirectiveValue} from '../analysis/dart/DartDeclarations.js';
+import type {DartLibraryIndex} from './DartLibraryIndex.js';
 
 /**
  * A reusable, project-wide module dependency graph (Phase 0 of the
@@ -16,7 +18,24 @@ import type {ModuleResolver, ResolutionMethod} from '../analysis/ModuleResolutio
  * `DependencyCycleRule` (see `cycleAdjacency`); alias/exports/imports edges are
  * carried for a later phase to consume deliberately, without changing any
  * current finding (decision D1-a).
+ *
+ * Flutter quality track E2: when a `DartLibraryIndex` is passed, every Dart
+ * `import`/`export` directive (`dart.importSpec`) is added too — an edge when
+ * the index resolves its URI to an analyzed project file (relative or the
+ * project's own `package:` URI), otherwise an unresolved import carrying the
+ * URI (`dart:`, third-party packages, excluded/generated files). `part` /
+ * `part of` add nothing: they form ONE library, not a dependency. A
+ * configurable import contributes its default URI only. Dart entries carry
+ * `origin: 'dart.importSpec'` (absent = `deps.import`, so every pre-E2 entry is
+ * byte-identical) and are NOT part of `cycleAdjacency`: circular imports are
+ * legal and common in Dart, and reporting them is a separate decision.
  */
+
+/** Where an edge/unresolved import came from. Absent = `deps.import`. */
+export type ModuleEdgeOrigin = 'deps.import' | 'dart.importSpec';
+
+/** How a Dart directive was resolved: a relative URI, or a `package:` URI of the project's own packages. */
+export type DartResolutionMethod = 'relative' | 'package';
 
 /** The one piece of provenance every edge/unresolved import keeps: which fact it came from and where. Never the fact itself. */
 export interface ImportEvidence {
@@ -33,8 +52,12 @@ export interface ModuleEdge {
     specifier: string;
     /** From the `deps.import` fact: a type-only import (erased at compile time, no runtime dependency). */
     isTypeOnly: boolean;
-    /** How `specifier` was resolved to `to` -- always a resolved method here (never `unresolved`). */
-    resolution: Exclude<ResolutionMethod, 'unresolved'>;
+    /** How `specifier` was resolved to `to` -- always a resolved method here (never `unresolved`). `package` only for Dart edges. */
+    resolution: Exclude<ResolutionMethod, 'unresolved'> | 'package';
+    /** Set only for Dart edges (`dart.importSpec`); absent = `deps.import`. */
+    origin?: ModuleEdgeOrigin;
+    /** Dart edges only: the directive that created the edge. */
+    dartDirective?: 'import' | 'export';
     /** ALL source sites of this one relationship (one per contributing `deps.import` fact), deduplicated by factId and sorted deterministically — so a finding can cite every place the edge occurs, never just the first. */
     evidence: ImportEvidence[];
 }
@@ -45,6 +68,10 @@ export interface UnresolvedImport {
     isTypeOnly: boolean;
     /** ALL source sites of this unresolved import, deduplicated by factId and sorted deterministically. */
     evidence: ImportEvidence[];
+    /** Set only for Dart directives (`dart.importSpec`); absent = `deps.import`. */
+    origin?: ModuleEdgeOrigin;
+    /** Dart only: the directive kind. */
+    dartDirective?: 'import' | 'export';
 }
 
 export interface ModuleGraph {
@@ -61,11 +88,18 @@ interface ImportValue {
     isTypeOnly: boolean;
 }
 
+// The trailing origin/directive keys only separate Dart entries from each
+// other (a Dart file has no `deps.import` facts), so the order of every
+// pre-E2 entry is unchanged.
 const compareEdges = (a: ModuleEdge, b: ModuleEdge): number =>
-    a.from.localeCompare(b.from) || a.to.localeCompare(b.to) || a.specifier.localeCompare(b.specifier) || a.resolution.localeCompare(b.resolution);
+    a.from.localeCompare(b.from) ||
+    a.to.localeCompare(b.to) ||
+    a.specifier.localeCompare(b.specifier) ||
+    a.resolution.localeCompare(b.resolution) ||
+    (a.dartDirective ?? '').localeCompare(b.dartDirective ?? '');
 
 const compareUnresolved = (a: UnresolvedImport, b: UnresolvedImport): number =>
-    a.from.localeCompare(b.from) || a.specifier.localeCompare(b.specifier);
+    a.from.localeCompare(b.from) || a.specifier.localeCompare(b.specifier) || (a.dartDirective ?? '').localeCompare(b.dartDirective ?? '');
 
 // Deterministic order for the evidence sites of one edge/unresolved import:
 // by factId, then by source position — independent of the order facts arrived.
@@ -87,13 +121,18 @@ const addEvidence = (sites: ImportEvidence[], evidence: ImportEvidence): void =>
  * arrive in (nodes and edges are sorted; edges are de-duplicated by their full
  * identity before sorting). Duplicate identical imports collapse to one edge;
  * two DIFFERENT specifiers reaching the same target stay two distinct edges, so
- * no genuine relationship is lost.
+ * no genuine relationship is lost. `dartIndex` (optional, E2) adds the Dart
+ * directives; without it the graph is exactly the pre-E2 graph.
  */
-export const buildModuleGraph = (facts: readonly Fact[], analyzedFiles: ReadonlySet<string>, resolver: ModuleResolver): ModuleGraph => {
+export const buildModuleGraph = (facts: readonly Fact[], analyzedFiles: ReadonlySet<string>, resolver: ModuleResolver, dartIndex?: DartLibraryIndex): ModuleGraph => {
     const edgeByKey = new Map<string, ModuleEdge>();
     const unresolvedByKey = new Map<string, UnresolvedImport>();
 
     for (const fact of facts) {
+        if (fact.kind === 'dart.importSpec' && dartIndex !== undefined) {
+            addDartDirective(fact, analyzedFiles, dartIndex, edgeByKey, unresolvedByKey);
+            continue;
+        }
         if (fact.kind !== 'deps.import') {
             continue;
         }
@@ -139,6 +178,43 @@ export const buildModuleGraph = (facts: readonly Fact[], analyzedFiles: Readonly
     };
 };
 
+// One Dart `import`/`export` directive → an edge or an unresolved import.
+const addDartDirective = (
+    fact: Fact,
+    analyzedFiles: ReadonlySet<string>,
+    dartIndex: DartLibraryIndex,
+    edgeByKey: Map<string, ModuleEdge>,
+    unresolvedByKey: Map<string, UnresolvedImport>
+): void => {
+    const directive = fact.value as unknown as DartDirectiveValue;
+    if ((directive.kind !== 'import' && directive.kind !== 'export') || directive.uri === null) {
+        return;
+    }
+    const from = fact.subject.file;
+    const specifier = directive.uri;
+    const dartDirective = directive.kind;
+    const evidence: ImportEvidence = {factId: fact.id, range: fact.subject.range};
+    const target = dartIndex.resolveUri(from, specifier);
+    if (target === null || !analyzedFiles.has(target)) {
+        const key = `dart ${from} ${specifier} ${dartDirective}`;
+        const existing = unresolvedByKey.get(key);
+        if (existing === undefined) {
+            unresolvedByKey.set(key, {from, specifier, isTypeOnly: false, evidence: [evidence], origin: 'dart.importSpec', dartDirective});
+        } else {
+            addEvidence(existing.evidence, evidence);
+        }
+        return;
+    }
+    const resolution: DartResolutionMethod = specifier.startsWith('package:') ? 'package' : 'relative';
+    const key = `dart ${from} ${target} ${specifier} ${dartDirective}`;
+    const existing = edgeByKey.get(key);
+    if (existing === undefined) {
+        edgeByKey.set(key, {from, to: target, specifier, isTypeOnly: false, resolution, origin: 'dart.importSpec', dartDirective, evidence: [evidence]});
+    } else {
+        addEvidence(existing.evidence, evidence);
+    }
+};
+
 /**
  * The Phase-0 view the existing `DependencyCycleRule` consumes: a plain
  * adjacency map seeded with EVERY node (so isolated files are present, exactly
@@ -146,6 +222,8 @@ export const buildModuleGraph = (facts: readonly Fact[], analyzedFiles: Readonly
  * edges, with self-edges excluded. This encodes decision D1-a in one place -- it
  * reproduces precisely the edge set the rule computed before (relative-resolved,
  * type-only skipped, self-import ignored), so cycle findings are byte-identical.
+ * Dart edges (E2, `origin: 'dart.importSpec'`) are excluded: Dart cycles are
+ * not reported (see the module comment).
  */
 export const cycleAdjacency = (graph: ModuleGraph): Map<string, Set<string>> => {
     const adjacency = new Map<string, Set<string>>();
@@ -153,7 +231,7 @@ export const cycleAdjacency = (graph: ModuleGraph): Map<string, Set<string>> => 
         adjacency.set(node, new Set<string>());
     }
     for (const edge of graph.edges) {
-        if (edge.resolution !== 'relative' || edge.isTypeOnly || edge.from === edge.to) {
+        if (edge.origin !== undefined || edge.resolution !== 'relative' || edge.isTypeOnly || edge.from === edge.to) {
             continue;
         }
         adjacency.get(edge.from)?.add(edge.to);

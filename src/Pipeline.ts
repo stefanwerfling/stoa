@@ -254,7 +254,14 @@ export const analyze = (options: AnalyzeOptions): AnalysisResult => {
     // with the rest of this function's locals afterward — it adds no persistent
     // or unbounded state (the FactCache stays strictly file-local, untouched).
     const moduleResolver = new ModuleResolver(loadProjectConfig(options.rootPath));
-    const moduleGraph = buildModuleGraph(facts, analyzedPaths, moduleResolver);
+    // Flutter quality Phase B: cross-file Dart name resolution (which
+    // declaration a widget/controller name refers to), built only when Dart
+    // files were analyzed — from facts + the project's own pubspec package
+    // names (read here, never cached) + the static Flutter catalog. Built
+    // before the module graph, which takes the Dart import edges from it (E2).
+    const dartPaths = [...analyzedPaths].filter((path) => path.endsWith('.dart')).sort();
+    const dartLibraryIndex = dartPaths.length > 0 ? flutterAwareIndex(facts, loadDartPackages(dartPaths)) : undefined;
+    const moduleGraph = buildModuleGraph(facts, analyzedPaths, moduleResolver, dartLibraryIndex);
     // Phase 1: the cross-file symbol graph, built right after the module graph
     // from the same facts (deps.importName + deps.export) + the module graph's
     // resolved edges. Same discipline: strings/fact-ids only (no AST, no fact
@@ -265,12 +272,6 @@ export const analyze = (options: AnalyzeOptions): AnalysisResult => {
     // fact-ids out, lives only for this evaluate() call). Passed only when the
     // run actually produced widget trees; the Flutter layout rules (Phase 2,
     // rules/project/FlutterLayoutRules.ts) consume it.
-    // Flutter quality Phase B: cross-file Dart name resolution (which
-    // declaration a widget/controller name refers to), built only when Dart
-    // files were analyzed — from facts + the project's own pubspec package
-    // names (read here, never cached) + the static Flutter catalog.
-    const dartPaths = [...analyzedPaths].filter((path) => path.endsWith('.dart')).sort();
-    const dartLibraryIndex = dartPaths.length > 0 ? flutterAwareIndex(facts, loadDartPackages(dartPaths)) : undefined;
     const flutterWidgetGraph = buildFlutterWidgetGraph(facts, dartLibraryIndex);
     const findings: Finding[] = ruleEngine.evaluate(facts, moduleGraph, symbolGraph, flutterWidgetGraph.nodes.length > 0 ? flutterWidgetGraph : undefined, dartLibraryIndex);
     // RuleEngine.evaluate() is one atomic, synchronous pass with no internal

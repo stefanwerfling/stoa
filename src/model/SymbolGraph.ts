@@ -129,6 +129,11 @@ export const buildSymbolGraph = (facts: readonly Fact[], moduleGraph: ModuleGrap
     // (null) rather than silently picking one.
     const targetByPair = new Map<string, string | null>();
     for (const edge of moduleGraph.edges) {
+        // Dart edges (E2) belong to Dart's library model, not to the
+        // ES-module import/export model this graph resolves.
+        if (edge.origin !== undefined) {
+            continue;
+        }
         const key = `${edge.from}${SEP}${edge.specifier}`;
         if (!targetByPair.has(key)) {
             targetByPair.set(key, edge.to);

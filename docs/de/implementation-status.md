@@ -224,6 +224,25 @@
   CLI nach dem Baseline-Schritt, sodass `analyze()` und die Baseline ungefiltert
   bleiben; `AnalysisReport.filter` hält Kriterien und Zahl der ausgeblendeten
   Befunde fest. Tests: `test/RuleGovernance.test.ts`.
+- **Dart im ModuleGraph (Flutter-Qualitätsstrang, E2):** `buildModuleGraph`
+  nimmt optional einen `DartLibraryIndex` (die Pipeline baut den Index jetzt vor
+  dem Graphen). Jede Dart-`import`/`export`-Direktive, deren URI auf eine
+  analysierte Datei auflöst (relativ oder eine `package:`-URI der eigenen
+  Pakete), wird eine Kante mit `origin: 'dart.importSpec'`, `dartDirective` und
+  `resolution` `relative` | `package`; jede andere (`dart:`, Fremdpakete,
+  ausgeschlossene/generierte Dateien) ein unaufgelöster Import mit ihrer URI.
+  `part`/`part of` erzeugen keine Kante (eine Bibliothek); ein konfigurierbarer
+  Import trägt nur seine Standard-URI bei. Einträge von vor E2 tragen kein
+  `origin` und sind byte-identisch. `cycleAdjacency` und der SymbolGraph
+  ignorieren Dart-Kanten, `R-DEP-CYCLE` bleibt also unverändert — Dart-Zyklen
+  sind legal und verbreitet; ob sie gemeldet werden, ist eine eigene
+  Entscheidung. Gemessen auf vier echten Apps (185/74/66/35 Dart-Dateien): 548 /
+  210 / 294 / 77 Kanten, 277 / 133 / 95 / 65 unaufgelöst (alle extern: Flutter,
+  `dart:`, Fremdpakete; keine eigene Paket-URI unaufgelöst), Importzyklen in 3 /
+  1 / 0 / 2 starken Zusammenhangskomponenten (größte 15 Dateien), Graphaufbau
+  ≤ 6 ms; Befunde auf den Apps, dem Golden-Korpus und den TS-Projekten
+  byte-identisch. Tests: `test/ModuleGraph.test.ts`
+  (`test/fixtures/dart-modulegraph`).
 - **Flutter-State-Lifecycle (Flutter-Analyse, Phase 3):** `src/analysis/dart/FlutterLifecycle.ts`
   erzeugt je Klasse, die direkt `extends State<…>` ist, einen neutralen
   `dart.stateLifecycle`-Fact: Felder, denen genau ein Aufruf zugewiesen wird

@@ -7,6 +7,13 @@ import {mkdirSync, mkdtempSync, rmSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import type {Fact} from '../src/Types.js';
+import {dirname} from 'node:path';
+import {fileURLToPath} from 'node:url';
+import {initDart} from '../src/analysis/DartAdapter.js';
+import {loadDartPackages} from '../src/analysis/dart/DartPackages.js';
+import {flutterAwareIndex} from '../src/analysis/dart/FlutterCatalog.js';
+import {DEFAULT_CONFIG} from '../src/Config.js';
+import {analyze} from '../src/Pipeline.js';
 
 // Phase 0 — the reusable ModuleGraph. These tests drive the builder with
 // synthetic `deps.import` facts so the graph's determinism, de-duplication,
@@ -210,4 +217,68 @@ test('alias edges are recorded with resolution "alias" but are NOT in the Phase-
     } finally {
         rmSync(dir, {recursive: true, force: true});
     }
+});
+
+// Flutter quality track E2: Dart `import`/`export` directives in the ModuleGraph.
+
+const testDir = dirname(fileURLToPath(import.meta.url));
+const dartProject = join(testDir, 'fixtures', 'dart-modulegraph');
+const rel = (file: string): string => file.slice(dartProject.length + 1);
+
+const dartGraphOf = (facts: readonly Fact[]) => {
+    const analyzed = new Set(facts.map((fact) => fact.subject.file));
+    const dartFiles = [...analyzed].filter((file) => file.endsWith('.dart')).sort();
+    return {analyzed, graph: buildModuleGraph(facts, analyzed, emptyResolver, flutterAwareIndex(facts, loadDartPackages(dartFiles)))};
+};
+
+const analyzeDart = async () => {
+    await initDart();
+    return analyze({rootPath: dartProject, knowledgeDir: join(testDir, '..', 'knowledge', 'marcus'), ruleSetDir: join(testDir, '..', 'rules', 'default'), config: DEFAULT_CONFIG});
+};
+
+test('E2: relative, package: and export directives become Dart edges; part/part of add none; external URIs stay unresolved', async () => {
+    const {graph} = dartGraphOf((await analyzeDart()).facts);
+    assert.deepEqual(
+        graph.edges.map((edge) => `${rel(edge.from)} -> ${rel(edge.to)} ${edge.specifier} ${edge.resolution} ${edge.dartDirective} ${edge.origin} x${edge.evidence.length}`),
+        [
+            'lib/a.dart -> lib/src/b.dart src/b.dart relative import dart.importSpec x1',
+            'lib/barrel.dart -> lib/a.dart a.dart relative export dart.importSpec x1',
+            'lib/barrel.dart -> lib/src/b.dart src/b.dart relative export dart.importSpec x1',
+            // the same URI imported twice (once with a prefix) is one relationship with both sites
+            'lib/src/b.dart -> lib/a.dart package:modgraph/a.dart package import dart.importSpec x2'
+        ]
+    );
+    assert.equal(graph.edges.some((edge) => edge.from.endsWith('a_part.dart') || edge.to.endsWith('a_part.dart')), false, 'part / part of create no edge');
+    assert.deepEqual(
+        graph.unresolved.map((entry) => `${rel(entry.from)} ${entry.specifier} ${entry.dartDirective}`),
+        ['lib/a.dart dart:async import', 'lib/a.dart package:flutter/material.dart import', 'lib/src/b.dart generated.g.dart import']
+    );
+});
+
+test('E2: the Dart graph is deterministic (reversed fact order) and without a DartLibraryIndex the graph has no Dart entries', async () => {
+    const {facts} = await analyzeDart();
+    const forward = dartGraphOf(facts);
+    const reversed = dartGraphOf([...facts].reverse());
+    assert.equal(JSON.stringify(reversed.graph), JSON.stringify(forward.graph));
+    const plain = buildModuleGraph(facts, forward.analyzed, emptyResolver);
+    assert.equal(plain.edges.length, 0);
+    assert.equal(plain.unresolved.length, 0);
+});
+
+test('E2: Dart edges stay out of cycleAdjacency — the a.dart <-> b.dart import cycle produces no R-DEP-CYCLE finding', async () => {
+    const result = await analyzeDart();
+    const {graph} = dartGraphOf(result.facts);
+    assert.ok(graph.edges.some((edge) => edge.from.endsWith('a.dart') && edge.to.endsWith('b.dart')));
+    assert.ok(graph.edges.some((edge) => edge.from.endsWith('b.dart') && edge.to.endsWith('a.dart')));
+    for (const targets of cycleAdjacency(graph).values()) {
+        assert.equal(targets.size, 0);
+    }
+    assert.equal(result.report.findings.filter((finding) => finding.rule.id === 'R-DEP-CYCLE').length, 0);
+});
+
+test('E2: a TS edge next to a Dart edge keeps its pre-E2 shape (no origin field) and its cycle view', () => {
+    const analyzed = new Set(['/p/a.ts', '/p/b.ts']);
+    const ts = buildModuleGraph([importFact('/p/a.ts', './b'), importFact('/p/b.ts', './a')], analyzed, emptyResolver);
+    assert.equal(ts.edges.every((edge) => !('origin' in edge) && !('dartDirective' in edge)), true);
+    assert.deepEqual([...(cycleAdjacency(ts).get('/p/a.ts') ?? [])], ['/p/b.ts']);
 });
