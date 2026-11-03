@@ -556,6 +556,11 @@ stoa eval <pfad> --expected <datei> [--format markdown|json] [--contracts <datei
   (zuvor von `eval` stillschweigend ignoriert) — ein fehlerhafter/unlesbarer
   Vertrag schlägt bei beiden Befehlen sofort fehl (Exit 1), nie ein
   stillschweigend verschlechtertes Ergebnis.
+- Ausgabe über eine Pipe ist in jeder Größe vollständig: die CLI setzt
+  `process.exitCode`, statt `process.exit()` aufzurufen, das den Prozess beendete,
+  bevor ein asynchrones stdout geleert war, und gepipte Reports bei 64 KiB
+  abschnitt (`stoa analyze … --format json | jq`); Regressionstest
+  `test/CliOutput.test.ts`.
 - `--architecture <datei>` (E5b) lädt eine deklarierte Architektur
   (`stoa.architecture.json`, `schemas/architecture.schema.json`); eine
   fehlerhafte Datei schlägt ebenso sofort fehl (Exit 1). Sie ergänzt den Report

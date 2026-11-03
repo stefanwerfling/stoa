@@ -516,6 +516,11 @@ stoa eval <path> --expected <file> [--format markdown|json] [--contracts <file>]
 - `--contracts <file>` is accepted by BOTH `analyze` and `eval` (previously
   silently ignored by `eval`) — a malformed/unreadable contract fails fast
   (exit 1) for either command, never a silently-degraded result.
+- Output through a pipe is complete at any size: the CLI sets
+  `process.exitCode` instead of calling `process.exit()`, which used to end
+  the process before an asynchronous stdout was drained and cut piped reports
+  at 64 KiB (`stoa analyze … --format json | jq`); regression test
+  `test/CliOutput.test.ts`.
 - `--architecture <file>` (E5b) loads a declared architecture
   (`stoa.architecture.json`, `schemas/architecture.schema.json`); a broken file
   fails fast the same way (exit 1). It adds the `architecture` summary to the

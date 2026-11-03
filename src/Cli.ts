@@ -428,4 +428,7 @@ const main = async (): Promise<number> => {
     return 1;
 };
 
-process.exit(await main());
+// Set the exit code instead of calling process.exit(): exit() terminates
+// before an asynchronous stdout (a pipe on POSIX) is drained, which cut a
+// large JSON/SARIF report at 64 KiB when piped (`stoa analyze … | jq`).
+process.exitCode = await main();
