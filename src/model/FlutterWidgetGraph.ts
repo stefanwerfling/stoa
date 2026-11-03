@@ -9,7 +9,8 @@ import type {DartDirectiveValue, DartTypeDeclValue} from '../analysis/dart/DartD
  * per function), `dart.classDecl` and `dart.importSpec` (identity). It holds
  * strings, numbers and fact ids only (no AST, no fact copy), is handed to
  * project rules via `ProjectRuleInput.flutterWidgetGraph`, and is not part of
- * `AnalysisResult`. No rule reads it yet.
+ * `AnalysisResult`. Consumed by the Flutter layout rules (Phase 2,
+ * rules/project/FlutterLayoutRules.ts).
  *
  * Uncertainty is explicit, never collapsed:
  * - `status` says how well the STRUCTURE at a node is known (`known`,

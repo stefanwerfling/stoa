@@ -81,7 +81,7 @@
   text). `src/model/FlutterWidgetGraph.ts` rebuilds the project-wide graph from facts
   alone after extraction (identical on a FactCache hit, which never re-parses) and
   hands it to project rules via `ProjectRuleInput.flutterWidgetGraph`; it is not part
-  of `AnalysisResult`, and no rule reads it yet. Node kinds: `widget`, `reference`
+  of `AnalysisResult`; the Flutter layout rules (Phase 2, below) read it. Node kinds: `widget`, `reference`
   (variable/helper call), `builder` (`*builder` closures, all `return` paths),
   `conditional` (`if`/ternary), `repeat` (`for`), `spread`, `list`, `dynamic`
   (unmodelled expression), `unparsed` (tree-sitter could not parse — e.g. Dart 3
@@ -95,6 +95,21 @@
   `verified` (no cross-file library index yet). Measured on a 203-file Flutter app:
   2733 nodes, tree facts 9.3 % of all facts, graph build ~16 ms, findings
   byte-identical.
+- **Flutter layout rules (Flutter analysis, Phase 2):** four `ProjectRule`s in
+  `src/rules/project/FlutterLayoutRules.ts`, the first consumers of the graph —
+  `R-FLUTTER-PARENTDATA-MISUSE`, `R-FLUTTER-UNBOUNDED-SCROLLABLE`,
+  `R-FLUTTER-TEXTFIELD-UNBOUNDED-WIDTH`, `R-FLUTTER-NESTED-SCROLL-UNBOUNDED`
+  (runtime layout exceptions `flutter analyze` does not report). A widget counts
+  as the framework widget only with `heuristic` identity and a `package:flutter/`
+  import candidate (a same-file declaration shadows it). The effective parent is
+  reached only through `conditional`/`repeat`/`spread`/`list`; anything else
+  (builder, reference, `dynamic`, `unparsed`, root, custom parent) ends the walk
+  without a finding. Argument values are not in the graph, so a rule depending on
+  one (`scrollDirection`) stays silent when it is present. Dogfooded on four real
+  Flutter apps (SwipeMeister, mwpa-app, velyo, movinder): 224 candidate widgets
+  with a known parent, 0 findings — those layouts are correct; recall is shown
+  only by fixtures (`test/FlutterLayout.test.ts`), plus one genuine error in the
+  Phase-1 graph fixture (`ListView.builder` directly in a `Column`).
 - **Pipeline:** ingestion → fact extraction → rule engine → findings → reporter.
   No clock/randomness/network in the core; same input + versions + language ⇒
   byte-identical findings.

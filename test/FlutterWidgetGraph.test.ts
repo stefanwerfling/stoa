@@ -201,9 +201,13 @@ test('project rules receive the graph via ProjectRuleInput; without Flutter code
     assert.equal(seen[1], undefined);
 });
 
-test('no finding changes: the widget facts and graph trigger nothing', () => {
+test('graph findings on the Phase-1 fixtures: only the one real layout error (ListView.builder directly in a Column)', () => {
     const findings = analyze({rootPath: fixtures, knowledgeDir, ruleSetDir, config: DEFAULT_CONFIG}).report.findings;
-    assert.equal(findings.some((finding) => finding.observation.evidence.some((evidence) => evidence.fact === 'ui.flutterWidgetTree')), false);
+    const graphFindings = findings.filter((finding) => finding.observation.evidence.some((evidence) => evidence.fact === 'ui.flutterWidgetTree'));
+    assert.deepEqual(
+        graphFindings.map((finding) => `${finding.rule.id} ${finding.location.file.slice(finding.location.file.lastIndexOf('/') + 1)}:${finding.location.range.startLine}`),
+        ['R-FLUTTER-UNBOUNDED-SCROLLABLE Complex.dart:13']
+    );
 });
 
 test('roots: only structural calls (slot/builder) or Widget-function returns; slot-less calls outside a tree are not structure', () => {

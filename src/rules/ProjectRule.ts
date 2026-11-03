@@ -27,9 +27,10 @@ export interface ProjectRuleInput {
     /**
      * The project-wide Flutter widget graph (Flutter Phase 1), built once by
      * the pipeline from `ui.flutterWidgetTree` + `dart.classDecl` +
-     * `dart.importSpec` facts. OPTIONAL and additive, like `symbolGraph`: no
-     * rule reads it yet, and it is passed only when the run produced widget
-     * trees (a run without Flutter code omits it).
+     * `dart.importSpec` facts. OPTIONAL and additive, like `symbolGraph`:
+     * read by the Flutter layout rules (rules/project/FlutterLayoutRules.ts),
+     * which report nothing without it; passed only when the run produced
+     * widget trees (a run without Flutter code omits it).
      */
     flutterWidgetGraph?: FlutterWidgetGraph;
     /**

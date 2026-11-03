@@ -307,6 +307,16 @@ Procedural rules (`ProjectRule`, cross-file):
 |---------|-------|-----------|-----------|-----------|
 | `R-DEP-CYCLE` | module graph from `deps.import` (Tarjan SCC) | `marcus.cooperation` | Dependencies | syntactic |
 | `R-UNUSED-EXPORT` | `deps.export` × `deps.importName` | `marcus.cooperation` | Dependencies | heuristic, opt-in `--dead-exports` |
+| `R-FLUTTER-PARENTDATA-MISUSE` | FlutterWidgetGraph: `Expanded`/`Flexible`/`Spacer` in a non-Flex, `Positioned*` in a non-Stack framework widget | `marcus.judgment` | Robustness | syntactic structure, identity via `package:flutter` import |
+| `R-FLUTTER-UNBOUNDED-SCROLLABLE` | FlutterWidgetGraph: `ListView`/`GridView`/`CustomScrollView`/`PageView` directly in `Row`/`Column`/`Flex` without `shrinkWrap` | `marcus.judgment` | Robustness | as above |
+| `R-FLUTTER-TEXTFIELD-UNBOUNDED-WIDTH` | FlutterWidgetGraph: `TextField`/`TextFormField` directly in a `Row` | `marcus.judgment` | Robustness | as above |
+| `R-FLUTTER-NESTED-SCROLL-UNBOUNDED` | FlutterWidgetGraph: vertical scrollable directly in a vertical `SingleChildScrollView`/`ListView` without `shrinkWrap` | `marcus.judgment` | Robustness | as above; axis inferred from absent `scrollDirection` |
+
+> The Flutter layout rules (`src/rules/project/FlutterLayoutRules.ts`) report
+> layouts the framework rejects at runtime. They walk up only through
+> transparent nodes (`if`/`for`/spread/list) to the effective parent; a
+> builder, reference, `dynamic`/`unparsed` node or an unknown/custom parent
+> widget means *no finding*. Parent sets are curated framework allowlists.
 
 > **Not yet implemented** (documented as ideas): `R-RESP-MIXED-CONCERNS`
 > (layer/namespace mixing, `marcus.purpose`) and `R-ARCH-LAYER-VIOLATION`

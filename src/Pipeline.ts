@@ -19,6 +19,7 @@ import {isMemoryCritical, takeMemorySnapshot, type MemorySnapshot} from './Memor
 import {RuleEngine} from './rules/RuleEngine.js';
 import {RuleSet} from './rules/RuleSet.js';
 import {DependencyCycleRule} from './rules/project/DependencyCycleRule.js';
+import {flutterLayoutRules} from './rules/project/FlutterLayoutRules.js';
 import {DeadExportRule} from './rules/project/DeadExportRule.js';
 import {ValidationContractRule} from './rules/project/ValidationContractRule.js';
 import type {ProjectRule} from './rules/ProjectRule.js';
@@ -117,7 +118,7 @@ export const analyze = (options: AnalyzeOptions): AnalysisResult => {
         .register(new VueAdapter());
     const knowledgeBase = KnowledgeBase.loadFromDirectory(options.knowledgeDir, options.config.knowledgeBase);
     const ruleSet = RuleSet.loadFromDirectory(options.ruleSetDir, options.config.ruleSet);
-    const projectRules: ProjectRule[] = [new DependencyCycleRule()];
+    const projectRules: ProjectRule[] = [new DependencyCycleRule(), ...flutterLayoutRules()];
     if (options.deadExports === true) {
         projectRules.push(new DeadExportRule());
     }
@@ -259,7 +260,8 @@ export const analyze = (options: AnalyzeOptions): AnalysisResult => {
     const symbolGraph = buildSymbolGraph(facts, moduleGraph);
     // Flutter Phase 1: the widget graph, same discipline (facts in, strings/
     // fact-ids out, lives only for this evaluate() call). Passed only when the
-    // run actually produced widget trees; no rule consumes it yet.
+    // run actually produced widget trees; the Flutter layout rules (Phase 2,
+    // rules/project/FlutterLayoutRules.ts) consume it.
     const flutterWidgetGraph = buildFlutterWidgetGraph(facts);
     const findings: Finding[] = ruleEngine.evaluate(facts, moduleGraph, symbolGraph, flutterWidgetGraph.nodes.length > 0 ? flutterWidgetGraph : undefined);
     // RuleEngine.evaluate() is one atomic, synchronous pass with no internal

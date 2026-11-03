@@ -87,8 +87,8 @@
   kein Quelltext). `src/model/FlutterWidgetGraph.ts` baut den projektweiten Graphen
   nach der Extraktion allein aus Facts (identisch bei einem FactCache-Treffer, der nie
   neu parst) und reicht ihn über `ProjectRuleInput.flutterWidgetGraph` an
-  Projektregeln; er ist nicht Teil von `AnalysisResult`, und noch keine Regel liest
-  ihn. Knotenarten: `widget`, `reference` (Variable/Helper-Aufruf), `builder`
+  Projektregeln; er ist nicht Teil von `AnalysisResult`; die Flutter-Layoutregeln
+  (Phase 2, unten) lesen ihn. Knotenarten: `widget`, `reference` (Variable/Helper-Aufruf), `builder`
   (`*builder`-Closures, alle `return`-Pfade), `conditional` (`if`/Ternary), `repeat`
   (`for`), `spread`, `list`, `dynamic` (nicht modellierter Ausdruck), `unparsed`
   (tree-sitter konnte nicht parsen — z. B. Dart-3-Syntax; auf den betroffenen
@@ -102,6 +102,22 @@
   Flutter-Klasse ist nie `verified` (noch kein dateiübergreifender Bibliotheks-Index).
   Gemessen an einer Flutter-App mit 203 Dateien: 2733 Knoten, Tree-Facts 9,3 % aller
   Facts, Graph-Aufbau ~16 ms, Befunde byte-identisch.
+- **Flutter-Layoutregeln (Flutter-Analyse, Phase 2):** vier `ProjectRule`s in
+  `src/rules/project/FlutterLayoutRules.ts`, die ersten Konsumenten des Graphen —
+  `R-FLUTTER-PARENTDATA-MISUSE`, `R-FLUTTER-UNBOUNDED-SCROLLABLE`,
+  `R-FLUTTER-TEXTFIELD-UNBOUNDED-WIDTH`, `R-FLUTTER-NESTED-SCROLL-UNBOUNDED`
+  (Layout-Ausnahmen zur Laufzeit, die `flutter analyze` nicht meldet). Ein Widget
+  gilt nur bei `heuristic`-Identität mit einem `package:flutter/`-Import-Kandidaten
+  als Framework-Widget (eine Deklaration in derselben Datei verdeckt es). Der
+  effektive Elternteil wird nur über `conditional`/`repeat`/`spread`/`list`
+  erreicht; alles andere (Builder, Referenz, `dynamic`, `unparsed`, Wurzel, eigenes
+  Eltern-Widget) beendet die Suche ohne Befund. Argumentwerte stehen nicht im
+  Graphen; eine Regel, die von einem abhängt (`scrollDirection`), schweigt, wenn es
+  gesetzt ist. Erprobt an vier echten Flutter-Apps (SwipeMeister, mwpa-app, velyo,
+  movinder): 224 Kandidaten-Widgets mit bekanntem Elternteil, 0 Befunde — diese
+  Layouts sind korrekt; den Recall zeigen nur die Fixtures
+  (`test/FlutterLayout.test.ts`) sowie ein echter Fehler im Graph-Fixture aus
+  Phase 1 (`ListView.builder` direkt in einer `Column`).
 - **Pipeline:** Ingestion → Fact-Extraktion → Regel-Engine → Befunde → Reporter.
   Keine Uhr/kein Zufall/kein Netz im Kern; gleiche Eingabe + Versionen + Sprache ⇒
   byte-identische Befunde.
