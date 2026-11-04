@@ -15,9 +15,7 @@ import {writeFileSync} from 'node:fs';
 import {dirname, join, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {parseArgs} from 'node:util';
-import {initCpp} from '../src/analysis/CppAdapter.js';
-import {initDart} from '../src/analysis/DartAdapter.js';
-import {initHtml} from '../src/analysis/HtmlAdapter.js';
+import {initGrammars} from '../src/analysis/DefaultAdapters.js';
 import {DEFAULT_CONFIG} from '../src/Config.js';
 import {analyze} from '../src/Pipeline.js';
 import {buildRealWorldReport} from '../src/evaluation/RealWorldReport.js';
@@ -56,11 +54,9 @@ const main = async (): Promise<number> => {
         exclude: values.exclude !== undefined && values.exclude.length > 0 ? values.exclude : DEFAULT_CONFIG.exclude
     };
 
-    // Load the tree-sitter (WASM) grammars once, sequentially (the shared
-    // Parser.init() is not safe to race); files are skipped if a grammar fails.
-    await initDart().catch(() => undefined);
-    await initCpp().catch(() => undefined);
-    await initHtml().catch(() => undefined);
+    // The tree-sitter (WASM) grammars, loaded as the CLI loads them; files are
+    // skipped if a grammar fails.
+    await initGrammars();
 
     const startedAt = Date.now();
     const result = analyze({
