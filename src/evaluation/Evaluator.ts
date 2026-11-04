@@ -1,6 +1,8 @@
 import {findingKey as producedKey, keyString, toForwardSlashes, type FindingKey} from '../FindingIdentity.js';
 import type {Finding} from '../Types.js';
 import type {
+    EvaluationAnalysis,
+    EvaluationOutcome,
     EvaluationResult,
     ExpectedFinding,
     LanguageMetrics,
@@ -140,4 +142,15 @@ const languageOf = (file: string): string => {
         return 'HTML';
     }
     return 'other';
+};
+
+/**
+ * The verdict of an evaluation (see `EvaluationOutcome`): an incomplete
+ * analysis is never `passed`, whatever the metrics say.
+ */
+export const evaluationOutcome = (result: EvaluationResult, analysis: EvaluationAnalysis): EvaluationOutcome => {
+    if (analysis.status !== 'complete') {
+        return 'incomplete';
+    }
+    return result.overall.falseNegatives === 0 && result.overall.falsePositives === 0 && result.duplicateExpected.length === 0 ? 'passed' : 'failed';
 };

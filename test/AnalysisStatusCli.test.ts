@@ -92,7 +92,7 @@ test('exit 1: the failed-report Markdown shows the status label and the error me
     assert.match(result.stdout, /ENOENT|no such file|not exist/i);
 });
 
-test('eval command: exit code still means precision/recall pass/fail, unaffected by the analyze command\'s new 0/1/2 scheme', () => {
+test('eval command: a complete golden-corpus eval still exits 0 (incomplete evals exit 2 — see EvalIntegrityCli.test.ts)', () => {
     const expected = join(here, 'corpus', 'expected.json');
     const corpus = join(here, 'corpus', 'project');
     const result = spawnSync('node', ['--import', 'tsx', 'src/Cli.ts', 'eval', corpus, '--expected', expected], {cwd: root, encoding: 'utf8'});

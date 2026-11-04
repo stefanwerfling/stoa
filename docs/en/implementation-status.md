@@ -328,6 +328,23 @@
   (`test/fixtures/architecture`: loader errors, assignment incl. multiple
   matches and outside-root files, all four edge verdicts, package bans and
   names, report summary and markdown, CLI fail-fast and JSON).
+- **Evaluator integrity (semantic consolidation, phase 1):** `stoa eval`
+  reported an incomplete analysis as a pass — a `partial` scan (memory guard,
+  read/parse error) only printed a stderr warning and exited 0 whenever the
+  findings reached so far matched. Now: exit 0 = complete and passed, 1 =
+  complete and failed or a technical error (an exception in the analysis is
+  caught and reported instead of crashing), 2 = incomplete (wins over the
+  metrics). `evaluationOutcome(result, analysis)` (`src/evaluation/Evaluator.ts`)
+  decides; the result gains the additive fields `analysis` and `outcome`, the
+  Markdown two lines. `eval` honours the same test-only incomplete hook as
+  `analyze`. `analyze`, its reports and every finding are unchanged. Tests:
+  `test/EvalIntegrityCli.test.ts` (real CLI process: passed, FP, FN, memory
+  guard, incomplete although every produced finding matches, unreadable file,
+  manifest and project untouched, technical error, Markdown; a parse failure
+  cannot be provoked through the CLI — it always loads every grammar — so it is
+  checked through pipeline + evaluator in a fresh process without the Dart
+  grammar) and `evaluationOutcome` in `test/EvaluatorUnit.test.ts`. Against the
+  previous code 9 of the 10 CLI tests fail.
 - **SOLID, SRP responsibility cohesion (Flutter quality track, E6e):**
   `src/rules/project/SolidSrpRule.ts`, `R-SOLID-SRP-RESPONSIBILITY-COHESION`
   0.1.0 (experimental, `semantic-heuristic` 0.4, `info`, `marcus.purpose`,

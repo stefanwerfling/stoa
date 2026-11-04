@@ -3,7 +3,7 @@ import {execFileSync} from 'node:child_process';
 import {dirname, join} from 'node:path';
 import {test} from 'node:test';
 import {fileURLToPath} from 'node:url';
-import {evaluate} from '../src/evaluation/Evaluator.js';
+import {evaluate, evaluationOutcome} from '../src/evaluation/Evaluator.js';
 import {loadExpected} from '../src/evaluation/Corpus.js';
 import type {ExpectedFinding} from '../src/evaluation/EvaluationTypes.js';
 import type {Certainty, Finding, QualityDimension, Severity} from '../src/Types.js';
@@ -150,4 +150,19 @@ test('1.4.6 CLI eval exits 0 on a match, non-zero on a false negative or false p
 test('2.8 CLI eval fails on a duplicate expected identity and on a malformed manifest', () => {
     assert.notEqual(runEvalCli('expected-dup.json'), 0, 'a duplicate expected identity must fail the evaluation');
     assert.notEqual(runEvalCli('expected-malformed.json'), 0, 'a malformed manifest must fail the evaluation');
+});
+
+test('Phase 1: evaluationOutcome — passed only for a complete analysis with no FP/FN/duplicate expected; incomplete wins over the metrics', () => {
+    const match = evaluate([makeFinding('a.ts', 'R-X', 's1')], [expected('a.ts', 'R-X', 's1')], ROOT);
+    const miss = evaluate([], [expected('a.ts', 'R-X', 's1')], ROOT);
+    const spurious = evaluate([makeFinding('a.ts', 'R-X', 's1')], [], ROOT);
+    const duplicateExpected = evaluate([makeFinding('a.ts', 'R-X', 's1')], [expected('a.ts', 'R-X', 's1'), expected('a.ts', 'R-X', 's1')], ROOT);
+    assert.equal(evaluationOutcome(match, {status: 'complete'}), 'passed');
+    assert.equal(evaluationOutcome(miss, {status: 'complete'}), 'failed');
+    assert.equal(evaluationOutcome(spurious, {status: 'complete'}), 'failed');
+    assert.equal(evaluationOutcome(duplicateExpected, {status: 'complete'}), 'failed');
+    for (const status of ['partial', 'failed'] as const) {
+        assert.equal(evaluationOutcome(match, {status}), 'incomplete', `${status}: a perfect match is still never a pass`);
+        assert.equal(evaluationOutcome(miss, {status}), 'incomplete');
+    }
 });

@@ -354,6 +354,25 @@
   (`test/fixtures/architecture`: Loader-Fehler, Zuordnung inkl. Mehrfachtreffer
   und Dateien außerhalb der Wurzel, alle vier Kantenurteile, Paketverbote und
   -namen, Report-Zusammenfassung und Markdown, CLI-Fail-fast und JSON).
+- **Evaluator-Integrität (semantische Konsolidierung, Phase 1):** `stoa eval`
+  meldete eine unvollständige Analyse als bestanden — ein `partial`-Lauf
+  (Memory Guard, Lese-/Parse-Fehler) gab nur eine Warnung auf stderr aus und
+  endete mit 0, sobald die bis dahin erreichten Findings passten. Jetzt: Exit 0
+  = vollständig und bestanden, 1 = vollständig und nicht bestanden oder
+  technischer Fehler (eine Exception der Analyse wird abgefangen und gemeldet
+  statt abzustürzen), 2 = unvollständig (hat Vorrang vor den Kennzahlen).
+  Entscheidet `evaluationOutcome(result, analysis)`
+  (`src/evaluation/Evaluator.ts`); das Ergebnis erhält die additiven Felder
+  `analysis` und `outcome`, das Markdown zwei Zeilen. `eval` beachtet denselben
+  testinternen Unvollständig-Hook wie `analyze`. `analyze`, seine Reports und
+  alle Findings bleiben unverändert. Tests: `test/EvalIntegrityCli.test.ts`
+  (echter CLI-Prozess: bestanden, FP, FN, Memory Guard, unvollständig obwohl
+  jedes erzeugte Finding passt, unlesbare Datei, Manifest und Projekt
+  unverändert, technischer Fehler, Markdown; ein Parse-Fehler lässt sich über
+  die CLI nicht auslösen — sie lädt immer alle Grammatiken —, daher geprüft über
+  Pipeline + Evaluator in einem frischen Prozess ohne Dart-Grammatik) und
+  `evaluationOutcome` in `test/EvaluatorUnit.test.ts`. Gegen den bisherigen Code
+  schlagen 9 der 10 CLI-Tests fehl.
 - **SOLID, SRP-Verantwortungskohäsion (Flutter-Qualitätsstrang, E6e):**
   `src/rules/project/SolidSrpRule.ts`, `R-SOLID-SRP-RESPONSIBILITY-COHESION`
   0.1.0 (experimentell, `semantic-heuristic` 0,4, `info`, `marcus.purpose`,

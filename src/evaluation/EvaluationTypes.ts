@@ -1,4 +1,5 @@
 import type {FindingKey} from '../FindingIdentity.js';
+import type {AnalysisStatus} from '../Types.js';
 
 /** One finding that the golden corpus expects the engine to produce. */
 export interface ExpectedFinding {
@@ -75,4 +76,26 @@ export interface EvaluationResult {
     duplicates: FindingKey[];
     /** Expected (manifest) findings whose identity key appears more than once — a corpus-integrity error. */
     duplicateExpected: FindingKey[];
+    /** Set by `stoa eval`: the completeness of the analysis the metrics were computed from. */
+    analysis?: EvaluationAnalysis;
+    /** Set by `stoa eval`: the overall verdict (see `evaluationOutcome`). */
+    outcome?: EvaluationOutcome;
+}
+
+/**
+ * The verdict of an evaluation run:
+ * - `passed` — the analysis was complete and nothing is missing, spurious or
+ *   duplicated in the manifest;
+ * - `failed` — the analysis was complete, but precision/recall deviate (or the
+ *   manifest is inconsistent);
+ * - `incomplete` — the analysis was not complete (memory guard, read/parse
+ *   error): the metrics cover only the files reached and are never a pass,
+ *   even when every finding produced so far matches.
+ */
+export type EvaluationOutcome = 'passed' | 'failed' | 'incomplete';
+
+export interface EvaluationAnalysis {
+    status: AnalysisStatus;
+    /** The file the memory guard stopped before, when it aborted the scan. */
+    stoppedAtFile?: string;
 }

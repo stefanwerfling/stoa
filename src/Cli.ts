@@ -11,7 +11,8 @@ import {loadConfig} from './Config.js';
 import {loadValidationContract} from './contracts/ValidationContract.js';
 import {loadArchitectureConfig, type ArchitectureConfig} from './architecture/ArchitectureConfig.js';
 import {loadExpected} from './evaluation/Corpus.js';
-import {evaluate} from './evaluation/Evaluator.js';
+import {evaluate, evaluationOutcome} from './evaluation/Evaluator.js';
+import type {EvaluationAnalysis} from './evaluation/EvaluationTypes.js';
 import {toMarkdown as evaluationMarkdown} from './evaluation/EvaluationReporter.js';
 import {analyze} from './Pipeline.js';
 import {toJson, toMarkdown} from './reporting/Reporter.js';
@@ -354,32 +355,41 @@ const runEval = async (values: CliValues, target: string): Promise<number> => {
         process.stderr.write(`${(error as Error).message}\n`);
         return 1;
     }
-    const analyzed = analyze({
-        rootPath: root,
-        knowledgeDir: knowledgeDirOf(values),
-        ruleSetDir: ruleSetDirOf(values),
-        config: configFor(values),
-        validationContract: inputs.contract,
-        // E7: the SOLID corpus is scored with the same opt-ins as `analyze`
-        solid: values.solid === true,
-        architecture: inputs.architecture
-    });
-    // `eval`'s exit code means precision/recall pass/fail, not analysis
-    // completeness (that is `analyze`'s 0/1/2 — see EXIT_INCOMPLETE above) —
-    // deliberately NOT changed here. Still surfaced, so a partial underlying
-    // scan is never silently read as a trustworthy precision/recall number.
-    if (analyzed.report.coverage.status !== 'complete') {
-        process.stderr.write(`[stoa] WARNING: the underlying analysis was not complete (status: ${analyzed.report.coverage.status}) — this evaluation's precision/recall reflects only the files actually reached.\n`);
+    let analyzed: AnalysisResult;
+    try {
+        analyzed = analyze({
+            rootPath: root,
+            knowledgeDir: knowledgeDirOf(values),
+            ruleSetDir: ruleSetDirOf(values),
+            config: configFor(values),
+            validationContract: inputs.contract,
+            // E7: the SOLID corpus is scored with the same opt-ins as `analyze`
+            solid: values.solid === true,
+            architecture: inputs.architecture,
+            // Same test-only hook as `analyze` (forces `coverage.status: 'partial'`).
+            ...(process.env.STOA_TEST_FORCE_INCOMPLETE === '1' ? {memoryGuard: {checkEveryFiles: 1, criticalRatio: 0}} : {})
+        });
+    } catch (error) {
+        // A technical error (bad root, malformed rule set/knowledge base) is an evaluation error, never a pass.
+        process.stderr.write(`${(error as Error).message}\n`);
+        return EXIT_ERROR;
     }
-    const findings = analyzed.report.findings;
-    const result = evaluate(findings, expected, root);
+    const {coverage} = analyzed.report;
+    if (coverage.status !== 'complete') {
+        process.stderr.write(`[stoa] WARNING: the underlying analysis was not complete (status: ${coverage.status}) — this evaluation is INCOMPLETE: its precision/recall reflect only the files actually reached, and it never passes.\n`);
+    }
+    const analysis: EvaluationAnalysis = {status: coverage.status, ...(coverage.stoppedAtFile !== undefined ? {stoppedAtFile: coverage.stoppedAtFile} : {})};
+    const scored = evaluate(analyzed.report.findings, expected, root);
+    const outcome = evaluationOutcome(scored, analysis);
+    const result = {...scored, analysis, outcome};
     const output = values.format === 'json' ? JSON.stringify(result, null, 2) : evaluationMarkdown(result);
     process.stdout.write(`${output}\n`);
-    // The evaluation passes only when nothing is missing or spurious and the
-    // manifest is internally consistent: any false negative, false positive, or
-    // duplicate expected identity fails it.
-    const passed = result.overall.falseNegatives === 0 && result.overall.falsePositives === 0 && result.duplicateExpected.length === 0;
-    return passed ? 0 : 1;
+    // Same 0/1/2 convention as `analyze`: 0 only for a complete analysis whose
+    // evaluation passed (no false negative, no false positive, no duplicate
+    // expected identity); 1 for a complete analysis that failed it (or a
+    // technical error above); 2 whenever the analysis was incomplete — that
+    // wins over the metrics, which then cover only part of the selection.
+    return outcome === 'passed' ? EXIT_OK : outcome === 'incomplete' ? EXIT_INCOMPLETE : EXIT_ERROR;
 };
 
 const main = async (): Promise<number> => {

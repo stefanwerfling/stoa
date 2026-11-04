@@ -73,8 +73,19 @@ Jede Regel hat einen Testkatalog (siehe [rule-model.md §7](./rule-model.md#7-te
   dieser Wert ist nur zusammen mit der Erzeugt-Anzahl aussagekräftig (Precision
   `1.0` bei 0 Erzeugten bedeutet „nichts erzeugt", nicht „alles korrekt").
 - **False Positives** (gemeldet, aber kein echtes Problem) und **False Negatives**
-  (echtes Problem übersehen) werden getrennt berichtet. `stoa eval` endet mit
-  Fehlercode, sobald eines von beiden auftritt.
+  (echtes Problem übersehen) werden getrennt berichtet.
+- **Exit-Code und Ergebnis** (dieselbe 0/1/2-Konvention wie `stoa analyze`):
+  **0** nur, wenn die Analyse vollständig war und die Auswertung bestanden ist
+  (kein False Positive, kein False Negative, keine doppelte erwartete
+  Identität); **1**, wenn eine vollständige Analyse die Auswertung nicht
+  besteht, oder bei einem technischen Fehler (fehlerhaftes Manifest, Regelwerk,
+  Wissensbasis); **2**, wenn die Analyse unvollständig war (`coverage.status`
+  nicht `complete`: Memory Guard, Lese- oder Parse-Fehler) — das hat Vorrang vor
+  den Kennzahlen, die dann nur die erreichten Dateien abdecken; ein
+  unvollständiger Lauf ist also nie bestanden, auch wenn jedes bis dahin
+  erzeugte Finding passt. Das Ergebnis trägt `analysis` (`status`,
+  `stoppedAtFile`) und `outcome` (`passed` / `failed` / `incomplete`); das
+  Markdown nennt beides.
 - **Sprachbezogene Aufschlüsselung.** Das Ergebnis trägt einen `byLanguage`-Teil
   (aus der Dateiendung je Finding: TypeScript/JavaScript, PHP, Dart, C/C++),
   sodass die unterstützten Sprachen *innerhalb eines Korpus* vergleichbar sind.

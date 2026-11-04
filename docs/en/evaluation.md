@@ -72,8 +72,17 @@ Each rule has a test catalog (see [rule-model.md §7](./rule-model.md#7-testbark
   value is only meaningful read together with the produced count (precision
   `1.0` with 0 produced means "nothing was produced", not "all correct").
 - **False positives** (reported, but no real problem) and **false negatives**
-  (real problem overlooked) are reported separately. `stoa eval` exits non-zero
-  when either is present.
+  (real problem overlooked) are reported separately.
+- **Exit code and outcome** (same 0/1/2 convention as `stoa analyze`): **0**
+  only when the analysis was complete and the evaluation passed (no false
+  positive, no false negative, no duplicate expected identity); **1** when a
+  complete analysis failed the evaluation, or on a technical error (bad
+  manifest, rule set, knowledge base); **2** when the analysis was incomplete
+  (`coverage.status` not `complete`: memory guard, read or parse error) — this
+  wins over the metrics, which then cover only the files reached, so an
+  incomplete run is never a pass even when every finding produced so far
+  matches. The result carries `analysis` (`status`, `stoppedAtFile`) and
+  `outcome` (`passed` / `failed` / `incomplete`); the Markdown states both.
 - **Per-language breakdown.** The result carries a `byLanguage` section (derived
   from each finding's file extension: TypeScript/JavaScript, PHP, Dart, C/C++) so
   the supported languages can be compared *within one corpus*. Numbers from

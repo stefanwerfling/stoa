@@ -1,5 +1,21 @@
 import type {EvaluationResult, FindingKey} from './EvaluationTypes.js';
 
+/** The analysis-completeness lines (only when `stoa eval` recorded them). */
+const analysisLines = (result: EvaluationResult): string[] => {
+    if (result.analysis === undefined) {
+        return [];
+    }
+    const stopped = result.analysis.stoppedAtFile !== undefined ? ` (stopped before ${result.analysis.stoppedAtFile})` : '';
+    const lines = [`- Analysis: ${result.analysis.status}${stopped}`];
+    if (result.outcome !== undefined) {
+        lines.push(`- Outcome: ${result.outcome}`);
+    }
+    if (result.analysis.status !== 'complete') {
+        lines.push('- **Incomplete evaluation:** the metrics cover only the files the analysis reached; this is never a pass.');
+    }
+    return lines;
+};
+
 const pct = (value: number): string => `${(value * 100).toFixed(1)}%`;
 
 const keyLine = (key: FindingKey): string => `  - ${key.file} · ${key.rule} · ${key.symbol}`;
@@ -15,6 +31,7 @@ export const toMarkdown = (result: EvaluationResult): string => {
             `(TP ${overall.truePositives} / FP ${overall.falsePositives} / FN ${overall.falseNegatives}; ` +
             `${overall.producedCount} produced)`
     );
+    lines.push(...analysisLines(result));
     lines.push('');
     lines.push('## Per rule');
     lines.push('');
