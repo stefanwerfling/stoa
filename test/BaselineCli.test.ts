@@ -143,13 +143,14 @@ test('--update-baseline on findings that share an identity exits 1 with the reas
     try {
         const project = join(dir, 'project');
         spawnSync('mkdir', ['-p', project]);
-        const sixParams = 'a: number, b: number, c: number, d: number, e: number, f: number';
-        writeFileSync(join(project, 'a.ts'), `export class A {\n    run(${sixParams}): number {\n        return a;\n    }\n}\nexport class B {\n    run(${sixParams}): number {\n        return a;\n    }\n}\n`);
+        // Two anonymous Doctrine migration classes in one file: both
+        // `(anonymous)` for R-MIGRATION-NO-DOWN (an open identity case).
+        writeFileSync(join(project, 'm.php'), '<?php\n$first = new class extends AbstractMigration {\n    public function up(Schema $schema): void {}\n};\n$second = new class extends AbstractMigration {\n    public function up(Schema $schema): void {}\n};\n');
         const path = join(dir, 'baseline.json');
         writeFileSync(path, '{"version": 1, "findings": []}\n');
         const result = analyzeAt(project, ['--baseline', path, '--update-baseline', '--format', 'json']);
         assert.equal(result.status, 1);
-        assert.match(result.stderr, /refusing to update baseline .*share an identity.*a\.ts::R-FN-TOO-MANY-PARAMS::run/);
+        assert.match(result.stderr, /refusing to update baseline .*share an identity.*m\.php::R-MIGRATION-NO-DOWN::\(anonymous\)/);
         assert.equal(readFileSync(path, 'utf8'), '{"version": 1, "findings": []}\n');
     } finally {
         rmSync(dir, {recursive: true, force: true});

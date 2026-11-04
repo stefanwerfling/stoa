@@ -57,10 +57,11 @@ facts for an end-to-end FE/BE chain; validation on independent external
 corpora.
 
 **Known limitations (open):**
-- Finding identities of the TS/Dart/PHP adapters use the bare method name as
-  symbol, so `A.run` and `B.run` in one file can collide. Since the evaluator
-  integrity work such a collision fails `stoa eval` and blocks
-  `--update-baseline`; the adapters are not changed yet.
+- Class-level findings name an anonymous class `(anonymous)`: two anonymous
+  Doctrine migration classes in one PHP file share an `R-MIGRATION-NO-DOWN`
+  identity (fails `stoa eval`, blocks `--update-baseline`). The function,
+  method and eager-relation collisions are fixed (see "Qualified function
+  identities").
 - Symbols of the form `anonymous@<line>` shift when lines above them change,
   so such findings are not stable across edits in a baseline.
 - Extraction dominates runtime and memory (see the measurement entry below);
@@ -396,6 +397,41 @@ the named local projects; none is a general accuracy claim.
   (`test/fixtures/architecture`: loader errors, assignment incl. multiple
   matches and outside-root files, all four edge verdicts, package bans and
   names, report summary and markdown, CLI fail-fast and JSON).
+- **Qualified function identities (follow-up to the evaluator-integrity
+  track):** the TS, Dart, PHP and C/C++ adapters named a function or method
+  by its bare name, so two classes' `run` in one file shared one finding
+  identity (since phase 1 a failed `stoa eval` and a refused
+  `--update-baseline`). Now every function fact carries its name qualified
+  by the enclosing named scopes — TS: class, namespace, named function,
+  object literal bound to a variable (`Service.run`, `outer.inner`,
+  `api.run`); Dart: class, mixin, extension, enclosing function; PHP: class,
+  trait, interface, enum; C++: class/struct/union with `::`, as out-of-class
+  definitions already spell it. Namespaces of PHP and C++ are not added (one
+  per file in practice; adding them would rename almost every symbol).
+  A base that still occurs twice in one file gets `#n` on every occurrence
+  (`uniqueSymbols` in FindingIdentity.ts: getter/setter pairs, C++
+  overloads, two closures on one line). `anonymous@<line>` stays as the
+  base. Facts and rules are otherwise unchanged; the FactCache invalidates
+  itself through the engine fingerprint. The Flutter widget-tree owner is
+  the same function symbol, so layout identities read `Page.build>Expanded#n`
+  (still numbered per file). Effect, HEAD vs. this change on 18 runs (16
+  targets): golden and SOLID corpora, contracts, ffschemas, kapalium
+  unchanged; on the others only `location.symbol` and the observation text
+  that names it changed — flyingfish backend 54, frontend 39, velyo 31,
+  swipemeister 30, stoa/src 10, mwpa 9 findings (complexity, nesting,
+  parameters, nondeterminism); no finding added or lost, no identity
+  collision before or after on these targets. `R-ORM-EAGER-RELATION` (TS and
+  PHP) names a finding `Entity.property` (two entities with the same eager
+  property in one file collided); approved golden-corpus change: the six
+  eager-relation expectations in `test/corpus/expected.json` (`tags` →
+  `Order.tags`, `messages` → `Thread.messages`, `customer` →
+  `Order.customer`/`Invoice.customer`, `parent` → `Node.parent`, `source` →
+  `Edge.source`), corpus still TP 44 / FP 0 / FN 0. The CLI collision tests
+  now use the remaining case: two anonymous Doctrine migration classes in
+  one PHP file, both `(anonymous)`. Tests: `test/FunctionIdentity.test.ts`
+  (7: `uniqueSymbols`, one per adapter, the finding-level `A.run`/`B.run`
+  case, the eager-relation case in TS and PHP); widget-graph, layout and
+  ORM expectations updated.
 - **Measurement and memory profile (evaluator-integrity track, phase 4):**
   `--memory-stats` / `AnalyzeOptions.onMetrics` now report the run's
   `PipelineMetrics` (src/PipelineMetrics.ts) — counts (deterministic), phase
@@ -1668,7 +1704,7 @@ fails fast (exit 1, concrete errors) instead of silently yielding 0 findings.
 
 ## Quality assurance
 
-- **node:test suite** (`npm test`, `test/*.test.ts`): 531 tests, 0 failed,
+- **node:test suite** (`npm test`, `test/*.test.ts`): 538 tests, 0 failed,
   as of the 2026-11-04 run (rules pos./neg., extraction, schema validation,
   i18n, determinism, SARIF, evaluation, semantic groundedness, privacy,
   finding-model separation, semantic models, identities, metrics).
@@ -1790,10 +1826,9 @@ baseline; PSR-4 resolution so R-DEP-CYCLE / R-UNUSED-EXPORT cover PHP; a
 generic ESLint fact adapter; context facts (`flag.generatedCode`, `hasTests`)
 for richer suppression; LLM-output evaluation at scale.
 
-**Open from the evaluator-integrity track (2026-11-04):** unique method
-identities in the TS/Dart/PHP adapters (a bare method name collides across
-classes in one file — now a hard evaluation/baseline failure instead of a
-silent one); stable symbols instead of `anonymous@<line>`; fewer full-tree
+**Open from the evaluator-integrity track (2026-11-04):** a unique symbol
+for anonymous classes in class-level findings (two anonymous PHP migration
+classes in one file); stable symbols instead of `anonymous@<line>`; fewer full-tree
 walks in the TS extraction (the measured runtime and peak-memory lever,
 facts must stay byte-identical); not building the SymbolGraph under
 `--solid` when no type declarations exist (measured 2.7 ms, low priority).

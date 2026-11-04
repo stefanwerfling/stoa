@@ -1,3 +1,4 @@
+import {uniqueSymbols} from '../../FindingIdentity.js';
 import type {Fact, SourceRange, SubjectKind} from '../../Types.js';
 import {factBuilder, type AdapterInfo} from '../FactBuilder.js';
 import {isDeepImport} from '../ImportPath.js';
@@ -47,14 +48,14 @@ export const extractFacts = (program: PhpNode, content: string, filePath: string
 
     facts.push(build({kind: 'file.lineCount', kindOf: 'file', range: fileRange(lines), value: lineCount(content)}));
 
-    for (const fn of collect(program, (node) => FUNCTION_LIKE.has(node.kind))) {
+    const functions = qualifiedFunctions(program).flatMap(({fn, base}) => {
         const body = fn.body as PhpNode | undefined;
-        if (body === undefined) {
-            continue;
-        }
-
+        return body === undefined ? [] : [{fn, body, base}];
+    });
+    const symbols = uniqueSymbols(functions.map(({base}) => base));
+    for (const [index, {fn, body}] of functions.entries()) {
         const metrics = computeMetrics(fn, body);
-        const symbol = functionName(fn);
+        const symbol = symbols[index] as string;
         const kindOf: SubjectKind = fn.kind === 'method' ? 'method' : 'function';
         const range = rangeOf(fn);
 
@@ -202,7 +203,7 @@ export const extractFacts = (program: PhpNode, content: string, filePath: string
                 const eager = attributes.find((attribute) => RELATION_ATTRIBUTES.has(attributeShortName(attribute)) && relationIsEager(attribute));
                 const relation = eager !== undefined ? attributeShortName(eager) : docRelation;
                 if (relation !== null) {
-                    facts.push(build({kind: 'orm.eagerRelation', kindOf: 'statement', symbol: nodeName(property), range: rangeOf(eager ?? statement), value: relation}));
+                    facts.push(build({kind: 'orm.eagerRelation', kindOf: 'statement', symbol: `${nodeName(cls)}.${nodeName(property)}`, range: rangeOf(eager ?? statement), value: relation}));
                 }
             }
         }
@@ -542,6 +543,32 @@ const catchReadsError = (clause: PhpNode): boolean => {
 
 const exists = (root: PhpNode, predicate: (node: PhpNode) => boolean): boolean => {
     return collect(root, predicate).length > 0;
+};
+
+const TYPE_KINDS: ReadonlySet<string> = new Set(['class', 'trait', 'interface', 'enum']);
+
+/**
+ * Every function-like node in source order (the same order as `collect`)
+ * with its identity base: the name qualified by the enclosing class, trait,
+ * interface or enum (`Service.run`), so two classes' `run` in one file no
+ * longer share a symbol. Namespaces are not part of it (one per file in
+ * practice); closures keep `anonymous@<line>`. Remaining duplicates get `#n`
+ * (`uniqueSymbols`).
+ */
+const qualifiedFunctions = (program: PhpNode): {fn: PhpNode; base: string}[] => {
+    const found: {fn: PhpNode; base: string}[] = [];
+    const walk = (node: PhpNode, scope: string | undefined): void => {
+        if (FUNCTION_LIKE.has(node.kind)) {
+            const own = functionName(node);
+            found.push({fn: node, base: scope === undefined || own.startsWith('anonymous@') ? own : `${scope}.${own}`});
+        }
+        const inner = TYPE_KINDS.has(node.kind) && nodeName(node) !== '(anonymous)' ? nodeName(node) : scope;
+        for (const child of childNodes(node)) {
+            walk(child, inner);
+        }
+    };
+    walk(program, undefined);
+    return found;
 };
 
 const functionName = (fn: PhpNode): string => {

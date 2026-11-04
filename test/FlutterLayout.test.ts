@@ -71,7 +71,7 @@ test('finding shape: location at the child, robustness, marcus.judgment, evidenc
     const factKinds = new Set(result.facts.map((fact) => fact.kind));
     const finding = result.report.findings.find((candidate) => candidate.rule.id === 'R-FLUTTER-PARENTDATA-MISUSE');
     assert.ok(finding !== undefined);
-    assert.equal(finding.location.symbol, 'build>Expanded#0');
+    assert.equal(finding.location.symbol, 'Broken.build>Expanded#0');
     assert.deepEqual(finding.location.range, {startLine: 8, startCol: 47, endLine: 8, endCol: 73});
     assert.deepEqual(finding.interpretation.dimensions, ['robustness']);
     assert.equal(finding.interpretation.principles[0]?.id, 'marcus.judgment');
@@ -107,14 +107,15 @@ test('determinism: two runs give byte-identical layout findings', () => {
     assert.equal(JSON.stringify(layoutFindings(fixtures)), JSON.stringify(layoutFindings(fixtures)));
 });
 
-// Identity: the owning function and the widget, numbered per file in source
-// order — the same widget misplaced twice in one build(), and once more in a
-// second class's build() of the same file, are three identities.
+// Identity: the owning function (qualified by its class, see the adapters'
+// function identities) and the widget, numbered per file in source order —
+// the same widget misplaced twice in one build(), and once more in a second
+// class's build() of the same file, are three identities.
 test('identity: owner>widget#n, unique per file even across classes sharing a build()', () => {
     const findings = layoutFindings(join(here, 'fixtures', 'flutter-identity', 'Layout.dart'));
     assert.deepEqual(
         findings.map((finding) => `${finding.rule.id} ${finding.location.range.startLine} ${finding.location.symbol ?? ''}`),
-        ['R-FLUTTER-PARENTDATA-MISUSE 9 build>Expanded#0', 'R-FLUTTER-PARENTDATA-MISUSE 10 build>Expanded#1', 'R-FLUTTER-PARENTDATA-MISUSE 18 build>Expanded#2']
+        ['R-FLUTTER-PARENTDATA-MISUSE 9 First.build>Expanded#0', 'R-FLUTTER-PARENTDATA-MISUSE 10 First.build>Expanded#1', 'R-FLUTTER-PARENTDATA-MISUSE 18 Second.build>Expanded#0']
     );
 });
 

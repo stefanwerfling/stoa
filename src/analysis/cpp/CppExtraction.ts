@@ -1,4 +1,5 @@
 import type {Node} from 'web-tree-sitter';
+import {uniqueSymbols} from '../../FindingIdentity.js';
 import type {Fact, SourceRange, SubjectKind} from '../../Types.js';
 import {factBuilder, type AdapterInfo} from '../FactBuilder.js';
 
@@ -35,17 +36,15 @@ export const extractFacts = (root: Node, content: string, filePath: string, info
 
     let allocIndex = 0;
 
-    for (const fn of descendants(root, 'function_definition')) {
+    const functions = descendants(root, 'function_definition').flatMap((fn) => {
         const body = fn.childForFieldName('body');
-        if (body === null || body.type !== 'compound_statement') {
-            continue;
-        }
         const declarator = descendants(fn, 'function_declarator')[0];
-        if (declarator === undefined) {
-            continue;
-        }
+        return body === null || body.type !== 'compound_statement' || declarator === undefined ? [] : [{fn, body, declarator}];
+    });
+    const symbols = uniqueSymbols(functions.map(({fn, declarator}) => qualifiedFunctionName(fn, declarator)));
+    for (const [index, {fn, body, declarator}] of functions.entries()) {
         const kindOf: SubjectKind = hasAncestorType(fn, 'field_declaration_list') ? 'method' : 'function';
-        const symbol = functionName(declarator);
+        const symbol = symbols[index] as string;
         const range = rangeOf(fn);
         const metrics = computeMetrics(body);
 
@@ -158,6 +157,26 @@ const hasAncestorType = (node: Node, type: string): boolean => {
 
 const functionName = (declarator: Node): string => {
     return declarator.childForFieldName('declarator')?.text ?? '(anonymous)';
+};
+
+const TYPE_TYPES: ReadonlySet<string> = new Set(['class_specifier', 'struct_specifier', 'union_specifier']);
+
+/**
+ * A function's identity base: an in-class definition is qualified by its
+ * enclosing named classes (`Buffer::reset`), the way an out-of-class
+ * definition already spells itself (`Buffer::reset`), so two classes'
+ * `reset` in one file no longer share a symbol. Namespaces are not added;
+ * overloads and other remaining duplicates get `#n` (`uniqueSymbols`).
+ */
+const qualifiedFunctionName = (fn: Node, declarator: Node): string => {
+    const scopes: string[] = [];
+    for (let node = fn.parent; node !== null; node = node.parent) {
+        const name = TYPE_TYPES.has(node.type) ? node.childForFieldName('name')?.text : undefined;
+        if (name !== undefined && name.length > 0) {
+            scopes.unshift(name);
+        }
+    }
+    return [...scopes, functionName(declarator)].join('::');
 };
 
 const parameterCount = (declarator: Node): number => {

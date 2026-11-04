@@ -188,15 +188,23 @@ von einer Stelle melden, tragen das Ziel ins Symbol ein (SOLID: `Klasse:Ziel`,
 zwei Befunde nie dieselbe Identität teilen. Regeln, die mehrere STELLEN unter
 einem Namen melden, nummerieren sie in Quelltextreihenfolge nach der
 `#n`-Konvention (Flutter-Lifecycle: `Klasse.feld`, `Klasse.signIn#1`,
-`Klasse.initState:Theme.of#0`; Flutter-Layout: `build>Expanded#2`, je Datei
-nummeriert). Eine Kollision ist ein Regelfehler: `stoa eval` scheitert daran,
-und `--update-baseline` verweigert eine Baseline, die eine Identität
-wiederholt (`loadBaseline` könnte sie nicht wieder lesen) — Exit 1, die
-bestehende Datei bleibt unverändert. **Bekannte offene Kollision:** Die
-Adapter für TS, Dart und PHP benennen eine Funktion oder Methode nur mit ihrem
-Namen, zwei Klassen einer Datei mit gleichnamiger Methode (etwa beide `run` mit
-zu vielen Parametern) teilen für die deklarativen Regeln also weiterhin eine
-Identität.
+`Klasse.initState:Theme.of#0`; Flutter-Layout: `Page.build>Expanded#2`, je
+Datei nummeriert). Funktionen und Methoden (das Subjekt der deklarativen
+Komplexitäts-, Größen- und Seiteneffekt-Regeln) benennen die Adapter mit
+allen umschließenden benannten Bereichen: `Service.run`, `outer.inner`,
+`api.run` (ein an `api` gebundenes Objektliteral) in TS, `A.run` für eine
+Dart-Klasse/-Mixin/-Extension und eine PHP-Klasse/-Trait/-Interface/-Enum,
+`Buffer::reset` in C++ (Namespaces werden nicht ergänzt); eine Basis, die in
+einer Datei dennoch mehrfach vorkommt (ein Getter/Setter-Paar,
+C++-Überladungen, zwei Closures in einer Zeile), erhält bei jedem Vorkommen
+`#n`. Anonyme Funktionen behalten `anonymous@<Zeile>`. Eine Kollision ist ein
+Regelfehler: `stoa eval` scheitert daran, und `--update-baseline` verweigert
+eine Baseline, die eine Identität wiederholt (`loadBaseline` könnte sie nicht
+wieder lesen) — Exit 1, die bestehende Datei bleibt unverändert. `R-ORM-EAGER-RELATION` benennt einen
+Befund `Entity.property`. **Bekannte offene Kollision:** Befunde auf
+Klassenebene benennen eine anonyme Klasse `(anonymous)`, zwei anonyme
+Doctrine-Migrationsklassen in einer PHP-Datei (`new class extends
+AbstractMigration`) teilen also eine `R-MIGRATION-NO-DOWN`-Identität.
 
 ## 7. Grenzen
 

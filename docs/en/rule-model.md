@@ -164,7 +164,7 @@ Persistence / ORM (TypeORM, TS/JS only, on by default):
 | `R-ORM-SYNCHRONIZE-ENABLED` | `orm.synchronizeEnabled` | `marcus.control` | Side-effect control, robustness | heuristic |
 | `R-ORM-SYNC-WITH-MIGRATIONS` | `orm.syncWithMigrations` | `marcus.judgment` | Decision-evidence, robustness | heuristic |
 | `R-ORM-ENTITY-NO-PK` | `orm.entityNoPrimaryKey` | `marcus.judgment` | Robustness, decision-evidence | syntactic (`@Entity` / `#[ORM\Entity]`) |
-| `R-ORM-EAGER-RELATION` | `orm.eagerRelation` | `marcus.control` | Side-effect control, robustness | syntactic (TypeORM + Doctrine) |
+| `R-ORM-EAGER-RELATION` | `orm.eagerRelation` | `marcus.control` | Side-effect control, robustness | syntactic (TypeORM + Doctrine); identity `Entity.property` |
 | `R-ORM-NULLABLE-NO-DEFAULT` | `migration.nullableNoDefault` | `marcus.obstacle` | Robustness, error handling | heuristic (NOT NULL add in `up()`) |
 | `R-MIGRATION-UNGUARDED-DDL` | `migration.unguardedDdl` | `marcus.obstacle` | Robustness, error handling | heuristic (migration files only) |
 | `R-MIGRATION-NO-DOWN` | `migration.noDown` | `marcus.judgment` | Robustness, decision-evidence | syntactic (migration files only) |

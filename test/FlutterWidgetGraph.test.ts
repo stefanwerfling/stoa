@@ -56,7 +56,7 @@ test('simple nesting: the Scaffold example becomes the exact parent/child struct
     ]);
     const scaffold = graph.nodes.find((node) => node.name === 'Scaffold');
     assert.deepEqual(scaffold?.argNames, ['appBar', 'body']);
-    assert.equal(scaffold?.owner.startsWith('build@'), true);
+    assert.equal(scaffold?.owner.startsWith('DashboardPage.build@'), true);
     assert.equal(scaffold?.range.startLine, 6);
     const row = graph.edges.find((edge) => edge.child.endsWith('/body/children[1]'));
     assert.deepEqual({kind: row?.kind, label: row?.label, index: row?.index}, {kind: 'children', label: 'children', index: 1});
@@ -65,7 +65,7 @@ test('simple nesting: the Scaffold example becomes the exact parent/child struct
 });
 
 test('complex structures: conditional, repeat, spreads, builders, references, dynamic — never an empty or invented subtree', () => {
-    const lines = outline(run(join(fixtures, 'Complex.dart')).graph, 'build');
+    const lines = outline(run(join(fixtures, 'Complex.dart')).graph, 'ComplexPage.build');
     for (const expected of [
         'r0/children[0] conditional',
         'r0/children[0]/then widget Icon',
@@ -98,14 +98,14 @@ test('complex structures: conditional, repeat, spreads, builders, references, dy
 });
 
 test('callbacks are not children: a dialog built in onPressed is its own root', () => {
-    const lines = outline(run(join(fixtures, 'Complex.dart')).graph, 'build');
+    const lines = outline(run(join(fixtures, 'Complex.dart')).graph, 'ComplexPage.build');
     assert.ok(lines.includes('r1 widget AlertDialog'));
     assert.ok(lines.includes('r1/title widget Text'));
     assert.equal(lines.some((line) => line.startsWith('r0/') && line.includes('AlertDialog')), false);
 });
 
 test('a function declared to return Widget that returns a variable gets a reference root', () => {
-    assert.deepEqual(outline(run(join(fixtures, 'Complex.dart')).graph, '_header'), ['r0 reference header (dynamic)']);
+    assert.deepEqual(outline(run(join(fixtures, 'Complex.dart')).graph, 'ComplexPage._header'), ['r0 reference header (dynamic)']);
 });
 
 test('identity: local class verified, prefixed/shown import heuristic, excluded or undeclared names unresolved', () => {
@@ -213,16 +213,16 @@ test('graph findings on the graph fixtures: only the real layout errors (ListVie
 
 test('roots: only structural calls (slot/builder) or Widget-function returns; slot-less calls outside a tree are not structure', () => {
     const {graph} = run(join(fixtures, 'Roots.dart'));
-    const build = outline(graph, 'build');
+    const build = outline(graph, 'RootsPage.build');
     assert.equal(build.some((line) => /AppLocalizations|Paint|Navigator|ScaffoldMessenger/.test(line)), false, build.join('\n'));
     assert.equal(build.some((line) => line.includes("Text") && line.startsWith('r') && !line.includes('/')), false, 'a slot-less Text in a local variable is no root');
     assert.ok(build.includes('r0/children[0] reference label (dynamic)'), 'its use site is the placeholder');
     assert.ok(build.some((line) => / widget SnackBar$/.test(line)), 'SnackBar(content: …) passed to a method call is a root (has a slot)');
-    assert.deepEqual(outline(graph, '_icon'), ['r0 widget Icon'], 'a slot-less widget returned from a Widget? function is a root');
+    assert.deepEqual(outline(graph, 'RootsPage._icon'), ['r0 widget Icon'], 'a slot-less widget returned from a Widget? function is a root');
 });
 
 test('literals in a slot are provably not widgets (no node); list values in branches fan out', () => {
-    const build = outline(run(join(fixtures, 'Roots.dart')).graph, 'build');
+    const build = outline(run(join(fixtures, 'Roots.dart')).graph, 'RootsPage.build');
     const item = build.find((line) => line.endsWith('widget BottomNavigationBarItem'));
     assert.ok(item !== undefined);
     const itemPath = item.split(' ')[0] as string;

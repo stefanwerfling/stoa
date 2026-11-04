@@ -65,8 +65,11 @@ before(() => {
     writeFileSync(join(project, 'c.ts'), fileWithEmptyCatch('gamma'));
     collidingProject = join(work, 'colliding');
     spawnSync('mkdir', ['-p', collidingProject]);
-    const sixParams = 'a: number, b: number, c: number, d: number, e: number, f: number';
-    writeFileSync(join(collidingProject, 'a.ts'), `export class A {\n    run(${sixParams}): number {\n        return a + b + c + d + e + f;\n    }\n}\nexport class B {\n    run(${sixParams}): number {\n        return a + b + c + d + e + f;\n    }\n}\n`);
+    // A collision that remains after the qualified function and entity
+    // identities: two anonymous Doctrine migration classes in one file are
+    // both `(anonymous)` for R-MIGRATION-NO-DOWN (documented as open in
+    // implementation-status).
+    writeFileSync(join(collidingProject, 'm.php'), '<?php\n$first = new class extends AbstractMigration {\n    public function up(Schema $schema): void {}\n};\n$second = new class extends AbstractMigration {\n    public function up(Schema $schema): void {}\n};\n');
 });
 
 after(() => {
@@ -196,11 +199,11 @@ test('exit 1: duplicate PRODUCED identities fail a complete evaluation even with
     assert.equal(result.status, 1);
     assert.deepEqual([json.outcome, json.analysis.status], ['failed', 'complete']);
     assert.deepEqual([json.overall.falsePositives, json.overall.falseNegatives], [0, 0], 'the metrics alone would pass');
-    assert.deepEqual(json.duplicates, [{file: 'a.ts', rule: 'R-FN-TOO-MANY-PARAMS', symbol: 'run'}]);
+    assert.deepEqual(json.duplicates, [{file: 'm.php', rule: 'R-MIGRATION-NO-DOWN', symbol: '(anonymous)'}]);
     assert.equal(json.overall.producedCount, produced.length, 'nothing dropped');
     assert.match(result.stderr, /identity collision: 1 produced finding/);
     const markdown = stoa(['eval', collidingProject, '--expected', path]);
     assert.equal(markdown.status, 1);
     assert.match(markdown.stdout, /- Outcome: failed/);
-    assert.match(markdown.stdout, /identity collision — fails the evaluation[\s\S]*a\.ts · R-FN-TOO-MANY-PARAMS · run/);
+    assert.match(markdown.stdout, /identity collision — fails the evaluation[\s\S]*m\.php · R-MIGRATION-NO-DOWN · \(anonymous\)/);
 });

@@ -188,13 +188,22 @@ targets from one place put the target into the symbol (SOLID: `Class:Target`,
 findings never share one identity. Rules that report several SITES under one
 name number them in source order with the `#n` convention (Flutter lifecycle:
 `Class.field`, `Class.signIn#1`, `Class.initState:Theme.of#0`; Flutter
-layout: `build>Expanded#2`, numbered per file). A collision is a rule
-defect: `stoa eval` fails on it, and `--update-baseline` refuses to write a
-baseline that repeats an identity (`loadBaseline` could not read it back) —
-exit 1, the existing file untouched. **Known open collision:** the TS, Dart
-and PHP adapters name a function or method by its bare name, so two classes
-in one file with a same-named method (e.g. both `run` with too many
-parameters) still share one identity for the declarative rules.
+layout: `Page.build>Expanded#2`, numbered per file). Functions and methods
+(the subject of the declarative complexity/size/side-effect rules) are named
+by the adapters with every enclosing named scope: `Service.run`,
+`outer.inner`, `api.run` (an object literal bound to `api`) in TS, `A.run`
+for a Dart class/mixin/extension and a PHP class/trait/interface/enum,
+`Buffer::reset` in C++ (namespaces are not added); a base that still occurs
+twice in one file (a getter/setter pair, C++ overloads, two closures on one
+line) gets `#n` on every occurrence. Anonymous functions keep
+`anonymous@<line>`. A collision is a rule defect: `stoa eval` fails on it,
+and `--update-baseline` refuses to write a baseline that repeats an identity
+(`loadBaseline` could not read it back) — exit 1, the existing file
+untouched. `R-ORM-EAGER-RELATION` names a finding `Entity.property`.
+**Known open collision:** class-level findings name an anonymous class
+`(anonymous)`, so two anonymous Doctrine migration classes in one PHP file
+(`new class extends AbstractMigration`) share one `R-MIGRATION-NO-DOWN`
+identity.
 
 ## 7. Limits
 

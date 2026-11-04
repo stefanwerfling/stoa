@@ -59,11 +59,12 @@ API-Request-/DTO-Facts für eine durchgehende FE/BE-Kette; Validierung an
 unabhängigen externen Korpora.
 
 **Bekannte Einschränkungen (offen):**
-- Finding-Identitäten der TS-/Dart-/PHP-Adapter nutzen den nackten
-  Methodennamen als Symbol; `A.run` und `B.run` in einer Datei können daher
-  kollidieren. Seit der Evaluator-Integritätsarbeit lässt eine solche
-  Kollision `stoa eval` scheitern und blockiert `--update-baseline`; die
-  Adapter sind noch nicht geändert.
+- Befunde auf Klassenebene benennen eine anonyme Klasse `(anonymous)`: zwei
+  anonyme Doctrine-Migrationsklassen in einer PHP-Datei teilen eine
+  `R-MIGRATION-NO-DOWN`-Identität (lässt `stoa eval` scheitern, blockiert
+  `--update-baseline`). Die Kollisionen bei Funktionen, Methoden und
+  Eager-Relationen sind behoben (siehe „Qualifizierte
+  Funktionsidentitäten").
 - Symbole der Form `anonymous@<Zeile>` verschieben sich, wenn sich Zeilen
   darüber ändern; solche Findings sind in einer Baseline nicht änderungsstabil.
 - Die Extraktion dominiert Laufzeit und Speicher (siehe Messeintrag unten);
@@ -425,6 +426,45 @@ genannten lokalen Projekten; keine ist eine allgemeine Genauigkeitsaussage.
   (`test/fixtures/architecture`: Loader-Fehler, Zuordnung inkl. Mehrfachtreffer
   und Dateien außerhalb der Wurzel, alle vier Kantenurteile, Paketverbote und
   -namen, Report-Zusammenfassung und Markdown, CLI-Fail-fast und JSON).
+- **Qualifizierte Funktionsidentitäten (Nachtrag zum
+  Evaluator-Integritäts-Folgeauftrag):** Die Adapter für TS, Dart, PHP und
+  C/C++ benannten eine Funktion oder Methode mit ihrem nackten Namen, zwei
+  Klassen mit `run` in einer Datei teilten also eine Finding-Identität (seit
+  Phase 1 ein gescheitertes `stoa eval` und ein verweigertes
+  `--update-baseline`). Jetzt trägt jeder Funktions-Fact seinen Namen,
+  qualifiziert mit den umschließenden benannten Bereichen — TS: Klasse,
+  Namespace, benannte Funktion, an eine Variable gebundenes Objektliteral
+  (`Service.run`, `outer.inner`, `api.run`); Dart: Klasse, Mixin, Extension,
+  umschließende Funktion; PHP: Klasse, Trait, Interface, Enum; C++:
+  Klasse/Struct/Union mit `::`, so wie Definitionen außerhalb der Klasse es
+  bereits schreiben. Namespaces von PHP und C++ werden nicht ergänzt (in der
+  Praxis einer je Datei; sie zu ergänzen benennte fast jedes Symbol um).
+  Eine Basis, die in einer Datei dennoch mehrfach vorkommt, erhält bei jedem
+  Vorkommen `#n` (`uniqueSymbols` in FindingIdentity.ts: Getter/Setter-Paare,
+  C++-Überladungen, zwei Closures in einer Zeile). `anonymous@<Zeile>` bleibt
+  die Basis. Facts und Regeln sind sonst unverändert; der FactCache
+  invalidiert sich über den Engine-Fingerprint selbst. Der Owner im
+  Flutter-Widget-Baum ist dasselbe Funktionssymbol, Layout-Identitäten lauten
+  daher `Page.build>Expanded#n` (weiter je Datei nummeriert). Wirkung, HEAD
+  gegen diese Änderung auf 18 Läufen (16 Ziele): Golden- und SOLID-Korpus,
+  contracts, ffschemas, kapalium unverändert; bei den übrigen änderten sich
+  nur `location.symbol` und der Beobachtungstext, der es nennt — flyingfish
+  backend 54, frontend 39, velyo 31, swipemeister 30, stoa/src 10, mwpa 9
+  Befunde (Komplexität, Verschachtelung, Parameter, Nichtdeterminismus);
+  kein Befund hinzugekommen oder verloren, keine Identitätskollision vorher
+  oder nachher auf diesen Zielen. `R-ORM-EAGER-RELATION` (TS und PHP)
+  benennt einen Befund `Entity.property` (zwei Entities mit gleicher
+  Eager-Property in einer Datei kollidierten); freigegebene
+  Golden-Korpus-Änderung: die sechs Eager-Relation-Erwartungen in
+  `test/corpus/expected.json` (`tags` → `Order.tags`, `messages` →
+  `Thread.messages`, `customer` → `Order.customer`/`Invoice.customer`,
+  `parent` → `Node.parent`, `source` → `Edge.source`), Korpus weiter TP 44 /
+  FP 0 / FN 0. Die CLI-Kollisionstests nutzen jetzt den verbleibenden Fall:
+  zwei anonyme Doctrine-Migrationsklassen in einer PHP-Datei, beide
+  `(anonymous)`. Tests: `test/FunctionIdentity.test.ts` (7: `uniqueSymbols`,
+  je Adapter einer, der `A.run`/`B.run`-Fall auf Befundebene, der
+  Eager-Relation-Fall in TS und PHP); Widget-Graph-, Layout- und
+  ORM-Erwartungen angepasst.
 - **Messung und Speicherprofil (Evaluator-Integritäts-Folgeauftrag,
   Phase 4):** `--memory-stats` / `AnalyzeOptions.onMetrics` melden jetzt die
   `PipelineMetrics` des Laufs (src/PipelineMetrics.ts) — Zählwerte
@@ -1824,7 +1864,7 @@ zu liefern.
 
 ## Qualitätssicherung
 
-- **node:test-Suite** (`npm test`, `test/*.test.ts`): 531 Tests, 0 fehlgeschlagen,
+- **node:test-Suite** (`npm test`, `test/*.test.ts`): 538 Tests, 0 fehlgeschlagen,
   Lauf vom 2026-11-04 (Regeln pos./neg., Extraktion, Schema-Validierung, i18n,
   Determinismus, SARIF, Eval, Semantik-Groundedness, Datenschutz,
   Finding-Trennung, semantische Modelle, Identitäten, Metriken).
@@ -1953,10 +1993,9 @@ R-DEP-CYCLE/R-UNUSED-EXPORT auch PHP abdecken; generischer ESLint-Fact-Adapter;
 Kontext-Facts (`flag.generatedCode`, `hasTests`) für reichhaltigere
 Suppression; LLM-Ausgabe-Evaluierung im Maßstab.
 
-**Offen aus dem Evaluator-Integritäts-Folgeauftrag (2026-11-04):** eindeutige
-Methoden-Identitäten in den TS-/Dart-/PHP-Adaptern (ein nackter Methodenname
-kollidiert über Klassen in einer Datei — jetzt ein harter statt ein stiller
-Evaluierungs-/Baseline-Fehler); stabile Symbole statt `anonymous@<Zeile>`;
+**Offen aus dem Evaluator-Integritäts-Folgeauftrag (2026-11-04):** ein
+eindeutiges Symbol für anonyme Klassen in Befunden auf Klassenebene (zwei
+anonyme PHP-Migrationsklassen in einer Datei); stabile Symbole statt `anonymous@<Zeile>`;
 weniger Vollbaum-Durchläufe in der TS-Extraktion (der gemessene Hebel für
 Laufzeit und Speicherspitze, Facts müssen byte-identisch bleiben); kein
 SymbolGraph unter `--solid`, wenn keine Typdeklarationen existieren (gemessen

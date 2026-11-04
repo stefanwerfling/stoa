@@ -187,7 +187,7 @@ test('R-ORM-EAGER-RELATION flags eager:true in any argument position, not eager:
     assert.equal(eager.length, 2, 'options as 2nd arg (tags) and as 3rd arg (messages)');
     assert.deepEqual(
         eager.map((f) => f.location.symbol).sort(),
-        ['messages', 'tags']
+        ['Order.tags', 'Thread.messages']
     );
     assert.equal(eager[0]?.interpretation.principles[0]?.id, 'marcus.control');
 
@@ -263,13 +263,13 @@ test('R-ORM-EAGER-RELATION catches the constant fetch form (…::FETCH_EAGER), a
         (f) => f.rule.id === 'R-ORM-EAGER-RELATION'
     );
     assert.equal(attr.length, 1);
-    assert.equal(attr[0]?.location.symbol, 'parent');
+    assert.equal(attr[0]?.location.symbol, 'Node.parent');
 
     const anno = analyzePath(join(root, 'test', 'corpus', 'project', 'DoctrineAnnotatedEagerConst.php')).filter(
         (f) => f.rule.id === 'R-ORM-EAGER-RELATION'
     );
     assert.equal(anno.length, 1);
-    assert.equal(anno[0]?.location.symbol, 'source');
+    assert.equal(anno[0]?.location.symbol, 'Edge.source');
 });
 
 test('the @Entity rules fire for Doctrine (PHP) via #[ORM] attributes', () => {
@@ -284,7 +284,7 @@ test('the @Entity rules fire for Doctrine (PHP) via #[ORM] attributes', () => {
     const eager = analyzePath(join(root, 'test', 'corpus', 'project', 'DoctrineEntityEager.php'));
     const eagerHits = eager.filter((f) => f.rule.id === 'R-ORM-EAGER-RELATION');
     assert.equal(eagerHits.length, 1, 'the EAGER ManyToOne, not the LAZY OneToMany');
-    assert.equal(eagerHits[0]?.location.symbol, 'customer');
+    assert.equal(eagerHits[0]?.location.symbol, 'Order.customer');
     assert.equal(eagerHits[0]?.interpretation.principles[0]?.id, 'marcus.control');
     assert.equal(eager.filter((f) => f.rule.id === 'R-ORM-ENTITY-NO-PK').length, 0, '#[ORM\\Id] is a primary key');
 
@@ -304,7 +304,7 @@ test('the @Entity rules also fire for annotation-mapped Doctrine (docblock @ORM)
     const eager = analyzePath(join(root, 'test', 'corpus', 'project', 'DoctrineAnnotatedEager.php'));
     const eagerHits = eager.filter((f) => f.rule.id === 'R-ORM-EAGER-RELATION');
     assert.equal(eagerHits.length, 1, 'the EAGER relation, not the LAZY one');
-    assert.equal(eagerHits[0]?.location.symbol, 'customer');
+    assert.equal(eagerHits[0]?.location.symbol, 'Invoice.customer');
     assert.equal(eager.filter((f) => f.rule.id === 'R-ORM-ENTITY-NO-PK').length, 0, '@ORM\\Id is a primary key');
 
     const inherits = analyzePath(join(root, 'test', 'fixtures', 'orm', 'DoctrineAnnotatedInherits.php')).filter(

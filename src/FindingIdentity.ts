@@ -46,3 +46,19 @@ export const ordinalSymbols = (bases: readonly string[]): string[] => {
         return `${base}#${index}`;
     });
 };
+
+/**
+ * Unique symbols for one file's declarations (the adapters' functions and
+ * methods, in source order): a base that occurs once stays as it is; a base
+ * shared by several (a getter/setter pair, C++ overloads, two closures on
+ * one line) gets the `#n` ordinal on every occurrence. Names cannot contain
+ * `#`, so a disambiguated symbol never equals another base.
+ */
+export const uniqueSymbols = (bases: readonly string[]): string[] => {
+    const counts = new Map<string, number>();
+    for (const base of bases) {
+        counts.set(base, (counts.get(base) ?? 0) + 1);
+    }
+    const ordinals = ordinalSymbols(bases);
+    return bases.map((base, index) => ((counts.get(base) ?? 0) > 1 ? (ordinals[index] as string) : base));
+};

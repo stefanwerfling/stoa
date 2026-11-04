@@ -164,7 +164,7 @@ Persistenz / ORM (TypeORM, nur TS/JS, Default aktiv):
 | `R-ORM-SYNCHRONIZE-ENABLED` | `orm.synchronizeEnabled` | `marcus.control` | Seiteneffekt-Kontrolle, Robustheit | heuristisch |
 | `R-ORM-SYNC-WITH-MIGRATIONS` | `orm.syncWithMigrations` | `marcus.judgment` | Belegbarkeit, Robustheit | heuristisch |
 | `R-ORM-ENTITY-NO-PK` | `orm.entityNoPrimaryKey` | `marcus.judgment` | Robustheit, Belegbarkeit | syntaktisch (`@Entity` / `#[ORM\Entity]`) |
-| `R-ORM-EAGER-RELATION` | `orm.eagerRelation` | `marcus.control` | Seiteneffekt-Kontrolle, Robustheit | syntaktisch (TypeORM + Doctrine) |
+| `R-ORM-EAGER-RELATION` | `orm.eagerRelation` | `marcus.control` | Seiteneffekt-Kontrolle, Robustheit | syntaktisch (TypeORM + Doctrine); Identität `Entity.property` |
 | `R-ORM-NULLABLE-NO-DEFAULT` | `migration.nullableNoDefault` | `marcus.obstacle` | Robustheit, Fehlerbehandlung | heuristisch (NOT-NULL-Add im `up()`) |
 | `R-MIGRATION-UNGUARDED-DDL` | `migration.unguardedDdl` | `marcus.obstacle` | Robustheit, Fehlerbehandlung | heuristisch (nur Migrationsdateien) |
 | `R-MIGRATION-NO-DOWN` | `migration.noDown` | `marcus.judgment` | Robustheit, Belegbarkeit | syntaktisch (nur Migrationsdateien) |

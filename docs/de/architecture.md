@@ -276,7 +276,7 @@ Siehe [open-questions.md](./open-questions.md). Kernpunkte: inkrementelle
 Analyse/Caching-Granularität, projektweite (interprozedurale) Datenflussanalyse
 vs. Aufwand, einheitliches Fact-Schema über sehr unterschiedliche Sprachen.
 
-Offene Punkte aus der Umsetzung (2026-11-04): eindeutige Methoden-Identitäten
-in den TS-/Dart-/PHP-Adaptern, stabile Symbole statt `anonymous@<Zeile>` und
+Offene Punkte aus der Umsetzung (2026-11-04): eine eindeutige
+Identität für anonyme Klassen in Befunden auf Klassenebene, stabile Symbole statt `anonymous@<Zeile>` und
 weniger Syntaxbaum-Durchläufe in der TS-Extraktion — siehe „Noch offen" in
 [implementation-status.md](./implementation-status.md).

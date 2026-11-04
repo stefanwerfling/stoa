@@ -1,4 +1,5 @@
 import type {Node} from 'web-tree-sitter';
+import {uniqueSymbols} from '../../FindingIdentity.js';
 import type {Fact, SourceRange, SubjectKind} from '../../Types.js';
 import {factBuilder, type AdapterInfo} from '../FactBuilder.js';
 import {importPrefixes, parseErrorCount} from './DartCallSite.js';
@@ -48,15 +49,16 @@ export const extractFacts = (root: Node, content: string, filePath: string, info
     }
 
     const prefixes = importPrefixes(root);
-    for (const signature of descendants(root, 'function_signature')) {
+    const functions = descendants(root, 'function_signature').flatMap((signature) => {
         const parent = signature.parent;
         const owner = parent !== null && parent.type === 'method_signature' ? parent : signature;
         const body = owner.nextNamedSibling;
-        if (body === null || body.type !== 'function_body') {
-            continue;
-        }
+        return body === null || body.type !== 'function_body' ? [] : [{signature, owner, body}];
+    });
+    const symbols = uniqueSymbols(functions.map(({signature}) => qualifiedFunctionName(signature)));
+    for (const [index, {signature, owner, body}] of functions.entries()) {
         const kindOf: SubjectKind = owner.type === 'method_signature' ? 'method' : 'function';
-        const symbol = functionName(signature);
+        const symbol = symbols[index] as string;
         const range = spanRange(owner, body);
         const metrics = computeMetrics(body);
 
@@ -172,6 +174,42 @@ const functionName = (signature: Node): string => {
         return named.text;
     }
     return namedChildren(signature).find((child) => child.type === 'identifier')?.text ?? '(anonymous)';
+};
+
+const SCOPE_TYPES: ReadonlySet<string> = new Set(['class_definition', 'mixin_declaration', 'extension_declaration', 'enum_declaration']);
+
+/** The name of a class/mixin/extension/enum, or of the function whose body `node` is; `undefined` for anything else (or an unnamed extension). */
+const scopeName = (node: Node): string | undefined => {
+    if (SCOPE_TYPES.has(node.type)) {
+        return (node.childForFieldName('name') ?? namedChildren(node).find((child) => child.type === 'identifier'))?.text;
+    }
+    if (node.type === 'function_body') {
+        const previous = node.previousNamedSibling;
+        const signature = previous?.type === 'method_signature' ? namedChildren(previous).find((child) => child.type === 'function_signature') : previous;
+        if (signature !== undefined && signature !== null && signature.type === 'function_signature') {
+            const name = functionName(signature);
+            return name === '(anonymous)' ? undefined : name;
+        }
+    }
+    return undefined;
+};
+
+/**
+ * A function's identity base: its name qualified by every enclosing named
+ * type and function (`LoginState.build`, `outer.inner`), so two classes'
+ * `build` in one file no longer share a symbol. Remaining duplicates get
+ * `#n` (`uniqueSymbols`).
+ */
+const qualifiedFunctionName = (signature: Node): string => {
+    const own = functionName(signature);
+    const scopes: string[] = [];
+    for (let node = signature.parent; node !== null; node = node.parent) {
+        const name = scopeName(node);
+        if (name !== undefined && name.length > 0) {
+            scopes.unshift(name);
+        }
+    }
+    return [...scopes, own].join('.');
 };
 
 const parameterCount = (signature: Node): number => {

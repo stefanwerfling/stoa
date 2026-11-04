@@ -1,6 +1,7 @@
 import {Node, SyntaxKind, ts} from 'ts-morph';
 import type {Block, CallExpression, CatchClause, ClassDeclaration, Decorator, ImportDeclaration, MethodDeclaration, ObjectLiteralExpression, PropertyAssignment, SourceFile} from 'ts-morph';
 import type {Fact, SourceRange, SubjectKind} from '../../Types.js';
+import {uniqueSymbols} from '../../FindingIdentity.js';
 import {factBuilder, type AdapterInfo} from '../FactBuilder.js';
 import {isDeepImport} from '../ImportPath.js';
 import {extractJsxA11yFacts} from '../jsx/JsxA11y.js';
@@ -78,14 +79,14 @@ export const extractFacts = (sourceFile: SourceFile, info: AdapterInfo): Fact[] 
     facts.push(build({kind: 'file.lineCount', kindOf: 'file', range: fileRange(sourceFile), value: lineCount(sourceFile)}));
     facts.push(build({kind: 'metric.exportCount', kindOf: 'file', range: fileRange(sourceFile), value: countExports(sourceFile)}));
 
-    for (const fn of functionLikeNodes(sourceFile)) {
+    const functions = functionLikeNodes(sourceFile).flatMap((fn) => {
         const body = functionBody(fn);
-        if (body === undefined) {
-            continue;
-        }
-
+        return body === undefined ? [] : [{fn, body}];
+    });
+    const symbols = uniqueSymbols(functions.map(({fn}) => qualifiedFunctionName(fn)));
+    for (const [index, {fn, body}] of functions.entries()) {
         const metrics = computeMetrics(fn, body);
-        const symbol = functionName(fn);
+        const symbol = symbols[index] as string;
         const kindOf = subjectKindOf(fn);
         const range = rangeOf(sourceFile, fn);
 
@@ -267,7 +268,7 @@ export const extractFacts = (sourceFile: SourceFile, info: AdapterInfo): Fact[] 
         for (const property of cls.getProperties()) {
             for (const decorator of property.getDecorators()) {
                 if (RELATION_DECORATORS.has(decorator.getName()) && decoratorHasEager(decorator)) {
-                    facts.push(build({kind: 'orm.eagerRelation', kindOf: 'statement', symbol: property.getName(), range: rangeOf(sourceFile, decorator), value: decorator.getName()}));
+                    facts.push(build({kind: 'orm.eagerRelation', kindOf: 'statement', symbol: `${cls.getName() ?? '(anonymous)'}.${property.getName()}`, range: rangeOf(sourceFile, decorator), value: decorator.getName()}));
                 }
             }
         }
@@ -750,6 +751,49 @@ const functionName = (fn: Node): string => {
         return 'constructor';
     }
     return `anonymous@${fn.getStartLineNumber()}`;
+};
+
+const isAnonymous = (name: string): boolean => name.startsWith('anonymous@');
+
+/**
+ * The name of a node that scopes the functions inside it, or `undefined`
+ * when it scopes nothing nameable: a named class or namespace, a named
+ * function, or an object literal bound to a variable (`const api = {run() {}}`).
+ */
+const scopeName = (node: Node): string | undefined => {
+    if (Node.isClassDeclaration(node) || Node.isClassExpression(node) || Node.isModuleDeclaration(node)) {
+        return node.getName();
+    }
+    if (FUNCTION_LIKE_KINDS.has(node.getKind())) {
+        const name = functionName(node);
+        return isAnonymous(name) ? undefined : name;
+    }
+    if (Node.isObjectLiteralExpression(node)) {
+        const holder = node.getParent();
+        return holder !== undefined && Node.isVariableDeclaration(holder) ? holder.getName() : undefined;
+    }
+    return undefined;
+};
+
+/**
+ * A function's identity base: its name qualified by every enclosing named
+ * scope (`Service.run`, `outer.inner`, `api.run`), so two classes' `run` in
+ * one file no longer share a symbol. Anonymous functions keep
+ * `anonymous@<line>`; remaining duplicates get `#n` (`uniqueSymbols`).
+ */
+const qualifiedFunctionName = (fn: Node): string => {
+    const own = functionName(fn);
+    if (isAnonymous(own)) {
+        return own;
+    }
+    const scopes: string[] = [];
+    for (let node = fn.getParent(); node !== undefined; node = node.getParent()) {
+        const name = scopeName(node);
+        if (name !== undefined && name.length > 0) {
+            scopes.unshift(name);
+        }
+    }
+    return [...scopes, own].join('.');
 };
 
 const subjectKindOf = (fn: Node): SubjectKind => {
