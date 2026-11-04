@@ -1,4 +1,4 @@
-import {Node, SyntaxKind} from 'ts-morph';
+import {Node, SyntaxKind, ts} from 'ts-morph';
 import type {ClassDeclaration, InterfaceDeclaration, ParameterDeclaration, SourceFile, TypeNode} from 'ts-morph';
 import type {Fact, SourceRange} from '../../Types.js';
 import type {FactSpec} from '../FactBuilder.js';
@@ -297,6 +297,38 @@ const bodyShape = (body: Node | undefined): {body: StructBody; throwsType: strin
     return {body: 'normal', throwsType: null};
 };
 
+/**
+ * The nodes refsOf inspects: `scope` and its descendants that are property
+ * accesses, `new` expressions or identifiers — the same set as filtering
+ * `[scope, ...scope.getDescendants()]`, without wrapping every token. The
+ * compiler tree is walked like getDescendants (`getChildren`, JSDoc included);
+ * only the hits are wrapped. Property accesses and `new` come from
+ * getDescendantsOfKind (node walk, no JSDoc); should JSDoc hold one (e.g.
+ * `@augments a.B`), the full getDescendants path is taken instead.
+ */
+const referenceCandidates = (scope: Node): Node[] => {
+    const file = scope.getSourceFile().compilerNode;
+    const rawExpressions = new Set<ts.Node>();
+    let identifiers = 0;
+    const walk = (node: ts.Node): void => {
+        for (const child of node.getChildren(file)) {
+            if (child.kind === ts.SyntaxKind.PropertyAccessExpression || child.kind === ts.SyntaxKind.NewExpression) {
+                rawExpressions.add(child);
+            } else if (child.kind === ts.SyntaxKind.Identifier) {
+                identifiers += 1;
+            }
+            walk(child);
+        }
+    };
+    walk(scope.compilerNode);
+    const expressions = [...scope.getDescendantsOfKind(SyntaxKind.PropertyAccessExpression), ...scope.getDescendantsOfKind(SyntaxKind.NewExpression)];
+    const identifierNodes = identifiers === 0 ? [] : scope.getDescendantsOfKind(SyntaxKind.Identifier);
+    if (expressions.length !== rawExpressions.size || expressions.some((node) => !rawExpressions.has(node.compilerNode)) || identifierNodes.length !== identifiers) {
+        return [scope, ...scope.getDescendants()];
+    }
+    return [scope, ...expressions, ...identifierNodes];
+};
+
 const refsOf = (
     scope: Node | undefined,
     own: ReadonlySet<string>,
@@ -312,8 +344,7 @@ const refsOf = (
     const refsImports: string[] = [];
     const instantiates: StructInstantiation[] = [];
     const staticAccess: StructStaticAccess[] = [];
-    const nodes = [scope, ...scope.getDescendants()];
-    for (const node of nodes) {
+    for (const node of referenceCandidates(scope)) {
         if (Node.isPropertyAccessExpression(node)) {
             const target = node.getExpression();
             if (target.getKind() === SyntaxKind.ThisKeyword || (Node.isIdentifier(target) && target.getText() === className)) {

@@ -57,8 +57,10 @@ facts for an end-to-end FE/BE chain; validation on independent external
 corpora.
 
 **Known limitations (open):**
-- Extraction dominates runtime and memory (see the measurement entry below);
-  the TS adapter walks each syntax tree about eleven times. Not optimized yet.
+- Extraction dominates runtime and memory (see the measurement entry below).
+  The TS adapter no longer wraps every token and no longer builds a type
+  checker for export questions (≈ −43 % extraction time, see "Fewer token
+  walks"); it still walks each tree once per fact family.
 
 **Tests and measurements:** see "Quality assurance" below and the dated
 measurement entry "Measurement and memory profile". All numbers on this
@@ -390,6 +392,30 @@ the named local projects; none is a general accuracy claim.
   (`test/fixtures/architecture`: loader errors, assignment incl. multiple
   matches and outside-root files, all four edge verdicts, package bans and
   names, report summary and markdown, CLI fail-fast and JSON).
+- **Fewer token walks in the TS extraction (follow-up):** the TS extraction
+  wrapped every token of a file several times — `getDescendants()` and
+  `getDescendantsOfKind(Identifier)` wrap each token in a ts-morph object —
+  and `isExported()`/`isDefaultExport()` built a Program and a TypeChecker per
+  file for every declaration without the keyword. Now: identifiers outside
+  imports are collected by a walk over the compiler tree (only their text is
+  read); JSX elements, request handlers and member references use node-only
+  walks and wrap only their hits (`refsOf` takes the full path again if JSDoc
+  holds a property access or `new`, e.g. `@augments a.B`); the export names
+  are computed once per file (`countExports` derives from them), and the
+  export questions are answered by the keyword alone unless the file has an
+  export without it (`export {x}`, `export {x as default}`, `export default
+  x`, `export =`) — only then is ts-morph asked. Facts are byte-identical:
+  same hash over all 50,046 facts of 652 TS/JS files (flyingfish backend +
+  frontend, kapalium frontend, a stoa snapshot), and the findings of 18 runs
+  match the previous commit (stoa/src analyzing itself: the same findings,
+  two moved by lines in the edited files). Measured (extractFacts only, the same 652
+  files, minimum of 3 rounds, alternating runs on a machine under load):
+  9.75–10.3 s → 5.6–5.8 s (≈ −43 %). Not changed: parsing, the remaining
+  node walks per fact family (one per family), the Dart/PHP/C++ adapters.
+  Tests: `test/TsExtractionShortcuts.test.ts` (exports without the keyword,
+  aliases and re-exports, named default, `export =`, `export default
+  <expr>`, a JSDoc property access as static access — expected values from
+  the extraction before the change).
 - **Stable names for functions without a name (follow-up):** a TS/PHP
   function without its own name was `anonymous@<line>`, so any edit above it
   renamed its findings (and moved them in a baseline). Now it takes the name
@@ -1724,7 +1750,7 @@ fails fast (exit 1, concrete errors) instead of silently yielding 0 findings.
 
 ## Quality assurance
 
-- **node:test suite** (`npm test`, `test/*.test.ts`): 542 tests, 0 failed,
+- **node:test suite** (`npm test`, `test/*.test.ts`): 545 tests, 0 failed,
   as of the 2026-11-04 run (rules pos./neg., extraction, schema validation,
   i18n, determinism, SARIF, evaluation, semantic groundedness, privacy,
   finding-model separation, semantic models, identities, metrics).
@@ -1846,8 +1872,9 @@ baseline; PSR-4 resolution so R-DEP-CYCLE / R-UNUSED-EXPORT cover PHP; a
 generic ESLint fact adapter; context facts (`flag.generatedCode`, `hasTests`)
 for richer suppression; LLM-output evaluation at scale.
 
-**Open from the evaluator-integrity track (2026-11-04):** fewer full-tree
-walks in the TS extraction (the measured runtime and peak-memory lever,
+**Open from the evaluator-integrity track (2026-11-04):** merging the
+remaining per-family node walks of the TS extraction into fewer walks (token
+wrapping and the per-file type checker are removed, see "Fewer token walks";
 facts must stay byte-identical); not building the SymbolGraph under
 `--solid` when no type declarations exist (measured 2.7 ms, low priority).
 

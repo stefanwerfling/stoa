@@ -1,4 +1,5 @@
 import {Node, SyntaxKind} from 'ts-morph';
+import type {ts} from 'ts-morph';
 import type {CallExpression, SourceFile} from 'ts-morph';
 import type {Fact, SourceRange} from '../../Types.js';
 import type {FactSpec} from '../FactBuilder.js';
@@ -69,8 +70,26 @@ const VALIDATOR_METHODS: ReadonlySet<string> = new Set([
 const VALIDATOR_NAME = /^(validate|parse|assert|ensure|check|guard)/i;
 const NOT_VALIDATORS: ReadonlySet<string> = new Set(['parseInt', 'parseFloat']);
 
+// Every function of the file in source order — a node walk (forEachDescendant),
+// not getDescendants(), which would also wrap every token. Memoized per
+// parse: the backend-validation and mass-assignment facts both read it. Keyed
+// by the compiler node, not the ts-morph SourceFile: re-parsing a path can
+// hand back the same wrapper, whose earlier nodes are then forgotten.
+const handlerCache = new WeakMap<ts.SourceFile, Node[]>();
+
 const handlerFunctions = (sourceFile: SourceFile): Node[] => {
-    return sourceFile.getDescendants().filter((node) => FUNCTION_KINDS.has(node.getKind()));
+    const cached = handlerCache.get(sourceFile.compilerNode);
+    if (cached !== undefined) {
+        return cached;
+    }
+    const handlers: Node[] = [];
+    sourceFile.forEachDescendant((node) => {
+        if (FUNCTION_KINDS.has(node.getKind())) {
+            handlers.push(node);
+        }
+    });
+    handlerCache.set(sourceFile.compilerNode, handlers);
+    return handlers;
 };
 
 // Exported for reuse by the Validation Trace ID usage tracer

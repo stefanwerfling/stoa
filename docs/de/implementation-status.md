@@ -59,8 +59,11 @@ API-Request-/DTO-Facts für eine durchgehende FE/BE-Kette; Validierung an
 unabhängigen externen Korpora.
 
 **Bekannte Einschränkungen (offen):**
-- Die Extraktion dominiert Laufzeit und Speicher (siehe Messeintrag unten);
-  der TS-Adapter durchläuft jeden Syntaxbaum etwa elfmal. Noch nicht optimiert.
+- Die Extraktion dominiert Laufzeit und Speicher (siehe Messeintrag unten).
+  Der TS-Adapter hüllt nicht mehr jeden Token ein und baut für Exportfragen
+  keinen TypeChecker mehr (≈ −43 % Extraktionszeit, siehe „Weniger
+  Token-Durchläufe"); er durchläuft jeden Baum weiterhin einmal je
+  Fact-Familie.
 
 **Tests und Messungen:** siehe „Qualitätssicherung" unten und den datierten
 Messeintrag „Messung und Speicherprofil". Alle Zahlen auf dieser Seite stammen
@@ -418,6 +421,32 @@ genannten lokalen Projekten; keine ist eine allgemeine Genauigkeitsaussage.
   (`test/fixtures/architecture`: Loader-Fehler, Zuordnung inkl. Mehrfachtreffer
   und Dateien außerhalb der Wurzel, alle vier Kantenurteile, Paketverbote und
   -namen, Report-Zusammenfassung und Markdown, CLI-Fail-fast und JSON).
+- **Weniger Token-Durchläufe in der TS-Extraktion (Nachtrag):** Die
+  TS-Extraktion hüllte jeden Token einer Datei mehrfach ein —
+  `getDescendants()` und `getDescendantsOfKind(Identifier)` erzeugen für
+  jeden Token ein ts-morph-Objekt —, und `isExported()`/`isDefaultExport()`
+  bauten für jede Deklaration ohne Schlüsselwort ein Program und einen
+  TypeChecker je Datei. Jetzt: Bezeichner außerhalb von Imports sammelt ein
+  Durchlauf über den Compiler-Baum (nur ihr Text wird gelesen);
+  JSX-Elemente, Request-Handler und Member-Referenzen nutzen reine
+  Knoten-Durchläufe und hüllen nur ihre Treffer ein (`refsOf` nimmt wieder
+  den vollen Weg, wenn JSDoc einen Property-Zugriff oder `new` enthält, etwa
+  `@augments a.B`); die Exportnamen werden einmal je Datei berechnet
+  (`countExports` leitet sich daraus ab), und die Exportfragen beantwortet
+  das Schlüsselwort allein, außer die Datei exportiert ohne es (`export {x}`,
+  `export {x as default}`, `export default x`, `export =`) — nur dann wird
+  ts-morph gefragt. Facts byte-identisch: derselbe Hash über alle 50.046
+  Facts von 652 TS-/JS-Dateien (flyingfish backend + frontend, kapalium
+  frontend, ein stoa-Schnappschuss), und die Befunde von 18 Läufen gleichen
+  dem vorigen Commit (stoa/src über sich selbst: dieselben Befunde, zwei
+  in den geänderten Dateien um Zeilen verschoben). Gemessen (nur extractFacts, dieselben 652 Dateien,
+  Minimum aus 3 Runden, abwechselnde Läufe auf einer belasteten Maschine):
+  9,75–10,3 s → 5,6–5,8 s (≈ −43 %). Nicht geändert: das Parsen, die
+  verbleibenden Knoten-Durchläufe je Fact-Familie (einer je Familie), die
+  Dart-/PHP-/C++-Adapter. Tests: `test/TsExtractionShortcuts.test.ts`
+  (Exporte ohne Schlüsselwort, Aliase und Re-Exporte, benannter Default,
+  `export =`, `export default <Ausdruck>`, ein JSDoc-Property-Zugriff als
+  statischer Zugriff — Erwartungswerte aus der Extraktion vor der Änderung).
 - **Stabile Namen für Funktionen ohne Namen (Nachtrag):** Eine TS-/PHP-
   Funktion ohne eigenen Namen hieß `anonymous@<Zeile>`, jede Änderung
   darüber benannte ihre Befunde also um (und verschob sie in einer
@@ -1886,7 +1915,7 @@ zu liefern.
 
 ## Qualitätssicherung
 
-- **node:test-Suite** (`npm test`, `test/*.test.ts`): 542 Tests, 0 fehlgeschlagen,
+- **node:test-Suite** (`npm test`, `test/*.test.ts`): 545 Tests, 0 fehlgeschlagen,
   Lauf vom 2026-11-04 (Regeln pos./neg., Extraktion, Schema-Validierung, i18n,
   Determinismus, SARIF, Eval, Semantik-Groundedness, Datenschutz,
   Finding-Trennung, semantische Modelle, Identitäten, Metriken).
@@ -2015,11 +2044,12 @@ R-DEP-CYCLE/R-UNUSED-EXPORT auch PHP abdecken; generischer ESLint-Fact-Adapter;
 Kontext-Facts (`flag.generatedCode`, `hasTests`) für reichhaltigere
 Suppression; LLM-Ausgabe-Evaluierung im Maßstab.
 
-**Offen aus dem Evaluator-Integritäts-Folgeauftrag (2026-11-04):**
-weniger Vollbaum-Durchläufe in der TS-Extraktion (der gemessene Hebel für
-Laufzeit und Speicherspitze, Facts müssen byte-identisch bleiben); kein
-SymbolGraph unter `--solid`, wenn keine Typdeklarationen existieren (gemessen
-2,7 ms, niedrige Priorität).
+**Offen aus dem Evaluator-Integritäts-Folgeauftrag (2026-11-04):** die
+verbleibenden Knoten-Durchläufe je Fact-Familie der TS-Extraktion zu
+weniger Durchläufen zusammenführen (Token-Einhüllung und TypeChecker je
+Datei sind entfernt, siehe „Weniger Token-Durchläufe"; Facts müssen
+byte-identisch bleiben); kein SymbolGraph unter `--solid`, wenn keine
+Typdeklarationen existieren (gemessen 2,7 ms, niedrige Priorität).
 
 **Cross-Layer-Validierung — Grenzen (erster vertikaler Schnitt):**
 `R-VALIDATION-MISSING-BACKEND` (Kategorie „Missing Backend Validation") und

@@ -548,39 +548,83 @@ const collectReexports = (sourceFile: SourceFile): Reexport[] => {
     return out;
 };
 
+// Memoized per parse: `countExports` and `exportFacts` both read it. Keyed by
+// the compiler node — re-parsing a path can hand back the same SourceFile
+// wrapper with new content.
+const exportNamesCache = new WeakMap<ts.SourceFile, ExportedName[]>();
+
+/**
+ * `isExported()` / `isDefaultExport()` without the type checker where the
+ * answer cannot depend on it. Both ts-morph methods fall back to a symbol
+ * lookup (which builds a Program and a TypeChecker for the file) when the
+ * declaration lacks the keyword; that lookup can only find an export made
+ * WITHOUT the keyword — a local `export {x}` / `export {x as default}`, or an
+ * `export default x` / `export = x` assignment. A file without any of those
+ * is answered by the keyword alone; any other file still asks ts-morph, so
+ * the result is the same in every case.
+ */
+interface ExportLookup {
+    isExported: (declaration: ExportableDeclaration) => boolean;
+    isDefaultExport: (declaration: DefaultExportableDeclaration) => boolean;
+}
+
+type ExportableDeclaration = Node & {hasExportKeyword: () => boolean; isExported: () => boolean};
+type DefaultExportableDeclaration = Node & {hasDefaultKeyword: () => boolean; isDefaultExport: () => boolean};
+
+const exportLookup = (sourceFile: SourceFile): ExportLookup => {
+    const assignments = sourceFile.getExportAssignments();
+    const declarations = sourceFile.getExportDeclarations();
+    const localExportList = declarations.some((declaration) => !declaration.hasModuleSpecifier());
+    const namedDefault = declarations.some((declaration) =>
+        declaration.getNamedExports().some((specifier) => (specifier.getAliasNode() ?? specifier.getNameNode()).getText() === 'default')
+    );
+    const exportedWithoutKeyword = localExportList || assignments.length > 0;
+    const defaultWithoutKeyword = namedDefault || assignments.some((assignment) => !assignment.isExportEquals());
+    return {
+        isExported: (declaration) => declaration.hasExportKeyword() || (exportedWithoutKeyword && declaration.isExported()),
+        isDefaultExport: (declaration) => declaration.hasDefaultKeyword() || (defaultWithoutKeyword && declaration.isDefaultExport())
+    };
+};
+
 const collectExportNames = (sourceFile: SourceFile): ExportedName[] => {
+    const cached = exportNamesCache.get(sourceFile.compilerNode);
+    if (cached !== undefined) {
+        return cached;
+    }
     const out: ExportedName[] = [];
+    exportNamesCache.set(sourceFile.compilerNode, out);
     const add = (name: string, node: Node): void => {
         out.push({name, range: rangeOf(sourceFile, node)});
     };
+    const lookup = exportLookup(sourceFile);
 
     for (const d of sourceFile.getFunctions()) {
-        if (d.isExported()) {
-            add(d.isDefaultExport() ? 'default' : (d.getName() ?? 'default'), d);
+        if (lookup.isExported(d)) {
+            add(lookup.isDefaultExport(d) ? 'default' : (d.getName() ?? 'default'), d);
         }
     }
     for (const d of sourceFile.getClasses()) {
-        if (d.isExported()) {
-            add(d.isDefaultExport() ? 'default' : (d.getName() ?? 'default'), d);
+        if (lookup.isExported(d)) {
+            add(lookup.isDefaultExport(d) ? 'default' : (d.getName() ?? 'default'), d);
         }
     }
     for (const d of sourceFile.getInterfaces()) {
-        if (d.isExported()) {
+        if (lookup.isExported(d)) {
             add(d.getName(), d);
         }
     }
     for (const d of sourceFile.getTypeAliases()) {
-        if (d.isExported()) {
+        if (lookup.isExported(d)) {
             add(d.getName(), d);
         }
     }
     for (const d of sourceFile.getEnums()) {
-        if (d.isExported()) {
+        if (lookup.isExported(d)) {
             add(d.getName(), d);
         }
     }
     for (const statement of sourceFile.getVariableStatements()) {
-        if (statement.isExported()) {
+        if (lookup.isExported(statement)) {
             for (const declaration of statement.getDeclarations()) {
                 add(declaration.getName(), declaration);
             }
@@ -623,14 +667,27 @@ const usesNondeterminism = (body: Node): boolean => {
     return found;
 };
 
-// Identifier texts referenced anywhere outside an import declaration.
+// Identifier texts referenced anywhere outside an import declaration. Walks
+// the compiler tree directly — the same children ts-morph's
+// getDescendantsOfKind(Identifier) visits (`getChildren`, JSDoc included) —
+// and skips each import declaration as a whole, instead of wrapping every
+// identifier and walking its ancestors (measured: the most expensive single
+// fact family of the TS extraction).
 const referencedIdentifiers = (sourceFile: SourceFile): Set<string> => {
     const names = new Set<string>();
-    for (const id of sourceFile.getDescendantsOfKind(SyntaxKind.Identifier)) {
-        if (id.getFirstAncestorByKind(SyntaxKind.ImportDeclaration) === undefined) {
-            names.add(id.getText());
+    const file = sourceFile.compilerNode;
+    const walk = (node: ts.Node): void => {
+        for (const child of node.getChildren(file)) {
+            if (child.kind === ts.SyntaxKind.ImportDeclaration) {
+                continue;
+            }
+            if (child.kind === ts.SyntaxKind.Identifier) {
+                names.add(child.getText(file));
+            }
+            walk(child);
         }
-    }
+    };
+    walk(file);
     return names;
 };
 
@@ -652,24 +709,13 @@ const importedNames = (decl: ImportDeclaration): string[] => {
 
 // Counts the module's public surface syntactically (no module resolution), so a
 // file with unresolved re-exports is still counted safely.
-const countExports = (sourceFile: SourceFile): number => {
-    let count = 0;
-    count += sourceFile.getFunctions().filter((declaration) => declaration.isExported()).length;
-    count += sourceFile.getClasses().filter((declaration) => declaration.isExported()).length;
-    count += sourceFile.getInterfaces().filter((declaration) => declaration.isExported()).length;
-    count += sourceFile.getTypeAliases().filter((declaration) => declaration.isExported()).length;
-    count += sourceFile.getEnums().filter((declaration) => declaration.isExported()).length;
-    for (const statement of sourceFile.getVariableStatements()) {
-        if (statement.isExported()) {
-            count += statement.getDeclarations().length;
-        }
-    }
-    for (const exportDeclaration of sourceFile.getExportDeclarations()) {
-        count += exportDeclaration.getNamedExports().length; // `export {a, b}`; `export *` contributes 0
-    }
-    count += sourceFile.getExportAssignments().length; // `export default <expr>` / `export =`
-    return count;
-};
+// Every exported declaration, named export specifier (`export {a, b}`;
+// `export *` contributes 0) and export assignment (`export default <expr>`,
+// `export =`). The same declarations `collectExportNames` lists — which
+// leaves out only `export =` — so it is counted from that list rather than by
+// asking `isExported()` (a symbol lookup) of every declaration a second time.
+const countExports = (sourceFile: SourceFile): number =>
+    collectExportNames(sourceFile).length + sourceFile.getExportAssignments().filter((assignment) => assignment.isExportEquals()).length;
 
 const functionLikeNodes = (sourceFile: SourceFile): Node[] => {
     const nodes: Node[] = [];

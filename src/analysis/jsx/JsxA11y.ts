@@ -12,8 +12,6 @@ type Build = (spec: FactSpec) => Fact;
 // statically. Presence (the attribute exists at all) is tracked by the map key.
 type Attrs = Map<string, string | null>;
 
-const JSX_ELEMENT_KINDS: readonly SyntaxKind[] = [SyntaxKind.JsxOpeningElement, SyntaxKind.JsxSelfClosingElement];
-
 // Only lowercase, simple intrinsic tags map to real DOM elements. Capitalised
 // (<Button/>) or member (<Foo.Bar/>) tags are React components whose
 // accessibility lives in their own implementation and is out of scope here.
@@ -33,7 +31,14 @@ export const extractJsxA11yFacts = (sourceFile: SourceFile, build: Build): Fact[
     const facts: Fact[] = [];
     const counters = {img: 0, button: 0, field: 0, link: 0, role: 0, ariaAttr: 0, ariaVal: 0, tabindex: 0, ariaHidden: 0, frame: 0, contrast: 0};
 
-    const elements = sourceFile.getDescendants().filter((node) => JSX_ELEMENT_KINDS.includes(node.getKind())) as Array<JsxOpeningElement | JsxSelfClosingElement>;
+    // Node-only walk: JSX elements are never tokens, so wrapping every token
+    // (getDescendants) is not needed; the sort below fixes the order.
+    const elements: Array<JsxOpeningElement | JsxSelfClosingElement> = [];
+    sourceFile.forEachDescendant((node) => {
+        if (Node.isJsxOpeningElement(node) || Node.isJsxSelfClosingElement(node)) {
+            elements.push(node);
+        }
+    });
     elements.sort((a, b) => a.getStart() - b.getStart());
 
     // Literal htmlFor targets anywhere in the file; a control whose literal id is
