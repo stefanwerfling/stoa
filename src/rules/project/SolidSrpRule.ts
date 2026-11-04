@@ -192,6 +192,7 @@ const commonDirectory = (files: ReadonlySet<string>): string => {
 export class SolidSrpResponsibilityCohesionRule implements ProjectRule {
     public readonly id = 'R-SOLID-SRP-RESPONSIBILITY-COHESION';
     public readonly version = '0.1.0';
+    public readonly usesTypeModel = true;
     public readonly maturity = 'experimental' as const;
     public readonly requiredFactKinds = ['struct.typeDecl', 'struct.importBindings', 'deps.export', 'deps.import', 'deps.importName', 'deps.reexport', 'dart.importSpec', 'dart.classDecl'];
 

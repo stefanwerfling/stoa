@@ -355,6 +355,26 @@
   (`test/fixtures/architecture`: Loader-Fehler, Zuordnung inkl. Mehrfachtreffer
   und Dateien außerhalb der Wurzel, alle vier Kantenurteile, Paketverbote und
   -namen, Report-Zusammenfassung und Markdown, CLI-Fail-fast und JSON).
+- **SymbolGraph bei Bedarf (Evaluator-Integritäts-Folgeauftrag, Phase 2):**
+  Eine Regel deklariert `usesTypeModel`, wenn sie das TypeModel liest
+  (`typeModelOf`) — `R-SOLID-LSP-CONTRACT-COMPATIBILITY`,
+  `R-SOLID-ISP-INTERFACE-COHESION`, `R-SOLID-DIP-CONCRETE-DEPENDENCY` und die
+  nicht registrierte SRP-Regel. Die Pipeline baut den SymbolGraph
+  (`needsSymbolGraph(projectRules)`, die eine zentrale Entscheidung) nur, wenn
+  eine aktive Regel das deklariert — praktisch nur mit `--solid`; eine Instanz
+  pro Lauf, über `ProjectRuleInput` geteilt. Das TypeModel ist der einzige
+  Verbraucher des SymbolGraph. Eine Regel, die das TypeModel ohne Deklaration
+  liest, scheitert laut in `typeModelOf` (ModuleGraph vorhanden, SymbolGraph
+  nicht), statt einen zweiten, nicht geteilten Graphen zu bauen; eine direkt
+  ohne Graphen aufgerufene Regel (ein Test) leitet weiterhin alle Modelle aus
+  ihren Facts ab. Der gemessene Nutzen ist klein (Aufbau 0,2–7,7 ms und
+  ≤ 1 MB auf den gemessenen Projekten) — es geht darum, dass kein Graph umsonst
+  gebaut wird. Findings auf jedem gemessenen Projekt byte-identisch, mit und
+  ohne `--solid`. Tests: `test/SymbolGraphDemand.test.ts` (welche Regeln es
+  deklarieren und welche Regelmengen den Graphen brauchen; jede Deklaration
+  stimmt auf den SOLID-Fixtures; ein nicht deklarierter TypeModel-Leser wirft;
+  geteilter Graph und selbst gebauter Weg sowie umgekehrte Fact-Reihenfolge
+  liefern identische Findings).
 - **Eindeutige Finding-Identitäten und duplikatsichere Evaluierung
   (Evaluator-Integrität, Phase 1 des Folgeauftrags):**
   - **Befund:** Die Flutter-Lifecycle-Regeln nutzten die State-Klasse als

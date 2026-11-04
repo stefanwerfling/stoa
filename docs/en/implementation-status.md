@@ -329,6 +329,25 @@
   (`test/fixtures/architecture`: loader errors, assignment incl. multiple
   matches and outside-root files, all four edge verdicts, package bans and
   names, report summary and markdown, CLI fail-fast and JSON).
+- **SymbolGraph on demand (evaluator-integrity track, phase 2):** a rule
+  declares `usesTypeModel` when it reads the TypeModel (`typeModelOf`) —
+  `R-SOLID-LSP-CONTRACT-COMPATIBILITY`, `R-SOLID-ISP-INTERFACE-COHESION`,
+  `R-SOLID-DIP-CONCRETE-DEPENDENCY` and the unregistered SRP rule. The
+  pipeline builds the SymbolGraph (`needsSymbolGraph(projectRules)`, the one
+  central decision) only when an active rule declares it — in practice only
+  with `--solid`; one instance per run, shared through `ProjectRuleInput`.
+  The TypeModel is the SymbolGraph's only consumer. A rule that reads the
+  TypeModel without the declaration fails loudly in `typeModelOf` (module
+  graph given, symbol graph not) instead of building a second, unshared
+  graph; a rule called directly without any graph (a test) still derives
+  every model from its facts. Measured benefit is small (the build cost
+  0.2–7.7 ms and ≤ 1 MB on the measured projects) — the point is that no
+  graph is built for nothing. Findings byte-identical on every measured
+  project, with and without `--solid`. Tests: `test/SymbolGraphDemand.test.ts`
+  (which rules declare it and which rule sets need the graph; every rule's
+  declaration is truthful on the SOLID fixtures; an undeclared TypeModel
+  reader throws; shared graph vs. self-built path and reversed fact order
+  give identical findings).
 - **Unique finding identities and duplicate-safe evaluation (evaluator
   integrity, phase 1 of the follow-up track):**
   - **Found:** the Flutter lifecycle rules used the State class as the

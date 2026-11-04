@@ -318,6 +318,7 @@ const refusedContractOf = (model: TypeModel, node: TypeNode, member: StructMembe
 export class SolidLspContractCompatibilityRule implements ProjectRule {
     public readonly id = 'R-SOLID-LSP-CONTRACT-COMPATIBILITY';
     public readonly version = '0.1.0';
+    public readonly usesTypeModel = true;
     public readonly maturity = 'experimental' as const;
     public readonly requiredFactKinds = TYPE_MODEL_FACT_KINDS;
 
@@ -438,6 +439,7 @@ const contractsOf = (model: TypeModel, node: TypeNode): TypeNode[] => {
 export class SolidIspInterfaceCohesionRule implements ProjectRule {
     public readonly id = 'R-SOLID-ISP-INTERFACE-COHESION';
     public readonly version = '0.1.0';
+    public readonly usesTypeModel = true;
     public readonly maturity = 'experimental' as const;
     public readonly requiredFactKinds = TYPE_MODEL_FACT_KINDS;
 
@@ -607,6 +609,7 @@ const concreteDependenciesOf = (model: TypeModel, classification: LayerClassific
 export class SolidDipConcreteDependencyRule implements ProjectRule {
     public readonly id = 'R-SOLID-DIP-CONCRETE-DEPENDENCY';
     public readonly version = '0.1.0';
+    public readonly usesTypeModel = true;
     public readonly maturity = 'experimental' as const;
     public readonly requiredFactKinds = [...TYPE_MODEL_FACT_KINDS, 'metric.functionLength'];
 

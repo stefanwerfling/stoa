@@ -18,12 +18,14 @@ export interface ProjectRuleInput {
      */
     moduleGraph?: ModuleGraph;
     /**
-     * The project-wide cross-file symbol graph (Phase 1), built once by the
-     * pipeline from `deps.importName` + `deps.export` facts + `moduleGraph`.
-     * OPTIONAL and additive, exactly like `moduleGraph`: no existing rule
-     * reads it, and a caller that does not build one omits it. Carried for a
-     * later cross-file rule to consume deliberately — it changes no current
-     * finding on its own.
+     * The project-wide cross-file symbol graph — the one ES-module name
+     * resolver (bindings, re-exports, definitions) — built once by the
+     * pipeline from `deps.importName` + `deps.export` + `deps.reexport` facts
+     * and `moduleGraph`, and ONLY when an active rule declares
+     * `usesTypeModel` (`needsSymbolGraph`): its consumer is the TypeModel,
+     * which resolves TS names through it. Absent otherwise, and for a caller
+     * that builds no graphs (a rule called directly in a test), where
+     * `typeModelOf` derives every model from `facts` itself.
      */
     symbolGraph?: SymbolGraph;
     /**
@@ -75,6 +77,14 @@ export interface ProjectRule {
     readonly id: string;
     readonly version: string;
     /**
+     * True when `evaluate()` reads the project TypeModel (`typeModelOf`). The
+     * pipeline builds the shared SymbolGraph the TypeModel resolves TS names
+     * through only when an active rule declares this (`needsSymbolGraph`); a
+     * rule that reads the TypeModel without declaring it fails loudly in
+     * `typeModelOf` instead of silently building a second graph.
+     */
+    readonly usesTypeModel?: boolean;
+    /**
      * Declares exactly which fact KINDS this rule's `evaluate()` reads from
      * `input.facts` (not `analyzedFiles`, which every rule gets regardless).
      * Omit when the rule genuinely needs to scan the full fact set — absence
@@ -106,10 +116,20 @@ export interface ProjectRule {
 const NONE = {};
 const typeModelCache = new WeakMap<readonly unknown[], WeakMap<object, WeakMap<object, TypeModel>>>();
 
+/** Whether the pipeline must build the SymbolGraph for these rules: only when one of them reads the TypeModel. */
+export const needsSymbolGraph = (rules: readonly ProjectRule[]): boolean => rules.some((rule) => rule.usesTypeModel === true);
+
 /** The input's type model, or one built from its facts (memoized per fact array, index and module graph, so several rules share it). */
 export const typeModelOf = (input: ProjectRuleInput): TypeModel => {
     if (input.typeModel !== undefined) {
         return input.typeModel;
+    }
+    if (input.moduleGraph !== undefined && input.symbolGraph === undefined) {
+        // The pipeline passes a module graph and builds the symbol graph only
+        // for rules that declare `usesTypeModel`: reaching this means a rule
+        // reads the TypeModel without declaring it. Building a private graph
+        // here would hide that (a second, unshared resolver instance).
+        throw new Error('typeModelOf: a module graph without a symbol graph — the calling rule reads the TypeModel but does not declare `usesTypeModel`');
     }
     const byIndex = typeModelCache.get(input.facts) ?? new WeakMap<object, WeakMap<object, TypeModel>>();
     typeModelCache.set(input.facts, byIndex);
@@ -118,7 +138,7 @@ export const typeModelOf = (input: ProjectRuleInput): TypeModel => {
     let model = byGraph.get(input.moduleGraph ?? NONE);
     if (model === undefined) {
         // The symbol graph is derived from facts + module graph, so the memo key stays valid without it.
-        model = buildTypeModel(input.facts, input.analyzedFiles, input.dartLibraryIndex, input.moduleGraph, input.moduleGraph !== undefined ? input.symbolGraph : undefined);
+        model = buildTypeModel(input.facts, input.analyzedFiles, input.dartLibraryIndex, input.moduleGraph, input.symbolGraph);
         byGraph.set(input.moduleGraph ?? NONE, model);
     }
     return model;

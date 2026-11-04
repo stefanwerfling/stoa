@@ -28,7 +28,7 @@ import {flutterLifecycleRules} from './rules/project/FlutterLifecycleRules.js';
 import {DeadExportRule} from './rules/project/DeadExportRule.js';
 import {solidRules} from './rules/project/SolidRules.js';
 import {ValidationContractRule} from './rules/project/ValidationContractRule.js';
-import type {ProjectRule} from './rules/ProjectRule.js';
+import {needsSymbolGraph, type ProjectRule} from './rules/ProjectRule.js';
 import type {ValidationContract} from './contracts/ValidationContract.js';
 import {ArchitectureModel, type ArchitectureConfig} from './architecture/ArchitectureConfig.js';
 import {ENGINE_VERSION} from './Version.js';
@@ -279,12 +279,14 @@ export const analyze = (options: AnalyzeOptions): AnalysisResult => {
     const dartPaths = [...analyzedPaths].filter((path) => path.endsWith('.dart')).sort();
     const dartLibraryIndex = dartPaths.length > 0 ? flutterAwareIndex(facts, loadDartPackages(dartPaths)) : undefined;
     const moduleGraph = buildModuleGraph(facts, analyzedPaths, moduleResolver, dartLibraryIndex);
-    // Phase 1: the cross-file symbol graph, built right after the module graph
-    // from the same facts (deps.importName + deps.export) + the module graph's
-    // resolved edges. Same discipline: strings/fact-ids only (no AST, no fact
-    // copy), lives only for this evaluate() call. No rule consumes it yet, so
-    // it changes no finding — carried via ProjectRuleInput for a later step.
-    const symbolGraph = buildSymbolGraph(facts, moduleGraph);
+    // The cross-file symbol graph (the one ES-module name resolver), built
+    // right after the module graph from the same facts (deps.importName +
+    // deps.export + deps.reexport) + its resolved edges — ONLY when an active
+    // rule declares `usesTypeModel` (the TypeModel resolves TS names through
+    // it; nothing else reads it). One instance per run, shared by every rule.
+    // Same discipline: strings/fact-ids only (no AST, no fact copy), lives
+    // only for this evaluate() call.
+    const symbolGraph = needsSymbolGraph(projectRules) ? buildSymbolGraph(facts, moduleGraph) : undefined;
     // Flutter Phase 1: the widget graph, same discipline (facts in, strings/
     // fact-ids out, lives only for this evaluate() call). Passed only when the
     // run actually produced widget trees; the Flutter layout rules (Phase 2,
