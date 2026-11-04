@@ -63,7 +63,9 @@ corpora.
   file and walks each function once (together ≈ −74 % extraction time, see
   "Fewer token walks", "One node index per file", "One walk per function")
   and releases an ES module by dropping its own Project ("Parse and
-  release"); parsing and wrapping all nodes once now dominate.
+  release"); the parse, ts-morph's wrapper creation (needed by the
+  extraction's own navigation), `isExported()`'s symbol fallback and
+  `classMembers` remain.
 
 **Tests and measurements:** see "Quality assurance" below and the dated
 measurement entry "Measurement and memory profile". All numbers on this
@@ -395,6 +397,20 @@ the named local projects; none is a general accuracy claim.
   (`test/fixtures/architecture`: loader errors, assignment incl. multiple
   matches and outside-root files, all four edge verdicts, package bans and
   names, report summary and markdown, CLI fail-fast and JSON).
+- **Wrapping only what is queried (examined, rejected):** the node index
+  wraps every node of a file once (`forEachDescendant`). Tried: wrap only
+  the nodes a query returns, on demand, from the nearest wrapped ancestor
+  down via `forEachChild` (plus wrapping only identifiers that name an
+  import in `refsOf`). Facts byte-identical, but no measurable gain: parse +
+  extract + release 3.22–3.24 s against 3.16–3.49 s (three alternating pairs
+  of 5 rounds), end to end within noise, and the CPU profile shows the same
+  time in ts-morph's wrapper creation before and after (≈ 600 ms, 10 %) —
+  the extraction's own navigation (`getParent`, `getText`, `getStatements`,
+  `getFunctions`, …) wraps nearly every node anyway, so the index only moves
+  that cost. Not committed as code. Measured next levers instead: the
+  TypeScript parse (≈ 15 % of the profile), `isExported()`'s symbol
+  fallback building a Program per module that exports without the keyword
+  (≈ 7 %) and `classMembers` (≈ 10 %).
 - **Parse and release in the TS adapter (follow-up):** every file was
   parsed into one shared ts-morph Project and released with
   `removeSourceFile()`, whose `forget()` walks every wrapper of the file (all
@@ -1966,9 +1982,11 @@ generic ESLint fact adapter; context facts (`flag.generatedCode`, `hasTests`)
 for richer suppression; LLM-output evaluation at scale.
 
 **Open from the evaluator-integrity track (2026-11-04):** in the TS
-extraction, wrapping every node once for the index and the TypeScript parse
-itself — walks are merged and the release costs ≈ 0 ("One node index per
-file", "One walk per function", "Parse and release"); not building the SymbolGraph under
+extraction, `isExported()`'s symbol fallback (a Program per module that
+exports without the keyword, ≈ 7 %) and `classMembers` (≈ 10 %); the parse
+itself (≈ 15 %) and ts-morph's wrapper creation (≈ 10 %, needed by the
+extraction's navigation — wrapping lazily was measured without gain, see
+"Wrapping only what is queried"); not building the SymbolGraph under
 `--solid` when no type declarations exist (measured 2.7 ms, low priority).
 
 **Cross-layer validation — limits (first vertical slice):**

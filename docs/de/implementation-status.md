@@ -65,8 +65,10 @@ unabhängigen externen Korpora.
   je Datei und durchläuft jede Funktion einmal (zusammen ≈ −74 %
   Extraktionszeit, siehe „Weniger Token-Durchläufe", „Ein Knotenindex je
   Datei", „Ein Durchlauf je Funktion") und gibt ein ES-Modul frei, indem
-  sein eigenes Project fällt („Parsen und Freigeben"); Parsen und das
-  einmalige Einhüllen aller Knoten dominieren jetzt.
+  sein eigenes Project fällt („Parsen und Freigeben"); es bleiben das
+  Parsen, ts-morphs Wrapper-Erzeugung (von der eigenen Navigation der
+  Extraktion gebraucht), der Symbol-Rückweg von `isExported()` und
+  `classMembers`.
 
 **Tests und Messungen:** siehe „Qualitätssicherung" unten und den datierten
 Messeintrag „Messung und Speicherprofil". Alle Zahlen auf dieser Seite stammen
@@ -424,6 +426,21 @@ genannten lokalen Projekten; keine ist eine allgemeine Genauigkeitsaussage.
   (`test/fixtures/architecture`: Loader-Fehler, Zuordnung inkl. Mehrfachtreffer
   und Dateien außerhalb der Wurzel, alle vier Kantenurteile, Paketverbote und
   -namen, Report-Zusammenfassung und Markdown, CLI-Fail-fast und JSON).
+- **Nur Abgefragtes einhüllen (geprüft, verworfen):** Der Knotenindex hüllt
+  jeden Knoten einer Datei einmal ein (`forEachDescendant`). Erprobt: nur die
+  Knoten einhüllen, die eine Abfrage liefert, bei Bedarf vom nächsten
+  eingehüllten Vorfahren abwärts über `forEachChild` (dazu in `refsOf` nur
+  Bezeichner, die einen Import benennen). Facts byte-identisch, aber kein
+  messbarer Gewinn: Parsen + Extraktion + Freigeben 3,22–3,24 s gegenüber
+  3,16–3,49 s (drei abwechselnde Paare à 5 Runden), Ende zu Ende im
+  Rauschen, und das CPU-Profil zeigt vorher wie nachher dieselbe Zeit in
+  ts-morphs Wrapper-Erzeugung (≈ 600 ms, 10 %) — die eigene Navigation der
+  Extraktion (`getParent`, `getText`, `getStatements`, `getFunctions`, …)
+  hüllt ohnehin fast jeden Knoten ein, der Index verschiebt diese Kosten nur.
+  Nicht als Code übernommen. Stattdessen gemessen als nächste Hebel: das
+  TypeScript-Parsen (≈ 15 % des Profils), der Symbol-Rückweg von
+  `isExported()`, der je Modul mit Export ohne Schlüsselwort ein Program baut
+  (≈ 7 %), und `classMembers` (≈ 10 %).
 - **Parsen und Freigeben im TS-Adapter (Nachtrag):** Jede Datei wurde in ein
   gemeinsames ts-morph-Project geparst und mit `removeSourceFile()`
   freigegeben, dessen `forget()` jeden Wrapper der Datei durchläuft (seit
@@ -2144,10 +2161,11 @@ Kontext-Facts (`flag.generatedCode`, `hasTests`) für reichhaltigere
 Suppression; LLM-Ausgabe-Evaluierung im Maßstab.
 
 **Offen aus dem Evaluator-Integritäts-Folgeauftrag (2026-11-04):** in der
-TS-Extraktion das einmalige Einhüllen aller Knoten für den Index und das
-TypeScript-Parsen selbst — die Durchläufe sind zusammengeführt und das
-Freigeben kostet ≈ 0 („Ein Knotenindex je Datei", „Ein Durchlauf je
-Funktion", „Parsen und Freigeben"); kein SymbolGraph unter `--solid`, wenn keine
+TS-Extraktion der Symbol-Rückweg von `isExported()` (ein Program je Modul mit
+Export ohne Schlüsselwort, ≈ 7 %) und `classMembers` (≈ 10 %); das Parsen
+selbst (≈ 15 %) und ts-morphs Wrapper-Erzeugung (≈ 10 %, von der Navigation
+der Extraktion gebraucht — lazy Einhüllen wurde ohne Gewinn gemessen, siehe
+„Nur Abgefragtes einhüllen"); kein SymbolGraph unter `--solid`, wenn keine
 Typdeklarationen existieren (gemessen 2,7 ms, niedrige Priorität).
 
 **Cross-Layer-Validierung — Grenzen (erster vertikaler Schnitt):**
