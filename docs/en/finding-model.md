@@ -194,9 +194,13 @@ by the adapters with every enclosing named scope: `Service.run`,
 `outer.inner`, `api.run` (an object literal bound to `api`) in TS, `A.run`
 for a Dart class/mixin/extension and a PHP class/trait/interface/enum,
 `Buffer::reset` in C++ (namespaces are not added); a base that still occurs
-twice in one file (a getter/setter pair, C++ overloads, two closures on one
-line) gets `#n` on every occurrence. Anonymous functions keep
-`anonymous@<line>`. A collision is a rule defect: `stoa eval` fails on it,
+twice in one file (a getter/setter pair, C++ overloads) gets `#n` on every
+occurrence. A function without a name takes the name it is bound to
+(`const handler = () => …` → `handler`, an object property, a class field,
+PHP `$handler = function …`); a callback is `<scope>.(anonymous)#n`,
+numbered within its scope (`C.go.(anonymous)#1`, `pair.(anonymous)#0` for a
+callback in `const pair = list.map(…)`) — never by its line, so an edit
+above it or in another scope does not rename it. A collision is a rule defect: `stoa eval` fails on it,
 and `--update-baseline` refuses to write a baseline that repeats an identity
 (`loadBaseline` could not read it back) — exit 1, the existing file
 untouched. `R-ORM-EAGER-RELATION` names a finding `Entity.property`;

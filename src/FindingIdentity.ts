@@ -62,3 +62,29 @@ export const uniqueSymbols = (bases: readonly string[]): string[] => {
     const ordinals = ordinalSymbols(bases);
     return bases.map((base, index) => ((counts.get(base) ?? 0) > 1 ? (ordinals[index] as string) : base));
 };
+
+/** One declaration's identity base, in source order: a (qualified) name, or `scope.(anonymous)` for a function with no name (parentheses: never an identifier, so no collision with a function named `anonymous`). */
+export interface DeclarationBase {
+    base: string;
+    anonymous: boolean;
+}
+
+/**
+ * Symbols for one file's functions: an anonymous base is always numbered in
+ * source order within its scope (`outer.(anonymous)#0`, `outer.(anonymous)#1`),
+ * so an edit outside that scope never shifts it — unlike a line number; the
+ * rest goes through `uniqueSymbols`.
+ */
+export const declarationSymbols = (entries: readonly DeclarationBase[]): string[] => {
+    const anonymous = ordinalSymbols(entries.filter((entry) => entry.anonymous).map((entry) => entry.base));
+    let next = 0;
+    return uniqueSymbols(
+        entries.map((entry) => {
+            if (!entry.anonymous) {
+                return entry.base;
+            }
+            next += 1;
+            return anonymous[next - 1] as string;
+        })
+    );
+};

@@ -276,6 +276,5 @@ Siehe [open-questions.md](./open-questions.md). Kernpunkte: inkrementelle
 Analyse/Caching-Granularität, projektweite (interprozedurale) Datenflussanalyse
 vs. Aufwand, einheitliches Fact-Schema über sehr unterschiedliche Sprachen.
 
-Offene Punkte aus der Umsetzung (2026-11-04): stabile Symbole statt `anonymous@<Zeile>` und
-weniger Syntaxbaum-Durchläufe in der TS-Extraktion — siehe „Noch offen" in
+Offener Punkt aus der Umsetzung (2026-11-04): weniger Syntaxbaum-Durchläufe in der TS-Extraktion — siehe „Noch offen" in
 [implementation-status.md](./implementation-status.md).

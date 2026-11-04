@@ -57,8 +57,6 @@ facts for an end-to-end FE/BE chain; validation on independent external
 corpora.
 
 **Known limitations (open):**
-- Symbols of the form `anonymous@<line>` shift when lines above them change,
-  so such findings are not stable across edits in a baseline.
 - Extraction dominates runtime and memory (see the measurement entry below);
   the TS adapter walks each syntax tree about eleven times. Not optimized yet.
 
@@ -392,6 +390,26 @@ the named local projects; none is a general accuracy claim.
   (`test/fixtures/architecture`: loader errors, assignment incl. multiple
   matches and outside-root files, all four edge verdicts, package bans and
   names, report summary and markdown, CLI fail-fast and JSON).
+- **Stable names for functions without a name (follow-up):** a TS/PHP
+  function without its own name was `anonymous@<line>`, so any edit above it
+  renamed its findings (and moved them in a baseline). Now it takes the name
+  it is bound to — TS `const handler = () => …`, an object property
+  `onClick: …`, a class field `run = () => …`; PHP `$handler = function …` —
+  and a remaining callback is `<scope>.(anonymous)#n`, numbered in source
+  order within its nearest named scope (`declarationSymbols` in
+  FindingIdentity.ts; parentheses so it can never equal a real name). A
+  variable, property or class field whose initializer is not a function is
+  a scope of its own (`const pair = list.map(() => …)` →
+  `pair.(anonymous)#0`), and PHP named functions/methods scope the closures
+  in them. An edit above a callback or in another scope no longer renames
+  it; adding a callback before it in the same scope still does. Effect vs.
+  the previous commit on 18 runs: only former `anonymous@` symbols changed
+  (flyingfish backend 11, frontend 16 findings; stoa/src renamed its own,
+  e.g. `anonymous@134` → `analyze`); golden and SOLID corpora unchanged, no
+  `anonymous@` symbol left, no collision, two runs byte-identical. Tests:
+  `test/FunctionIdentity.test.ts` (10: bindings, callbacks per scope, a
+  stability case with inserted lines and an added callback in another
+  scope, PHP closures).
 - **Qualified function identities (follow-up to the evaluator-integrity
   track):** the TS, Dart, PHP and C/C++ adapters named a function or method
   by its bare name, so two classes' `run` in one file shared one finding
@@ -1706,7 +1724,7 @@ fails fast (exit 1, concrete errors) instead of silently yielding 0 findings.
 
 ## Quality assurance
 
-- **node:test suite** (`npm test`, `test/*.test.ts`): 539 tests, 0 failed,
+- **node:test suite** (`npm test`, `test/*.test.ts`): 542 tests, 0 failed,
   as of the 2026-11-04 run (rules pos./neg., extraction, schema validation,
   i18n, determinism, SARIF, evaluation, semantic groundedness, privacy,
   finding-model separation, semantic models, identities, metrics).
@@ -1828,7 +1846,7 @@ baseline; PSR-4 resolution so R-DEP-CYCLE / R-UNUSED-EXPORT cover PHP; a
 generic ESLint fact adapter; context facts (`flag.generatedCode`, `hasTests`)
 for richer suppression; LLM-output evaluation at scale.
 
-**Open from the evaluator-integrity track (2026-11-04):** stable symbols instead of `anonymous@<line>`; fewer full-tree
+**Open from the evaluator-integrity track (2026-11-04):** fewer full-tree
 walks in the TS extraction (the measured runtime and peak-memory lever,
 facts must stay byte-identical); not building the SymbolGraph under
 `--solid` when no type declarations exist (measured 2.7 ms, low priority).

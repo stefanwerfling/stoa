@@ -1,7 +1,7 @@
 import {Node, SyntaxKind, ts} from 'ts-morph';
 import type {Block, CallExpression, CatchClause, ClassDeclaration, Decorator, ImportDeclaration, MethodDeclaration, ObjectLiteralExpression, PropertyAssignment, SourceFile} from 'ts-morph';
 import type {Fact, SourceRange, SubjectKind} from '../../Types.js';
-import {uniqueSymbols} from '../../FindingIdentity.js';
+import {declarationSymbols, type DeclarationBase} from '../../FindingIdentity.js';
 import {factBuilder, type AdapterInfo} from '../FactBuilder.js';
 import {isDeepImport} from '../ImportPath.js';
 import {extractJsxA11yFacts} from '../jsx/JsxA11y.js';
@@ -83,7 +83,7 @@ export const extractFacts = (sourceFile: SourceFile, info: AdapterInfo): Fact[] 
         const body = functionBody(fn);
         return body === undefined ? [] : [{fn, body}];
     });
-    const symbols = uniqueSymbols(functions.map(({fn}) => qualifiedFunctionName(fn)));
+    const symbols = declarationSymbols(functions.map(({fn}) => functionBase(fn)));
     for (const [index, {fn, body}] of functions.entries()) {
         const metrics = computeMetrics(fn, body);
         const symbol = symbols[index] as string;
@@ -741,7 +741,14 @@ const parameterCount = (fn: Node): number => {
     return holder.getParameters?.().length ?? 0;
 };
 
-const functionName = (fn: Node): string => {
+/**
+ * The name a function-like node declares or is bound to: its own name
+ * (`function f`, method `run`, a named function expression), `constructor`,
+ * or the binding that holds it — `const handler = () => …`, an object
+ * property `onClick: () => …`, a class field `run = () => …`. `undefined` for
+ * a function with none of these (a callback passed as an argument).
+ */
+const ownName = (fn: Node): string | undefined => {
     const holder = fn as unknown as {getName?: () => string | undefined};
     const name = holder.getName?.();
     if (name !== undefined && name.length > 0) {
@@ -750,27 +757,39 @@ const functionName = (fn: Node): string => {
     if (fn.getKind() === SyntaxKind.Constructor) {
         return 'constructor';
     }
-    return `anonymous@${fn.getStartLineNumber()}`;
+    const parent = fn.getParent();
+    if (parent !== undefined && (Node.isVariableDeclaration(parent) || Node.isPropertyAssignment(parent) || Node.isPropertyDeclaration(parent))) {
+        const nameNode = parent.getNameNode();
+        if (Node.isIdentifier(nameNode) || Node.isStringLiteral(nameNode) || Node.isPrivateIdentifier(nameNode)) {
+            return nameNode.getText().replace(/^['"]|['"]$/g, '');
+        }
+    }
+    return undefined;
 };
-
-const isAnonymous = (name: string): boolean => name.startsWith('anonymous@');
 
 /**
  * The name of a node that scopes the functions inside it, or `undefined`
- * when it scopes nothing nameable: a named class or namespace, a named
- * function, or an object literal bound to a variable (`const api = {run() {}}`).
+ * when it scopes nothing nameable: a named class or namespace, a named (or
+ * bound) function, or a variable, object property or class field whose
+ * initializer is not itself a function (`const api = {run() {}}` → `api.run`,
+ * `const pair = list.map(() => …)` → `pair.(anonymous)#0`). A binding whose
+ * initializer IS a function is that function's own name (`ownName`), not a
+ * second scope.
  */
 const scopeName = (node: Node): string | undefined => {
     if (Node.isClassDeclaration(node) || Node.isClassExpression(node) || Node.isModuleDeclaration(node)) {
         return node.getName();
     }
     if (FUNCTION_LIKE_KINDS.has(node.getKind())) {
-        const name = functionName(node);
-        return isAnonymous(name) ? undefined : name;
+        return ownName(node);
     }
-    if (Node.isObjectLiteralExpression(node)) {
-        const holder = node.getParent();
-        return holder !== undefined && Node.isVariableDeclaration(holder) ? holder.getName() : undefined;
+    if (Node.isVariableDeclaration(node) || Node.isPropertyAssignment(node) || Node.isPropertyDeclaration(node)) {
+        const initializer = node.getInitializer();
+        const nameNode = node.getNameNode();
+        if (initializer === undefined || FUNCTION_LIKE_KINDS.has(initializer.getKind())) {
+            return undefined;
+        }
+        return Node.isIdentifier(nameNode) || Node.isStringLiteral(nameNode) || Node.isPrivateIdentifier(nameNode) ? nameNode.getText().replace(/^['"]|['"]$/g, '') : undefined;
     }
     return undefined;
 };
@@ -778,14 +797,11 @@ const scopeName = (node: Node): string | undefined => {
 /**
  * A function's identity base: its name qualified by every enclosing named
  * scope (`Service.run`, `outer.inner`, `api.run`), so two classes' `run` in
- * one file no longer share a symbol. Anonymous functions keep
- * `anonymous@<line>`; remaining duplicates get `#n` (`uniqueSymbols`).
+ * one file no longer share a symbol. A function with no name is
+ * `<scope>.(anonymous)`, numbered within that scope (`declarationSymbols`) —
+ * never by its line, which any edit above it would shift.
  */
-const qualifiedFunctionName = (fn: Node): string => {
-    const own = functionName(fn);
-    if (isAnonymous(own)) {
-        return own;
-    }
+const functionBase = (fn: Node): DeclarationBase => {
     const scopes: string[] = [];
     for (let node = fn.getParent(); node !== undefined; node = node.getParent()) {
         const name = scopeName(node);
@@ -793,7 +809,8 @@ const qualifiedFunctionName = (fn: Node): string => {
             scopes.unshift(name);
         }
     }
-    return [...scopes, own].join('.');
+    const own = ownName(fn);
+    return {base: [...scopes, own ?? '(anonymous)'].join('.'), anonymous: own === undefined};
 };
 
 const subjectKindOf = (fn: Node): SubjectKind => {

@@ -196,8 +196,14 @@ allen umschließenden benannten Bereichen: `Service.run`, `outer.inner`,
 Dart-Klasse/-Mixin/-Extension und eine PHP-Klasse/-Trait/-Interface/-Enum,
 `Buffer::reset` in C++ (Namespaces werden nicht ergänzt); eine Basis, die in
 einer Datei dennoch mehrfach vorkommt (ein Getter/Setter-Paar,
-C++-Überladungen, zwei Closures in einer Zeile), erhält bei jedem Vorkommen
-`#n`. Anonyme Funktionen behalten `anonymous@<Zeile>`. Eine Kollision ist ein
+C++-Überladungen), erhält bei jedem Vorkommen `#n`. Eine Funktion ohne Namen
+übernimmt den Namen, an den sie gebunden ist (`const handler = () => …` →
+`handler`, eine Objekt-Property, ein Klassenfeld, PHP `$handler = function
+…`); ein Callback heißt `<Bereich>.(anonymous)#n`, nummeriert innerhalb
+seines Bereichs (`C.go.(anonymous)#1`, `pair.(anonymous)#0` für einen
+Callback in `const pair = list.map(…)`) — nie nach seiner Zeile, eine
+Änderung darüber oder in einem anderen Bereich benennt ihn also nicht um.
+Eine Kollision ist ein
 Regelfehler: `stoa eval` scheitert daran, und `--update-baseline` verweigert
 eine Baseline, die eine Identität wiederholt (`loadBaseline` könnte sie nicht
 wieder lesen) — Exit 1, die bestehende Datei bleibt unverändert. `R-ORM-EAGER-RELATION` benennt einen

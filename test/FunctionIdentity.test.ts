@@ -7,13 +7,15 @@ import {fileURLToPath} from 'node:url';
 import {initCpp} from '../src/analysis/CppAdapter.js';
 import {initDart} from '../src/analysis/DartAdapter.js';
 import {DEFAULT_CONFIG} from '../src/Config.js';
-import {uniqueSymbols} from '../src/FindingIdentity.js';
+import {declarationSymbols, uniqueSymbols} from '../src/FindingIdentity.js';
 import {analyze} from '../src/Pipeline.js';
 
 // Function identities of the language adapters: a function's symbol is its
 // name qualified by the enclosing named scopes, so two classes' `run` in one
 // file are two identities (they used to share the bare `run` — the evaluator
 // then failed and `--update-baseline` refused). Remaining duplicates get `#n`.
+// A function without a name takes its binding's name, or is
+// `<scope>.(anonymous)#n`, numbered within its scope — never its line.
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, '..');
@@ -48,7 +50,19 @@ test('uniqueSymbols: a unique base stays, every occurrence of a shared base gets
     assert.deepEqual(uniqueSymbols([]), []);
 });
 
-test('TypeScript: methods by class, nested functions by their function, object-literal methods by their variable; accessor pairs and same-line closures get #n', () => {
+test('declarationSymbols: anonymous bases are always numbered per base, names stay unless duplicated', () => {
+    assert.deepEqual(
+        declarationSymbols([
+            {base: 'outer', anonymous: false},
+            {base: 'outer.(anonymous)', anonymous: true},
+            {base: '(anonymous)', anonymous: true},
+            {base: 'outer.(anonymous)', anonymous: true}
+        ]),
+        ['outer', 'outer.(anonymous)#0', '(anonymous)#0', 'outer.(anonymous)#1']
+    );
+});
+
+test('TypeScript: methods by class, nested functions by their function, object-literal methods by their variable; accessor pairs get #n, callbacks are numbered in their scope', () => {
     const source = [
         'export class A {',
         '    constructor() {}',
@@ -68,7 +82,36 @@ test('TypeScript: methods by class, nested functions by their function, object-l
         'export const pair = [1].map(() => 1).map(() => 2);',
         ''
     ].join('\n');
-    assert.deepEqual(symbolsOf('a.ts', source), ['A.constructor', 'A.run', 'A.size#0', 'A.size#1', 'B.run', 'outer', 'outer.inner', 'api.run', 'anonymous@16#0', 'anonymous@16#1']);
+    assert.deepEqual(symbolsOf('a.ts', source), ['A.constructor', 'A.run', 'A.size#0', 'A.size#1', 'B.run', 'outer', 'outer.inner', 'api.run', 'pair.(anonymous)#0', 'pair.(anonymous)#1']);
+});
+
+test('TypeScript: a function bound to a variable, property or class field takes that name; a callback is <scope>.(anonymous)#n', () => {
+    const source = [
+        'export const handler = (): void => {',
+        '    [1].forEach(() => undefined);',
+        '};',
+        'export const routes = {onClick: (): void => undefined};',
+        'export class C {',
+        '    run = (): void => undefined;',
+        '    go(): void {',
+        '        setTimeout(() => undefined);',
+        '        setTimeout(function () {});',
+        '    }',
+        '}',
+        'setTimeout(() => undefined);',
+        ''
+    ].join('\n');
+    assert.deepEqual(symbolsOf('b.ts', source), ['handler', 'handler.(anonymous)#0', 'routes.onClick', 'C.run', 'C.go', 'C.go.(anonymous)#0', 'C.go.(anonymous)#1', '(anonymous)#0']);
+});
+
+test('stable: lines inserted above, or a callback added in another scope, change no symbol', () => {
+    const body = ['export function a(): void {', '    [1].map(() => 1);', '}', 'export function b(): void {', '    [1].map(() => 2);', '}', ''];
+    const before = symbolsOf('c.ts', body.join('\n'));
+    const shifted = symbolsOf('c.ts', ['// a comment', '', ...body].join('\n'));
+    const added = symbolsOf('c.ts', body.join('\n').replace('    [1].map(() => 1);', '    [1].map(() => 1);\n    [1].map(() => 3);'));
+    assert.deepEqual(before, ['a', 'a.(anonymous)#0', 'b', 'b.(anonymous)#0']);
+    assert.deepEqual(shifted, before);
+    assert.deepEqual(added, ['a', 'a.(anonymous)#0', 'a.(anonymous)#1', 'b', 'b.(anonymous)#0']);
 });
 
 test('Dart: methods by class, mixin and extension; a local function by its function', () => {
@@ -76,9 +119,15 @@ test('Dart: methods by class, mixin and extension; a local function by its funct
     assert.deepEqual(symbolsOf('a.dart', source), ['A.run', 'M.run', 'E.run', 'outer', 'outer.inner']);
 });
 
-test('PHP: methods by class and trait; closures keep anonymous@line', () => {
-    const source = ['<?php', 'class A { public function run() { $f = function () {}; } }', 'trait T { public function run() {} }', 'function top() {}', ''].join('\n');
-    assert.deepEqual(symbolsOf('a.php', source), ['A.run', 'anonymous@2', 'T.run', 'top']);
+test('PHP: methods by class and trait; a closure takes its variable, or is <scope>.(anonymous)#n', () => {
+    const source = [
+        '<?php',
+        'class A { public function run() { $f = function () {}; $rows = array_map(fn ($x) => $x, []); usort($rows, function ($a, $b) { return 0; }); } }',
+        'trait T { public function run() {} }',
+        'function top() {}',
+        ''
+    ].join('\n');
+    assert.deepEqual(symbolsOf('a.php', source), ['A.run', 'A.run.f', 'A.run.rows.(anonymous)#0', 'A.run.(anonymous)#0', 'T.run', 'top']);
 });
 
 test('C++: in-class definitions by class like out-of-class ones; overloads get #n', () => {

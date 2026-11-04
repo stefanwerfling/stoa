@@ -1,4 +1,4 @@
-import {uniqueSymbols} from '../../FindingIdentity.js';
+import {declarationSymbols, uniqueSymbols, type DeclarationBase} from '../../FindingIdentity.js';
 import type {Fact, SourceRange, SubjectKind} from '../../Types.js';
 import {factBuilder, type AdapterInfo} from '../FactBuilder.js';
 import {isDeepImport} from '../ImportPath.js';
@@ -52,7 +52,7 @@ export const extractFacts = (program: PhpNode, content: string, filePath: string
         const body = fn.body as PhpNode | undefined;
         return body === undefined ? [] : [{fn, body, base}];
     });
-    const symbols = uniqueSymbols(functions.map(({base}) => base));
+    const symbols = declarationSymbols(functions.map(({base}) => base));
     for (const [index, {fn, body}] of functions.entries()) {
         const metrics = computeMetrics(fn, body);
         const symbol = symbols[index] as string;
@@ -556,28 +556,51 @@ const TYPE_KINDS: ReadonlySet<string> = new Set(['class', 'trait', 'interface', 
 /**
  * Every function-like node in source order (the same order as `collect`)
  * with its identity base: the name qualified by the enclosing class, trait,
- * interface or enum (`Service.run`), so two classes' `run` in one file no
- * longer share a symbol. Namespaces are not part of it (one per file in
- * practice); closures keep `anonymous@<line>`. Remaining duplicates get `#n`
- * (`uniqueSymbols`).
+ * interface or enum and by the enclosing named function or method
+ * (`Service.run`, `Service.run.helper`), so two classes' `run` in one file no
+ * longer share a symbol. A closure assigned to a variable takes its name
+ * (`$handler = function () {}` → `handler`), a closure inside another value
+assigned to a variable lives in that variable's scope; any other closure is
+ * `<scope>.(anonymous)`, numbered within that scope (`declarationSymbols`) —
+ * never by its line. Namespaces are not part of it (one per file in
+ * practice).
  */
-const qualifiedFunctions = (program: PhpNode): {fn: PhpNode; base: string}[] => {
-    const found: {fn: PhpNode; base: string}[] = [];
-    const walk = (node: PhpNode, scope: string | undefined): void => {
-        if (FUNCTION_LIKE.has(node.kind)) {
-            const own = functionName(node);
-            found.push({fn: node, base: scope === undefined || own.startsWith('anonymous@') ? own : `${scope}.${own}`});
+const qualifiedFunctions = (program: PhpNode): {fn: PhpNode; base: DeclarationBase}[] => {
+    const found: {fn: PhpNode; base: DeclarationBase}[] = [];
+    const bound = new Map<PhpNode, string>();
+    const walk = (node: PhpNode, scopes: readonly string[]): void => {
+        let inner = scopes;
+        if (node.kind === 'assign') {
+            const left = node.left as PhpNode | undefined;
+            const right = node.right as PhpNode | undefined;
+            if (right !== undefined && left?.kind === 'variable' && typeof left.name === 'string') {
+                if (FUNCTION_LIKE.has(right.kind)) {
+                    bound.set(right, left.name);
+                } else {
+                    // `$rows = array_map(function () {…}, …)`: the closure lives in `rows`.
+                    walk(left, scopes);
+                    walk(right, [...scopes, left.name]);
+                    return;
+                }
+            }
         }
-        const inner = TYPE_KINDS.has(node.kind) && nodeName(node) !== '(anonymous)' ? nodeName(node) : scope;
+        if (FUNCTION_LIKE.has(node.kind)) {
+            const own = functionName(node) ?? bound.get(node);
+            found.push({fn: node, base: {base: [...scopes, own ?? '(anonymous)'].join('.'), anonymous: own === undefined}});
+            inner = own === undefined ? scopes : [...scopes, own];
+        } else if (TYPE_KINDS.has(node.kind) && nodeName(node) !== '(anonymous)') {
+            inner = [...scopes, nodeName(node)];
+        }
         for (const child of childNodes(node)) {
             walk(child, inner);
         }
     };
-    walk(program, undefined);
+    walk(program, []);
     return found;
 };
 
-const functionName = (fn: PhpNode): string => {
+/** A function's or method's own name; `undefined` for a closure or arrow function. */
+const functionName = (fn: PhpNode): string | undefined => {
     const name = fn.name;
     if (typeof name === 'string' && name.length > 0) {
         return name;
@@ -585,7 +608,7 @@ const functionName = (fn: PhpNode): string => {
     if (isPhpNode(name) && typeof name.name === 'string') {
         return name.name;
     }
-    return `anonymous@${fn.loc?.start.line ?? 0}`;
+    return undefined;
 };
 
 const rangeOf = (node: PhpNode): SourceRange => {

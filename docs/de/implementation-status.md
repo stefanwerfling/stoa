@@ -59,8 +59,6 @@ API-Request-/DTO-Facts für eine durchgehende FE/BE-Kette; Validierung an
 unabhängigen externen Korpora.
 
 **Bekannte Einschränkungen (offen):**
-- Symbole der Form `anonymous@<Zeile>` verschieben sich, wenn sich Zeilen
-  darüber ändern; solche Findings sind in einer Baseline nicht änderungsstabil.
 - Die Extraktion dominiert Laufzeit und Speicher (siehe Messeintrag unten);
   der TS-Adapter durchläuft jeden Syntaxbaum etwa elfmal. Noch nicht optimiert.
 
@@ -420,6 +418,29 @@ genannten lokalen Projekten; keine ist eine allgemeine Genauigkeitsaussage.
   (`test/fixtures/architecture`: Loader-Fehler, Zuordnung inkl. Mehrfachtreffer
   und Dateien außerhalb der Wurzel, alle vier Kantenurteile, Paketverbote und
   -namen, Report-Zusammenfassung und Markdown, CLI-Fail-fast und JSON).
+- **Stabile Namen für Funktionen ohne Namen (Nachtrag):** Eine TS-/PHP-
+  Funktion ohne eigenen Namen hieß `anonymous@<Zeile>`, jede Änderung
+  darüber benannte ihre Befunde also um (und verschob sie in einer
+  Baseline). Jetzt übernimmt sie den Namen, an den sie gebunden ist — TS
+  `const handler = () => …`, eine Objekt-Property `onClick: …`, ein
+  Klassenfeld `run = () => …`; PHP `$handler = function …` — und ein
+  verbleibender Callback heißt `<Bereich>.(anonymous)#n`, in
+  Quelltextreihenfolge nummeriert innerhalb seines nächsten benannten
+  Bereichs (`declarationSymbols` in FindingIdentity.ts; Klammern, damit er
+  nie einem echten Namen gleicht). Eine Variable, Property oder ein
+  Klassenfeld, deren Initialisierer keine Funktion ist, bildet einen eigenen
+  Bereich (`const pair = list.map(() => …)` → `pair.(anonymous)#0`), und
+  benannte PHP-Funktionen/-Methoden umschließen ihre Closures. Eine Änderung
+  über einem Callback oder in einem anderen Bereich benennt ihn nicht mehr
+  um; ein zusätzlicher Callback davor im selben Bereich weiterhin schon.
+  Wirkung gegenüber dem vorigen Commit auf 18 Läufen: nur frühere
+  `anonymous@`-Symbole änderten sich (flyingfish backend 11, frontend 16
+  Befunde; stoa/src benannte die eigenen um, etwa `anonymous@134` →
+  `analyze`); Golden- und SOLID-Korpus unverändert, kein `anonymous@`-Symbol
+  übrig, keine Kollision, zwei Läufe byte-identisch. Tests:
+  `test/FunctionIdentity.test.ts` (10: Bindungen, Callbacks je Bereich, ein
+  Stabilitätsfall mit eingefügten Zeilen und einem Callback in einem anderen
+  Bereich, PHP-Closures).
 - **Qualifizierte Funktionsidentitäten (Nachtrag zum
   Evaluator-Integritäts-Folgeauftrag):** Die Adapter für TS, Dart, PHP und
   C/C++ benannten eine Funktion oder Methode mit ihrem nackten Namen, zwei
@@ -1865,7 +1886,7 @@ zu liefern.
 
 ## Qualitätssicherung
 
-- **node:test-Suite** (`npm test`, `test/*.test.ts`): 539 Tests, 0 fehlgeschlagen,
+- **node:test-Suite** (`npm test`, `test/*.test.ts`): 542 Tests, 0 fehlgeschlagen,
   Lauf vom 2026-11-04 (Regeln pos./neg., Extraktion, Schema-Validierung, i18n,
   Determinismus, SARIF, Eval, Semantik-Groundedness, Datenschutz,
   Finding-Trennung, semantische Modelle, Identitäten, Metriken).
@@ -1994,7 +2015,7 @@ R-DEP-CYCLE/R-UNUSED-EXPORT auch PHP abdecken; generischer ESLint-Fact-Adapter;
 Kontext-Facts (`flag.generatedCode`, `hasTests`) für reichhaltigere
 Suppression; LLM-Ausgabe-Evaluierung im Maßstab.
 
-**Offen aus dem Evaluator-Integritäts-Folgeauftrag (2026-11-04):** stabile Symbole statt `anonymous@<Zeile>`;
+**Offen aus dem Evaluator-Integritäts-Folgeauftrag (2026-11-04):**
 weniger Vollbaum-Durchläufe in der TS-Extraktion (der gemessene Hebel für
 Laufzeit und Speicherspitze, Facts müssen byte-identisch bleiben); kein
 SymbolGraph unter `--solid`, wenn keine Typdeklarationen existieren (gemessen
