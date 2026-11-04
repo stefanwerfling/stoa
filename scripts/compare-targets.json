@@ -1,0 +1,14 @@
+[
+    {"name": "corpus", "path": "../test/corpus/project", "deadExports": true},
+    {"name": "solidcorpus", "path": "../test/corpus/solid/project", "solid": true},
+    {"name": "contracts", "path": "../test/fixtures/solid/contracts", "solid": true},
+    {"name": "srp", "path": "../test/fixtures/solid/srp", "solid": true},
+    {"name": "stoa", "path": "../src", "solid": true, "deadExports": true},
+    {"name": "arch_archcorpus", "path": "../test/corpus/solid/project", "solid": true, "architecture": "../test/corpus/solid/stoa.architecture.json"},
+    {"name": "arch_archfixture", "path": "../test/fixtures/solid/dip-declared/project", "solid": true, "architecture": "../test/fixtures/solid/dip-declared/stoa.architecture.json"},
+    {"name": "arch_stoa", "path": "../src", "solid": true, "architecture": "stoa.architecture.json"},
+    {"name": "vdf", "path": "../test/fixtures/validation-dataflow-corpus/corpus", "contracts": "../test/fixtures/validation-dataflow-corpus/contract.json"},
+    {"name": "html", "path": "../test/fixtures/html/corpus"},
+    {"name": "vue", "path": "../test/fixtures/vue/corpus"},
+    {"name": "flutter", "path": "../test/fixtures/flutter/corpus"}
+]

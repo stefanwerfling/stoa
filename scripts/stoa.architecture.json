@@ -1,0 +1,58 @@
+{
+    "version": "1.0.0",
+    "layers": [
+        {
+            "name": "model",
+            "include": [
+                "model/**"
+            ]
+        },
+        {
+            "name": "rules",
+            "include": [
+                "rules/**"
+            ]
+        },
+        {
+            "name": "analysis",
+            "include": [
+                "analysis/**"
+            ]
+        },
+        {
+            "name": "reporting",
+            "include": [
+                "reporting/**"
+            ]
+        }
+    ],
+    "allow": [
+        {
+            "from": "rules",
+            "to": "model"
+        },
+        {
+            "from": "rules",
+            "to": "analysis"
+        },
+        {
+            "from": "model",
+            "to": "analysis"
+        }
+    ],
+    "forbidPackages": [
+        {
+            "layer": "model",
+            "packages": [
+                "ts-morph",
+                "web-tree-sitter"
+            ]
+        },
+        {
+            "layer": "rules",
+            "packages": [
+                "ts-morph"
+            ]
+        }
+    ]
+}

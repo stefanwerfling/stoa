@@ -2164,6 +2164,16 @@ fails fast (exit 1, concrete errors) instead of silently yielding 0 findings.
   for it; only bare scalar schemas in the pre-existing fixtures ever
   exercised them. Fixed the same way as the dataflow tracer's equivalent fix.
 - Dogfooding: stoa analyzes its own `src/`.
+- **Findings comparison** (`scripts/compare-findings.ts`): the check behind
+  every "reports byte-identical" in this document. `snapshot <dir>` writes
+  each target's findings as JSON lines (report order, paths relative to the
+  target); `diff <before> <after>` compares two directories file by file and,
+  where one differs, by finding key (rule, file, symbol, statement) — which
+  separates real changes from shifted positions; exit 1 on any difference.
+  `--jobs N` checks parallel extraction against the sequential run. The
+  default targets (`scripts/compare-targets.json`) cover this repository
+  only; your own projects go in a targets file outside the repository
+  (`--targets`). Grammars are loaded as in the CLI.
 
 ## Deviations from the concept (deliberate, documented)
 

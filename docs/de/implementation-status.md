@@ -2355,6 +2355,17 @@ zu liefern.
   bestehenden Fixtures erreichten sie je. Genauso behoben wie die
   entsprechende Korrektur beim Datenfluss-Tracer.
 - Dogfooding: stoa analysiert den eigenen `src/`.
+- **Findings-Vergleich** (`scripts/compare-findings.ts`): die Prüfung hinter
+  jedem „Berichte byte-identisch“ dieses Dokuments. `snapshot <dir>` schreibt
+  die Findings jedes Ziels als JSON-Zeilen (Berichtsreihenfolge, Pfade relativ
+  zum Ziel), `diff <vorher> <nachher>` vergleicht zwei Verzeichnisse je Datei
+  und, wo eine abweicht, je Finding-Schlüssel (Regel, Datei, Symbol, Aussage)
+  — das trennt echte Änderungen von verschobenen Positionen; Exit 1 bei jeder
+  Abweichung. `--jobs N` prüft die parallele Extraktion gegen den
+  sequentiellen Lauf. Die Standardziele (`scripts/compare-targets.json`)
+  umfassen nur dieses Repository; eigene Projekte kommen über eine Zieldatei
+  außerhalb des Repositorys (`--targets`). Grammatiken werden wie in der CLI
+  geladen.
 
 ## Abweichungen vom Konzept (bewusst, dokumentiert)
 
