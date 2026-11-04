@@ -426,6 +426,31 @@ genannten lokalen Projekten; keine ist eine allgemeine Genauigkeitsaussage.
   (`test/fixtures/architecture`: Loader-Fehler, Zuordnung inkl. Mehrfachtreffer
   und Dateien außerhalb der Wurzel, alle vier Kantenurteile, Paketverbote und
   -namen, Report-Zusammenfassung und Markdown, CLI-Fail-fast und JSON).
+- **Export-Abfrage: `.d.ts`-Regression behoben, syntaktischer Rückweg
+  gemessen (Nachtrag):** Der Schlüsselwort-Kurzweg aus „Weniger
+  Token-Durchläufe" beantwortete eine Deklaration ohne Schlüsselwort mit
+  `false`, sobald die Datei keine Exportliste und keine Export-Zuweisung
+  hatte — ein `.d.ts`-Modul ohne Exportliste exportiert aber jede
+  Deklaration implizit (der Export-Kontext des Binders), seit 88b90b6
+  verlor eine solche Datei also diese `deps.export`-Facts und ihren
+  `metric.exportCount` (etwa 4 → 1). Deklarationsdateien fragen jetzt immer
+  ts-morph; keiner der 18 verglichenen Läufe änderte sich (ihre
+  `.d.ts`-Dateien nutzen das Schlüsselwort oder werden nicht analysiert).
+  Die Abfrage liegt jetzt in `ExportLookup.ts` und wird Deklaration für
+  Deklaration gegen ts-morphs eigenes `isExported()`/`isDefaultExport()`
+  geprüft, auf 22 Dateien (Exportlisten, Aliase, String-Namen, benannter
+  Default, `export default x` / `x()` / `(x)` / `N.x`, `export =`,
+  Re-Exporte, Überladungen, Enum + Namespace, zwei Defaults, ein Import
+  gleichen Namens, `declare global`, `.d.ts` mit und ohne Liste, JS mit
+  `@typedef`). Außerdem erprobt: die übrigen Fälle aus der Syntax statt über
+  ts-morphs Symbolabfrage beantworten — exakt auf allen 22 Dateien (11 davon
+  über die Syntax, per Mutationsprobe bestätigt), aber ohne messbaren Gewinn
+  (Extraktion 2,64–2,70 s gegenüber 2,63–2,69 s, vier abwechselnde Paare à 5
+  Runden): Das Program, das ts-morph dafür baut, ist für eine Datei ohne
+  Lib-Dateien billig; nur der CPU-Profiler ließ es wie ≈ 7 % aussehen. Nicht
+  übernommen. Facts der 652 gemessenen Dateien byte-identisch, Befunde von 18
+  Läufen byte-identisch, Golden- und SOLID-Korpus unverändert. Tests:
+  `test/ExportLookup.test.ts` (22 + 1: die `.d.ts`-Export-Facts).
 - **Nur Abgefragtes einhüllen (geprüft, verworfen):** Der Knotenindex hüllt
   jeden Knoten einer Datei einmal ein (`forEachDescendant`). Erprobt: nur die
   Knoten einhüllen, die eine Abfrage liefert, bei Bedarf vom nächsten
@@ -551,7 +576,9 @@ genannten lokalen Projekten; keine ist eine allgemeine Genauigkeitsaussage.
   (`countExports` leitet sich daraus ab), und die Exportfragen beantwortet
   das Schlüsselwort allein, außer die Datei exportiert ohne es (`export {x}`,
   `export {x as default}`, `export default x`, `export =`) — nur dann wird
-  ts-morph gefragt. Facts byte-identisch: derselbe Hash über alle 50.046
+  ts-morph gefragt (Korrektur: ein `.d.ts`-Modul exportiert implizit und
+  wurde falsch beantwortet; behoben in „Export-Abfrage:
+  `.d.ts`-Regression behoben"). Facts byte-identisch: derselbe Hash über alle 50.046
   Facts von 652 TS-/JS-Dateien (flyingfish backend + frontend, kapalium
   frontend, ein stoa-Schnappschuss), und die Befunde von 18 Läufen gleichen
   dem vorigen Commit (stoa/src über sich selbst: dieselben Befunde, zwei
@@ -2031,7 +2058,7 @@ zu liefern.
 
 ## Qualitätssicherung
 
-- **node:test-Suite** (`npm test`, `test/*.test.ts`): 553 Tests, 0 fehlgeschlagen,
+- **node:test-Suite** (`npm test`, `test/*.test.ts`): 576 Tests, 0 fehlgeschlagen,
   Lauf vom 2026-11-04 (Regeln pos./neg., Extraktion, Schema-Validierung, i18n,
   Determinismus, SARIF, Eval, Semantik-Groundedness, Datenschutz,
   Finding-Trennung, semantische Modelle, Identitäten, Metriken).
@@ -2161,8 +2188,9 @@ Kontext-Facts (`flag.generatedCode`, `hasTests`) für reichhaltigere
 Suppression; LLM-Ausgabe-Evaluierung im Maßstab.
 
 **Offen aus dem Evaluator-Integritäts-Folgeauftrag (2026-11-04):** in der
-TS-Extraktion der Symbol-Rückweg von `isExported()` (ein Program je Modul mit
-Export ohne Schlüsselwort, ≈ 7 %) und `classMembers` (≈ 10 %); das Parsen
+TS-Extraktion `classMembers` (≈ 10 % des CPU-Profils; der Profiler
+überzeichnet billige Program-Aufbauten — der Rückweg von `isExported()` sah
+nach ≈ 7 % aus und maß sich als nichts, siehe „Export-Abfrage"); das Parsen
 selbst (≈ 15 %) und ts-morphs Wrapper-Erzeugung (≈ 10 %, von der Navigation
 der Extraktion gebraucht — lazy Einhüllen wurde ohne Gewinn gemessen, siehe
 „Nur Abgefragtes einhüllen"); kein SymbolGraph unter `--solid`, wenn keine

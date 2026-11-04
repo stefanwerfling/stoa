@@ -276,5 +276,5 @@ Siehe [open-questions.md](./open-questions.md). Kernpunkte: inkrementelle
 Analyse/Caching-Granularität, projektweite (interprozedurale) Datenflussanalyse
 vs. Aufwand, einheitliches Fact-Schema über sehr unterschiedliche Sprachen.
 
-Offener Punkt aus der Umsetzung (2026-11-04): in der TS-Extraktion bleiben der Symbol-Rückweg von `isExported()`, `classMembers`, das TypeScript-Parsen und ts-morphs Wrapper-Erzeugung (lazy Einhüllen ohne messbaren Gewinn); Token-Einhüllung, TypeChecker je Datei, die Durchläufe je Fact-Familie und je Funktion und das teure Freigeben sind seit den Nachträgen „Weniger Token-Durchläufe", „Ein Knotenindex je Datei", „Ein Durchlauf je Funktion" und „Parsen und Freigeben" entfernt — siehe „Noch offen" in
+Offener Punkt aus der Umsetzung (2026-11-04): in der TS-Extraktion bleiben `classMembers`, das TypeScript-Parsen und ts-morphs Wrapper-Erzeugung (lazy Einhüllen und ein syntaktischer Export-Rückweg ohne messbaren Gewinn); Token-Einhüllung, TypeChecker je Datei, die Durchläufe je Fact-Familie und je Funktion und das teure Freigeben sind seit den Nachträgen „Weniger Token-Durchläufe", „Ein Knotenindex je Datei", „Ein Durchlauf je Funktion" und „Parsen und Freigeben" entfernt — siehe „Noch offen" in
 [implementation-status.md](./implementation-status.md).

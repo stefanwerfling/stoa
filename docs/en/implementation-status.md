@@ -397,6 +397,29 @@ the named local projects; none is a general accuracy claim.
   (`test/fixtures/architecture`: loader errors, assignment incl. multiple
   matches and outside-root files, all four edge verdicts, package bans and
   names, report summary and markdown, CLI fail-fast and JSON).
+- **Export lookup: `.d.ts` regression fixed, syntactic fallback measured
+  (follow-up):** the keyword shortcut of "Fewer token walks" answered a
+  declaration without the keyword with `false` whenever the file had no
+  export list or assignment — but a `.d.ts` module without an export list
+  exports every declaration implicitly (the binder's export context), so
+  since 88b90b6 such a file lost those `deps.export` facts and its
+  `metric.exportCount` (e.g. 4 → 1). Declaration files now always ask
+  ts-morph; none of the 18 compared runs changed (their `.d.ts` files use
+  the keyword or are not analyzed). The lookup moved to `ExportLookup.ts`
+  and is now checked declaration by declaration against ts-morph's own
+  `isExported()`/`isDefaultExport()` on 22 files (export lists, aliases,
+  string names, named default, `export default x` / `x()` / `(x)` / `N.x`,
+  `export =`, re-exports, overloads, enum + namespace, two defaults, an
+  import of the same name, `declare global`, `.d.ts` with and without a
+  list, JS with `@typedef`). Also tried: answering the remaining cases from
+  the syntax instead of ts-morph's symbol lookup — exact on all 22 files
+  (11 of them by the syntax, a mutation check confirmed it), but without a
+  measurable gain (extraction 2.64–2.70 s against 2.63–2.69 s, four
+  alternating pairs of 5 rounds): the Program ts-morph builds for it is
+  cheap for one file without lib files; only the CPU profiler made it look
+  like ≈ 7 %. Not adopted. Facts of the 652 measured files byte-identical,
+  findings of 18 runs byte-identical, golden and SOLID corpora unchanged.
+  Tests: `test/ExportLookup.test.ts` (22 + 1: the `.d.ts` export facts).
 - **Wrapping only what is queried (examined, rejected):** the node index
   wraps every node of a file once (`forEachDescendant`). Tried: wrap only
   the nodes a query returns, on demand, from the nearest wrapped ancestor
@@ -513,7 +536,9 @@ the named local projects; none is a general accuracy claim.
   are computed once per file (`countExports` derives from them), and the
   export questions are answered by the keyword alone unless the file has an
   export without it (`export {x}`, `export {x as default}`, `export default
-  x`, `export =`) — only then is ts-morph asked. Facts are byte-identical:
+  x`, `export =`) — only then is ts-morph asked (correction: a `.d.ts`
+  module exports implicitly and was answered wrongly; fixed in "Export
+  lookup: `.d.ts` regression fixed"). Facts are byte-identical:
   same hash over all 50,046 facts of 652 TS/JS files (flyingfish backend +
   frontend, kapalium frontend, a stoa snapshot), and the findings of 18 runs
   match the previous commit (stoa/src analyzing itself: the same findings,
@@ -1859,7 +1884,7 @@ fails fast (exit 1, concrete errors) instead of silently yielding 0 findings.
 
 ## Quality assurance
 
-- **node:test suite** (`npm test`, `test/*.test.ts`): 553 tests, 0 failed,
+- **node:test suite** (`npm test`, `test/*.test.ts`): 576 tests, 0 failed,
   as of the 2026-11-04 run (rules pos./neg., extraction, schema validation,
   i18n, determinism, SARIF, evaluation, semantic groundedness, privacy,
   finding-model separation, semantic models, identities, metrics).
@@ -1982,8 +2007,9 @@ generic ESLint fact adapter; context facts (`flag.generatedCode`, `hasTests`)
 for richer suppression; LLM-output evaluation at scale.
 
 **Open from the evaluator-integrity track (2026-11-04):** in the TS
-extraction, `isExported()`'s symbol fallback (a Program per module that
-exports without the keyword, ≈ 7 %) and `classMembers` (≈ 10 %); the parse
+extraction, `classMembers` (≈ 10 % of the CPU profile; the profiler
+overstates cheap Program builds — `isExported()`'s fallback looked like
+≈ 7 % and measured as nothing, see "Export lookup"); the parse
 itself (≈ 15 %) and ts-morph's wrapper creation (≈ 10 %, needed by the
 extraction's navigation — wrapping lazily was measured without gain, see
 "Wrapping only what is queried"); not building the SymbolGraph under

@@ -13,6 +13,7 @@ import {destructiveDdl, nullableNoDefault, unguardedDdl} from '../MigrationSql.j
 import {extractTsMemberFacts} from './TsMembers.js';
 import type {ReexportValue} from '../DepsFacts.js';
 import {descendantsOfKind, descendantsOfKinds} from './NodeIndex.js';
+import {exportLookup} from './ExportLookup.js';
 
 interface FunctionMetrics {
     cyclomatic: number;
@@ -553,39 +554,6 @@ const collectReexports = (sourceFile: SourceFile): Reexport[] => {
 // the compiler node — re-parsing a path can hand back the same SourceFile
 // wrapper with new content.
 const exportNamesCache = new WeakMap<ts.SourceFile, ExportedName[]>();
-
-/**
- * `isExported()` / `isDefaultExport()` without the type checker where the
- * answer cannot depend on it. Both ts-morph methods fall back to a symbol
- * lookup (which builds a Program and a TypeChecker for the file) when the
- * declaration lacks the keyword; that lookup can only find an export made
- * WITHOUT the keyword — a local `export {x}` / `export {x as default}`, or an
- * `export default x` / `export = x` assignment. A file without any of those
- * is answered by the keyword alone; any other file still asks ts-morph, so
- * the result is the same in every case.
- */
-interface ExportLookup {
-    isExported: (declaration: ExportableDeclaration) => boolean;
-    isDefaultExport: (declaration: DefaultExportableDeclaration) => boolean;
-}
-
-type ExportableDeclaration = Node & {hasExportKeyword: () => boolean; isExported: () => boolean};
-type DefaultExportableDeclaration = Node & {hasDefaultKeyword: () => boolean; isDefaultExport: () => boolean};
-
-const exportLookup = (sourceFile: SourceFile): ExportLookup => {
-    const assignments = sourceFile.getExportAssignments();
-    const declarations = sourceFile.getExportDeclarations();
-    const localExportList = declarations.some((declaration) => !declaration.hasModuleSpecifier());
-    const namedDefault = declarations.some((declaration) =>
-        declaration.getNamedExports().some((specifier) => (specifier.getAliasNode() ?? specifier.getNameNode()).getText() === 'default')
-    );
-    const exportedWithoutKeyword = localExportList || assignments.length > 0;
-    const defaultWithoutKeyword = namedDefault || assignments.some((assignment) => !assignment.isExportEquals());
-    return {
-        isExported: (declaration) => declaration.hasExportKeyword() || (exportedWithoutKeyword && declaration.isExported()),
-        isDefaultExport: (declaration) => declaration.hasDefaultKeyword() || (defaultWithoutKeyword && declaration.isDefaultExport())
-    };
-};
 
 const collectExportNames = (sourceFile: SourceFile): ExportedName[] => {
     const cached = exportNamesCache.get(sourceFile.compilerNode);
