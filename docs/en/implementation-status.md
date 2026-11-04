@@ -264,7 +264,8 @@
   TS through a same-file declaration or the new file-local
   `struct.importBindings` fact (local name → module, exported name: aliases,
   default and namespace imports — `deps.importName` has no local name) plus the
-  ModuleGraph; TS re-export barrels are not followed. `TickerProviderStateMixin`,
+  ModuleGraph; TS re-export barrels are not followed (followed since the
+  semantic consolidation, phase 2 — TS resolution moved to the SymbolGraph). `TickerProviderStateMixin`,
   `SingleTickerProviderStateMixin`, `AutomaticKeepAliveClientMixin` and
   `CustomPainter` were added to the Flutter catalog (SDK-checked). Not wired
   into the pipeline (E6b reads it through `typeModelOf`); findings byte-identical
@@ -328,6 +329,64 @@
   (`test/fixtures/architecture`: loader errors, assignment incl. multiple
   matches and outside-root files, all four edge verdicts, package bans and
   names, report summary and markdown, CLI fail-fast and JSON).
+- **SymbolGraph as the one ES-module name resolver (semantic consolidation,
+  phase 2):**
+  - **One resolver, clear responsibilities:** ModuleResolver/ModuleGraph —
+    which module depends on which; SymbolGraph — which exported symbol a
+    name refers to and where it is defined; TypeModel — which types exist and
+    how they inherit. `TypeModel.resolveTs` no longer resolves imports itself:
+    its module-target table and default-export line table are gone; it maps
+    the local alias (`struct.importBindings`) to the SymbolGraph binding and
+    the binding's definition to a declaration. Dart stays with the
+    DartLibraryIndex (a different import model: prefixes, `show`/`hide`,
+    parts). Measured before the switch: both TS resolvers agreed on all 3,131
+    type bindings of flyingfish and stoa.
+  - **`external`:** `ModuleResolver.isExternal` (a bare specifier no
+    configured mechanism claims — not relative/absolute/`#`, not the own
+    package, no tsconfig `paths` pattern, with `baseUrl` no analyzed path
+    below it) is the single classification; the ModuleGraph records it on
+    unresolved TS entries (`external`), the SymbolGraph reports `external`
+    instead of `unresolved` for packages (a failed relative import or alias
+    stays `unresolved`, now with `unresolvedReason` `module`/`export`/`cycle`).
+  - **Re-exports:** new file-local fact `deps.reexport` (TS adapter; value in
+    `src/analysis/DepsFacts.ts`) for `export {a as b} from`, `export {default
+    as X} from`, `export * from`, `export * as ns from` (type-only marked);
+    a named one has exactly the range of the `deps.export` the same specifier
+    produces, so local and re-exported names are told apart. `deps.export`
+    is unchanged. The ModuleGraph adds them as entries with `origin:
+    'deps.reexport'` (ignored by `R-DEP-CYCLE`, the layer rules and — until
+    phase 3 decides — `R-SOLID-DIP-LAYER-DIRECTION` stage 2). The SymbolGraph
+    follows them to the defining file (`definitions`, every hop in `via`):
+    local/explicit beats `export *`; two `export *` with different
+    definitions → `ambiguous` (both kept); `export *` never provides
+    `default`; a hop into a package → `external` (also when the name can only
+    come from the single `export *` into a package); a missing module →
+    `unresolved` (`module`); a cycle is detected on the current path →
+    `unresolved` (`cycle`). `resolveExport(file, name)` answers `ns.X`.
+    Not followed: `import {A} …; export {A};` (counts as defined there).
+  - **TypeModel gains through it:** types behind barrels, aliases,
+    `default as`, and `ns.X` where `ns` is a named import of an `export * as
+    ns`; an `export *` conflict is `ambiguous` with both candidates.
+    Declaration merging (several export sites of one name in one file) stays
+    one declaration, as before.
+  - **Unchanged:** every finding on the main corpus, the SOLID corpus, the
+    SOLID fixtures, flyingfish (backend, frontend, schemas), kapalium,
+    swipemeister, mwpa and velyo (with `--solid`, `--dead-exports`), and every
+    pre-existing TypeModel resolution on all of them — byte-identical. stoa's
+    own self-analysis changes only through its new code (274 instead of 276
+    findings: four complexity findings fewer; `buildTypeModel` now has a
+    fifth, optional parameter). `coverage.factCount` grows by the
+    `deps.reexport` facts where re-exports exist; FactCache entries
+    invalidate by themselves (engine fingerprint).
+  - **Changed test expectations (intended):** a package import is `external`
+    (was `unresolved`); the "module not resolvable" case now uses a missing
+    relative module; the TypeModel's barrel case resolves (was the documented
+    limit).
+  - Tests: `test/SymbolGraphReexport.test.ts` (real adapter on
+    `test/fixtures/symbolgraph/reexport`: facts and ranges, chains, alias,
+    `default as`, namespace re-export, type-only, ambiguity, `default`,
+    cycle, missing module, packages, TypeModel through the graph,
+    determinism, FactCache hit, ModuleGraph entries, `isExternal`).
 - **Evaluator integrity (semantic consolidation, phase 1):** `stoa eval`
   reported an incomplete analysis as a pass — a `partial` scan (memory guard,
   read/parse error) only printed a stderr warning and exited 0 whenever the
@@ -1351,7 +1410,7 @@ fails fast (exit 1, concrete errors) instead of silently yielding 0 findings.
 `metric.cognitiveComplexity`, `metric.nestingDepth`, `metric.parameterCount`,
 `metric.functionLength`, `doc.hasComplexityRationale`, `ast.usesNondeterminism`,
 `ast.emptyCatch`, `ast.catchSwallowsError`, `doc.catchHasRationale`, `deps.import`, `deps.importUnused`,
-`deps.importDeep`, `deps.export`, `deps.importName`, `orm.synchronizeEnabled`,
+`deps.importDeep`, `deps.export`, `deps.importName`, `deps.reexport`, `orm.synchronizeEnabled`,
 `orm.syncWithMigrations`, `orm.entityNoPrimaryKey`, `orm.eagerRelation`,
 `migration.unguardedDdl`, `migration.noDown`, `migration.dataLoss`,
 `migration.nullableNoDefault`, `ui.imageMissingAlt`, `ui.controlMissingName`,

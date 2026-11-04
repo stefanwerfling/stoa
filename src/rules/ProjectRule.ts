@@ -117,7 +117,8 @@ export const typeModelOf = (input: ProjectRuleInput): TypeModel => {
     byIndex.set(input.dartLibraryIndex ?? NONE, byGraph);
     let model = byGraph.get(input.moduleGraph ?? NONE);
     if (model === undefined) {
-        model = buildTypeModel(input.facts, input.analyzedFiles, input.dartLibraryIndex, input.moduleGraph);
+        // The symbol graph is derived from facts + module graph, so the memo key stays valid without it.
+        model = buildTypeModel(input.facts, input.analyzedFiles, input.dartLibraryIndex, input.moduleGraph, input.moduleGraph !== undefined ? input.symbolGraph : undefined);
         byGraph.set(input.moduleGraph ?? NONE, model);
     }
     return model;

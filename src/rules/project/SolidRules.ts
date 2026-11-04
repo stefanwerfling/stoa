@@ -196,7 +196,7 @@ export class SolidDipLayerDirectionRule implements ProjectRule {
 const TEST_PATH = /(^|\/)(test|tests|__tests__|test_driver|integration_test)\/|_test\.dart$|\.(test|spec)\.[cm]?[jt]sx?$/;
 const TEST_DOUBLE = /Mock|Fake|Stub/;
 /** Everything the TypeModel reads: class-model facts, TS bindings/exports/imports (module graph), Dart directives and class names (library index). */
-const TYPE_MODEL_FACT_KINDS = ['struct.typeDecl', 'struct.importBindings', 'deps.export', 'deps.import', 'dart.importSpec', 'dart.classDecl'];
+const TYPE_MODEL_FACT_KINDS = ['struct.typeDecl', 'struct.importBindings', 'deps.export', 'deps.import', 'deps.importName', 'deps.reexport', 'dart.importSpec', 'dart.classDecl'];
 const CALLABLE = new Set<StructMember['memberKind']>(['method', 'getter', 'setter']);
 
 /** The deepest directory containing every analyzed file — the project root as far as the rules can tell (test paths are matched below it). */

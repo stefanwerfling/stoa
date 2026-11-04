@@ -14,12 +14,13 @@ import {
 import {EMPTY_PROJECT_CONFIG} from '../config/ProjectConfig.js';
 import type {DartLibraryIndex} from './DartLibraryIndex.js';
 import {buildModuleGraph, type ModuleGraph} from './ModuleGraph.js';
+import {buildSymbolGraph, type ExportResolution, type SymbolEdge, type SymbolGraph} from './SymbolGraph.js';
 
 /**
  * The project type model (Flutter quality track E4). Built after extraction
- * from facts only (`struct.typeDecl`, `struct.importBindings`, `deps.export`,
- * plus the DartLibraryIndex and the ModuleGraph); holds strings, fact ids and
- * the expanded member records — no AST. Lives for one evaluation.
+ * from facts only (`struct.typeDecl`, `struct.importBindings`, plus the
+ * DartLibraryIndex and the SymbolGraph); holds strings, fact ids and the
+ * expanded member records — no AST. Lives for one evaluation.
  *
  * A written type name (`prefix`, `name`) in a file resolves to:
  * - `project` — a declaration in the analyzed code (`target` = its key);
@@ -31,11 +32,15 @@ import {buildModuleGraph, type ModuleGraph} from './ModuleGraph.js';
  *   in `candidates`; TS: globals such as `Error`, barrels, missing exports).
  *
  * Dart resolution is the DartLibraryIndex's (prefixes, `show`/`hide`,
- * `export` barrels, `part`s). TS: a declaration in the same file, else the
- * file's import binding (named incl. alias, default, namespace) → the module
- * via the ModuleGraph → a declaration with the exported name in the target
- * file (a default export by its `deps.export` site). TS re-export barrels are
- * not followed (documented limit).
+ * `export` barrels, `part`s). TS resolution is the SymbolGraph's (semantic
+ * consolidation, phase 2 — no second resolver here): a declaration in the
+ * same file, else the file's import binding (`struct.importBindings` gives
+ * the local alias) → the SymbolGraph binding of that import (module, re-export
+ * chains incl. `export *` and aliases) → the declaration with the defined name
+ * in the defining file (a default export by its export site's line). A
+ * package is `external` (origin = its specifier, or the re-export hop's); a
+ * name several files define is `ambiguous`; several export sites of ONE
+ * name in ONE file (declaration merging) are that one declaration.
  *
  * Inherited members follow `extends`, `with` and `on` (not `implements`),
  * transitively and cycle-safe, most-derived first: own members, then the
@@ -99,6 +104,7 @@ export interface TypeNode {
 
 const compareText = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
 const keyOf = (file: string, name: string): string => `${file}#${name}`;
+const symbolEdgeKey = (file: string, module: string, importedName: string, kind: string): string => `${file}\n${module}\n${importedName}\n${kind}`;
 const UNRESOLVED: TypeResolution = {status: 'unresolved', target: null, origin: null, candidates: []};
 const INHERITING: ReadonlySet<StructSupertype['kind']> = new Set(['extends', 'with', 'on']);
 
@@ -114,12 +120,17 @@ export class TypeModel {
     private readonly declarations = new Map<string, Declaration>();
     private readonly keysByName = new Map<string, string[]>();
     private readonly bindingsByFile = new Map<string, Map<string, StructImportBinding>>();
-    private readonly defaultExportLine = new Map<string, number>();
-    private readonly moduleTargets = new Map<string, string>();
+    private readonly symbolEdges = new Map<string, SymbolEdge>();
     private readonly dartIndex: DartLibraryIndex;
+    private readonly symbolGraph: SymbolGraph;
 
-    public constructor(facts: readonly Fact[], dartIndex: DartLibraryIndex, moduleGraph: ModuleGraph) {
+    /** `symbolGraph` defaults to the one built from `facts` + `moduleGraph` (the pipeline passes its own, built from the same two). */
+    public constructor(facts: readonly Fact[], dartIndex: DartLibraryIndex, moduleGraph: ModuleGraph, symbolGraph: SymbolGraph = buildSymbolGraph(facts, moduleGraph)) {
         this.dartIndex = dartIndex;
+        this.symbolGraph = symbolGraph;
+        for (const edge of symbolGraph.imports) {
+            this.symbolEdges.set(symbolEdgeKey(edge.fromFile, edge.specifier, edge.importedName, edge.kind), edge);
+        }
         for (const fact of facts) {
             if (fact.kind === 'struct.typeDecl' && fact.subject.symbol !== undefined) {
                 const key = keyOf(fact.subject.file, fact.subject.symbol);
@@ -128,13 +139,6 @@ export class TypeModel {
             } else if (fact.kind === 'struct.importBindings') {
                 const value = fact.value as unknown as StructImportBindingsValue;
                 this.bindingsByFile.set(fact.subject.file, new Map(value.bindings.map((binding) => [binding.local, binding])));
-            } else if (fact.kind === 'deps.export' && fact.value === 'default') {
-                this.defaultExportLine.set(fact.subject.file, fact.subject.range.startLine);
-            }
-        }
-        for (const edge of moduleGraph.edges) {
-            if (edge.origin === undefined) {
-                this.moduleTargets.set(`${edge.from}\n${edge.specifier}`, edge.to);
             }
         }
         const nodes = [...this.declarations.entries()].sort(([a], [b]) => compareText(a, b)).map(([key, declaration]) => this.nodeOf(key, declaration));
@@ -198,21 +202,60 @@ export class TypeModel {
             return {status: 'project', target: keyOf(file, ref.name), origin: null, candidates: []};
         }
         const binding = this.bindingsByFile.get(file)?.get(ref.prefix ?? ref.name);
-        if (binding === undefined || (ref.prefix !== null && binding.kind !== 'namespace') || (ref.prefix === null && binding.kind === 'namespace')) {
+        if (binding === undefined || (ref.prefix === null && binding.kind === 'namespace') || (ref.prefix !== null && binding.kind === 'default')) {
             return UNRESOLVED;
         }
-        const target = this.moduleTargets.get(`${file}\n${binding.module}`);
-        if (target === undefined) {
-            // Not an analyzed file: a package import is external; a relative one that did not resolve stays unresolved.
-            return binding.module.startsWith('.') || binding.module.startsWith('/') ? UNRESOLVED : {status: 'external', target: null, origin: binding.module, candidates: []};
+        const edge = this.symbolEdges.get(symbolEdgeKey(file, binding.module, binding.importedName, binding.kind));
+        if (edge === undefined) {
+            return UNRESOLVED;
         }
-        const exported = binding.kind === 'namespace' ? ref.name : binding.importedName;
-        if (exported === 'default') {
-            const line = this.defaultExportLine.get(target);
-            const match = [...this.declarations.entries()].find(([key, declaration]) => key.startsWith(`${target}#`) && declaration.fact.subject.range.startLine === line);
-            return match === undefined ? UNRESOLVED : {status: 'project', target: match[0], origin: null, candidates: []};
+        if (ref.prefix === null) {
+            return this.declarationOf(edge, binding.module);
         }
-        return this.declarations.has(keyOf(target, exported)) ? {status: 'project', target: keyOf(target, exported), origin: null, candidates: []} : UNRESOLVED;
+        // `ns.Name`: `ns` binds a whole module — a namespace import, or a named
+        // import of an `export * as ns` re-export; the name is one of its exports.
+        const module = this.namespaceModuleOf(edge);
+        if (module === null) {
+            return edge.status === 'external' ? {status: 'external', target: null, origin: binding.module, candidates: []} : UNRESOLVED;
+        }
+        return this.declarationOf(this.symbolGraph.resolveExport(module, ref.name), binding.module);
+    }
+
+    // The module a binding stands for as a whole, or null.
+    private namespaceModuleOf(edge: SymbolEdge): string | null {
+        if (edge.status !== 'resolved') {
+            return null;
+        }
+        if (edge.kind === 'namespace') {
+            return edge.toFile;
+        }
+        const [definition] = edge.definitions;
+        return edge.definitions.length === 1 && definition?.name === '*' ? definition.file : null;
+    }
+
+    // A SymbolGraph resolution → the project declaration it defines (see the module comment).
+    private declarationOf(resolution: ExportResolution, module: string): TypeResolution {
+        if (resolution.status === 'external') {
+            const hop = resolution.via[resolution.via.length - 1];
+            return {status: 'external', target: null, origin: hop?.specifier ?? module, candidates: []};
+        }
+        const keys = [...new Set(resolution.definitions.map((definition) => this.declarationKey(definition.file, definition.name, definition.evidence[0]?.range.startLine)))];
+        if (resolution.status === 'ambiguous' && resolution.definitions.length > 1) {
+            return {status: 'ambiguous', target: null, origin: null, candidates: resolution.definitions.map((definition) => `${definition.file}#${definition.name}`).sort(compareText)};
+        }
+        const key = keys[0];
+        return (resolution.status === 'resolved' || resolution.status === 'ambiguous') && keys.length === 1 && key !== undefined && key !== null
+            ? {status: 'project', target: key, origin: null, candidates: []}
+            : UNRESOLVED;
+    }
+
+    // The declaration a definition names: by name, or — for `default` — the declaration on the export site's line.
+    private declarationKey(file: string, name: string, line: number | undefined): string | null {
+        if (name !== 'default') {
+            return this.declarations.has(keyOf(file, name)) ? keyOf(file, name) : null;
+        }
+        const match = [...this.declarations.entries()].find(([key, declaration]) => key.startsWith(`${file}#`) && declaration.fact.subject.range.startLine === line);
+        return match?.[0] ?? null;
     }
 
     // Inherited and framework members, most-derived first (see the module comment).
@@ -267,11 +310,13 @@ const isInheritable = (member: StructMember): boolean => member.memberKind !== '
 const memberKey = (member: StructMember): string => (member.memberKind === 'setter' ? `${member.name}=` : member.name);
 
 /**
- * Builds the type model. `dartIndex` and `moduleGraph` are the pipeline's;
- * without them (a focused test) an index over `facts` alone (own `package:`
- * URIs opaque) and a relative-only module graph are used.
+ * Builds the type model. `dartIndex`, `moduleGraph` and `symbolGraph` are the
+ * pipeline's; without them (a focused test) an index over `facts` alone (own
+ * `package:` URIs opaque), a relative-only module graph and the symbol graph
+ * over both are used.
  */
-export const buildTypeModel = (facts: readonly Fact[], analyzedFiles: ReadonlySet<string>, dartIndex?: DartLibraryIndex, moduleGraph?: ModuleGraph): TypeModel => {
+export const buildTypeModel = (facts: readonly Fact[], analyzedFiles: ReadonlySet<string>, dartIndex?: DartLibraryIndex, moduleGraph?: ModuleGraph, symbolGraph?: SymbolGraph): TypeModel => {
     const index = dartIndex ?? flutterAwareIndex(facts);
-    return new TypeModel(facts, index, moduleGraph ?? buildModuleGraph(facts, analyzedFiles, new ModuleResolver(EMPTY_PROJECT_CONFIG), index));
+    const graph = moduleGraph ?? buildModuleGraph(facts, analyzedFiles, new ModuleResolver(EMPTY_PROJECT_CONFIG), index);
+    return new TypeModel(facts, index, graph, symbolGraph ?? buildSymbolGraph(facts, graph));
 };

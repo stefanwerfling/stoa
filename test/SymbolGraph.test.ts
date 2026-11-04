@@ -71,9 +71,11 @@ test('named import, module resolved but export ABSENT: unresolved, yet the known
 
 test('named import, MODULE not resolvable: unresolved AND toFile null (distinct from the export-absent case above)', () => {
     const analyzed = new Set(['/p/a.ts']);
-    const facts = [importFact('/p/a.ts', 'external-pkg'), importNameFact('/p/a.ts', 'external-pkg', 'x', 'named')];
+    // A project module that does not exist (relative) — a package would be `external` (test below).
+    const facts = [importFact('/p/a.ts', './missing'), importNameFact('/p/a.ts', './missing', 'x', 'named')];
     const edge = edgeFor(build(facts, analyzed), 'x');
     assert.equal(edge?.status, 'unresolved');
+    assert.equal(edge?.unresolvedReason, 'module');
     assert.equal(edge?.toFile, null, 'the module itself did not resolve — toFile is null, unlike the export-absent case');
 });
 
@@ -105,12 +107,13 @@ test('namespace import whose module does not resolve is unresolved', () => {
     assert.equal(edge?.toFile, null);
 });
 
-test('an import of an unresolvable (external) module is unresolved, with no assumption about the module', () => {
+test('an import of a package (bare specifier no configured mechanism claims) is external — with no assumption about its exports', () => {
     const analyzed = new Set(['/p/a.ts']);
     const facts = [importFact('/p/a.ts', 'react'), importNameFact('/p/a.ts', 'react', 'useState', 'named')];
     const edge = edgeFor(build(facts, analyzed), 'useState');
-    assert.equal(edge?.status, 'unresolved');
+    assert.equal(edge?.status, 'external');
     assert.equal(edge?.toFile, null);
+    assert.deepEqual([edge?.definitions, edge?.exportEvidence], [[], []]);
 });
 
 test('ambiguous: the resolved target declares the same export name twice', () => {

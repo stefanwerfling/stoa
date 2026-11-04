@@ -286,7 +286,8 @@
   Fact `struct.importBindings` (lokaler Name → Modul, exportierter Name:
   Aliase, Default- und Namespace-Importe — `deps.importName` kennt keinen
   lokalen Namen) plus den ModuleGraph; TS-Re-Export-Barrels werden nicht
-  verfolgt. `TickerProviderStateMixin`, `SingleTickerProviderStateMixin`,
+  verfolgt (seit der semantischen Konsolidierung, Phase 2, schon — die
+  TS-Auflösung liegt jetzt beim SymbolGraph). `TickerProviderStateMixin`, `SingleTickerProviderStateMixin`,
   `AutomaticKeepAliveClientMixin` und `CustomPainter` wurden in den
   Flutter-Katalog aufgenommen (gegen das SDK geprüft). Nicht in der Pipeline
   verdrahtet (E6b liest es über `typeModelOf`); Befunde byte-identisch auf vier
@@ -354,6 +355,67 @@
   (`test/fixtures/architecture`: Loader-Fehler, Zuordnung inkl. Mehrfachtreffer
   und Dateien außerhalb der Wurzel, alle vier Kantenurteile, Paketverbote und
   -namen, Report-Zusammenfassung und Markdown, CLI-Fail-fast und JSON).
+- **SymbolGraph als einziger ES-Modul-Namensauflöser (semantische
+  Konsolidierung, Phase 2):**
+  - **Ein Resolver, klare Zuständigkeiten:** ModuleResolver/ModuleGraph —
+    welches Modul hängt von welchem ab; SymbolGraph — auf welches exportierte
+    Symbol ein Name verweist und wo es definiert ist; TypeModel — welche
+    Typen es gibt und wie sie erben. `TypeModel.resolveTs` löst Importe nicht
+    mehr selbst auf: seine Modul-Zieltabelle und die Default-Export-Zeilen
+    sind entfallen; es bildet den lokalen Alias (`struct.importBindings`) auf
+    die SymbolGraph-Bindung ab und deren Definition auf eine Deklaration.
+    Dart bleibt beim DartLibraryIndex (ein anderes Importmodell: Präfixe,
+    `show`/`hide`, Parts). Vor der Umstellung gemessen: Beide TS-Resolver
+    stimmten bei allen 3.131 Typ-Bindungen von flyingfish und stoa überein.
+  - **`external`:** `ModuleResolver.isExternal` (ein nackter Specifier, den
+    kein konfigurierter Mechanismus beansprucht — nicht relativ/absolut/`#`,
+    nicht das eigene Paket, kein tsconfig-`paths`-Muster, bei `baseUrl` kein
+    analysierter Pfad darunter) ist die einzige Klassifizierung; der
+    ModuleGraph trägt sie an unaufgelösten TS-Einträgen (`external`), der
+    SymbolGraph meldet für Pakete `external` statt `unresolved` (ein
+    gescheiterter relativer Import oder Alias bleibt `unresolved`, jetzt mit
+    `unresolvedReason` `module`/`export`/`cycle`).
+  - **Re-Exporte:** neuer dateilokaler Fact `deps.reexport` (TS-Adapter; Wert
+    in `src/analysis/DepsFacts.ts`) für `export {a as b} from`, `export
+    {default as X} from`, `export * from`, `export * as ns from`
+    (Type-only markiert); ein benannter hat genau den Range des `deps.export`,
+    den derselbe Specifier erzeugt, damit lokale und re-exportierte Namen
+    unterscheidbar sind. `deps.export` bleibt unverändert. Der ModuleGraph
+    nimmt sie als Einträge mit `origin: 'deps.reexport'` auf (ignoriert von
+    `R-DEP-CYCLE`, den Schichtregeln und — bis Phase 3 entscheidet —
+    `R-SOLID-DIP-LAYER-DIRECTION` Stufe 2). Der SymbolGraph verfolgt sie bis
+    zur definierenden Datei (`definitions`, jeder Schritt in `via`):
+    lokal/explizit schlägt `export *`; zwei `export *` mit verschiedenen
+    Definitionen → `ambiguous` (beide behalten); `export *` liefert nie
+    `default`; ein Schritt in ein Paket → `external` (auch wenn der Name nur
+    aus dem einzigen `export *` in ein Paket stammen kann); ein fehlendes
+    Modul → `unresolved` (`module`); ein Zyklus wird auf dem aktuellen Pfad
+    erkannt → `unresolved` (`cycle`). `resolveExport(datei, name)` beantwortet
+    `ns.X`. Nicht verfolgt: `import {A} …; export {A};` (gilt dort als
+    definiert).
+  - **Das TypeModel gewinnt dadurch:** Typen hinter Barrels, Aliase,
+    `default as` und `ns.X`, wenn `ns` ein benannter Import eines `export * as
+    ns` ist; ein `export *`-Konflikt ist `ambiguous` mit beiden Kandidaten.
+    Declaration Merging (mehrere Exportstellen eines Namens in einer Datei)
+    bleibt wie bisher eine Deklaration.
+  - **Unverändert:** jedes Finding auf dem Hauptkorpus, dem SOLID-Korpus, den
+    SOLID-Fixtures, flyingfish (Backend, Frontend, Schemas), kapalium,
+    swipemeister, mwpa und velyo (mit `--solid`, `--dead-exports`) und jede
+    bestehende TypeModel-Auflösung auf allen — byte-identisch. stoas eigene
+    Selbstanalyse ändert sich nur durch den neuen Code (274 statt 276
+    Findings: vier Komplexitäts-Findings weniger; `buildTypeModel` hat jetzt
+    einen fünften, optionalen Parameter). `coverage.factCount` wächst um die
+    `deps.reexport`-Facts, wo es Re-Exporte gibt; FactCache-Einträge
+    invalidieren sich selbst (Engine-Fingerabdruck).
+  - **Geänderte Testerwartungen (beabsichtigt):** ein Paketimport ist
+    `external` (war `unresolved`); der Fall „Modul nicht auflösbar“ nutzt
+    jetzt ein fehlendes relatives Modul; der Barrel-Fall des TypeModels löst
+    auf (war die dokumentierte Einschränkung).
+  - Tests: `test/SymbolGraphReexport.test.ts` (echter Adapter auf
+    `test/fixtures/symbolgraph/reexport`: Facts und Ranges, Ketten, Alias,
+    `default as`, Namespace-Re-Export, Type-only, Mehrdeutigkeit, `default`,
+    Zyklus, fehlendes Modul, Pakete, TypeModel über den Graphen,
+    Determinismus, FactCache-Treffer, ModuleGraph-Einträge, `isExternal`).
 - **Evaluator-Integrität (semantische Konsolidierung, Phase 1):** `stoa eval`
   meldete eine unvollständige Analyse als bestanden — ein `partial`-Lauf
   (Memory Guard, Lese-/Parse-Fehler) gab nur eine Warnung auf stderr aus und
@@ -1487,7 +1549,7 @@ zu liefern.
 `metric.cognitiveComplexity`, `metric.nestingDepth`, `metric.parameterCount`,
 `metric.functionLength`, `doc.hasComplexityRationale`, `ast.usesNondeterminism`,
 `ast.emptyCatch`, `ast.catchSwallowsError`, `doc.catchHasRationale`, `deps.import`, `deps.importUnused`,
-`deps.importDeep`, `deps.export`, `deps.importName`, `orm.synchronizeEnabled`,
+`deps.importDeep`, `deps.export`, `deps.importName`, `deps.reexport`, `orm.synchronizeEnabled`,
 `orm.syncWithMigrations`, `orm.entityNoPrimaryKey`, `orm.eagerRelation`,
 `migration.unguardedDdl`, `migration.noDown`, `migration.dataLoss`,
 `migration.nullableNoDefault`, `ui.imageMissingAlt`, `ui.controlMissingName`,

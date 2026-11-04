@@ -86,6 +86,19 @@ const substitutePattern = (pattern: string, specifier: string, replacement: stri
     return replacement.includes('*') ? replacement.replace('*', captured) : replacement;
 };
 
+// Whether the first segment of a bare specifier (both segments for a scoped
+// `@scope/name`) is an analyzed file or directory below `baseUrl`.
+const underBaseUrl = (baseUrl: string, specifier: string, analyzedFiles: ReadonlySet<string>): boolean => {
+    const segments = specifier.split('/');
+    const head = resolve(baseUrl, ...segments.slice(0, specifier.startsWith('@') ? 2 : 1));
+    for (const file of analyzedFiles) {
+        if (file.startsWith(`${head}/`) || stripExtension(file) === head) {
+            return true;
+        }
+    }
+    return false;
+};
+
 /**
  * Orders two `*`-containing subpath-pattern keys by Node.js specificity
  * (`PATTERN_KEY_COMPARE`): the key with the longer part BEFORE `*` (larger
@@ -174,6 +187,28 @@ export class ModuleResolver {
             return {target: exportsTarget, resolution: 'exports'};
         }
         return {target: null, resolution: 'unresolved'};
+    }
+
+    /**
+     * Whether an UNRESOLVED `specifier` names a module outside the project (a
+     * package): bare (not relative, absolute or `#`), not the project's own
+     * package name, not matched by any tsconfig `paths` pattern, and — with a
+     * `baseUrl` — its first segment is no analyzed path below it. Anything a
+     * configured mechanism could map into the project is NOT external: it is
+     * an unresolved project reference, never a package.
+     */
+    public isExternal(specifier: string, analyzedFiles: ReadonlySet<string>): boolean {
+        if (specifier.startsWith('.') || specifier.startsWith('/') || specifier.startsWith('#') || isAbsolute(specifier)) {
+            return false;
+        }
+        const name = this.config.packageName;
+        if (name !== undefined && (specifier === name || specifier.startsWith(`${name}/`))) {
+            return false;
+        }
+        if (Object.keys(this.config.paths ?? {}).some((pattern) => substitutePattern(pattern, specifier, '') !== null)) {
+            return false;
+        }
+        return this.config.baseUrl === undefined || !underBaseUrl(this.config.baseUrl, specifier, analyzedFiles);
     }
 
     // tsconfig `paths` + `baseUrl`. All matches (across every paths entry and

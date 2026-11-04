@@ -79,9 +79,14 @@ const compareText = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 
 const firstOf = (evidence: readonly ImportEvidence[]): ImportEvidence =>
     [...evidence].sort((a, b) => a.range.startLine - b.range.startLine || a.range.startCol - b.range.startCol || compareText(a.factId, b.factId))[0] as ImportEvidence;
 
+// TS re-export entries (`deps.reexport`, semantic consolidation phase 2) are
+// not judged yet: whether a barrel's re-export counts as an architectural
+// dependency is decided in phase 3 — until then the findings stay unchanged.
+const isReexport = (entry: {origin?: string}): boolean => entry.origin === 'deps.reexport';
+
 const edgeViolations = (graph: ModuleGraph, model: ArchitectureModel): Violation[] =>
     graph.edges
-        .filter((edge) => model.edgeVerdict(edge.from, edge.to) === 'forbidden')
+        .filter((edge) => !isReexport(edge) && model.edgeVerdict(edge.from, edge.to) === 'forbidden')
         .map((edge) => ({
             kind: 'edge' as const,
             file: edge.from,
@@ -98,7 +103,7 @@ const edgeViolations = (graph: ModuleGraph, model: ArchitectureModel): Violation
 
 const packageViolations = (graph: ModuleGraph, model: ArchitectureModel): Violation[] => {
     const byKey = new Map<string, Violation>();
-    for (const entry of graph.unresolved) {
+    for (const entry of graph.unresolved.filter((candidate) => !isReexport(candidate))) {
         const name = packageNameOf(entry.specifier);
         const layer = model.layerOf(entry.from);
         if (name === null || layer === null || !model.isPackageForbidden(entry.from, name)) {

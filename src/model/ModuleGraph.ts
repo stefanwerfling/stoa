@@ -31,8 +31,13 @@ import type {DartLibraryIndex} from './DartLibraryIndex.js';
  * legal and common in Dart, and reporting them is a separate decision.
  */
 
-/** Where an edge/unresolved import came from. Absent = `deps.import`. */
-export type ModuleEdgeOrigin = 'deps.import' | 'dart.importSpec';
+/**
+ * Where an edge/unresolved import came from. Absent = `deps.import`.
+ * `deps.reexport` (semantic consolidation, phase 2): a TS re-export
+ * (`export … from`) — a module dependency of the barrel, carried for the
+ * SymbolGraph's re-export chains; rules that predate it skip these entries.
+ */
+export type ModuleEdgeOrigin = 'deps.import' | 'dart.importSpec' | 'deps.reexport';
 
 /** How a Dart directive was resolved: a relative URI, or a `package:` URI of the project's own packages. */
 export type DartResolutionMethod = 'relative' | 'package';
@@ -72,6 +77,13 @@ export interface UnresolvedImport {
     origin?: ModuleEdgeOrigin;
     /** Dart only: the directive kind. */
     dartDirective?: 'import' | 'export';
+    /**
+     * TS entries only (`deps.import` / `deps.reexport`): the specifier names a
+     * package outside the project (`ModuleResolver.isExternal`) — as opposed
+     * to a project reference that failed to resolve (relative, `#`, a tsconfig
+     * `paths` match without an analyzed target).
+     */
+    external?: boolean;
 }
 
 export interface ModuleGraph {
@@ -96,10 +108,14 @@ const compareEdges = (a: ModuleEdge, b: ModuleEdge): number =>
     a.to.localeCompare(b.to) ||
     a.specifier.localeCompare(b.specifier) ||
     a.resolution.localeCompare(b.resolution) ||
-    (a.dartDirective ?? '').localeCompare(b.dartDirective ?? '');
+    (a.dartDirective ?? '').localeCompare(b.dartDirective ?? '') ||
+    (a.origin ?? '').localeCompare(b.origin ?? '');
 
 const compareUnresolved = (a: UnresolvedImport, b: UnresolvedImport): number =>
-    a.from.localeCompare(b.from) || a.specifier.localeCompare(b.specifier) || (a.dartDirective ?? '').localeCompare(b.dartDirective ?? '');
+    a.from.localeCompare(b.from) ||
+    a.specifier.localeCompare(b.specifier) ||
+    (a.dartDirective ?? '').localeCompare(b.dartDirective ?? '') ||
+    (a.origin ?? '').localeCompare(b.origin ?? '');
 
 // Deterministic order for the evidence sites of one edge/unresolved import:
 // by factId, then by source position — independent of the order facts arrived.
@@ -133,32 +149,8 @@ export const buildModuleGraph = (facts: readonly Fact[], analyzedFiles: Readonly
             addDartDirective(fact, analyzedFiles, dartIndex, edgeByKey, unresolvedByKey);
             continue;
         }
-        if (fact.kind !== 'deps.import') {
-            continue;
-        }
-        const value = fact.value as unknown as ImportValue;
-        const from = fact.subject.file;
-        const specifier = value.module;
-        const isTypeOnly = value.isTypeOnly === true;
-        const evidence: ImportEvidence = {factId: fact.id, range: fact.subject.range};
-
-        const resolved = resolver.resolve(from, specifier, analyzedFiles);
-        if (resolved.target === null || resolved.resolution === 'unresolved') {
-            const key = `${from} ${specifier} ${isTypeOnly}`;
-            const existing = unresolvedByKey.get(key);
-            if (existing === undefined) {
-                unresolvedByKey.set(key, {from, specifier, isTypeOnly, evidence: [evidence]});
-            } else {
-                addEvidence(existing.evidence, evidence);
-            }
-            continue;
-        }
-        const key = `${from} ${resolved.target} ${specifier} ${isTypeOnly} ${resolved.resolution}`;
-        const existing = edgeByKey.get(key);
-        if (existing === undefined) {
-            edgeByKey.set(key, {from, to: resolved.target, specifier, isTypeOnly, resolution: resolved.resolution, evidence: [evidence]});
-        } else {
-            addEvidence(existing.evidence, evidence);
+        if (fact.kind === 'deps.import' || fact.kind === 'deps.reexport') {
+            addTsDependency(fact, {analyzedFiles, resolver, edgeByKey, unresolvedByKey});
         }
     }
 
@@ -176,6 +168,47 @@ export const buildModuleGraph = (facts: readonly Fact[], analyzedFiles: Readonly
         edges: edges.sort(compareEdges),
         unresolved: unresolved.sort(compareUnresolved)
     };
+};
+
+// One TS `deps.import` (or `deps.reexport`) fact → an edge or an unresolved
+// import. A `deps.import` entry is exactly the pre-phase-2 entry plus the
+// `external` flag on unresolved ones; re-export entries carry their origin
+// (also in the key, so an import and a re-export of the same specifier stay
+// two entries).
+interface TsDependencySink {
+    analyzedFiles: ReadonlySet<string>;
+    resolver: ModuleResolver;
+    edgeByKey: Map<string, ModuleEdge>;
+    unresolvedByKey: Map<string, UnresolvedImport>;
+}
+
+const addTsDependency = (fact: Fact, {analyzedFiles, resolver, edgeByKey, unresolvedByKey}: TsDependencySink): void => {
+    const value = fact.value as unknown as ImportValue;
+    const from = fact.subject.file;
+    const specifier = value.module;
+    const isTypeOnly = value.isTypeOnly === true;
+    const evidence: ImportEvidence = {factId: fact.id, range: fact.subject.range};
+    const origin = fact.kind === 'deps.reexport' ? ({origin: 'deps.reexport'} as const) : {};
+    const originKey = fact.kind === 'deps.reexport' ? ' reexport' : '';
+
+    const resolved = resolver.resolve(from, specifier, analyzedFiles);
+    if (resolved.target === null || resolved.resolution === 'unresolved') {
+        const key = `${from} ${specifier} ${isTypeOnly}${originKey}`;
+        const existing = unresolvedByKey.get(key);
+        if (existing === undefined) {
+            unresolvedByKey.set(key, {from, specifier, isTypeOnly, evidence: [evidence], ...origin, external: resolver.isExternal(specifier, analyzedFiles)});
+        } else {
+            addEvidence(existing.evidence, evidence);
+        }
+        return;
+    }
+    const key = `${from} ${resolved.target} ${specifier} ${isTypeOnly} ${resolved.resolution}${originKey}`;
+    const existing = edgeByKey.get(key);
+    if (existing === undefined) {
+        edgeByKey.set(key, {from, to: resolved.target, specifier, isTypeOnly, resolution: resolved.resolution, ...origin, evidence: [evidence]});
+    } else {
+        addEvidence(existing.evidence, evidence);
+    }
 };
 
 // One Dart `import`/`export` directive → an edge or an unresolved import.

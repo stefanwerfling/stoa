@@ -10,6 +10,7 @@ import {extractValidatorUsageFacts} from './ValidatorUsage.js';
 import {extractValidationDataflowFacts} from './ValidationDataflow.js';
 import {destructiveDdl, nullableNoDefault, unguardedDdl} from '../MigrationSql.js';
 import {extractTsMemberFacts} from './TsMembers.js';
+import type {ReexportValue} from '../DepsFacts.js';
 
 interface FunctionMetrics {
     cyclomatic: number;
@@ -130,9 +131,7 @@ export const extractFacts = (sourceFile: SourceFile, info: AdapterInfo): Fact[] 
         }
     });
 
-    for (const exported of collectExportNames(sourceFile)) {
-        facts.push(build({kind: 'deps.export', kindOf: 'module', symbol: exported.name, range: exported.range, value: exported.name}));
-    }
+    facts.push(...exportFacts(sourceFile, build));
 
     // Class model (E3): neutral struct.typeDecl facts with embedded members.
     facts.push(...extractTsMemberFacts(sourceFile, build));
@@ -508,6 +507,45 @@ interface ExportedName {
     name: string;
     range: SourceRange;
 }
+
+interface Reexport {
+    symbol: string;
+    range: SourceRange;
+    value: ReexportValue;
+}
+
+// `deps.export` per exported name, `deps.reexport` per `export … from` (see DepsFacts.ts).
+const exportFacts = (sourceFile: SourceFile, build: ReturnType<typeof factBuilder>): Fact[] => [
+    ...collectExportNames(sourceFile).map((exported) => build({kind: 'deps.export', kindOf: 'module', symbol: exported.name, range: exported.range, value: exported.name})),
+    ...collectReexports(sourceFile).map((reexport) => build({kind: 'deps.reexport', kindOf: 'module', symbol: reexport.symbol, range: reexport.range, value: {...reexport.value}}))
+];
+
+const collectReexports = (sourceFile: SourceFile): Reexport[] => {
+    const out: Reexport[] = [];
+    sourceFile.getExportDeclarations().forEach((declaration, index) => {
+        const module = declaration.getModuleSpecifierValue();
+        if (module === undefined) {
+            return;
+        }
+        const named = declaration.getNamedExports();
+        if (named.length === 0) {
+            const namespace = declaration.getNamespaceExport()?.getName();
+            const kind = namespace === undefined ? 'star' : 'namespace';
+            out.push({symbol: `reexport#${index}`, range: rangeOf(sourceFile, declaration), value: {module, name: '*', exportedAs: namespace ?? '*', kind, isTypeOnly: declaration.isTypeOnly()}});
+            return;
+        }
+        named.forEach((specifier, position) => {
+            const name = specifier.getNameNode().getText();
+            const exportedAs = specifier.getAliasNode()?.getText() ?? name;
+            out.push({
+                symbol: `reexport#${index}.${position}`,
+                range: rangeOf(sourceFile, specifier),
+                value: {module, name, exportedAs, kind: 'named', isTypeOnly: declaration.isTypeOnly() || specifier.isTypeOnly()}
+            });
+        });
+    });
+    return out;
+};
 
 const collectExportNames = (sourceFile: SourceFile): ExportedName[] => {
     const out: ExportedName[] = [];

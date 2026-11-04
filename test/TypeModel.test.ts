@@ -78,14 +78,16 @@ test('E4: a Flutter framework base contributes its catalogued members (State, St
     assert.deepEqual(node('dart/lib/page.dart', 'Page').frameworkMembers.map((member) => member.name), ['key', 'createState', 'createElement']);
 });
 
-test('E4 TS: aliased named import, default import, namespace import, same-file declaration; package import external; globals and barrels unresolved', () => {
+test('E4 TS: aliased named import, default import, namespace import, same-file declaration; package import external; globals unresolved; barrels followed through the SymbolGraph (phase 2)', () => {
     assert.deepEqual(supers('ts/sub.ts', 'S1'), ['extends B → project ts/base.ts#Base']);
     assert.deepEqual(supers('ts/sub.ts', 'S2'), ['extends Def → project ts/def.ts#Def']);
     assert.deepEqual(supers('ts/sub.ts', 'S3'), ['extends ns.Base → project ts/base.ts#Base']);
     assert.deepEqual(supers('ts/sub.ts', 'S4'), ['extends Ext → external some-lib']);
     assert.deepEqual(supers('ts/sub.ts', 'S5'), ['extends Error → unresolved ']);
     assert.deepEqual(supers('ts/sub.ts', 'S6'), ['extends Local → project ts/sub.ts#Local']);
-    assert.deepEqual(supers('ts/sub.ts', 'S7'), ['extends ViaBarrel → unresolved ']);
+    // `export {Base} from './base'` in barrel.ts — followed since phase 2 (was a documented limit: unresolved)
+    assert.deepEqual(supers('ts/sub.ts', 'S7'), ['extends ViaBarrel → project ts/base.ts#Base']);
+    assert.deepEqual(inherited('ts/sub.ts', 'S7'), ['a@Base', 'b@Base'], 'S7 overrides nothing');
     assert.deepEqual(inherited('ts/sub.ts', 'S1'), ['b@Base']);
     assert.deepEqual(inherited('ts/sub.ts', 'S2'), ['x@Def']);
     assert.equal(node('ts/sub.ts', 'S4').hierarchyComplete, false);
