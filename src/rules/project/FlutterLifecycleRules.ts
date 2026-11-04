@@ -1,4 +1,5 @@
 import type {Fact, Finding, Severity} from '../../Types.js';
+import {ordinalSymbols} from '../../FindingIdentity.js';
 import {localize, type LocalizedText} from '../../i18n/Localized.js';
 import type {LifecycleCall, LifecycleCreation, LifecycleRange, StateLifecycleValue} from '../../analysis/dart/FlutterLifecycle.js';
 import {resolvedFrom, type DartNameResolution} from '../../model/DartLibraryIndex.js';
@@ -109,14 +110,22 @@ interface Hit {
     range: LifecycleRange;
     /** Filled into `{subject}` (field name, call). */
     subject: string;
+    /** The finding's identity within the State class (field name, or the call site's base — see `callSites`). */
+    key: string;
     /** Fact-value summary for the evidence. */
     evidence: string;
 }
 
 abstract class FlutterLifecycleRule implements ProjectRule {
     public abstract readonly id: string;
-    public readonly version: string = '1.1.0';
+    public readonly version: string = '1.2.0';
     public readonly requiredFactKinds = ['dart.stateLifecycle', 'dart.classDecl', 'dart.importSpec'];
+    /**
+     * True when one key can occur at several sites (calls in one method): the
+     * identity then carries the occurrence index (`Class.signIn#1`). A field
+     * key is unique per class and stays plain (`Class._controller`).
+     */
+    protected readonly callSites: boolean = false;
     protected abstract readonly text: LifecycleText;
     protected abstract readonly principleId: string;
     protected abstract readonly severity: Severity;
@@ -137,21 +146,22 @@ abstract class FlutterLifecycleRule implements ProjectRule {
             if (!fromSource(resolve(fact.subject.file, 'State', value.statePrefix), FLUTTER_PACKAGE)) {
                 continue;
             }
-            for (const hit of this.hits({fact, value}, resolve)) {
-                findings.push(this.buildFinding(hit, input));
-            }
+            const hits = this.hits({fact, value}, resolve).sort((a, b) => a.range.startLine - b.range.startLine || a.range.startCol - b.range.startCol);
+            const keys = hits.map((hit) => hit.key);
+            const symbols = this.callSites ? ordinalSymbols(keys) : keys;
+            hits.forEach((hit, index) => findings.push(this.buildFinding(hit, `${value.className}.${symbols[index] as string}`, input)));
         }
         return findings;
     }
 
-    private buildFinding(hit: Hit, input: ProjectRuleInput): Finding {
+    private buildFinding(hit: Hit, symbol: string, input: ProjectRuleInput): Finding {
         const {state, range} = hit;
         const fill = (text: LocalizedText): string => localize(text, input.lang).replaceAll('{subject}', hit.subject).replaceAll('{class}', state.value.className);
         return {
             id: `finding:${this.id}:${state.fact.subject.file}:${range.startLine}:${range.startCol}`,
             rule: {id: this.id, version: this.version},
             ruleSet: input.ruleSetId,
-            location: {file: state.fact.subject.file, range, symbol: state.value.className, structure: 'class'},
+            location: {file: state.fact.subject.file, range, symbol, structure: 'class'},
             observation: {
                 statement: fill(this.text.statement),
                 evidence: [{fact: 'dart.stateLifecycle', value: hit.evidence, certainty: 'syntactic'}]
@@ -190,6 +200,7 @@ const unreleased = (state: StateClass, accept: (call: LifecycleCreation) => bool
             state,
             range: creation.range,
             subject: `${creation.field} (${callText(creation)})`,
+            key: creation.field,
             evidence: `${value.className}.${creation.field} = ${callText(creation)}; dispose: ${value.hasDispose ? 'no mention' : 'absent'}`
         });
     }
@@ -210,7 +221,7 @@ const DISPOSE_CONTEXT: LocalizedText = {
 /** R-FLUTTER-UNDISPOSED-CONTROLLER: a framework controller/FocusNode held in a field and never released in dispose(). */
 export class FlutterUndisposedControllerRule extends FlutterLifecycleRule {
     public readonly id = 'R-FLUTTER-UNDISPOSED-CONTROLLER';
-    public override readonly version = '1.2.0';
+    public override readonly version = '1.3.0';
     protected readonly principleId = 'marcus.control';
     protected readonly severity: Severity = 'medium';
     protected readonly text: LifecycleText = {
@@ -235,7 +246,7 @@ export class FlutterUndisposedControllerRule extends FlutterLifecycleRule {
 /** R-FLUTTER-UNCANCELLED-SUBSCRIPTION: a Timer or stream subscription held in a field and never cancelled in dispose(). */
 export class FlutterUncancelledSubscriptionRule extends FlutterLifecycleRule {
     public readonly id = 'R-FLUTTER-UNCANCELLED-SUBSCRIPTION';
-    public override readonly version = '1.2.0';
+    public override readonly version = '1.3.0';
     protected readonly principleId = 'marcus.control';
     protected readonly severity: Severity = 'medium';
     protected readonly text: LifecycleText = {
@@ -265,7 +276,8 @@ export class FlutterUncancelledSubscriptionRule extends FlutterLifecycleRule {
 /** R-FLUTTER-SETSTATE-AFTER-AWAIT: setState() after an await in the same function without a `mounted` check in between. */
 export class FlutterSetStateAfterAwaitRule extends FlutterLifecycleRule {
     public readonly id = 'R-FLUTTER-SETSTATE-AFTER-AWAIT';
-    public override readonly version = '1.2.0';
+    public override readonly version = '1.3.0';
+    protected override readonly callSites = true;
     protected readonly principleId = 'marcus.control';
     protected readonly severity: Severity = 'medium';
     protected override readonly confidence = 0.7;
@@ -293,6 +305,7 @@ export class FlutterSetStateAfterAwaitRule extends FlutterLifecycleRule {
                     state,
                     range: call.range,
                     subject: `${state.value.className}.${call.method}`,
+                    key: call.method,
                     evidence: `${state.value.className}.${call.method}: await${awaitAt} → setState (line ${call.range.startLine}), ${guard}`
                 };
             });
@@ -302,6 +315,7 @@ export class FlutterSetStateAfterAwaitRule extends FlutterLifecycleRule {
 /** R-FLUTTER-INHERITED-IN-INITSTATE: an inherited-widget lookup (`Theme.of(context)`, …) directly in initState(). */
 export class FlutterInheritedInInitStateRule extends FlutterLifecycleRule {
     public readonly id = 'R-FLUTTER-INHERITED-IN-INITSTATE';
+    protected override readonly callSites = true;
     protected readonly principleId = 'marcus.judgment';
     protected readonly severity: Severity = 'high';
     protected readonly text: LifecycleText = {
@@ -337,7 +351,7 @@ export class FlutterInheritedInInitStateRule extends FlutterLifecycleRule {
                     fromSource(resolve(state.fact.subject.file, type, call.prefix), FLUTTER_PACKAGE)
                 );
             })
-            .map((call) => ({state, range: call.range, subject: `${callText(call)}(context)`, evidence: `${state.value.className}.initState: ${callText(call)}(context)`}));
+            .map((call) => ({state, range: call.range, subject: `${callText(call)}(context)`, key: `initState:${callText(call)}`, evidence: `${state.value.className}.initState: ${callText(call)}(context)`}));
     }
 }
 

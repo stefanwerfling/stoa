@@ -111,3 +111,47 @@ test('2.2: an incomplete scan compared against a baseline reports nothing as fix
         rmSync(dir, {recursive: true, force: true});
     }
 });
+
+// Unique identities: a Flutter project whose lifecycle/layout rules report several
+// sites of one class/build() round-trips through --update-baseline (before, the
+// written baseline repeated an identity and could not be read back); a project
+// that still collides is refused loudly instead of producing an unreadable file.
+const analyzeAt = (path: string, args: string[]): CliRun => {
+    const result = spawnSync('node', ['--import', 'tsx', 'src/Cli.ts', 'analyze', path, ...args], {cwd: root, encoding: 'utf8'});
+    return {status: result.status ?? 1, stdout: result.stdout, stderr: result.stderr};
+};
+
+test('Flutter identities: --update-baseline then --baseline --only-new round-trips (0 new, exit 0) on several sites per class and per build()', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'stoa-baseline-flutter-'));
+    try {
+        const path = join(dir, 'baseline.json');
+        const project = join(here, 'fixtures', 'flutter-identity');
+        const write = analyzeAt(project, ['--baseline', path, '--update-baseline', '--format', 'json']);
+        assert.equal(write.status, 0, write.stderr);
+        const entries = (JSON.parse(readFileSync(path, 'utf8')) as {findings: unknown[]}).findings;
+        assert.ok(entries.length >= 8);
+        const read = analyzeAt(project, ['--baseline', path, '--only-new', '--format', 'json']);
+        assert.equal(read.status, 0, read.stderr);
+        assert.equal((JSON.parse(read.stdout) as {findings: unknown[]}).findings.length, 0);
+    } finally {
+        rmSync(dir, {recursive: true, force: true});
+    }
+});
+
+test('--update-baseline on findings that share an identity exits 1 with the reason and leaves the existing baseline untouched', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'stoa-baseline-collision-'));
+    try {
+        const project = join(dir, 'project');
+        spawnSync('mkdir', ['-p', project]);
+        const sixParams = 'a: number, b: number, c: number, d: number, e: number, f: number';
+        writeFileSync(join(project, 'a.ts'), `export class A {\n    run(${sixParams}): number {\n        return a;\n    }\n}\nexport class B {\n    run(${sixParams}): number {\n        return a;\n    }\n}\n`);
+        const path = join(dir, 'baseline.json');
+        writeFileSync(path, '{"version": 1, "findings": []}\n');
+        const result = analyzeAt(project, ['--baseline', path, '--update-baseline', '--format', 'json']);
+        assert.equal(result.status, 1);
+        assert.match(result.stderr, /refusing to update baseline .*share an identity.*a\.ts::R-FN-TOO-MANY-PARAMS::run/);
+        assert.equal(readFileSync(path, 'utf8'), '{"version": 1, "findings": []}\n');
+    } finally {
+        rmSync(dir, {recursive: true, force: true});
+    }
+});

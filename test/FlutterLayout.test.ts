@@ -57,7 +57,7 @@ test('values (1.1.0): shrinkWrap / scrollDirection / Flex direction decide by li
         'NESTED-SCROLL-UNBOUNDED 23 SingleChildScrollView.child > ListView [shrinkWrap=true (literal), scrollDirection=vertical (default), parent axis=horizontal (literal)]'
     ]);
     for (const finding of layoutFindings(join(fixtures, 'Values.dart'))) {
-        assert.equal(finding.rule.version, finding.rule.id === 'R-FLUTTER-UNBOUNDED-SCROLLABLE' || finding.rule.id === 'R-FLUTTER-NESTED-SCROLL-UNBOUNDED' ? '1.2.0' : '1.1.0');
+        assert.equal(finding.rule.version, finding.rule.id === 'R-FLUTTER-UNBOUNDED-SCROLLABLE' || finding.rule.id === 'R-FLUTTER-NESTED-SCROLL-UNBOUNDED' ? '1.3.0' : '1.2.0');
     }
 });
 
@@ -71,7 +71,7 @@ test('finding shape: location at the child, robustness, marcus.judgment, evidenc
     const factKinds = new Set(result.facts.map((fact) => fact.kind));
     const finding = result.report.findings.find((candidate) => candidate.rule.id === 'R-FLUTTER-PARENTDATA-MISUSE');
     assert.ok(finding !== undefined);
-    assert.equal(finding.location.symbol, 'build');
+    assert.equal(finding.location.symbol, 'build>Expanded#0');
     assert.deepEqual(finding.location.range, {startLine: 8, startCol: 47, endLine: 8, endCol: 73});
     assert.deepEqual(finding.interpretation.dimensions, ['robustness']);
     assert.equal(finding.interpretation.principles[0]?.id, 'marcus.judgment');
@@ -105,4 +105,23 @@ test('requiredFactKinds is truthful: evaluating on only those kinds yields ident
 
 test('determinism: two runs give byte-identical layout findings', () => {
     assert.equal(JSON.stringify(layoutFindings(fixtures)), JSON.stringify(layoutFindings(fixtures)));
+});
+
+// Identity: the owning function and the widget, numbered per file in source
+// order — the same widget misplaced twice in one build(), and once more in a
+// second class's build() of the same file, are three identities.
+test('identity: owner>widget#n, unique per file even across classes sharing a build()', () => {
+    const findings = layoutFindings(join(here, 'fixtures', 'flutter-identity', 'Layout.dart'));
+    assert.deepEqual(
+        findings.map((finding) => `${finding.rule.id} ${finding.location.range.startLine} ${finding.location.symbol ?? ''}`),
+        ['R-FLUTTER-PARENTDATA-MISUSE 9 build>Expanded#0', 'R-FLUTTER-PARENTDATA-MISUSE 10 build>Expanded#1', 'R-FLUTTER-PARENTDATA-MISUSE 18 build>Expanded#2']
+    );
+});
+
+test('identity: no two layout findings share (file, rule, symbol) on any layout fixture', () => {
+    for (const path of [fixtures, join(here, 'fixtures', 'flutter-identity')]) {
+        const keys = layoutFindings(path).map((finding) => `${finding.location.file}::${finding.rule.id}::${finding.location.symbol ?? ''}`);
+        assert.ok(keys.length > 0, path);
+        assert.equal(new Set(keys).size, keys.length, `${path}: identity collision`);
+    }
 });

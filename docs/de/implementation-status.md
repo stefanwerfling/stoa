@@ -355,6 +355,48 @@
   (`test/fixtures/architecture`: Loader-Fehler, Zuordnung inkl. Mehrfachtreffer
   und Dateien außerhalb der Wurzel, alle vier Kantenurteile, Paketverbote und
   -namen, Report-Zusammenfassung und Markdown, CLI-Fail-fast und JSON).
+- **Eindeutige Finding-Identitäten und duplikatsichere Evaluierung
+  (Evaluator-Integrität, Phase 1 des Folgeauftrags):**
+  - **Befund:** Die Flutter-Lifecycle-Regeln nutzten die State-Klasse als
+    Symbol, die Layout-Regeln die besitzende Funktion (`build`) — mehrere
+    Stellen in einer Klasse bzw. einem `build()` teilten eine Identität (mwpa:
+    5 `setState`-Stellen und 3 Controller einer Klasse; swipemeister: 3).
+    `--update-baseline` schrieb dann eine Baseline, die `--baseline` ablehnte
+    („duplicates an earlier entry's identity“), und `stoa eval` bestand trotz
+    der Kollision (`duplicates` wurde berichtet, entschied aber nie über das
+    Ergebnis).
+  - **Identitäten:** Lifecycle `Klasse.feld` (Controller, Subscription),
+    `Klasse.methode#n` (`setState` nach `await`, je Methode in
+    Quelltextreihenfolge nummeriert), `Klasse.initState:Typ.of#n`; Layout
+    `owner>Widget#n` (je Datei nummeriert, weil zwei Klassen einer Datei beide
+    ein `build()` besitzen können). Die `#n`-Hilfsfunktion `ordinalSymbols`
+    liegt in `src/FindingIdentity.ts`. Versionen: UNDISPOSED-CONTROLLER,
+    UNCANCELLED-SUBSCRIPTION, SETSTATE-AFTER-AWAIT, UNBOUNDED-SCROLLABLE,
+    NESTED-SCROLL-UNBOUNDED 1.3.0; INHERITED-IN-INITSTATE, PARENTDATA-MISUSE,
+    TEXTFIELD-UNBOUNDED-WIDTH 1.2.0. Bestehende Baselines mit diesen Regeln
+    melden deren Findings als `new`, bis sie neu geschrieben werden (eine mit
+    Kollision ließ sich vorher ohnehin nicht laden).
+  - **Evaluierung:** Eine doppelte erzeugte Identität lässt eine vollständige
+    Evaluierung scheitern (Exit 1), auch bei 0 FP / 0 FN; die Identitäten
+    bleiben in `duplicates` aufgeführt, das Markdown erklärt die Kollision,
+    stderr nennt sie, nichts wird verworfen. **Baseline:** `saveBaseline`
+    verweigert Findings mit gemeinsamer Identität (Exit 1, bestehende Datei
+    unverändert), statt eine unlesbare Datei zu schreiben.
+  - **Bekannte offene Kollision (nicht geändert, braucht eine Entscheidung):**
+    Die Adapter für TS, Dart und PHP benennen eine Funktion/Methode nur mit
+    ihrem Namen — zwei Klassen einer Datei mit gleichnamiger Methode teilen für
+    jede deklarative Regel eine Identität (`A.run` und `B.run` beide `run`).
+    Auf den Golden-Korpora und den gemessenen Projekten trat das nicht auf;
+    ein solches Projekt scheitert jetzt laut an `eval` und
+    `--update-baseline` statt still.
+  - **Unverändert:** jeder Golden-Korpus (0 Duplikate), jedes Finding
+    außerhalb der Flutter-Regeln.
+  - Tests: `test/fixtures/flutter-identity` (mehrere Stellen je Klasse, je
+    Methode, je `build()` und über zwei Klassen einer Datei), Eindeutigkeit
+    über alle Lifecycle-/Layout-Fixtures, Flutter-Baseline-Rundlauf über die
+    CLI, Ablehnung durch `saveBaseline` (Unit + CLI), doppelte erzeugte
+    Identitäten über das echte `stoa eval` (Exit 1, JSON, Markdown, stderr) und
+    `evaluationOutcome`. Gegen den bisherigen Code schlagen sie fehl.
 - **Architekturregel auf den konsolidierten Modellen (semantische
   Konsolidierung, Phase 3):** `R-SOLID-DIP-LAYER-DIRECTION` Stufe 2 → 0.3.0.
   - **Re-Exporte sind Abhängigkeiten:** TS-`export … from` (`deps.reexport`-

@@ -174,13 +174,45 @@ test('resources: fact v2 records declared field types, external ownership and ce
     assert.deepEqual(resources?.releaseCalls, ['_cancelled', '_focus', '_scroll', '_timer']);
 });
 
-test('Phase C versions: controller, subscription and setState rules at 1.2.0, inherited-in-initState at 1.1.0', () => {
+test('versions: controller, subscription and setState rules at 1.3.0, inherited-in-initState at 1.2.0 (Phase C, then unique identities)', () => {
     const findings = [...lifecycleFindings(join(fixtures, 'Positive.dart')), ...lifecycleFindings(join(phaseC, 'Resources.dart'))];
     const versions = [...new Set(findings.map((finding) => `${finding.rule.id}@${finding.rule.version}`))].sort();
     assert.deepEqual(versions, [
-        'R-FLUTTER-INHERITED-IN-INITSTATE@1.1.0',
-        'R-FLUTTER-SETSTATE-AFTER-AWAIT@1.2.0',
-        'R-FLUTTER-UNCANCELLED-SUBSCRIPTION@1.2.0',
-        'R-FLUTTER-UNDISPOSED-CONTROLLER@1.2.0'
+        'R-FLUTTER-INHERITED-IN-INITSTATE@1.2.0',
+        'R-FLUTTER-SETSTATE-AFTER-AWAIT@1.3.0',
+        'R-FLUTTER-UNCANCELLED-SUBSCRIPTION@1.3.0',
+        'R-FLUTTER-UNDISPOSED-CONTROLLER@1.3.0'
     ]);
+});
+
+// Identity (Phase 1 of the evaluator-integrity track): (file, rule, symbol) must
+// be unique per run — the evaluator fails on a collision and a baseline with
+// one could not be read back. Field rules: `Class.field`; call-site rules: the
+// site numbered per method in source order (`Class.signIn#1`).
+const identities = (findings: readonly Finding[]): string[] => findings.map((finding) => `${finding.rule.id} ${finding.location.range.startLine} ${finding.location.symbol ?? ''}`);
+
+test('identity: field name for resource rules, numbered call site per method for setState / initState lookups', () => {
+    assert.deepEqual(identities(lifecycleFindings(join(here, 'fixtures', 'flutter-identity', 'Lifecycle.dart'))), [
+        'R-FLUTTER-UNDISPOSED-CONTROLLER 11 _LoginState._url',
+        'R-FLUTTER-UNDISPOSED-CONTROLLER 12 _LoginState._user',
+        'R-FLUTTER-SETSTATE-AFTER-AWAIT 17 _LoginState.signIn#0',
+        'R-FLUTTER-SETSTATE-AFTER-AWAIT 19 _LoginState.signIn#1',
+        'R-FLUTTER-SETSTATE-AFTER-AWAIT 24 _LoginState.reload#0'
+    ]);
+    assert.deepEqual(identities(lifecycleFindings(join(fixtures, 'Positive.dart'))).slice(0, 6), [
+        'R-FLUTTER-UNDISPOSED-CONTROLLER 11 _BrokenState._text',
+        'R-FLUTTER-UNDISPOSED-CONTROLLER 21 _BrokenState._anim',
+        'R-FLUTTER-UNCANCELLED-SUBSCRIPTION 22 _BrokenState._timer',
+        'R-FLUTTER-INHERITED-IN-INITSTATE 24 _BrokenState.initState:Theme.of#0',
+        'R-FLUTTER-SETSTATE-AFTER-AWAIT 30 _BrokenState.load#0',
+        'R-FLUTTER-SETSTATE-AFTER-AWAIT 43 _BrokenState.build#0'
+    ]);
+});
+
+test('identity: no two lifecycle findings share (file, rule, symbol) on any lifecycle fixture', () => {
+    for (const dir of ['flutter-lifecycle', 'flutter-lifecycle-phase-c', 'flutter-identity']) {
+        const keys = lifecycleFindings(join(here, 'fixtures', dir)).map((finding) => `${finding.location.file}::${finding.rule.id}::${finding.location.symbol ?? ''}`);
+        assert.ok(keys.length > 0, dir);
+        assert.equal(new Set(keys).size, keys.length, `${dir}: identity collision`);
+    }
 });

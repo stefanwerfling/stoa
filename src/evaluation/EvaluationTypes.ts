@@ -72,7 +72,7 @@ export interface EvaluationResult {
     byLanguage: LanguageMetrics[];
     falsePositives: FindingKey[];
     falseNegatives: FindingKey[];
-    /** Produced findings whose identity key already appeared — reported, never silently dropped. */
+    /** Produced findings whose identity key already appeared (an identity collision — fails the evaluation) — reported, never silently dropped. */
     duplicates: FindingKey[];
     /** Expected (manifest) findings whose identity key appears more than once — a corpus-integrity error. */
     duplicateExpected: FindingKey[];
@@ -85,9 +85,9 @@ export interface EvaluationResult {
 /**
  * The verdict of an evaluation run:
  * - `passed` — the analysis was complete and nothing is missing, spurious or
- *   duplicated in the manifest;
- * - `failed` — the analysis was complete, but precision/recall deviate (or the
- *   manifest is inconsistent);
+ *   duplicated (in the manifest or among the produced identities);
+ * - `failed` — the analysis was complete, but precision/recall deviate, the
+ *   manifest is inconsistent, or two produced findings share one identity;
  * - `incomplete` — the analysis was not complete (memory guard, read/parse
  *   error): the metrics cover only the files reached and are never a pass,
  *   even when every finding produced so far matches.

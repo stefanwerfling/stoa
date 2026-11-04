@@ -61,7 +61,11 @@ Each rule has a test catalog (see [rule-model.md §7](./rule-model.md#7-testbark
   same-named files in different directories do not collide; line/column are
   excluded (the symbol disambiguates within a file, lines shift under edits).
   Precision/recall are computed over the set of distinct keys; duplicate
-  produced findings are reported, not silently dropped. Duplicate **expected**
+  produced findings are reported (`duplicates`), not silently dropped — and
+  fail the evaluation: the engine already merges a finding reported twice at
+  the same site, so two findings left with one identity are two different
+  findings the identity cannot tell apart (a rule defect that would also make
+  a baseline unreadable). Duplicate **expected**
   entries in the manifest are a corpus-integrity error (reported and failing),
   and a malformed/unreadable manifest is an explicit evaluation error, not a
   pass.
@@ -75,7 +79,8 @@ Each rule has a test catalog (see [rule-model.md §7](./rule-model.md#7-testbark
   (real problem overlooked) are reported separately.
 - **Exit code and outcome** (same 0/1/2 convention as `stoa analyze`): **0**
   only when the analysis was complete and the evaluation passed (no false
-  positive, no false negative, no duplicate expected identity); **1** when a
+  positive, no false negative, no duplicate expected or produced identity —
+  a produced collision is also named on stderr); **1** when a
   complete analysis failed the evaluation, or on a technical error (bad
   manifest, rule set, knowledge base); **2** when the analysis was incomplete
   (`coverage.status` not `complete`: memory guard, read or parse error) — this

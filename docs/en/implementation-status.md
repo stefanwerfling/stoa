@@ -329,6 +329,45 @@
   (`test/fixtures/architecture`: loader errors, assignment incl. multiple
   matches and outside-root files, all four edge verdicts, package bans and
   names, report summary and markdown, CLI fail-fast and JSON).
+- **Unique finding identities and duplicate-safe evaluation (evaluator
+  integrity, phase 1 of the follow-up track):**
+  - **Found:** the Flutter lifecycle rules used the State class as the
+    symbol, the layout rules the owning function (`build`) — several sites in
+    one class / one `build()` shared one identity (mwpa: 5 `setState` sites
+    and 3 controllers of one class; swipemeister: 3). `--update-baseline`
+    then wrote a baseline that `--baseline` rejected ("duplicates an earlier
+    entry's identity"), and `stoa eval` passed despite the collision
+    (`duplicates` was reported but never decided the outcome).
+  - **Identities:** lifecycle `Class.field` (controller, subscription),
+    `Class.method#n` (`setState` after `await`, numbered per method in source
+    order), `Class.initState:Type.of#n`; layout `owner>Widget#n` (numbered per
+    file, since two classes of one file can both own a `build()`). The `#n`
+    helper `ordinalSymbols` lives in `src/FindingIdentity.ts`. Versions:
+    UNDISPOSED-CONTROLLER, UNCANCELLED-SUBSCRIPTION, SETSTATE-AFTER-AWAIT,
+    UNBOUNDED-SCROLLABLE, NESTED-SCROLL-UNBOUNDED 1.3.0; INHERITED-IN-INITSTATE,
+    PARENTDATA-MISUSE, TEXTFIELD-UNBOUNDED-WIDTH 1.2.0. Existing baselines with
+    these rules report their findings as `new` until rewritten (one with a
+    collision could not be loaded before anyway).
+  - **Evaluation:** a duplicate produced identity fails a complete evaluation
+    (exit 1) even with 0 FP / 0 FN; the identities stay listed in
+    `duplicates`, the Markdown explains the collision, stderr names it,
+    nothing is dropped. **Baseline:** `saveBaseline` refuses findings that
+    share an identity (exit 1, existing file untouched) instead of writing an
+    unreadable file.
+  - **Known open collision (not changed, needs a decision):** the TS, Dart
+    and PHP adapters name a function/method by its bare name — two classes in
+    one file with a same-named method share one identity for every
+    declarative rule (`A.run` and `B.run` both `run`). None occurred on the
+    golden corpora or the measured projects; such a project now fails `eval`
+    and `--update-baseline` loudly instead of silently.
+  - **Unchanged:** every golden corpus (0 duplicates), every non-Flutter
+    finding.
+  - Tests: `test/fixtures/flutter-identity` (several sites per class, per
+    method, per `build()` and across two classes of one file), uniqueness over
+    every lifecycle/layout fixture, Flutter baseline round trip through the
+    CLI, `saveBaseline` refusal (unit + CLI), duplicate produced identities
+    through the real `stoa eval` (exit 1, JSON, Markdown, stderr) and
+    `evaluationOutcome`. Against the previous code these fail.
 - **Architecture rule on the consolidated models (semantic consolidation,
   phase 3):** `R-SOLID-DIP-LAYER-DIRECTION` stage 2 → 0.3.0.
   - **Re-exports are dependencies:** TS `export … from` (`deps.reexport`

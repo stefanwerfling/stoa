@@ -185,7 +185,16 @@ emptyLayers, unknownLayerReferences}}`; Markdown shows it in the header, SARIF i
 (project-relative file, rule id, `location.symbol`). Rules that report several
 targets from one place put the target into the symbol (SOLID: `Class:Target`,
 `Class:Contract`, the imported file's path or `package:<name>`), so two
-findings never share one identity.
+findings never share one identity. Rules that report several SITES under one
+name number them in source order with the `#n` convention (Flutter lifecycle:
+`Class.field`, `Class.signIn#1`, `Class.initState:Theme.of#0`; Flutter
+layout: `build>Expanded#2`, numbered per file). A collision is a rule
+defect: `stoa eval` fails on it, and `--update-baseline` refuses to write a
+baseline that repeats an identity (`loadBaseline` could not read it back) —
+exit 1, the existing file untouched. **Known open collision:** the TS, Dart
+and PHP adapters name a function or method by its bare name, so two classes
+in one file with a same-named method (e.g. both `run` with too many
+parameters) still share one identity for the declarative rules.
 
 ## 7. Limits
 

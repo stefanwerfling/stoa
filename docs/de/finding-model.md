@@ -185,7 +185,18 @@ emptyLayers, unknownLayerReferences}}`; Markdown zeigt das im Kopf, SARIF in
 (projektrelative Datei, Regel-ID, `location.symbol`). Regeln, die mehrere Ziele
 von einer Stelle melden, tragen das Ziel ins Symbol ein (SOLID: `Klasse:Ziel`,
 `Klasse:Vertrag`, der Pfad der importierten Datei oder `package:<name>`), sodass
-zwei Befunde nie dieselbe Identität teilen.
+zwei Befunde nie dieselbe Identität teilen. Regeln, die mehrere STELLEN unter
+einem Namen melden, nummerieren sie in Quelltextreihenfolge nach der
+`#n`-Konvention (Flutter-Lifecycle: `Klasse.feld`, `Klasse.signIn#1`,
+`Klasse.initState:Theme.of#0`; Flutter-Layout: `build>Expanded#2`, je Datei
+nummeriert). Eine Kollision ist ein Regelfehler: `stoa eval` scheitert daran,
+und `--update-baseline` verweigert eine Baseline, die eine Identität
+wiederholt (`loadBaseline` könnte sie nicht wieder lesen) — Exit 1, die
+bestehende Datei bleibt unverändert. **Bekannte offene Kollision:** Die
+Adapter für TS, Dart und PHP benennen eine Funktion oder Methode nur mit ihrem
+Namen, zwei Klassen einer Datei mit gleichnamiger Methode (etwa beide `run` mit
+zu vielen Parametern) teilen für die deklarativen Regeln also weiterhin eine
+Identität.
 
 ## 7. Grenzen
 

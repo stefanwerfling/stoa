@@ -97,6 +97,15 @@ export const saveBaseline = (path: string, report: AnalysisReport, rootDir: stri
         );
     }
     const entries = report.findings.map((finding) => findingKey(rootDir, finding)).sort((a, b) => keyString(a).localeCompare(keyString(b)));
+    // `loadBaseline` rejects a repeated identity, so writing one would leave a
+    // baseline that can never be read back. Refused (the existing file stays
+    // untouched): two findings sharing an identity is a rule defect.
+    const collisions = entries.filter((entry, index) => index > 0 && keyString(entry) === keyString(entries[index - 1] as FindingKey)).map(keyString);
+    if (collisions.length > 0) {
+        throw new Error(
+            `refusing to update baseline ${path}: ${collisions.length} finding(s) share an identity (file, rule, symbol) with another — a rule defect, the baseline could not be read back: ${[...new Set(collisions)].slice(0, 5).join(', ')}`
+        );
+    }
     const file: BaselineFile = {version: 1, findings: entries};
     mkdirSync(dirname(path), {recursive: true});
     writeFileSync(path, `${JSON.stringify(file, null, 2)}\n`);

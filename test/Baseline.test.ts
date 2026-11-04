@@ -240,3 +240,17 @@ test('saveBaseline on a COMPLETE analysis still works (the incomplete guard does
         rmSync(dir, {recursive: true, force: true});
     }
 });
+
+test('saveBaseline refuses findings that share an identity (it could never be read back), naming them; the existing file stays byte-identical', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'stoa-baseline-'));
+    try {
+        const path = join(dir, 'baseline.json');
+        saveBaseline(path, reportOf([sampleFinding('/root/a.ts', 'R-A', 'sym#0')]), '/root');
+        const before = readFileSync(path, 'utf8');
+        const colliding = reportOf([sampleFinding('/root/a.ts', 'R-A', 'run'), sampleFinding('/root/a.ts', 'R-A', 'run'), sampleFinding('/root/b.ts', 'R-A', 'run')]);
+        assert.throws(() => saveBaseline(path, colliding, '/root'), /refusing to update baseline .*1 finding\(s\) share an identity.*a\.ts::R-A::run/);
+        assert.equal(readFileSync(path, 'utf8'), before);
+    } finally {
+        rmSync(dir, {recursive: true, force: true});
+    }
+});

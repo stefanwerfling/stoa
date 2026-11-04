@@ -62,7 +62,12 @@ Jede Regel hat einen Testkatalog (siehe [rule-model.md §7](./rule-model.md#7-te
   kollidieren; Zeile/Spalte bleiben außen vor (das Symbol unterscheidet innerhalb
   einer Datei, Zeilen verschieben sich bei Änderungen). Precision/Recall werden
   über die Menge eindeutiger Schlüssel berechnet; doppelte erzeugte Findings
-  werden berichtet, nicht still verworfen. Doppelte **erwartete** Einträge im
+  werden berichtet (`duplicates`), nicht still verworfen — und lassen die
+  Evaluierung scheitern: Die Engine führt ein an derselben Stelle doppelt
+  gemeldetes Finding bereits zusammen, zwei verbleibende Findings mit einer
+  Identität sind also zwei verschiedene, die die Identität nicht unterscheidet
+  (ein Regelfehler, der auch eine Baseline unlesbar machen würde). Doppelte
+  **erwartete** Einträge im
   Manifest sind ein Korpus-Integritätsfehler (werden berichtet und lassen die
   Evaluierung scheitern); ein fehlerhaftes/unlesbares Manifest ist ein expliziter
   Evaluierungsfehler, kein Bestehen.
@@ -76,8 +81,9 @@ Jede Regel hat einen Testkatalog (siehe [rule-model.md §7](./rule-model.md#7-te
   (echtes Problem übersehen) werden getrennt berichtet.
 - **Exit-Code und Ergebnis** (dieselbe 0/1/2-Konvention wie `stoa analyze`):
   **0** nur, wenn die Analyse vollständig war und die Auswertung bestanden ist
-  (kein False Positive, kein False Negative, keine doppelte erwartete
-  Identität); **1**, wenn eine vollständige Analyse die Auswertung nicht
+  (kein False Positive, kein False Negative, keine doppelte erwartete oder
+  erzeugte Identität — eine erzeugte Kollision wird auch auf stderr genannt);
+  **1**, wenn eine vollständige Analyse die Auswertung nicht
   besteht, oder bei einem technischen Fehler (fehlerhaftes Manifest, Regelwerk,
   Wissensbasis); **2**, wenn die Analyse unvollständig war (`coverage.status`
   nicht `complete`: Memory Guard, Lese- oder Parse-Fehler) — das hat Vorrang vor

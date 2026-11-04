@@ -384,9 +384,12 @@ const runEval = async (values: CliValues, target: string): Promise<number> => {
     const result = {...scored, analysis, outcome};
     const output = values.format === 'json' ? JSON.stringify(result, null, 2) : evaluationMarkdown(result);
     process.stdout.write(`${output}\n`);
+    if (result.duplicates.length > 0) {
+        process.stderr.write(`[stoa] identity collision: ${result.duplicates.length} produced finding(s) share an identity (file, rule, symbol) with another — a rule defect; the evaluation fails. See "duplicates".\n`);
+    }
     // Same 0/1/2 convention as `analyze`: 0 only for a complete analysis whose
     // evaluation passed (no false negative, no false positive, no duplicate
-    // expected identity); 1 for a complete analysis that failed it (or a
+    // expected or produced identity); 1 for a complete analysis that failed it (or a
     // technical error above); 2 whenever the analysis was incomplete — that
     // wins over the metrics, which then cover only part of the selection.
     return outcome === 'passed' ? EXIT_OK : outcome === 'incomplete' ? EXIT_INCOMPLETE : EXIT_ERROR;

@@ -70,7 +70,10 @@ export const toMarkdown = (result: EvaluationResult): string => {
     }
     if (result.duplicates.length > 0) {
         lines.push('');
-        lines.push('## Duplicate findings (same identity key)');
+        lines.push('## Duplicate findings (identity collision — fails the evaluation)');
+        lines.push('');
+        lines.push('Two or more produced findings share one identity (file, rule, symbol): a rule defect, not a pass. Each extra occurrence is listed.');
+        lines.push('');
         result.duplicates.forEach((key) => lines.push(keyLine(key)));
     }
     if (result.duplicateExpected.length > 0) {

@@ -29,3 +29,20 @@ export const findingKey = (rootDir: string, finding: Finding): FindingKey => ({
     rule: finding.rule.id,
     symbol: finding.location.symbol ?? ''
 });
+
+/**
+ * Call-site identities: each base gets its 0-based occurrence index in the
+ * given order (`signIn#0`, `signIn#1`, `build>ListView#0`) — the same `#n`
+ * convention the extractors use for anonymous functions (`handler#0`). A
+ * rule that can report several sites under one base (one method, one build
+ * function) must give each its own identity: two findings sharing (file,
+ * rule, symbol) are indistinguishable to the evaluator and the baseline.
+ */
+export const ordinalSymbols = (bases: readonly string[]): string[] => {
+    const seen = new Map<string, number>();
+    return bases.map((base) => {
+        const index = seen.get(base) ?? 0;
+        seen.set(base, index + 1);
+        return `${base}#${index}`;
+    });
+};

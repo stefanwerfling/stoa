@@ -152,7 +152,7 @@ test('2.8 CLI eval fails on a duplicate expected identity and on a malformed man
     assert.notEqual(runEvalCli('expected-malformed.json'), 0, 'a malformed manifest must fail the evaluation');
 });
 
-test('Phase 1: evaluationOutcome — passed only for a complete analysis with no FP/FN/duplicate expected; incomplete wins over the metrics', () => {
+test('Phase 1: evaluationOutcome — passed only for a complete analysis with no FP/FN/duplicate (expected or produced); incomplete wins over the metrics', () => {
     const match = evaluate([makeFinding('a.ts', 'R-X', 's1')], [expected('a.ts', 'R-X', 's1')], ROOT);
     const miss = evaluate([], [expected('a.ts', 'R-X', 's1')], ROOT);
     const spurious = evaluate([makeFinding('a.ts', 'R-X', 's1')], [], ROOT);
@@ -161,6 +161,11 @@ test('Phase 1: evaluationOutcome — passed only for a complete analysis with no
     assert.equal(evaluationOutcome(miss, {status: 'complete'}), 'failed');
     assert.equal(evaluationOutcome(spurious, {status: 'complete'}), 'failed');
     assert.equal(evaluationOutcome(duplicateExpected, {status: 'complete'}), 'failed');
+    // Two produced findings with one identity: the metrics are perfect (distinct keys), the outcome is not.
+    const collision = evaluate([makeFinding('a.ts', 'R-X', 's1'), makeFinding('a.ts', 'R-X', 's1')], [expected('a.ts', 'R-X', 's1')], ROOT);
+    assert.deepEqual([collision.overall.falsePositives, collision.overall.falseNegatives, collision.duplicates.length], [0, 0, 1]);
+    assert.equal(evaluationOutcome(collision, {status: 'complete'}), 'failed');
+    assert.equal(evaluationOutcome(collision, {status: 'partial'}), 'incomplete', 'incomplete still wins');
     for (const status of ['partial', 'failed'] as const) {
         assert.equal(evaluationOutcome(match, {status}), 'incomplete', `${status}: a perfect match is still never a pass`);
         assert.equal(evaluationOutcome(miss, {status}), 'incomplete');

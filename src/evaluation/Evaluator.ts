@@ -146,11 +146,16 @@ const languageOf = (file: string): string => {
 
 /**
  * The verdict of an evaluation (see `EvaluationOutcome`): an incomplete
- * analysis is never `passed`, whatever the metrics say.
+ * analysis is never `passed`, whatever the metrics say. A duplicate PRODUCED
+ * identity fails it too: the engine already merges a finding reported twice
+ * at the same site, so two findings left with one (file, rule, symbol) are
+ * two different findings the identity cannot tell apart — a rule defect that
+ * also breaks the baseline. They are listed, never dropped.
  */
 export const evaluationOutcome = (result: EvaluationResult, analysis: EvaluationAnalysis): EvaluationOutcome => {
     if (analysis.status !== 'complete') {
         return 'incomplete';
     }
-    return result.overall.falseNegatives === 0 && result.overall.falsePositives === 0 && result.duplicateExpected.length === 0 ? 'passed' : 'failed';
+    const consistent = result.duplicates.length === 0 && result.duplicateExpected.length === 0;
+    return consistent && result.overall.falseNegatives === 0 && result.overall.falsePositives === 0 ? 'passed' : 'failed';
 };

@@ -28,6 +28,11 @@ interface Key {
 
 let project: string;
 let work: string;
+// Two classes in one file with a same-named method: the adapters name a
+// function by its bare name, so both findings get one identity — a real,
+// still-open identity collision (see implementation-status), used here as the
+// source of a duplicate PRODUCED identity through the unmodified CLI.
+let collidingProject: string;
 
 const stoa = (args: string[], env: NodeJS.ProcessEnv = {}): {status: number | null; stdout: string; stderr: string} =>
     spawnSync('node', ['--import', 'tsx', 'src/Cli.ts', ...args], {cwd: root, encoding: 'utf8', env: {...process.env, ...env}});
@@ -58,6 +63,10 @@ before(() => {
     writeFileSync(join(project, 'a.ts'), fileWithEmptyCatch('alpha'));
     writeFileSync(join(project, 'b.ts'), fileWithEmptyCatch('beta'));
     writeFileSync(join(project, 'c.ts'), fileWithEmptyCatch('gamma'));
+    collidingProject = join(work, 'colliding');
+    spawnSync('mkdir', ['-p', collidingProject]);
+    const sixParams = 'a: number, b: number, c: number, d: number, e: number, f: number';
+    writeFileSync(join(collidingProject, 'a.ts'), `export class A {\n    run(${sixParams}): number {\n        return a + b + c + d + e + f;\n    }\n}\nexport class B {\n    run(${sixParams}): number {\n        return a + b + c + d + e + f;\n    }\n}\n`);
 });
 
 after(() => {
@@ -170,4 +179,28 @@ test('markdown: the analysis status and the outcome are stated; an incomplete ru
     assert.match(result.stdout, /- Analysis: partial/);
     assert.match(result.stdout, /- Outcome: incomplete/);
     assert.match(result.stdout, /never a pass/);
+});
+
+test('exit 1: duplicate PRODUCED identities fail a complete evaluation even with 0 FP / 0 FN — listed in JSON, named on stderr and in Markdown, nothing dropped', () => {
+    const run = stoa(['analyze', collidingProject, '--format', 'json']);
+    const produced = (JSON.parse(run.stdout) as {findings: {rule: {id: string}; location: {file: string; symbol?: string}}[]}).findings.map((finding) => ({
+        file: finding.location.file.slice(collidingProject.length + 1),
+        rule: finding.rule.id,
+        symbol: finding.location.symbol ?? ''
+    }));
+    const unique = [...new Map(produced.map((key) => [`${key.file}::${key.rule}::${key.symbol}`, key])).values()];
+    assert.ok(unique.length < produced.length, 'the project produces an identity collision');
+    const path = manifest('collision.json', unique);
+    const result = stoa(['eval', collidingProject, '--expected', path, '--format', 'json']);
+    const json = JSON.parse(result.stdout) as EvalJson & {duplicates: Key[]; overall: {producedCount: number}};
+    assert.equal(result.status, 1);
+    assert.deepEqual([json.outcome, json.analysis.status], ['failed', 'complete']);
+    assert.deepEqual([json.overall.falsePositives, json.overall.falseNegatives], [0, 0], 'the metrics alone would pass');
+    assert.deepEqual(json.duplicates, [{file: 'a.ts', rule: 'R-FN-TOO-MANY-PARAMS', symbol: 'run'}]);
+    assert.equal(json.overall.producedCount, produced.length, 'nothing dropped');
+    assert.match(result.stderr, /identity collision: 1 produced finding/);
+    const markdown = stoa(['eval', collidingProject, '--expected', path]);
+    assert.equal(markdown.status, 1);
+    assert.match(markdown.stdout, /- Outcome: failed/);
+    assert.match(markdown.stdout, /identity collision — fails the evaluation[\s\S]*a\.ts · R-FN-TOO-MANY-PARAMS · run/);
 });

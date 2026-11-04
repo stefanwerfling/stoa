@@ -1,4 +1,5 @@
 import type {Finding, PrincipleInterpretationRef} from '../../Types.js';
+import {ordinalSymbols} from '../../FindingIdentity.js';
 import {localize, type LocalizedText} from '../../i18n/Localized.js';
 import type {KnowledgeBase} from '../../knowledge/KnowledgeBase.js';
 import {argValueOf, type FlutterWidgetGraph, type WidgetEdge, type WidgetNode} from '../../model/FlutterWidgetGraph.js';
@@ -92,6 +93,9 @@ export const isFlutterWidget = (node: WidgetNode, names: ReadonlySet<string>): b
     resolvedFrom(node.resolution, FLUTTER_PACKAGE);
 
 const displayName = (node: WidgetNode): string => `${node.name ?? '?'}${node.constructorName === null ? '' : `.${node.constructorName}`}`;
+
+/** The owning function (without its `@line`) and the widget: `build>ListView.builder`. */
+const symbolBase = (node: WidgetNode): string => `${node.owner.slice(0, node.owner.lastIndexOf('@'))}>${displayName(node)}`;
 
 // Framework widgets that wrap their single `child` in their own render object
 // (or render-object-building subtree): a ParentDataWidget placed directly in
@@ -220,7 +224,7 @@ interface Match {
 /** Common finding assembly for the layout rules; subclasses only find matches. */
 abstract class FlutterLayoutRule implements ProjectRule {
     public abstract readonly id: string;
-    public readonly version: string = '1.1.0';
+    public readonly version: string = '1.2.0';
     public readonly requiredFactKinds = ['ui.flutterWidgetTree', 'dart.classDecl', 'dart.importSpec'];
     protected abstract readonly text: LayoutRuleText;
     protected readonly confidence: number = 0.8;
@@ -232,10 +236,17 @@ abstract class FlutterLayoutRule implements ProjectRule {
             return [];
         }
         const index = new WidgetGraphIndex(input.flutterWidgetGraph);
-        return this.matches(index).map((match) => this.buildFinding(match, input));
+        const matches = this.matches(index).sort(
+            (a, b) => (a.child.file < b.child.file ? -1 : a.child.file > b.child.file ? 1 : 0) || a.child.range.startLine - b.child.range.startLine || a.child.range.startCol - b.child.range.startCol
+        );
+        // Identity: the owning function and the widget, numbered per file in
+        // source order (`build>ListView#1`) — one build() can misplace the same
+        // widget several times, and two classes in one file can both own a build().
+        const symbols = ordinalSymbols(matches.map((match) => `${match.child.file}\n${symbolBase(match.child)}`));
+        return matches.map((match, position) => this.buildFinding(match, (symbols[position] as string).slice(match.child.file.length + 1), input));
     }
 
-    private buildFinding(match: Match, input: ProjectRuleInput): Finding {
+    private buildFinding(match: Match, symbol: string, input: ProjectRuleInput): Finding {
         const {child, parent, slot, expected} = match;
         const fill = (text: LocalizedText): string =>
             localize(text, input.lang)
@@ -247,7 +258,7 @@ abstract class FlutterLayoutRule implements ProjectRule {
             id: `finding:${this.id}:${child.file}:${child.range.startLine}:${child.range.startCol}`,
             rule: {id: this.id, version: this.version},
             ruleSet: input.ruleSetId,
-            location: {file: child.file, range: child.range, symbol: child.owner.slice(0, child.owner.lastIndexOf('@')), structure: 'widget'},
+            location: {file: child.file, range: child.range, symbol, structure: 'widget'},
             observation: {
                 statement: fill(this.text.statement),
                 evidence: [{fact: 'ui.flutterWidgetTree', value: `${displayName(parent)}.${slot} > ${displayName(child)}${match.detail === undefined || match.detail === '' ? '' : ` [${match.detail}]`}`, certainty: 'syntactic'}]
@@ -345,7 +356,7 @@ export class FlutterParentDataMisuseRule extends FlutterLayoutRule {
  */
 export class FlutterUnboundedScrollableRule extends FlutterLayoutRule {
     public readonly id = 'R-FLUTTER-UNBOUNDED-SCROLLABLE';
-    public override readonly version = '1.2.0';
+    public override readonly version = '1.3.0';
     protected readonly text: LayoutRuleText = {
         statement: {
             en: '{child} is placed directly in {parent}.{slot} without Expanded/Flexible/SizedBox, so its viewport gets an unbounded extent.',
@@ -422,7 +433,7 @@ export class FlutterTextFieldInRowRule extends FlutterLayoutRule {
  */
 export class FlutterNestedScrollRule extends FlutterLayoutRule {
     public readonly id = 'R-FLUTTER-NESTED-SCROLL-UNBOUNDED';
-    public override readonly version = '1.2.0';
+    public override readonly version = '1.3.0';
     protected override readonly confidence = 0.75;
     protected readonly text: LayoutRuleText = {
         statement: {
