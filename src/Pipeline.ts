@@ -292,7 +292,9 @@ export const analyze = (options: AnalyzeOptions): AnalysisResult => {
     // run actually produced widget trees; the Flutter layout rules (Phase 2,
     // rules/project/FlutterLayoutRules.ts) consume it.
     const flutterWidgetGraph = buildFlutterWidgetGraph(facts, dartLibraryIndex);
-    const findings: Finding[] = ruleEngine.evaluate(facts, moduleGraph, symbolGraph, flutterWidgetGraph.nodes.length > 0 ? flutterWidgetGraph : undefined, dartLibraryIndex);
+    // The rules get the same explicit file list as the ModuleGraph's nodes —
+    // never a set re-derived from the facts (see ProjectRuleInput.analyzedFiles).
+    const findings: Finding[] = ruleEngine.evaluate(facts, moduleGraph, symbolGraph, flutterWidgetGraph.nodes.length > 0 ? flutterWidgetGraph : undefined, dartLibraryIndex, analyzedPaths);
     // RuleEngine.evaluate() is one atomic, synchronous pass with no internal
     // checkpointing — it cannot be partially applied or safely interrupted
     // (declarative rules iterate per-subject; project rules need the full

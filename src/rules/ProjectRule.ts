@@ -53,13 +53,16 @@ export interface ProjectRuleInput {
      */
     typeModel?: TypeModel;
     /**
-     * Every file that contributed at least one fact to this run — computed
-     * by the caller directly from the analyzed file list, independent of
-     * which fact KINDS are present (see RuleEngine.ts). A rule needing to
-     * know "does this file exist in the analyzed set" (e.g. to resolve an
-     * import target) must read THIS, not re-derive it from `facts`: a file
-     * with zero facts of the kind(s) a filtered/bounded evaluation kept
-     * would otherwise silently disappear as a valid target.
+     * Every file this run actually analyzed: read and extracted (a FactCache
+     * hit included) — never a file that was excluded, skipped (read/parse
+     * error) or not reached after a memory-guard stop. The pipeline passes
+     * its own file list (the same set as the ModuleGraph's nodes), so a file
+     * stays here even when it contributed no fact, and a filtered or bounded
+     * fact set cannot shrink it. A rule needing to know "does this file exist
+     * in the analyzed set" (e.g. to resolve an import target) must read THIS,
+     * not re-derive it from `facts`. Only a caller without a file list
+     * (`RuleEngine.evaluate` without `analyzedFiles`, e.g. a test) gets the
+     * files of `facts` instead.
      */
     analyzedFiles: ReadonlySet<string>;
     ruleSetId: string;

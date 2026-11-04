@@ -43,7 +43,21 @@ export class RuleEngine {
         private readonly projectRules: ProjectRule[] = [new DependencyCycleRule()]
     ) {}
 
-    public evaluate(facts: Fact[], moduleGraph?: ModuleGraph, symbolGraph?: SymbolGraph, flutterWidgetGraph?: FlutterWidgetGraph, dartLibraryIndex?: DartLibraryIndex): Finding[] {
+    /**
+     * `analyzedFiles`: the files the run analyzed (see
+     * `ProjectRuleInput.analyzedFiles`), passed to every project rule as is.
+     * Omitted (a caller without a file list), it falls back to the files of
+     * `facts` — equal for a complete fact set today, since every adapter
+     * emits `file.lineCount` for each file, but not for a filtered one.
+     */
+    public evaluate(
+        facts: Fact[],
+        moduleGraph?: ModuleGraph,
+        symbolGraph?: SymbolGraph,
+        flutterWidgetGraph?: FlutterWidgetGraph,
+        dartLibraryIndex?: DartLibraryIndex,
+        analyzedFiles: ReadonlySet<string> = new Set(facts.map((fact) => fact.subject.file))
+    ): Finding[] {
         const units = groupUnits(facts);
         const keyed: KeyedFinding[] = [];
 
@@ -56,7 +70,6 @@ export class RuleEngine {
             }
         }
 
-        const analyzedFiles = new Set(facts.map((fact) => fact.subject.file));
         for (const projectRule of this.projectRules) {
             const findings = projectRule.evaluate({
                 facts,

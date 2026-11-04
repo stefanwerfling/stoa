@@ -329,6 +329,25 @@
   (`test/fixtures/architecture`: loader errors, assignment incl. multiple
   matches and outside-root files, all four edge verdicts, package bans and
   names, report summary and markdown, CLI fail-fast and JSON).
+- **`analyzedFiles` contract (evaluator-integrity track, phase 3):** the
+  RuleEngine derived `ProjectRuleInput.analyzedFiles` from
+  `facts.map(subject.file)`, while the contract (and the ModuleGraph, since
+  Phase 0 correction P5) use the pipeline's explicit list. No output
+  differed — every adapter emits `file.lineCount` for every file, empty ones
+  included (checked for TS, Dart, PHP), so both sets were equal on every
+  measured project — but a filtered or bounded fact set, or an adapter
+  without that fact, would have dropped files. Now `RuleEngine.evaluate`
+  takes `analyzedFiles` as an optional last parameter and hands it to every
+  project rule as is; the pipeline passes its list (the ModuleGraph's node
+  set). Semantics: every file read and extracted in this run (a FactCache hit
+  included) — never one excluded, skipped (read/parse error) or not reached
+  after a memory-guard stop; a file with no fact stays in it. A caller
+  without a list (a test) keeps the old fallback, the files of `facts`. No
+  synthetic fact was added. Findings byte-identical on every measured
+  project. Tests: `test/AnalyzedFiles.test.ts` (passed as is with a file
+  without facts; a filtered fact set keeps the inventory; the fallback; the
+  real pipeline hands rules exactly the ModuleGraph's nodes and leaves an
+  unreadable file out).
 - **SymbolGraph on demand (evaluator-integrity track, phase 2):** a rule
   declares `usesTypeModel` when it reads the TypeModel (`typeModelOf`) —
   `R-SOLID-LSP-CONTRACT-COMPATIBILITY`, `R-SOLID-ISP-INTERFACE-COHESION`,

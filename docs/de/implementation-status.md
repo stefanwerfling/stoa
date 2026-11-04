@@ -355,6 +355,27 @@
   (`test/fixtures/architecture`: Loader-Fehler, Zuordnung inkl. Mehrfachtreffer
   und Dateien außerhalb der Wurzel, alle vier Kantenurteile, Paketverbote und
   -namen, Report-Zusammenfassung und Markdown, CLI-Fail-fast und JSON).
+- **`analyzedFiles`-Vertrag (Evaluator-Integritäts-Folgeauftrag, Phase 3):**
+  Die RuleEngine leitete `ProjectRuleInput.analyzedFiles` aus
+  `facts.map(subject.file)` ab, während der Vertrag (und der ModuleGraph seit
+  der Phase-0-Korrektur P5) die explizite Liste der Pipeline nutzen. Keine
+  Ausgabe unterschied sich — jeder Adapter erzeugt `file.lineCount` für jede
+  Datei, auch für leere (geprüft für TS, Dart, PHP), auf allen gemessenen
+  Projekten waren beide Mengen gleich —, aber eine gefilterte oder begrenzte
+  Fact-Menge oder ein Adapter ohne diesen Fact hätte Dateien verloren. Jetzt
+  nimmt `RuleEngine.evaluate` `analyzedFiles` als optionalen letzten Parameter
+  und gibt die Menge unverändert an jede Projektregel weiter; die Pipeline
+  übergibt ihre Liste (die Knotenmenge des ModuleGraph). Semantik: jede in
+  diesem Lauf gelesene und extrahierte Datei (ein FactCache-Treffer
+  eingeschlossen) — nie eine ausgeschlossene, übersprungene (Lese-/
+  Parse-Fehler) oder nach einem Memory-Guard-Abbruch nicht erreichte; eine
+  Datei ohne Fact bleibt enthalten. Ein Aufrufer ohne Liste (ein Test) behält
+  den bisherigen Fallback, die Dateien der `facts`. Kein künstlicher Fact
+  hinzugefügt. Findings auf jedem gemessenen Projekt byte-identisch. Tests:
+  `test/AnalyzedFiles.test.ts` (unverändert weitergegeben mit einer Datei ohne
+  Facts; eine gefilterte Fact-Menge behält den Bestand; der Fallback; die
+  echte Pipeline gibt den Regeln genau die Knoten des ModuleGraph und lässt
+  eine unlesbare Datei weg).
 - **SymbolGraph bei Bedarf (Evaluator-Integritäts-Folgeauftrag, Phase 2):**
   Eine Regel deklariert `usesTypeModel`, wenn sie das TypeModel liest
   (`typeModelOf`) — `R-SOLID-LSP-CONTRACT-COMPATIBILITY`,
