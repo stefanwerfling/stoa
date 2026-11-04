@@ -1351,10 +1351,11 @@ V8's heap stats (it lives outside the JS heap). Fixed:
 `analyzeAsync`) parses and extracts files on `n` worker threads. Without it
 (or with 1) the run is the sequential path, unchanged.
 
-- **What runs where:** each worker (`src/ExtractionWorker.ts`) holds its own
-  adapters (`createAdapterRegistry()`, `src/analysis/DefaultAdapters.ts`) and
-  loads the tree-sitter grammars itself; it only parses, extracts and
-  releases. Everything else stays on the main thread: discovery, the memory
+- **What runs where:** each worker (`src/ExtractionWorker.ts`, the work in
+  `src/ExtractionWorkerTasks.ts`) holds its own adapters
+  (`createAdapterRegistry()`, `src/analysis/DefaultAdapters.ts`) and loads a
+  tree-sitter grammar the first time one of its files needs it (`grammarOf`);
+  it only parses, extracts and releases. Everything else stays on the main thread: discovery, the memory
   guard, reading each file, the fact cache, `--typecheck`, the graphs and the
   rules.
 - **Same report, by construction:** every file's result is a `FileOutcome`
@@ -1377,11 +1378,29 @@ V8's heap stats (it lives outside the JS heap). Fixed:
 - **API:** `analyze()` stays synchronous and sequential. `analyzeAsync()`
   loads the grammars, then runs the sequential path (`jobs` ≤ 1) or the
   parallel one. The CLI uses `analyzeAsync` for `analyze` and `eval`.
-- **Cost:** a worker needs ≈ 0.4–0.6 s to load TypeScript, ts-morph and the
-  grammars before its first file. All workers are therefore started at the
-  beginning of `analyzeAsync`, overlapping the loading of knowledge base and
-  rule set and discovery. Every worker has its own heap and its own adapters,
-  so peak RSS grows with `n`.
+- **Cost and start:** a worker needs ≈ 0.4–0.6 s before its first file,
+  ≈ 0.35 s of it compiling TypeScript, ts-morph and the adapters. Therefore:
+  - all workers start first thing in `analyzeAsync`, overlapping the loading
+    of knowledge base and rule set and discovery (the main thread loads no
+    grammar in parallel mode — it parses nothing);
+  - a worker loads a grammar only when a file needs it (a TypeScript-only
+    run loads none, ≈ 30–55 ms per worker);
+  - workers turn on Node's module compile cache (`module.enableCompileCache()`,
+    Node ≥ 22.1) before loading anything and write it right after loading:
+    compiled code is kept in Node's default directory
+    (`os.tmpdir()/node-compile-cache`, ≈ 7–9 MB) and later runs' workers load
+    in about half the time. Only worker threads do this — a run without
+    `--jobs` writes nothing beyond its report, as before;
+    `NODE_DISABLE_COMPILE_CACHE=1` turns it off; a Node without the API just
+    compiles.
+
+  Measured with `--jobs 4` against the previous state (three alternating
+  pairs, warm cache, reports byte-identical): stoa 2.72–2.76 s → 2.41–2.56 s,
+  the Dart app 2.34–2.79 s → 2.12–2.15 s, a small fixture 1.15–1.24 s →
+  0.85–0.98 s, flyingfish 3.74–4.25 s → 3.62–3.99 s (under load 5.6). The
+  first run, which fills the cache, takes as long as before (2.71–2.75 s vs
+  2.66–2.75 s). Every worker has its own heap and its own adapters, so peak
+  RSS grows with `n`.
 - **Measured** (CLI wall time, two runs each, on a 4-core/8-thread laptop
   under desktop load; reports byte-identical in every run):
 
@@ -1401,11 +1420,14 @@ V8's heap stats (it lives outside the JS heap). Fixed:
   sequential run (report and facts byte for byte) on fixtures of every
   adapter, on the whole fixture tree with every file selected, and on a
   directory mixing parsed, unsupported and unreadable files; with the fact
-  cache; the main-thread and the worker memory guard; a dying worker
+  cache; the compile cache (filled only by workers, none without `--jobs`,
+  none with `NODE_DISABLE_COMPILE_CACHE=1`); the main-thread and the worker
+  memory guard; a dying worker
   (test-only hook `STOA_TEST_WORKER_EXIT`); an adapter error; CLI `--jobs 2`
   equal to the sequential output, invalid `--jobs` values as usage errors.
   Mutation-checked: applying outcomes out of order, ignoring the worker
-  guard, or not filling the cache each fail tests. The golden corpora pass
+  guard, not filling the fact cache, not loading a needed grammar, or not
+  turning on the compile cache each fail tests. The golden corpora pass
   with `--jobs 4` as without it, and 18 comparison runs give the same
   findings with `jobs` 1 and 4.
 
@@ -2044,7 +2066,7 @@ fails fast (exit 1, concrete errors) instead of silently yielding 0 findings.
 
 ## Quality assurance
 
-- **node:test suite** (`npm test`, `test/*.test.ts`): 618 tests, 0 failed,
+- **node:test suite** (`npm test`, `test/*.test.ts`): 619 tests, 0 failed,
   as of the 2026-11-04 run (rules pos./neg., extraction, schema validation,
   i18n, determinism, SARIF, evaluation, semantic groundedness, privacy,
   finding-model separation, semantic models, identities, metrics).

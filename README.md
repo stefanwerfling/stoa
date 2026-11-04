@@ -103,7 +103,9 @@ An LLM is an optional, switchable adapter.
 > trades memory for time — files are parsed on `n` worker threads, the report
 > stays byte-identical, peak RSS grows with every worker (measured on a
 > 952-file repository: 4.8s / 0.8 GB sequential, 3.8s / 1.45 GB with 4
-> workers). Discovery reads only
+> workers); the workers keep Node's compile cache in the temp directory
+> (≈ 7–9 MB, `NODE_DISABLE_COMPILE_CACHE=1` turns it off), so later runs
+> start them faster. Discovery reads only
 > file METADATA up front (path + size); content is read lazily, one file at a
 > time, only once a matching adapter is known — a file nothing can parse is
 > never read. A root `.gitignore` is honored (narrow slice: root-only, no

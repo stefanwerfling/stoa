@@ -1459,10 +1459,11 @@ lebt außerhalb des JS-Heaps). Behoben:
 `analyzeAsync`) parst und extrahiert Dateien auf `n` Worker-Threads. Ohne den
 Schalter (oder mit 1) läuft der sequentielle Pfad, unverändert.
 
-- **Was wo läuft:** Jeder Worker (`src/ExtractionWorker.ts`) hat eigene
-  Adapter (`createAdapterRegistry()`, `src/analysis/DefaultAdapters.ts`) und
-  lädt die tree-sitter-Grammatiken selbst; er parst, extrahiert und gibt frei,
-  sonst nichts. Alles andere bleibt im Hauptthread: Dateisuche,
+- **Was wo läuft:** Jeder Worker (`src/ExtractionWorker.ts`, die Arbeit in
+  `src/ExtractionWorkerTasks.ts`) hat eigene Adapter
+  (`createAdapterRegistry()`, `src/analysis/DefaultAdapters.ts`) und lädt eine
+  tree-sitter-Grammatik, sobald eine seiner Dateien sie braucht (`grammarOf`);
+  er parst, extrahiert und gibt frei, sonst nichts. Alles andere bleibt im Hauptthread: Dateisuche,
   Speicherwächter, das Lesen jeder Datei, Fact-Cache, `--typecheck`, Graphen
   und Regeln.
 - **Gleicher Bericht, per Konstruktion:** Das Ergebnis jeder Datei ist ein
@@ -1488,11 +1489,30 @@ Schalter (oder mit 1) läuft der sequentielle Pfad, unverändert.
 - **API:** `analyze()` bleibt synchron und sequentiell. `analyzeAsync()` lädt
   die Grammatiken und läuft dann sequentiell (`jobs` ≤ 1) oder parallel. Die
   CLI nutzt `analyzeAsync` für `analyze` und `eval`.
-- **Kosten:** Ein Worker braucht ≈ 0,4–0,6 s, um TypeScript, ts-morph und die
-  Grammatiken zu laden, bevor er die erste Datei bearbeitet. Alle Worker
-  starten deshalb zu Beginn von `analyzeAsync`, überlappend mit dem Laden von
-  Wissensbasis und Regelsatz und der Dateisuche. Jeder Worker hat eigenen Heap
-  und eigene Adapter, der Peak-RSS wächst also mit `n`.
+- **Kosten und Start:** Ein Worker braucht ≈ 0,4–0,6 s bis zur ersten Datei,
+  ≈ 0,35 s davon für das Kompilieren von TypeScript, ts-morph und den
+  Adaptern. Deshalb:
+  - alle Worker starten als Erstes in `analyzeAsync`, überlappend mit dem
+    Laden von Wissensbasis und Regelsatz und der Dateisuche (der Hauptthread
+    lädt im parallelen Modus keine Grammatik — er parst nichts);
+  - ein Worker lädt eine Grammatik erst, wenn eine Datei sie braucht (ein
+    reiner TypeScript-Lauf lädt keine, ≈ 30–55 ms je Worker);
+  - Worker schalten vor dem Laden Nodes Modul-Compile-Cache ein
+    (`module.enableCompileCache()`, Node ≥ 22.1) und schreiben ihn direkt nach
+    dem Laden: Kompilierter Code liegt in Nodes Standardverzeichnis
+    (`os.tmpdir()/node-compile-cache`, ≈ 7–9 MB), und die Worker späterer Läufe
+    laden in etwa der halben Zeit. Das tun nur Worker-Threads — ein Lauf ohne
+    `--jobs` schreibt weiterhin nichts außer seinem Bericht;
+    `NODE_DISABLE_COMPILE_CACHE=1` schaltet ihn ab; ein Node ohne die API
+    kompiliert einfach.
+
+  Gemessen mit `--jobs 4` gegen den vorherigen Stand (drei abwechselnde Paare,
+  warmer Cache, Berichte byte-identisch): stoa 2,72–2,76 s → 2,41–2,56 s, die
+  Dart-App 2,34–2,79 s → 2,12–2,15 s, ein kleines Fixture 1,15–1,24 s →
+  0,85–0,98 s, flyingfish 3,74–4,25 s → 3,62–3,99 s (bei Last 5,6). Der erste
+  Lauf, der den Cache füllt, dauert so lange wie vorher (2,71–2,75 s
+  gegenüber 2,66–2,75 s). Jeder Worker hat eigenen Heap und eigene Adapter,
+  der Peak-RSS wächst also mit `n`.
 - **Gemessen** (Laufzeit der CLI, je zwei Läufe, auf einem Laptop mit 4 Kernen/
   8 Threads unter Desktop-Last; Berichte in jedem Lauf byte-identisch):
 
@@ -1513,12 +1533,15 @@ Schalter (oder mit 1) läuft der sequentielle Pfad, unverändert.
   sequentiellen Lauf (Bericht und Facts byte für byte) auf Fixtures jedes
   Adapters, auf dem ganzen Fixture-Baum mit allen Dateien ausgewählt und auf
   einem Verzeichnis, das geparste, nicht unterstützte und unlesbare Dateien
-  mischt; mit Fact-Cache; Speicherwächter im Hauptthread und im Worker; ein
+  mischt; mit Fact-Cache; der Compile-Cache (nur von Workern gefüllt, keiner
+  ohne `--jobs`, keiner mit `NODE_DISABLE_COMPILE_CACHE=1`); Speicherwächter
+  im Hauptthread und im Worker; ein
   sterbender Worker (Test-Hook `STOA_TEST_WORKER_EXIT`); ein Adapterfehler;
   CLI `--jobs 2` gleich der sequentiellen Ausgabe, ungültige `--jobs`-Werte
   als Aufruffehler. Per Mutationsprobe bestätigt: Ergebnisse außer der Reihe
-  anwenden, den Worker-Wächter ignorieren oder den Cache nicht füllen lässt
-  jeweils Tests scheitern. Die Golden-Korpora bestehen mit `--jobs 4` wie ohne,
+  anwenden, den Worker-Wächter ignorieren, den Fact-Cache nicht füllen, eine
+  gebrauchte Grammatik nicht laden oder den Compile-Cache nicht einschalten
+  lässt jeweils Tests scheitern. Die Golden-Korpora bestehen mit `--jobs 4` wie ohne,
   und 18 Vergleichsläufe liefern mit `jobs` 1 und 4 dieselben Befunde.
 
 ### Pro-Datei-Fact-Cache (opt-in, `--cache`)
@@ -2228,7 +2251,7 @@ zu liefern.
 
 ## Qualitätssicherung
 
-- **node:test-Suite** (`npm test`, `test/*.test.ts`): 618 Tests, 0 fehlgeschlagen,
+- **node:test-Suite** (`npm test`, `test/*.test.ts`): 619 Tests, 0 fehlgeschlagen,
   Lauf vom 2026-11-04 (Regeln pos./neg., Extraktion, Schema-Validierung, i18n,
   Determinismus, SARIF, Eval, Semantik-Groundedness, Datenschutz,
   Finding-Trennung, semantische Modelle, Identitäten, Metriken).

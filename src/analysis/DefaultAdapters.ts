@@ -33,3 +33,19 @@ export const initGrammars = async (): Promise<void> => {
     await initCpp().catch(() => undefined);
     await initHtml().catch(() => undefined);
 };
+
+/**
+ * The grammar an adapter needs loaded before it can parse, or undefined for
+ * one that needs none (TypeScript, PHP). Lets an extraction worker load a
+ * grammar only once a file needs it (see ExtractionWorker.ts); a grammar that
+ * fails to load leaves that adapter's files unparsed, as with `initGrammars`.
+ */
+export const grammarOf = (adapterId: string): (() => Promise<void>) | undefined => GRAMMARS[adapterId];
+
+const GRAMMARS: Readonly<Record<string, () => Promise<void>>> = {
+    dart: initDart,
+    cpp: initCpp,
+    html: initHtml,
+    angular: initHtml,
+    vue: initHtml
+};

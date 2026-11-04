@@ -1,46 +1,22 @@
-import {parentPort, workerData} from 'node:worker_threads';
-import {createAdapterRegistry, initGrammars} from './analysis/DefaultAdapters.js';
-import {extractFile} from './FileExtraction.js';
-import type {ExtractionReply, ExtractionTask, ExtractionWorkerConfig} from './ExtractionPool.js';
-import {isHeapCritical} from './MemoryGuard.js';
+import * as nodeModule from 'node:module';
 
 /**
- * One extraction worker (see ExtractionPool.ts): its own adapters — and so its
- * own ts-morph Projects and tree-sitter parsers —, parsing and extracting the
- * files the pool hands it, one reply per task. Before each file it checks its
- * own heap against the memory guard's ratio and, when critical, answers
- * `memoryCritical` instead of parsing (the pipeline then stops there, as the
- * main-thread guard does). An adapter error is sent back as an error, so the
- * run fails as it would on the main thread.
+ * Entry of an extraction worker thread (see ExtractionPool.ts). Before the
+ * worker loads TypeScript, ts-morph and the adapters — ≈ 0.35 s of compiling
+ * per worker, the bulk of its start — it turns on Node's module compile cache
+ * (`module.enableCompileCache()`, Node ≥ 22.1): compiled code is kept in
+ * Node's default cache directory (`os.tmpdir()/node-compile-cache`, ≈ 9 MB)
+ * and reused by the workers of later runs, which then load in about half the
+ * time. Only worker threads do this, so a run without `--jobs` writes nothing
+ * beyond its report, as before. `NODE_DISABLE_COMPILE_CACHE=1` turns it off;
+ * on a Node without the API the worker simply compiles. The cache is written
+ * right after loading (`flushCompileCache()`), because the pool ends its
+ * workers with `terminate()`, which may not leave time to write it.
+ *
+ * The modules that do the work are therefore imported dynamically, after the
+ * cache is on — a static import would load them first.
  */
-const port = parentPort;
-if (port === null) {
-    throw new Error('ExtractionWorker runs only as a worker thread');
-}
-const config = workerData as ExtractionWorkerConfig;
-await initGrammars();
-const registry = createAdapterRegistry();
-
-port.on('message', (task: ExtractionTask) => {
-    // Test-only hook, not a documented setting: a worker that dies on its
-    // first file, so the pool's crash handling is testable without
-    // exhausting memory. Invisible to a normal run.
-    if (process.env.STOA_TEST_WORKER_EXIT === '1') {
-        process.exit(3);
-    }
-    let reply: ExtractionReply;
-    if (isHeapCritical(config.criticalRatio)) {
-        reply = {index: task.index, outcome: {kind: 'memoryCritical'}};
-    } else {
-        try {
-            const adapter = registry.resolve(task.meta);
-            if (adapter === null) {
-                throw new Error(`no adapter for ${task.meta.path}`);
-            }
-            reply = {index: task.index, outcome: extractFile(adapter, task.file, config.rootDir)};
-        } catch (error) {
-            reply = {index: task.index, error: error instanceof Error ? (error.stack ?? error.message) : String(error)};
-        }
-    }
-    port.postMessage(reply);
-});
+const compileCache = nodeModule as {enableCompileCache?: () => unknown; flushCompileCache?: () => void};
+compileCache.enableCompileCache?.();
+await import('./ExtractionWorkerTasks.js');
+compileCache.flushCompileCache?.();

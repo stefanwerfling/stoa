@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
-import {chmodSync, mkdtempSync, rmSync, writeFileSync} from 'node:fs';
+import {chmodSync, existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync} from 'node:fs';
+import * as nodeModule from 'node:module';
 import {tmpdir} from 'node:os';
 import {dirname, join} from 'node:path';
 import {test} from 'node:test';
@@ -161,6 +162,40 @@ test('CLI --jobs 2 prints the same report as the sequential run', () => {
     assert.equal(sequential.status, 0);
     assert.equal(parallel.status, 0);
     assert.equal(parallel.stdout, sequential.stdout);
+});
+
+// The compile cache (ExtractionWorker.ts): only extraction workers turn it
+// on, in Node's default place under the temp directory — a run without
+// --jobs writes none there; NODE_DISABLE_COMPILE_CACHE=1 turns it off.
+// (The test runs the CLI through tsx, which keeps a cache of its own there.)
+const runCliIn = (temp: string, args: string[], env: Record<string, string> = {}): number => {
+    const result = spawnSync('node', ['--import', 'tsx', 'src/Cli.ts', 'analyze', join(here, 'fixtures', 'sample'), '--format', 'json', ...args], {
+        cwd: root,
+        encoding: 'utf8',
+        env: {...process.env, TMPDIR: temp, TMP: temp, TEMP: temp, NODE_COMPILE_CACHE: '', ...env}
+    });
+    return result.status ?? 1;
+};
+const compileCacheIn = (temp: string): string[] => (existsSync(join(temp, 'node-compile-cache')) ? readdirSync(join(temp, 'node-compile-cache')) : []);
+const hasCompileCache = typeof (nodeModule as {enableCompileCache?: unknown}).enableCompileCache === 'function';
+
+test('only extraction workers fill the compile cache; a run without --jobs writes none', {skip: hasCompileCache ? false : 'this Node has no module.enableCompileCache'}, () => {
+    const sequentialTemp = mkdtempSync(join(tmpdir(), 'stoa-cc-seq-'));
+    const parallelTemp = mkdtempSync(join(tmpdir(), 'stoa-cc-par-'));
+    const disabledTemp = mkdtempSync(join(tmpdir(), 'stoa-cc-off-'));
+    try {
+        assert.equal(runCliIn(sequentialTemp, []), 0);
+        assert.deepEqual(compileCacheIn(sequentialTemp), []);
+        assert.ok(!existsSync(join(sequentialTemp, 'node-compile-cache')));
+        assert.equal(runCliIn(parallelTemp, ['--jobs', '2']), 0);
+        assert.ok(compileCacheIn(parallelTemp).length > 0, 'the workers wrote a compile cache');
+        assert.equal(runCliIn(disabledTemp, ['--jobs', '2'], {NODE_DISABLE_COMPILE_CACHE: '1'}), 0);
+        assert.deepEqual(compileCacheIn(disabledTemp), []);
+    } finally {
+        for (const temp of [sequentialTemp, parallelTemp, disabledTemp]) {
+            rmSync(temp, {recursive: true, force: true});
+        }
+    }
 });
 
 for (const bad of ['0', '-1', '1.5', 'two', '']) {

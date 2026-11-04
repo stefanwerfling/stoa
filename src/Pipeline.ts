@@ -163,7 +163,7 @@ export const analyze = (options: AnalyzeOptions): AnalysisResult => {
 };
 
 /**
- * `analyze` with the grammars loaded first and, with `jobs` > 1, the files
+ * `analyze` with the grammars loaded first or, with `jobs` > 1, the files
  * parsed and extracted on that many worker threads (see ExtractionPool.ts).
  * Everything else stays on this thread and in file order: discovery, the
  * memory guard, reading, the fact cache, `--typecheck`, and applying each
@@ -175,11 +175,14 @@ export const analyze = (options: AnalyzeOptions): AnalysisResult => {
  * stops the run at the first file not yet applied.
  */
 export const analyzeAsync = async (options: AnalyzeAsyncOptions): Promise<AnalysisResult> => {
-    await initGrammars();
     const jobs = options.jobs ?? 1;
     if (jobs <= 1) {
+        await initGrammars();
         return analyze(options);
     }
+    // In parallel, this thread parses nothing — the workers load the
+    // grammars they need themselves (see ExtractionWorker.ts) —, and the
+    // workers start first, so their start overlaps everything below.
     const pool = new ExtractionPool(jobs, {rootDir: options.rootPath, criticalRatio: options.memoryGuard?.workerCriticalRatio ?? options.memoryGuard?.criticalRatio ?? DEFAULT_CRITICAL_RATIO});
     pool.start();
     let run: Run;
