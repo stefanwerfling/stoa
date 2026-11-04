@@ -4,6 +4,7 @@ import type {ExpressionStatement, SourceFile} from 'ts-morph';
 import type {Fact, SourceRange} from '../../Types.js';
 import {factBuilder} from '../FactBuilder.js';
 import type {FileRef} from '../LanguageAdapter.js';
+import {lineAndColumnAt} from './SourcePositions.js';
 
 // Robustness-relevant, resolution-independent diagnostic codes. Module/name
 // resolution codes (e.g. 2307 "cannot find module") are deliberately excluded so
@@ -240,7 +241,7 @@ const rangeOf = (sourceFile: SourceFile, start: number | undefined, length: numb
     if (start === undefined) {
         return {startLine: 1, startCol: 0, endLine: 1, endCol: 0};
     }
-    const from = sourceFile.getLineAndColumnAtPos(start);
-    const to = sourceFile.getLineAndColumnAtPos(start + length);
+    const from = lineAndColumnAt(sourceFile, start);
+    const to = lineAndColumnAt(sourceFile, start + length);
     return {startLine: from.line, startCol: from.column, endLine: to.line, endCol: to.column};
 };

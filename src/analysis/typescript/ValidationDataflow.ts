@@ -1,6 +1,6 @@
 import {Node, SyntaxKind} from 'ts-morph';
 import type {CallExpression, SourceFile} from 'ts-morph';
-import type {Fact, SourceRange} from '../../Types.js';
+import type {Fact} from '../../Types.js';
 import type {FactSpec} from '../FactBuilder.js';
 import type {EvidenceEdge, EvidenceGraph, EvidenceNode, EvidenceStatus} from '../../evidence/EvidenceGraph.js';
 import {annotatedSchemas} from './ValidationAnnotations.js';
@@ -8,6 +8,7 @@ import type {AnnotatedSchema} from './ValidationAnnotations.js';
 import {isRawRequestExpression, isRequestRootedExpression, nearestFunction, PERSISTENCE_VERB, rawRequestAliasNames} from './BackendValidation.js';
 import {findParseCalls, isFedByRequest} from './ValidatorUsage.js';
 import {findInnerCall, resolveOneHop} from './OneHopResolution.js';
+import {rangeOfNode} from './SourcePositions.js';
 import {destructuredProperty, isReassignedAnywhere, tracksBinding} from './SymbolResolution.js';
 import {verifySafeParseGuard} from './SafeParseGuard.js';
 import {descendantsOfKind} from './NodeIndex.js';
@@ -83,7 +84,7 @@ export const extractValidationDataflowFacts = (sourceFile: SourceFile, build: Bu
                 kind: 'validation.dataflowGraph',
                 kindOf: 'statement',
                 symbol: `dataflow#${index}`,
-                range: rangeOf(sourceFile, call),
+                range: rangeOfNode(sourceFile, call),
                 value: {id: schema.rawId, graph} as unknown as Record<string, unknown>,
                 certainty: 'semantic-heuristic'
             }));
@@ -212,11 +213,11 @@ const buildGraph = (sourceFile: SourceFile, schema: AnnotatedSchema, call: CallE
     const addNode = (kind: EvidenceNode['kind'], label: string, at: Node): string => {
         const nid = `${kind}#${seq}`;
         seq += 1;
-        nodes.push({id: nid, kind, label, file: sourceFile.getFilePath(), range: rangeOf(sourceFile, at)});
+        nodes.push({id: nid, kind, label, file: sourceFile.getFilePath(), range: rangeOfNode(sourceFile, at)});
         return nid;
     };
     const addEdge = (from: string, to: string, kind: EvidenceEdge['kind'], status: EvidenceStatus, basis: string, at: Node, producedBy: string, limits?: string[]): void => {
-        edges.push({from, to, kind, file: sourceFile.getFilePath(), range: rangeOf(sourceFile, at), basis, status, producedBy, ...(limits !== undefined ? {limits} : {})});
+        edges.push({from, to, kind, file: sourceFile.getFilePath(), range: rangeOfNode(sourceFile, at), basis, status, producedBy, ...(limits !== undefined ? {limits} : {})});
     };
 
     const sourceId = addNode('request-source', rootIdentifierText(requestArg), requestArg);
@@ -309,10 +310,4 @@ const buildGraph = (sourceFile: SourceFile, schema: AnnotatedSchema, call: CallE
     }
 
     return {nodes, edges};
-};
-
-const rangeOf = (sourceFile: SourceFile, node: Node): SourceRange => {
-    const start = sourceFile.getLineAndColumnAtPos(node.getStart());
-    const end = sourceFile.getLineAndColumnAtPos(node.getEnd());
-    return {startLine: start.line, startCol: start.column, endLine: end.line, endCol: end.column};
 };

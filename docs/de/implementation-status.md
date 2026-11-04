@@ -65,10 +65,10 @@ unabhängigen externen Korpora.
   je Datei und durchläuft jede Funktion einmal (zusammen ≈ −74 %
   Extraktionszeit, siehe „Weniger Token-Durchläufe", „Ein Knotenindex je
   Datei", „Ein Durchlauf je Funktion") und gibt ein ES-Modul frei, indem
-  sein eigenes Project fällt („Parsen und Freigeben"); es bleiben das
-  Parsen, ts-morphs Wrapper-Erzeugung (von der eigenen Navigation der
-  Extraktion gebraucht), der Symbol-Rückweg von `isExported()` und
-  `classMembers`.
+  sein eigenes Project fällt („Parsen und Freigeben"); Bereiche kommen aus
+  einer Umbruchtabelle je Datei statt aus einem Textdurchlauf je Aufruf
+  („Klassen-Member und Quellbereiche"). Es bleiben das Parsen und ts-morphs
+  Wrapper-Erzeugung (von der eigenen Navigation der Extraktion gebraucht).
 
 **Tests und Messungen:** siehe „Qualitätssicherung" unten und den datierten
 Messeintrag „Messung und Speicherprofil". Alle Zahlen auf dieser Seite stammen
@@ -426,6 +426,30 @@ genannten lokalen Projekten; keine ist eine allgemeine Genauigkeitsaussage.
   (`test/fixtures/architecture`: Loader-Fehler, Zuordnung inkl. Mehrfachtreffer
   und Dateien außerhalb der Wurzel, alle vier Kantenurteile, Paketverbote und
   -namen, Report-Zusammenfassung und Markdown, CLI-Fail-fast und JSON).
+- **Klassen-Member und Quellbereiche (Nachtrag):** Das Profil zeigte
+  `classMembers` bei ≈ 5 % und alle `rangeOf` zusammen bei ≈ 8 %. Den
+  größten Teil davon verursachte ts-morphs `getLineAndColumnAtPos`, das bei
+  jedem Aufruf den Text für die Zeile vom Dateianfang an und für die Spalte
+  zurück bis zum Zeilenanfang abläuft — jeder Bereich linear in der
+  Dateilänge. `SourcePositions.ts` legt die Positionen der Zeilenumbrüche
+  jetzt einmal je Datei ab und sucht darin binär, mit exakt ts-morphs
+  Definition (Zeile = 1 + `\n` vor der Position, Spalte ab dem letzten `\n`
+  oder `\r` — ein einzelnes `\r` beginnt keine Zeile). Die sieben
+  gleichlautenden `rangeOf`-Kopien der TS-Extraktion und der JSX-Prüfung
+  nutzen sie. In `refsOf` läuft ein Member, dessen Rumpf JSDoc enthält,
+  nicht mehr komplett über `getDescendants`: Nur die JSDoc-Knoten durchläuft
+  ts-morph, der Rest kommt aus dem Knotenindex (die Listen von refsOf werden
+  sortiert und dedupliziert, die Reihenfolge spielt keine Rolle); der
+  Callee-Test fragt `getExpression()`, statt die Kindliste aufzubauen.
+  Gemessen in vier abwechselnden Paaren à 5 Runden gegen HEAD: Extraktion
+  2,59–2,77 s → 2,04–2,10 s (≈ −21 %), gesamt 3,10–3,38 s → 2,57–2,70 s; im
+  Profil `classMembers` 5,4 % → 2,8 %, die Bereiche 8,1 % → 0,8 %. Facts der
+  652 gemessenen Dateien byte-identisch, Befunde von 18 Läufen unverändert
+  (die Selbstanalyse von stoa verschiebt nur Zeilen), Golden- und
+  SOLID-Korpus unverändert. Tests: `test/SourcePositions.test.ts` (jede
+  Position von Texten mit LF, CRLF, einzelnem CR, U+2028 gegen ts-morph;
+  JSDoc-Referenzen in `.ts`- und `.js`-Membern, per Mutationsprobe
+  bestätigt).
 - **Export-Abfrage: `.d.ts`-Regression behoben, syntaktischer Rückweg
   gemessen (Nachtrag):** Der Schlüsselwort-Kurzweg aus „Weniger
   Token-Durchläufe" beantwortete eine Deklaration ohne Schlüsselwort mit
@@ -2058,7 +2082,7 @@ zu liefern.
 
 ## Qualitätssicherung
 
-- **node:test-Suite** (`npm test`, `test/*.test.ts`): 576 Tests, 0 fehlgeschlagen,
+- **node:test-Suite** (`npm test`, `test/*.test.ts`): 586 Tests, 0 fehlgeschlagen,
   Lauf vom 2026-11-04 (Regeln pos./neg., Extraktion, Schema-Validierung, i18n,
   Determinismus, SARIF, Eval, Semantik-Groundedness, Datenschutz,
   Finding-Trennung, semantische Modelle, Identitäten, Metriken).
@@ -2188,9 +2212,7 @@ Kontext-Facts (`flag.generatedCode`, `hasTests`) für reichhaltigere
 Suppression; LLM-Ausgabe-Evaluierung im Maßstab.
 
 **Offen aus dem Evaluator-Integritäts-Folgeauftrag (2026-11-04):** in der
-TS-Extraktion `classMembers` (≈ 10 % des CPU-Profils; der Profiler
-überzeichnet billige Program-Aufbauten — der Rückweg von `isExported()` sah
-nach ≈ 7 % aus und maß sich als nichts, siehe „Export-Abfrage"); das Parsen
+TS-Extraktion das Parsen
 selbst (≈ 15 %) und ts-morphs Wrapper-Erzeugung (≈ 10 %, von der Navigation
 der Extraktion gebraucht — lazy Einhüllen wurde ohne Gewinn gemessen, siehe
 „Nur Abgefragtes einhüllen"); kein SymbolGraph unter `--solid`, wenn keine

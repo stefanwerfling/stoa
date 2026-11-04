@@ -1,10 +1,11 @@
 import {Node, SyntaxKind} from 'ts-morph';
 import type {CallExpression, SourceFile} from 'ts-morph';
-import type {Fact, SourceRange} from '../../Types.js';
+import type {Fact} from '../../Types.js';
 import type {FactSpec} from '../FactBuilder.js';
 import {annotatedSchemas} from './ValidationAnnotations.js';
 import {isRawRequestExpression, isRequestRootedExpression, nearestFunction, rawRequestAliasNames, rawRequestSinksInFunction} from './BackendValidation.js';
 import {descendantsOfKind} from './NodeIndex.js';
+import {rangeOfNode} from './SourcePositions.js';
 
 type Build = (spec: FactSpec) => Fact;
 
@@ -56,7 +57,7 @@ export const extractValidatorUsageFacts = (sourceFile: SourceFile, build: Build)
                 kind: 'validation.annotatedValidatorUnused',
                 kindOf: 'statement',
                 symbol: `unused#${unusedIndex}`,
-                range: rangeOf(sourceFile, schema.statement),
+                range: rangeOfNode(sourceFile, schema.statement),
                 value: {id: schema.rawId},
                 certainty: 'semantic-heuristic'
             }));
@@ -75,7 +76,7 @@ export const extractValidatorUsageFacts = (sourceFile: SourceFile, build: Build)
                     kind: 'validation.rawReuseAfterValidation',
                     kindOf: 'statement',
                     symbol: `rawreuse#${reuseIndex}`,
-                    range: rangeOf(sourceFile, call),
+                    range: rangeOfNode(sourceFile, call),
                     value: {id: schema.rawId, sinks: sinks.map((sink) => sink.description)},
                     certainty: 'semantic-heuristic'
                 }));
@@ -114,10 +115,4 @@ export const isFedByRequest = (call: CallExpression): boolean => {
     const fn = nearestFunction(call);
     const rawNames = fn === undefined ? new Set<string>() : rawRequestAliasNames(fn);
     return call.getArguments().some((argument) => isRequestRootedExpression(argument) || isRawRequestExpression(argument, rawNames));
-};
-
-const rangeOf = (sourceFile: SourceFile, node: Node): SourceRange => {
-    const start = sourceFile.getLineAndColumnAtPos(node.getStart());
-    const end = sourceFile.getLineAndColumnAtPos(node.getEnd());
-    return {startLine: start.line, startCol: start.column, endLine: end.line, endCol: end.column};
 };

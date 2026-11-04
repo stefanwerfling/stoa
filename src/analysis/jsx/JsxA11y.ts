@@ -1,10 +1,11 @@
 import {Node, SyntaxKind} from 'ts-morph';
 import type {JsxAttribute, JsxElement, JsxOpeningElement, JsxSelfClosingElement, SourceFile} from 'ts-morph';
-import type {Fact, SourceRange} from '../../Types.js';
+import type {Fact} from '../../Types.js';
 import type {FactSpec} from '../FactBuilder.js';
 import {ariaValueIsInvalid, hasRoleTokens, hasValidRole, isPositiveTabindexLiteral, isUnknownAriaName, parseTabindex} from '../AriaVocabulary.js';
 import {contrastViolation} from '../Contrast.js';
 import {descendantsOfKinds} from '../typescript/NodeIndex.js';
+import {rangeOfNode} from '../typescript/SourcePositions.js';
 
 type Build = (spec: FactSpec) => Fact;
 
@@ -48,7 +49,7 @@ export const extractJsxA11yFacts = (sourceFile: SourceFile, build: Build): Fact[
             continue;
         }
         const {attrs, hasSpread} = readAttributes(element);
-        const range = rangeOf(sourceFile, element);
+        const range = rangeOfNode(sourceFile, element);
         const evidence = `<${tag}>`;
 
         if (tag === 'img' && !hasSpread && !isDecorative(tag, attrs) && !attrs.has('alt') && !imgHasTextAlternative(attrs)) {
@@ -468,10 +469,4 @@ const propertyValue = (property: Node, name: string | null): string | null => {
         return `${initializer.getText()}px`;
     }
     return null;
-};
-
-const rangeOf = (sourceFile: SourceFile, node: Node): SourceRange => {
-    const start = sourceFile.getLineAndColumnAtPos(node.getStart());
-    const end = sourceFile.getLineAndColumnAtPos(node.getEnd());
-    return {startLine: start.line, startCol: start.column, endLine: end.line, endCol: end.column};
 };

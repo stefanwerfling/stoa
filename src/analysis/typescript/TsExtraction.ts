@@ -14,6 +14,7 @@ import {extractTsMemberFacts} from './TsMembers.js';
 import type {ReexportValue} from '../DepsFacts.js';
 import {descendantsOfKind, descendantsOfKinds} from './NodeIndex.js';
 import {exportLookup} from './ExportLookup.js';
+import {rangeOfNode} from './SourcePositions.js';
 
 interface FunctionMetrics {
     cyclomatic: number;
@@ -90,7 +91,7 @@ export const extractFacts = (sourceFile: SourceFile, info: AdapterInfo): Fact[] 
         const metrics = measureBody(fn, body);
         const symbol = symbols[index] as string;
         const kindOf = subjectKindOf(fn);
-        const range = rangeOf(sourceFile, fn);
+        const range = rangeOfNode(sourceFile, fn);
 
         facts.push(build({kind: 'metric.cyclomaticComplexity', kindOf, symbol, range, value: metrics.cyclomatic}));
         facts.push(build({kind: 'metric.cognitiveComplexity', kindOf, symbol, range, value: metrics.cognitive}));
@@ -106,7 +107,7 @@ export const extractFacts = (sourceFile: SourceFile, info: AdapterInfo): Fact[] 
         const empty = block.getStatements().length === 0;
         const hasThrow = descendantsOfKind(block, SyntaxKind.ThrowStatement).length > 0;
         const hasCall = descendantsOfKind(block, SyntaxKind.CallExpression).length > 0;
-        const range = rangeOf(sourceFile, clause);
+        const range = rangeOfNode(sourceFile, clause);
         const symbol = `catch#${index}`;
 
         facts.push(build({kind: 'ast.emptyCatch', kindOf: 'catch-clause', symbol, range, value: empty}));
@@ -117,7 +118,7 @@ export const extractFacts = (sourceFile: SourceFile, info: AdapterInfo): Fact[] 
     const referenced = referencedIdentifiers(sourceFile);
     sourceFile.getImportDeclarations().forEach((decl, index) => {
         const module = decl.getModuleSpecifierValue();
-        const range = rangeOf(sourceFile, decl);
+        const range = rangeOfNode(sourceFile, decl);
         const symbol = `import#${index}`;
         facts.push(build({kind: 'deps.import', kindOf: 'import', symbol, range, value: {module, isTypeOnly: decl.isTypeOnly()}}));
 
@@ -147,7 +148,7 @@ export const extractFacts = (sourceFile: SourceFile, info: AdapterInfo): Fact[] 
         if (value === null) {
             return;
         }
-        facts.push(build({kind: 'orm.synchronizeEnabled', kindOf: 'statement', symbol: `synchronize#${index}`, range: rangeOf(sourceFile, property), value}));
+        facts.push(build({kind: 'orm.synchronizeEnabled', kindOf: 'statement', symbol: `synchronize#${index}`, range: rangeOfNode(sourceFile, property), value}));
     });
 
     descendantsOfKind(sourceFile, SyntaxKind.ObjectLiteralExpression).forEach((object, index) => {
@@ -164,7 +165,7 @@ export const extractFacts = (sourceFile: SourceFile, info: AdapterInfo): Fact[] 
                     kind: 'orm.syncWithMigrations',
                     kindOf: 'statement',
                     symbol: `syncWithMigrations#${index}`,
-                    range: rangeOf(sourceFile, object),
+                    range: rangeOfNode(sourceFile, object),
                     value: 'synchronize + migrations'
                 })
             );
@@ -196,7 +197,7 @@ export const extractFacts = (sourceFile: SourceFile, info: AdapterInfo): Fact[] 
         // ordered by source position so symbols stay deterministic.
         candidates.sort((a, b) => a.node.getStart() - b.node.getStart());
         candidates.forEach((candidate, index) => {
-            facts.push(build({kind: 'migration.unguardedDdl', kindOf: 'statement', symbol: `ddl#${index}`, range: rangeOf(sourceFile, candidate.node), value: candidate.descriptor}));
+            facts.push(build({kind: 'migration.unguardedDdl', kindOf: 'statement', symbol: `ddl#${index}`, range: rangeOfNode(sourceFile, candidate.node), value: candidate.descriptor}));
         });
 
         // Dropping a table or column in up() destroys data on the forward path,
@@ -223,7 +224,7 @@ export const extractFacts = (sourceFile: SourceFile, info: AdapterInfo): Fact[] 
         }
         losses.sort((a, b) => a.node.getStart() - b.node.getStart());
         losses.forEach((loss, index) => {
-            facts.push(build({kind: 'migration.dataLoss', kindOf: 'statement', symbol: `loss#${index}`, range: rangeOf(sourceFile, loss.node), value: loss.descriptor}));
+            facts.push(build({kind: 'migration.dataLoss', kindOf: 'statement', symbol: `loss#${index}`, range: rangeOfNode(sourceFile, loss.node), value: loss.descriptor}));
         });
 
         // Adding a NOT NULL column without a default breaks on a non-empty table:
@@ -249,7 +250,7 @@ export const extractFacts = (sourceFile: SourceFile, info: AdapterInfo): Fact[] 
         }
         nullables.sort((a, b) => a.node.getStart() - b.node.getStart());
         nullables.forEach((nullable, index) => {
-            facts.push(build({kind: 'migration.nullableNoDefault', kindOf: 'statement', symbol: `nullable#${index}`, range: rangeOf(sourceFile, nullable.node), value: nullable.descriptor}));
+            facts.push(build({kind: 'migration.nullableNoDefault', kindOf: 'statement', symbol: `nullable#${index}`, range: rangeOfNode(sourceFile, nullable.node), value: nullable.descriptor}));
         });
 
         for (const cls of sourceFile.getClasses()) {
@@ -258,7 +259,7 @@ export const extractFacts = (sourceFile: SourceFile, info: AdapterInfo): Fact[] 
             }
             const descriptor = missingDown(cls.getMethod('down'));
             if (descriptor !== null) {
-                facts.push(build({kind: 'migration.noDown', kindOf: 'class', symbol: cls.getName() ?? '(anonymous)', range: rangeOf(sourceFile, cls.getNameNode() ?? cls), value: descriptor}));
+                facts.push(build({kind: 'migration.noDown', kindOf: 'class', symbol: cls.getName() ?? '(anonymous)', range: rangeOfNode(sourceFile, cls.getNameNode() ?? cls), value: descriptor}));
             }
         }
     }
@@ -270,7 +271,7 @@ export const extractFacts = (sourceFile: SourceFile, info: AdapterInfo): Fact[] 
         for (const property of cls.getProperties()) {
             for (const decorator of property.getDecorators()) {
                 if (RELATION_DECORATORS.has(decorator.getName()) && decoratorHasEager(decorator)) {
-                    facts.push(build({kind: 'orm.eagerRelation', kindOf: 'statement', symbol: `${cls.getName() ?? '(anonymous)'}.${property.getName()}`, range: rangeOf(sourceFile, decorator), value: decorator.getName()}));
+                    facts.push(build({kind: 'orm.eagerRelation', kindOf: 'statement', symbol: `${cls.getName() ?? '(anonymous)'}.${property.getName()}`, range: rangeOfNode(sourceFile, decorator), value: decorator.getName()}));
                 }
             }
         }
@@ -279,7 +280,7 @@ export const extractFacts = (sourceFile: SourceFile, info: AdapterInfo): Fact[] 
         if (cls.getExtends() !== undefined || hasPrimaryKey(cls)) {
             continue;
         }
-        facts.push(build({kind: 'orm.entityNoPrimaryKey', kindOf: 'class', symbol: cls.getName() ?? '(anonymous)', range: rangeOf(sourceFile, cls.getNameNode() ?? cls), value: 'entity has no primary key column'}));
+        facts.push(build({kind: 'orm.entityNoPrimaryKey', kindOf: 'class', symbol: cls.getName() ?? '(anonymous)', range: rangeOfNode(sourceFile, cls.getNameNode() ?? cls), value: 'entity has no primary key column'}));
     }
 
     // UI/UX accessibility facts from JSX elements (same ui.* facts the HTML
@@ -534,7 +535,7 @@ const collectReexports = (sourceFile: SourceFile): Reexport[] => {
         if (named.length === 0) {
             const namespace = declaration.getNamespaceExport()?.getName();
             const kind = namespace === undefined ? 'star' : 'namespace';
-            out.push({symbol: `reexport#${index}`, range: rangeOf(sourceFile, declaration), value: {module, name: '*', exportedAs: namespace ?? '*', kind, isTypeOnly: declaration.isTypeOnly()}});
+            out.push({symbol: `reexport#${index}`, range: rangeOfNode(sourceFile, declaration), value: {module, name: '*', exportedAs: namespace ?? '*', kind, isTypeOnly: declaration.isTypeOnly()}});
             return;
         }
         named.forEach((specifier, position) => {
@@ -542,7 +543,7 @@ const collectReexports = (sourceFile: SourceFile): Reexport[] => {
             const exportedAs = specifier.getAliasNode()?.getText() ?? name;
             out.push({
                 symbol: `reexport#${index}.${position}`,
-                range: rangeOf(sourceFile, specifier),
+                range: rangeOfNode(sourceFile, specifier),
                 value: {module, name, exportedAs, kind: 'named', isTypeOnly: declaration.isTypeOnly() || specifier.isTypeOnly()}
             });
         });
@@ -563,7 +564,7 @@ const collectExportNames = (sourceFile: SourceFile): ExportedName[] => {
     const out: ExportedName[] = [];
     exportNamesCache.set(sourceFile.compilerNode, out);
     const add = (name: string, node: Node): void => {
-        out.push({name, range: rangeOf(sourceFile, node)});
+        out.push({name, range: rangeOfNode(sourceFile, node)});
     };
     const lookup = exportLookup(sourceFile);
 
@@ -870,12 +871,6 @@ const isIdentifierRead = (identifier: Node): boolean => {
         return false;
     }
     return !(Node.isBinaryExpression(parent) && parent.getOperatorToken().getKind() === SyntaxKind.EqualsToken && parent.getLeft() === identifier);
-};
-
-const rangeOf = (sourceFile: SourceFile, node: Node): SourceRange => {
-    const start = sourceFile.getLineAndColumnAtPos(node.getStart());
-    const end = sourceFile.getLineAndColumnAtPos(node.getEnd());
-    return {startLine: start.line, startCol: start.column, endLine: end.line, endCol: end.column};
 };
 
 const fileRange = (sourceFile: SourceFile): SourceRange => {

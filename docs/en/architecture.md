@@ -273,5 +273,5 @@ See [open-questions.md](./open-questions.md). Core points: incremental
 analysis/caching granularity, project-wide (interprocedural) data flow analysis
 vs. effort, unified fact schema across very different languages.
 
-Open point from the implementation (2026-11-04): in the TS extraction, `classMembers`, the TypeScript parse and ts-morph's wrapper creation remain (lazy wrapping and a syntactic export fallback brought no measurable gain); token wrapping, the per-file type checker, the per-fact-family and per-function walks and the costly release are gone since the "Fewer token walks", "One node index per file", "One walk per function" and "Parse and release" follow-ups — see "Not yet done" in
+Open point from the implementation (2026-11-04): in the TS extraction, the TypeScript parse and ts-morph's wrapper creation remain (lazy wrapping and a syntactic export fallback brought no measurable gain); token wrapping, the per-file type checker, the per-fact-family and per-function walks the costly release and the per-call line scans of ranges are gone since the "Fewer token walks", "One node index per file", "One walk per function", "Parse and release" and "Class members and source ranges" follow-ups — see "Not yet done" in
 [implementation-status.md](./implementation-status.md).

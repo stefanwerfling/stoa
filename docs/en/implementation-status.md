@@ -63,9 +63,9 @@ corpora.
   file and walks each function once (together ≈ −74 % extraction time, see
   "Fewer token walks", "One node index per file", "One walk per function")
   and releases an ES module by dropping its own Project ("Parse and
-  release"); the parse, ts-morph's wrapper creation (needed by the
-  extraction's own navigation), `isExported()`'s symbol fallback and
-  `classMembers` remain.
+  release"); ranges come from a break table per file instead of a text scan
+  per call ("Class members and source ranges"). The parse and ts-morph's
+  wrapper creation (needed by the extraction's own navigation) remain.
 
 **Tests and measurements:** see "Quality assurance" below and the dated
 measurement entry "Measurement and memory profile". All numbers on this
@@ -397,6 +397,29 @@ the named local projects; none is a general accuracy claim.
   (`test/fixtures/architecture`: loader errors, assignment incl. multiple
   matches and outside-root files, all four edge verdicts, package bans and
   names, report summary and markdown, CLI fail-fast and JSON).
+- **Class members and source ranges (follow-up):** the profile put
+  `classMembers` at ≈ 5 % and every `rangeOf` together at ≈ 8 %. Most of it
+  was ts-morph's `getLineAndColumnAtPos`, which scans the text from the file
+  start for the line and back to the line start for the column on every
+  call — each range linear in the file length. `SourcePositions.ts` now
+  builds the newline and line-break positions once per file and searches
+  them binarily, with ts-morph's definition kept exactly (line = 1 + `\n`
+  before the position, column from the last `\n` or `\r` — a lone `\r`
+  starts no line). The seven identical `rangeOf` copies of the TS
+  extraction and the JSX check use it. In `refsOf`, a member whose body
+  holds JSDoc no longer walks the whole body with `getDescendants`: only
+  the JSDoc nodes are walked by ts-morph, the rest comes from the node
+  index (the lists refsOf builds are sorted and de-duplicated, so the order
+  does not matter); the callee test asks `getExpression()` instead of
+  building the child list. Measured in four alternating pairs of 5 rounds
+  against HEAD: extraction 2.59–2.77 s → 2.04–2.10 s (≈ −21 %), total
+  3.10–3.38 s → 2.57–2.70 s; in the profile `classMembers` 5.4 % → 2.8 %,
+  the ranges 8.1 % → 0.8 %. Facts of the 652 measured files
+  byte-identical, findings of 18 runs unchanged (stoa's self-analysis only
+  shifts lines), golden and SOLID corpora unchanged. Tests:
+  `test/SourcePositions.test.ts` (every position of texts with LF, CRLF,
+  lone CR, U+2028 against ts-morph; JSDoc references in `.ts` and `.js`
+  members, mutation-checked).
 - **Export lookup: `.d.ts` regression fixed, syntactic fallback measured
   (follow-up):** the keyword shortcut of "Fewer token walks" answered a
   declaration without the keyword with `false` whenever the file had no
@@ -1884,7 +1907,7 @@ fails fast (exit 1, concrete errors) instead of silently yielding 0 findings.
 
 ## Quality assurance
 
-- **node:test suite** (`npm test`, `test/*.test.ts`): 576 tests, 0 failed,
+- **node:test suite** (`npm test`, `test/*.test.ts`): 586 tests, 0 failed,
   as of the 2026-11-04 run (rules pos./neg., extraction, schema validation,
   i18n, determinism, SARIF, evaluation, semantic groundedness, privacy,
   finding-model separation, semantic models, identities, metrics).
@@ -2007,9 +2030,7 @@ generic ESLint fact adapter; context facts (`flag.generatedCode`, `hasTests`)
 for richer suppression; LLM-output evaluation at scale.
 
 **Open from the evaluator-integrity track (2026-11-04):** in the TS
-extraction, `classMembers` (≈ 10 % of the CPU profile; the profiler
-overstates cheap Program builds — `isExported()`'s fallback looked like
-≈ 7 % and measured as nothing, see "Export lookup"); the parse
+extraction, the parse
 itself (≈ 15 %) and ts-morph's wrapper creation (≈ 10 %, needed by the
 extraction's navigation — wrapping lazily was measured without gain, see
 "Wrapping only what is queried"); not building the SymbolGraph under

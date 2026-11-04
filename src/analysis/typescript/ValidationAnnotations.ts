@@ -1,9 +1,10 @@
 import {Node, SyntaxKind} from 'ts-morph';
 import type {Expression, SourceFile, VariableStatement} from 'ts-morph';
-import type {Fact, SourceRange} from '../../Types.js';
+import type {Fact} from '../../Types.js';
 import type {FactSpec} from '../FactBuilder.js';
 import type {NormalizationKind} from '../../contracts/ValidationContract.js';
 import {descendantsOfKind} from './NodeIndex.js';
+import {rangeOfNode} from './SourcePositions.js';
 
 type Build = (spec: FactSpec) => Fact;
 
@@ -101,7 +102,7 @@ export const extractValidationAnnotations = (sourceFile: SourceFile, build: Buil
             kind: 'validation.contractAnnotation',
             kindOf: 'statement',
             symbol: `annotation#${index}`,
-            range: rangeOf(sourceFile, schema.statement),
+            range: rangeOfNode(sourceFile, schema.statement),
             value,
             certainty: 'syntactic'
         }));
@@ -504,10 +505,4 @@ const applyModifiers = (dataType: 'number' | 'string' | 'boolean', links: Readon
         conditions.format = firstFormat;
     }
     return conditions;
-};
-
-const rangeOf = (sourceFile: SourceFile, node: Node): SourceRange => {
-    const start = sourceFile.getLineAndColumnAtPos(node.getStart());
-    const end = sourceFile.getLineAndColumnAtPos(node.getEnd());
-    return {startLine: start.line, startCol: start.column, endLine: end.line, endCol: end.column};
 };

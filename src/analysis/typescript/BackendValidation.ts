@@ -1,9 +1,10 @@
 import {Node, SyntaxKind} from 'ts-morph';
 import type {CallExpression, SourceFile} from 'ts-morph';
-import type {Fact, SourceRange} from '../../Types.js';
+import type {Fact} from '../../Types.js';
 import type {FactSpec} from '../FactBuilder.js';
 import {findInnerCall, resolveOneHop} from './OneHopResolution.js';
 import {descendantsOfKind, descendantsOfKinds} from './NodeIndex.js';
+import {rangeOfNode} from './SourcePositions.js';
 
 type Build = (spec: FactSpec) => Fact;
 
@@ -37,7 +38,7 @@ export const extractBackendValidationFacts = (sourceFile: SourceFile, build: Bui
             kind: 'validation.backendInputUnvalidated',
             kindOf: 'function',
             symbol: `handler#${index}`,
-            range: rangeOf(sourceFile, inputs[0] ?? handler),
+            range: rangeOfNode(sourceFile, inputs[0] ?? handler),
             value: distinctSources(inputs).join(', '),
             certainty: 'semantic-heuristic'
         }));
@@ -366,7 +367,7 @@ export const extractMassAssignmentFacts = (sourceFile: SourceFile, build: Build)
                 kind: 'validation.rawRequestMassAssignment',
                 kindOf: 'statement',
                 symbol: `massAssign#${index}`,
-                range: rangeOf(sourceFile, site.call),
+                range: rangeOfNode(sourceFile, site.call),
                 value: site.description,
                 certainty: 'semantic-heuristic'
             }));
@@ -525,10 +526,4 @@ const spreadRawRequestSource = (argument: Node, rawNames: ReadonlySet<string>): 
         }
     }
     return null;
-};
-
-const rangeOf = (sourceFile: SourceFile, node: Node): SourceRange => {
-    const start = sourceFile.getLineAndColumnAtPos(node.getStart());
-    const end = sourceFile.getLineAndColumnAtPos(node.getEnd());
-    return {startLine: start.line, startCol: start.column, endLine: end.line, endCol: end.column};
 };

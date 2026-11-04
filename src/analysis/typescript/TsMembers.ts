@@ -19,6 +19,7 @@ import {
     type StructTypeRef
 } from '../StructFacts.js';
 import {indexedWrapper} from './NodeIndex.js';
+import {rangeOfNode} from './SourcePositions.js';
 
 type Build = (spec: FactSpec) => Fact;
 
@@ -65,7 +66,7 @@ export const extractTsMemberFacts = (sourceFile: SourceFile, build: Build): Fact
             hasParseError: hasErrorIn(declaration),
             members: classMembers(declaration, sourceFile, imported).map(compactMember)
         };
-        facts.push(build({kind: 'struct.typeDecl', kindOf: 'class', symbol: name, range: rangeOf(sourceFile, declaration), value}));
+        facts.push(build({kind: 'struct.typeDecl', kindOf: 'class', symbol: name, range: rangeOfNode(sourceFile, declaration), value}));
     }
     for (const declaration of sourceFile.getInterfaces()) {
         const value: StructTypeDeclValue = {
@@ -75,12 +76,12 @@ export const extractTsMemberFacts = (sourceFile: SourceFile, build: Build): Fact
             hasParseError: hasErrorIn(declaration),
             members: interfaceMembers(declaration, sourceFile).map(compactMember)
         };
-        facts.push(build({kind: 'struct.typeDecl', kindOf: 'class', symbol: declaration.getName(), range: rangeOf(sourceFile, declaration), value}));
+        facts.push(build({kind: 'struct.typeDecl', kindOf: 'class', symbol: declaration.getName(), range: rangeOfNode(sourceFile, declaration), value}));
     }
     const bindings = importBindings(sourceFile);
     if (facts.length > 0 && bindings.length > 0) {
         const value: StructImportBindingsValue = {v: 1, bindings};
-        facts.push(build({kind: 'struct.importBindings', kindOf: 'file', range: rangeOf(sourceFile, sourceFile), value}));
+        facts.push(build({kind: 'struct.importBindings', kindOf: 'file', range: rangeOfNode(sourceFile, sourceFile), value}));
     }
     return facts;
 };
@@ -218,12 +219,12 @@ const classMembers = (declaration: ClassDeclaration, sourceFile: SourceFile, imp
     const className = declaration.getName() ?? '';
     const members: StructMember[] = [];
     for (const member of declaration.getMembers()) {
-        const range = rangeOf(sourceFile, member);
+        const range = rangeOfNode(sourceFile, member);
         if (Node.isConstructorDeclaration(member)) {
             const params = member.getParameters();
             members.push({...base('constructor', 'constructor', range), params: params.map(paramOf), ...refsOf(member.getBody(), own, imported, className, params)});
             for (const param of params.filter((candidate) => candidate.isParameterProperty())) {
-                members.push({...base(param.getName(), 'field', rangeOf(sourceFile, param)), isStatic: false, declaredType: refOfType(param.getTypeNode())});
+                members.push({...base(param.getName(), 'field', rangeOfNode(sourceFile, param)), isStatic: false, declaredType: refOfType(param.getTypeNode())});
             }
         } else if (Node.isPropertyDeclaration(member)) {
             members.push({
@@ -256,7 +257,7 @@ const classMembers = (declaration: ClassDeclaration, sourceFile: SourceFile, imp
 const interfaceMembers = (declaration: InterfaceDeclaration, sourceFile: SourceFile): StructMember[] => {
     const members: StructMember[] = [];
     for (const member of declaration.getMembers()) {
-        const range = rangeOf(sourceFile, member);
+        const range = rangeOfNode(sourceFile, member);
         if (Node.isPropertySignature(member)) {
             members.push({...base(member.getName(), 'field', range), isAbstract: true, declaredType: refOfType(member.getTypeNode())});
         } else if (Node.isMethodSignature(member)) {
@@ -309,16 +310,18 @@ const REFERENCE_KINDS: ReadonlySet<ts.SyntaxKind> = new Set([ts.SyntaxKind.Prope
  * `[scope, ...scope.getDescendants()]`. One compiler walk (`ts.forEachChild`)
  * finds them and the file's node index supplies their wrappers.
  * `getDescendants` also walks JSDoc (`getChildren`), which `forEachChild`
- * skips; a scope holding JSDoc anywhere (e.g. `@augments a.B` on a nested
- * class) therefore takes the full getDescendants path, as does any hit the
- * index cannot supply.
+ * skips; the JSDoc of every node in the scope (e.g. `@augments a.B` on a
+ * nested class) is therefore walked by ts-morph on its own, JSDoc node by
+ * JSDoc node. The order differs from `getDescendants`, which refsOf does not
+ * depend on (every list it builds is sorted and de-duplicated). Any node the
+ * index cannot supply sends the whole scope down the `getDescendants` path.
  */
 const referenceCandidates = (scope: Node): Node[] => {
-    let jsDoc = hasJsDoc(scope.compilerNode);
     const hits: ts.Node[] = [];
+    const jsDocOwners: ts.Node[] = hasJsDoc(scope.compilerNode) ? [scope.compilerNode] : [];
     const walk = (node: ts.Node): undefined => {
         if (hasJsDoc(node)) {
-            jsDoc = true;
+            jsDocOwners.push(node);
         }
         if (REFERENCE_KINDS.has(node.kind)) {
             hits.push(node);
@@ -327,11 +330,18 @@ const referenceCandidates = (scope: Node): Node[] => {
         return undefined;
     };
     ts.forEachChild(scope.compilerNode, walk);
-    const wrappers = jsDoc ? [] : hits.map((hit) => indexedWrapper(scope, hit));
-    if (jsDoc || wrappers.some((wrapper) => wrapper === undefined)) {
+    const wrappers = hits.map((hit) => indexedWrapper(scope, hit));
+    const owners = jsDocOwners.map((owner) => (owner === scope.compilerNode ? scope : indexedWrapper(scope, owner)));
+    if (wrappers.some((wrapper) => wrapper === undefined) || owners.some((owner) => owner === undefined)) {
         return [scope, ...scope.getDescendants()];
     }
-    return [scope, ...(wrappers as Node[])];
+    const candidates = [scope, ...(wrappers as Node[])];
+    for (const owner of owners as Node[]) {
+        for (const jsDoc of owner.getChildren().filter((child) => Node.isJSDoc(child))) {
+            candidates.push(...jsDoc.getDescendants().filter((node) => REFERENCE_KINDS.has(node.getKind())));
+        }
+    }
+    return candidates;
 };
 
 const refsOf = (
@@ -357,7 +367,8 @@ const refsOf = (
                     refsMembers.push(node.getName());
                 }
             } else {
-                const isCallee = Node.isCallExpression(node.getParent()) && node.getParent()?.getChildAtIndex(0) === node;
+                const parent = node.getParent();
+                const isCallee = Node.isCallExpression(parent) && parent.getExpression() === node;
                 const ref = refOfExpression(target);
                 if (!isCallee && ref !== null && /^[A-Z]/.test(ref.name) && (ref.prefix === null || imported.has(ref.prefix))) {
                     staticAccess.push({...ref, member: node.getName()});
@@ -379,10 +390,4 @@ const refsOf = (
         }
     }
     return {refsMembers: sortedUnique(refsMembers), refsImports: sortedUnique(refsImports), instantiates: sortedRefs(instantiates), staticAccess: sortedRefs(staticAccess)};
-};
-
-const rangeOf = (sourceFile: SourceFile, node: Node): SourceRange => {
-    const start = sourceFile.getLineAndColumnAtPos(node.getStart());
-    const end = sourceFile.getLineAndColumnAtPos(node.getEnd());
-    return {startLine: start.line, startCol: start.column, endLine: end.line, endCol: end.column};
 };
