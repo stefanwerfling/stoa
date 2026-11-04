@@ -276,5 +276,5 @@ Siehe [open-questions.md](./open-questions.md). Kernpunkte: inkrementelle
 Analyse/Caching-Granularität, projektweite (interprozedurale) Datenflussanalyse
 vs. Aufwand, einheitliches Fact-Schema über sehr unterschiedliche Sprachen.
 
-Offener Punkt aus der Umsetzung (2026-11-04): in der TS-Extraktion dominieren Parsen, Freigeben und das einmalige Einhüllen aller Knoten; Token-Einhüllung, TypeChecker je Datei und die Durchläufe je Fact-Familie und je Funktion sind seit den Nachträgen „Weniger Token-Durchläufe", „Ein Knotenindex je Datei" und „Ein Durchlauf je Funktion" entfernt — siehe „Noch offen" in
+Offener Punkt aus der Umsetzung (2026-11-04): in der TS-Extraktion dominieren das TypeScript-Parsen und das einmalige Einhüllen aller Knoten; Token-Einhüllung, TypeChecker je Datei, die Durchläufe je Fact-Familie und je Funktion und das teure Freigeben sind seit den Nachträgen „Weniger Token-Durchläufe", „Ein Knotenindex je Datei", „Ein Durchlauf je Funktion" und „Parsen und Freigeben" entfernt — siehe „Noch offen" in
 [implementation-status.md](./implementation-status.md).

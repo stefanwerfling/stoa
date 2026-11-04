@@ -64,8 +64,9 @@ unabhängigen externen Korpora.
   keinen TypeChecker, beantwortet die Knotenabfragen je Art aus einem Index
   je Datei und durchläuft jede Funktion einmal (zusammen ≈ −74 %
   Extraktionszeit, siehe „Weniger Token-Durchläufe", „Ein Knotenindex je
-  Datei", „Ein Durchlauf je Funktion"); Parsen, Freigeben und das einmalige
-  Einhüllen aller Knoten dominieren jetzt.
+  Datei", „Ein Durchlauf je Funktion") und gibt ein ES-Modul frei, indem
+  sein eigenes Project fällt („Parsen und Freigeben"); Parsen und das
+  einmalige Einhüllen aller Knoten dominieren jetzt.
 
 **Tests und Messungen:** siehe „Qualitätssicherung" unten und den datierten
 Messeintrag „Messung und Speicherprofil". Alle Zahlen auf dieser Seite stammen
@@ -423,6 +424,36 @@ genannten lokalen Projekten; keine ist eine allgemeine Genauigkeitsaussage.
   (`test/fixtures/architecture`: Loader-Fehler, Zuordnung inkl. Mehrfachtreffer
   und Dateien außerhalb der Wurzel, alle vier Kantenurteile, Paketverbote und
   -namen, Report-Zusammenfassung und Markdown, CLI-Fail-fast und JSON).
+- **Parsen und Freigeben im TS-Adapter (Nachtrag):** Jede Datei wurde in ein
+  gemeinsames ts-morph-Project geparst und mit `removeSourceFile()`
+  freigegeben, dessen `forget()` jeden Wrapper der Datei durchläuft (seit
+  dem Knotenindex alle) und dabei Kommentar-Knoten parst — 1,2 s von 4,6 s
+  auf den 652 gemessenen Dateien, mehr als das Parsen selbst. Jetzt erhält
+  ein ES-Modul ein eigenes Project ohne Lib-Dateien und wird freigegeben,
+  indem die Referenz fällt. Exakt, weil jede Symbolfrage der Extraktion
+  gegen eine in der Datei deklarierte Bindung vergleicht (`isSameBinding`,
+  die Exportsymbole), nur Deklarationen aus der Datei annimmt
+  (`resolveOneHop`) oder ein `const` mit Initialisierer braucht
+  (`resolveSimpleAlias`, die Zod-Form), und in einem Modul verschmilzt eine
+  lokale Bindung nie mit einem Lib-Global. Ein Skript (kein import/export,
+  auch CommonJS-JS — seine Top-Level-Namen verschmelzen mit Lib-Globals wie
+  `var name`) und eine Datei mit `declare global` behalten das gemeinsame
+  Project mit den Lib-Dateien. Nach Messung verworfen: ein Project je Datei
+  MIT Lib-Dateien (Facts identisch, aber jedes Program parst die
+  Lib-Dateien neu: Extraktion 2,9 → 6,6 s) und das gemeinsame Project alle K
+  Dateien zu erneuern (≈ −8 %, das Program wächst mit K). Facts
+  byte-identisch (derselbe Hash über 50.046 Facts von 652 Dateien), Befunde
+  von 18 Läufen byte-identisch, Golden- und SOLID-Korpus unverändert.
+  Gemessen (Parsen + extractFacts + Freigeben, dieselben Dateien, Minimum aus
+  3 Runden, abwechselnde Läufe): 4,6 s → 3,2 s (Freigeben 1,2 s → ≈ 0); Ende
+  zu Ende (`analyze` mit `--solid --dead-exports`, inkl. Prozessstart, je
+  zwei abwechselnde Läufe): flyingfish backend 3,0–3,1 → 2,8–2,9 s, frontend
+  3,3–3,5 → 2,8–3,0 s, stoa/src 3,4–3,6 → 2,8–2,9 s; Spitzen-RSS backend
+  356–362 → 394 MB (+9 %: die Projects je Datei warten auf die nächste GC),
+  frontend 392–395 → 365–377 MB, stoa/src 416–418 → 361–363 MB. Tests:
+  `test/TypeScriptAdapterRelease.test.ts` (ein Modul ohne Lib-Dateien, ein
+  Skript und eine `declare global`-Datei mit ihnen, dieselben Metriken auf
+  beiden Wegen).
 - **Ausdrucksrümpfe werden gemessen (Nachtrag):** Der Durchlauf je
   Funktion prüfte nur die Kinder des Funktionsrumpfs, nie den Rumpf selbst —
   harmlos bei einem Block, aber ein Pfeil mit Ausdrucksrumpf verlor seinen
@@ -1983,7 +2014,7 @@ zu liefern.
 
 ## Qualitätssicherung
 
-- **node:test-Suite** (`npm test`, `test/*.test.ts`): 550 Tests, 0 fehlgeschlagen,
+- **node:test-Suite** (`npm test`, `test/*.test.ts`): 553 Tests, 0 fehlgeschlagen,
   Lauf vom 2026-11-04 (Regeln pos./neg., Extraktion, Schema-Validierung, i18n,
   Determinismus, SARIF, Eval, Semantik-Groundedness, Datenschutz,
   Finding-Trennung, semantische Modelle, Identitäten, Metriken).
@@ -2113,10 +2144,10 @@ Kontext-Facts (`flag.generatedCode`, `hasTests`) für reichhaltigere
 Suppression; LLM-Ausgabe-Evaluierung im Maßstab.
 
 **Offen aus dem Evaluator-Integritäts-Folgeauftrag (2026-11-04):** in der
-TS-Extraktion Parsen und Freigeben (≈ 28 % des Profils) und das einmalige
-Einhüllen aller Knoten für den Index (≈ 12 %) — die Durchläufe je
-Fact-Familie und je Funktion sind zusammengeführt („Ein Knotenindex je
-Datei", „Ein Durchlauf je Funktion"); kein SymbolGraph unter `--solid`, wenn keine
+TS-Extraktion das einmalige Einhüllen aller Knoten für den Index und das
+TypeScript-Parsen selbst — die Durchläufe sind zusammengeführt und das
+Freigeben kostet ≈ 0 („Ein Knotenindex je Datei", „Ein Durchlauf je
+Funktion", „Parsen und Freigeben"); kein SymbolGraph unter `--solid`, wenn keine
 Typdeklarationen existieren (gemessen 2,7 ms, niedrige Priorität).
 
 **Cross-Layer-Validierung — Grenzen (erster vertikaler Schnitt):**

@@ -61,8 +61,9 @@ corpora.
   The TS adapter no longer wraps every token, builds no type checker for
   export questions, answers the per-kind node queries from one index per
   file and walks each function once (together ≈ −74 % extraction time, see
-  "Fewer token walks", "One node index per file", "One walk per function");
-  parsing, releasing and wrapping all nodes once now dominate.
+  "Fewer token walks", "One node index per file", "One walk per function")
+  and releases an ES module by dropping its own Project ("Parse and
+  release"); parsing and wrapping all nodes once now dominate.
 
 **Tests and measurements:** see "Quality assurance" below and the dated
 measurement entry "Measurement and memory profile". All numbers on this
@@ -394,6 +395,35 @@ the named local projects; none is a general accuracy claim.
   (`test/fixtures/architecture`: loader errors, assignment incl. multiple
   matches and outside-root files, all four edge verdicts, package bans and
   names, report summary and markdown, CLI fail-fast and JSON).
+- **Parse and release in the TS adapter (follow-up):** every file was
+  parsed into one shared ts-morph Project and released with
+  `removeSourceFile()`, whose `forget()` walks every wrapper of the file (all
+  of them since the node index) and parses comment nodes on the way — 1.2 s
+  of 4.6 s for the 652 measured files, more than parsing itself. Now an ES
+  module gets a Project of its own without the lib files and is released by
+  dropping the reference. Exact, because every symbol question of the
+  extraction compares against a binding declared in the file
+  (`isSameBinding`, the export symbols), accepts only declarations from the
+  file (`resolveOneHop`) or needs a `const` with an initializer
+  (`resolveSimpleAlias`, the Zod shape), and in a module a local binding
+  never merges with a lib global. A script (no import/export, incl.
+  CommonJS JS — its top-level names merge with lib globals such as `var
+  name`) and a file with `declare global` keep the shared Project with the
+  lib files. Rejected after measuring: one Project per file WITH lib files
+  (facts identical, but every Program re-parses the lib files: extraction
+  2.9 → 6.6 s), and recycling the shared Project every K files (≈ −8 %, the
+  Program grows with K). Facts byte-identical (same hash over 50,046 facts
+  of 652 files), findings of 18 runs byte-identical, golden and SOLID
+  corpora unchanged. Measured (parse + extractFacts + release, same files,
+  minimum of 3 rounds, alternating runs): 4.6 s → 3.2 s (release 1.2 s →
+  ≈ 0); end to end (`analyze` with `--solid --dead-exports`, incl. process
+  start, two alternating runs each): flyingfish backend 3.0–3.1 → 2.8–2.9 s,
+  frontend 3.3–3.5 → 2.8–3.0 s, stoa/src 3.4–3.6 → 2.8–2.9 s; peak RSS
+  backend 356–362 → 394 MB (+9 %: the per-file Projects wait for the next
+  GC), frontend 392–395 → 365–377 MB, stoa/src 416–418 → 361–363 MB. Tests:
+  `test/TypeScriptAdapterRelease.test.ts` (a module without lib files, a
+  script and a `declare global` file with them, the same metrics on both
+  paths).
 - **Expression bodies are measured (follow-up):** the per-function walk
   inspected only the children of a function's body, never the body itself —
   harmless for a block, but an arrow with an expression body lost its
@@ -1813,7 +1843,7 @@ fails fast (exit 1, concrete errors) instead of silently yielding 0 findings.
 
 ## Quality assurance
 
-- **node:test suite** (`npm test`, `test/*.test.ts`): 550 tests, 0 failed,
+- **node:test suite** (`npm test`, `test/*.test.ts`): 553 tests, 0 failed,
   as of the 2026-11-04 run (rules pos./neg., extraction, schema validation,
   i18n, determinism, SARIF, evaluation, semantic groundedness, privacy,
   finding-model separation, semantic models, identities, metrics).
@@ -1936,9 +1966,9 @@ generic ESLint fact adapter; context facts (`flag.generatedCode`, `hasTests`)
 for richer suppression; LLM-output evaluation at scale.
 
 **Open from the evaluator-integrity track (2026-11-04):** in the TS
-extraction, parsing and releasing (≈ 28 % of the profile) and wrapping every
-node once for the index (≈ 12 %) — the per-family and per-function walks are
-merged ("One node index per file", "One walk per function"); not building the SymbolGraph under
+extraction, wrapping every node once for the index and the TypeScript parse
+itself — walks are merged and the release costs ≈ 0 ("One node index per
+file", "One walk per function", "Parse and release"); not building the SymbolGraph under
 `--solid` when no type declarations exist (measured 2.7 ms, low priority).
 
 **Cross-layer validation — limits (first vertical slice):**

@@ -273,5 +273,5 @@ See [open-questions.md](./open-questions.md). Core points: incremental
 analysis/caching granularity, project-wide (interprocedural) data flow analysis
 vs. effort, unified fact schema across very different languages.
 
-Open point from the implementation (2026-11-04): parsing, releasing and wrapping every node once dominate the TS extraction; token wrapping, the per-file type checker and the per-fact-family and per-function walks are gone since the "Fewer token walks", "One node index per file" and "One walk per function" follow-ups — see "Not yet done" in
+Open point from the implementation (2026-11-04): the TypeScript parse and wrapping every node once dominate the TS extraction; token wrapping, the per-file type checker, the per-fact-family and per-function walks and the costly release are gone since the "Fewer token walks", "One node index per file", "One walk per function" and "Parse and release" follow-ups — see "Not yet done" in
 [implementation-status.md](./implementation-status.md).

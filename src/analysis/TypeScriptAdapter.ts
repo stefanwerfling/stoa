@@ -1,4 +1,4 @@
-import {Project} from 'ts-morph';
+import {Project, ts} from 'ts-morph';
 import type {SourceFile} from 'ts-morph';
 import type {Fact} from '../Types.js';
 import type {FileMeta, FileRef, LanguageAdapter, ParseResult, ProjectContext} from './LanguageAdapter.js';
@@ -26,6 +26,19 @@ const SUPPORTED_EXTENSIONS: readonly string[] = ['.ts', '.tsx', '.js', '.jsx', '
  * (e.g. hold a small, explicit group of SourceFiles for the files it
  * actually needs) rather than relying on this adapter's Project to still
  * contain everything.
+ *
+ * An ES module gets a Project of its own without the lib files: its facts are
+ * the same, and releasing it is dropping the reference — no per-node
+ * `forget()` walk, no lib files in a shared Program. That holds because every
+ * symbol question in `./typescript/*` either compares against a binding
+ * declared in this file (`isSameBinding`'s second argument, the export
+ * symbols of `isExported()`), accepts only declarations from this file
+ * (`resolveOneHop`) or needs a `const` with an initializer (`resolveSimpleAlias`,
+ * the Zod shape) — and in a module a local binding never merges with a lib
+ * global, while lib declarations are ambient, without initializers, in another
+ * file. A script (no import/export — its top-level names DO merge with lib
+ * globals, e.g. `var name`) and a file with `declare global` keep the shared
+ * Project with the lib files and the `removeSourceFile` release.
  */
 export class TypeScriptAdapter implements LanguageAdapter {
     public readonly id = 'typescript';
@@ -42,6 +55,11 @@ export class TypeScriptAdapter implements LanguageAdapter {
     }
 
     public parse(file: FileRef): ParseResult {
+        const own = new Project({useInMemoryFileSystem: true, skipLoadingLibFiles: true, compilerOptions: {allowJs: true}});
+        const module = own.createSourceFile(file.path, file.content);
+        if (ts.isExternalModule(module.compilerNode) && !file.content.includes('declare global')) {
+            return {file, ok: true, diagnostics: [], handle: module, release: () => undefined};
+        }
         const sourceFile = this.project.createSourceFile(file.path, file.content, {overwrite: true});
         return {file, ok: true, diagnostics: [], handle: sourceFile, release: () => this.project.removeSourceFile(sourceFile)};
     }
