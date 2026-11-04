@@ -394,6 +394,22 @@ the named local projects; none is a general accuracy claim.
   (`test/fixtures/architecture`: loader errors, assignment incl. multiple
   matches and outside-root files, all four edge verdicts, package bans and
   names, report summary and markdown, CLI fail-fast and JSON).
+- **Expression bodies are measured (follow-up):** the per-function walk
+  inspected only the children of a function's body, never the body itself —
+  harmless for a block, but an arrow with an expression body lost its
+  top-level node: `() => Math.random()` was not flagged as nondeterministic,
+  and the `&&`/`||`/`??` or `?:` at the top of `(a) => a && b` /
+  `(a) => (a ? 1 : 2)` did not count. Now `measureBody` starts at the body
+  itself, so an expression body counts like its block form `{ return …; }`
+  (a block is in none of the kind sets and adds nothing). Effect on the 652
+  measured TS/JS files: 201 expression-bodied arrows gain +1 cyclomatic and
+  +1 cognitive complexity, 7 gain +1 nesting depth; no nondeterminism fact
+  changed there; all other facts byte-identical. Findings of 18 runs
+  byte-identical (no threshold crossed), golden and SOLID corpora unchanged.
+  The fact cache needs no manual step (its key hashes the engine's code).
+  Tests: `test/TsExtractionShortcuts.test.ts` (the per-function case now
+  expects the flagged `() => Math.random()`, the counted `&&` and a
+  ternary arrow).
 - **One walk per function in the TS extraction (follow-up):** each function's
   body was walked twice through ts-morph's `forEachChild` (a wrapper array
   per node) — once for the complexity metrics, once for the
@@ -407,9 +423,9 @@ the named local projects; none is a general accuracy claim.
   (same hash over 50,046 facts of 652 files), findings of 18 runs unchanged.
   Measured (extractFacts only, same files, minimum of 3 rounds, alternating
   runs): 3.2–3.3 s → 2.5–2.6 s (≈ −20 %; ≈ −74 % against 9.7 s before the
-  three follow-ups). Kept as it was (byte-identical): an expression body
-  (`() => Math.random()`) is not inspected itself, only its children — such
-  an arrow is not flagged and a top-level `&&` in it is not counted. Tests:
+  three follow-ups). Kept as it was here (byte-identical), fixed in
+  "Expression bodies are measured": an expression body was not inspected
+  itself, only its children. Tests:
   `test/TsExtractionShortcuts.test.ts` (+1: metrics and nondeterminism with
   nested functions, `new Date()` with and without arguments, values from
   the two walks before).
@@ -1922,8 +1938,7 @@ for richer suppression; LLM-output evaluation at scale.
 **Open from the evaluator-integrity track (2026-11-04):** in the TS
 extraction, parsing and releasing (≈ 28 % of the profile) and wrapping every
 node once for the index (≈ 12 %) — the per-family and per-function walks are
-merged ("One node index per file", "One walk per function"); an expression
-body is not inspected itself (see there; changing it changes facts); not building the SymbolGraph under
+merged ("One node index per file", "One walk per function"); not building the SymbolGraph under
 `--solid` when no type declarations exist (measured 2.7 ms, low priority).
 
 **Cross-layer validation — limits (first vertical slice):**

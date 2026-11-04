@@ -70,7 +70,7 @@ test('member references: a property access inside JSDoc still counts as static a
     assert.deepEqual(run?.instantiates, [{prefix: null, name: 'Map', member: null}]);
 });
 
-test('one walk per function: metrics and nondeterminism skip nested functions (values from the two walks before)', () => {
+test('one walk per function: metrics and nondeterminism skip nested functions; an expression body counts itself', () => {
     const source = [
         'export function outer(a: boolean, b: boolean): number {',
         '    const t = Date.now();',
@@ -98,6 +98,7 @@ test('one walk per function: metrics and nondeterminism skip nested functions (v
         'export function onlyNested(): () => number {',
         '    return () => Math.random();',
         '}',
+        'export const ternary = (a: boolean): number => (a ? 1 : 2);',
         ''
     ].join('\n');
     const kinds = ['metric.cyclomaticComplexity', 'metric.cognitiveComplexity', 'metric.nestingDepth', 'ast.usesNondeterminism'];
@@ -109,13 +110,14 @@ test('one walk per function: metrics and nondeterminism skip nested functions (v
     }
     assert.deepEqual(bySymbol, {
         outer: [7, 12, 4, true],
-        'outer.later': [1, 0, 0, true],
+        'outer.later': [2, 1, 0, true],
         stamps: [1, 0, 0, true],
         fixed: [2, 1, 0, false],
         'clock.now': [1, 0, 0, true],
         onlyNested: [1, 0, 0, false],
-        // Current limitation, kept byte-identical: an expression body is not
-        // inspected itself, only its children — `() => Math.random()` is not flagged.
-        'onlyNested.(anonymous)#0': [1, 0, 0, false]
+        // The expression body itself is inspected: `() => Math.random()` is
+        // flagged, and the `&&` of `later` counts (it did not before).
+        'onlyNested.(anonymous)#0': [1, 0, 0, true],
+        ternary: [2, 1, 1, false]
     });
 });

@@ -702,8 +702,9 @@ const functionLikeNodes = (sourceFile: SourceFile): Node[] => descendantsOfKinds
 
 /**
  * One walk over a function's body for everything measured per function: the
- * complexity metrics and whether it calls a non-deterministic API. Nested
- * functions are their own units and are skipped. Walks the compiler tree
+ * complexity metrics and whether it calls a non-deterministic API — the body
+ * itself included, so an expression body counts. Nested functions are their
+ * own units and are skipped. Walks the compiler tree
  * (`ts.forEachChild`) — the same children ts-morph's `forEachChild` visits,
  * without building a wrapper array per node; texts are the same
  * `getText()` slices ts-morph returns.
@@ -711,38 +712,40 @@ const functionLikeNodes = (sourceFile: SourceFile): Node[] => descendantsOfKinds
 const measureBody = (fn: Node, body: Node): FunctionMetrics & {nondeterministic: boolean} => {
     const file = body.getSourceFile().compilerNode;
     const state = {cyclomatic: 1, cognitive: 0, maxNesting: 0, nondeterministic: false};
-    const visit = (node: ts.Node, nesting: number): void => {
-        ts.forEachChild(node, (child) => {
-            const kind = child.kind as SyntaxKind;
-            if (FUNCTION_LIKE_KINDS.has(kind)) {
-                return undefined;
-            }
-            if (CYCLOMATIC_KINDS.has(kind)) {
-                state.cyclomatic += 1;
-            }
-            if (ts.isBinaryExpression(child) && LOGICAL_OPERATORS.has(child.operatorToken.kind as SyntaxKind)) {
-                state.cyclomatic += 1;
-                state.cognitive += 1;
-            }
-            if (ts.isCallExpression(child) && NONDETERMINISTIC_CALLS.has(child.expression.getText(file))) {
-                state.nondeterministic = true;
-            }
-            if (ts.isNewExpression(child) && child.expression.getText(file) === 'Date' && (child.arguments?.length ?? 0) === 0) {
-                state.nondeterministic = true;
-            }
-            const isNesting = NESTING_KINDS.has(kind);
-            if (isNesting) {
-                state.cognitive += 1 + nesting;
-            }
-            const childNesting = isNesting ? nesting + 1 : nesting;
-            if (childNesting > state.maxNesting) {
-                state.maxNesting = childNesting;
-            }
-            visit(child, childNesting);
+    // `inspect` measures one node and then its children. It starts at the body
+    // itself, so an expression body (`() => a && b`, `() => Math.random()`)
+    // counts like its block form `{ return …; }`; a block body is in none of
+    // the kind sets and adds nothing itself.
+    const inspect = (node: ts.Node, nesting: number): undefined => {
+        const kind = node.kind as SyntaxKind;
+        if (FUNCTION_LIKE_KINDS.has(kind)) {
             return undefined;
-        });
+        }
+        if (CYCLOMATIC_KINDS.has(kind)) {
+            state.cyclomatic += 1;
+        }
+        if (ts.isBinaryExpression(node) && LOGICAL_OPERATORS.has(node.operatorToken.kind as SyntaxKind)) {
+            state.cyclomatic += 1;
+            state.cognitive += 1;
+        }
+        if (ts.isCallExpression(node) && NONDETERMINISTIC_CALLS.has(node.expression.getText(file))) {
+            state.nondeterministic = true;
+        }
+        if (ts.isNewExpression(node) && node.expression.getText(file) === 'Date' && (node.arguments?.length ?? 0) === 0) {
+            state.nondeterministic = true;
+        }
+        const isNesting = NESTING_KINDS.has(kind);
+        if (isNesting) {
+            state.cognitive += 1 + nesting;
+        }
+        const childNesting = isNesting ? nesting + 1 : nesting;
+        if (childNesting > state.maxNesting) {
+            state.maxNesting = childNesting;
+        }
+        ts.forEachChild(node, (child) => inspect(child, childNesting));
+        return undefined;
     };
-    visit(body.compilerNode, 0);
+    inspect(body.compilerNode, 0);
     return {
         cyclomatic: state.cyclomatic,
         cognitive: state.cognitive,

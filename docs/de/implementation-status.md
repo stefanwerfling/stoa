@@ -423,6 +423,23 @@ genannten lokalen Projekten; keine ist eine allgemeine Genauigkeitsaussage.
   (`test/fixtures/architecture`: Loader-Fehler, Zuordnung inkl. Mehrfachtreffer
   und Dateien außerhalb der Wurzel, alle vier Kantenurteile, Paketverbote und
   -namen, Report-Zusammenfassung und Markdown, CLI-Fail-fast und JSON).
+- **Ausdrucksrümpfe werden gemessen (Nachtrag):** Der Durchlauf je
+  Funktion prüfte nur die Kinder des Funktionsrumpfs, nie den Rumpf selbst —
+  harmlos bei einem Block, aber ein Pfeil mit Ausdrucksrumpf verlor seinen
+  obersten Knoten: `() => Math.random()` galt nicht als nichtdeterministisch,
+  und das `&&`/`||`/`??` oder `?:` ganz oben in `(a) => a && b` /
+  `(a) => (a ? 1 : 2)` zählte nicht. Jetzt beginnt `measureBody` beim Rumpf
+  selbst, ein Ausdrucksrumpf zählt also wie seine Blockform `{ return …; }`
+  (ein Block liegt in keiner der Art-Mengen und trägt nichts bei). Wirkung
+  auf die 652 gemessenen TS-/JS-Dateien: 201 Pfeile mit Ausdrucksrumpf
+  erhalten +1 zyklomatische und +1 kognitive Komplexität, 7 erhalten +1
+  Verschachtelungstiefe; kein Nichtdeterminismus-Fact änderte sich dort;
+  alle übrigen Facts byte-identisch. Befunde von 18 Läufen byte-identisch
+  (keine Schwelle überschritten), Golden- und SOLID-Korpus unverändert. Der
+  Fact-Cache braucht keinen Handgriff (sein Schlüssel hasht den Code der
+  Engine). Tests: `test/TsExtractionShortcuts.test.ts` (der Fall je
+  Funktion erwartet jetzt den markierten `() => Math.random()`, das gezählte
+  `&&` und einen Ternär-Pfeil).
 - **Ein Durchlauf je Funktion in der TS-Extraktion (Nachtrag):** Der Rumpf
   jeder Funktion wurde zweimal über ts-morphs `forEachChild` durchlaufen
   (ein Wrapper-Array je Knoten) — einmal für die Komplexitätsmetriken,
@@ -437,10 +454,10 @@ genannten lokalen Projekten; keine ist eine allgemeine Genauigkeitsaussage.
   byte-identisch (derselbe Hash über 50.046 Facts von 652 Dateien), Befunde
   von 18 Läufen unverändert. Gemessen (nur extractFacts, dieselben Dateien,
   Minimum aus 3 Runden, abwechselnde Läufe): 3,2–3,3 s → 2,5–2,6 s
-  (≈ −20 %; ≈ −74 % gegenüber 9,7 s vor den drei Nachträgen). Unverändert
-  belassen (byte-identisch): Ein Ausdrucksrumpf (`() => Math.random()`) wird
-  nicht selbst geprüft, nur seine Kinder — ein solcher Pfeil wird nicht
-  markiert, und ein `&&` auf oberster Ebene darin zählt nicht. Tests:
+  (≈ −20 %; ≈ −74 % gegenüber 9,7 s vor den drei Nachträgen). Hier noch
+  unverändert belassen (byte-identisch), behoben in „Ausdrucksrümpfe werden
+  gemessen": Ein Ausdrucksrumpf wurde nicht selbst geprüft, nur seine
+  Kinder. Tests:
   `test/TsExtractionShortcuts.test.ts` (+1: Metriken und Nichtdeterminismus
   mit verschachtelten Funktionen, `new Date()` mit und ohne Argumente,
   Werte aus den zwei Durchläufen davor).
@@ -2099,8 +2116,7 @@ Suppression; LLM-Ausgabe-Evaluierung im Maßstab.
 TS-Extraktion Parsen und Freigeben (≈ 28 % des Profils) und das einmalige
 Einhüllen aller Knoten für den Index (≈ 12 %) — die Durchläufe je
 Fact-Familie und je Funktion sind zusammengeführt („Ein Knotenindex je
-Datei", „Ein Durchlauf je Funktion"); ein Ausdrucksrumpf wird nicht selbst
-geprüft (siehe dort; eine Änderung ändert Facts); kein SymbolGraph unter `--solid`, wenn keine
+Datei", „Ein Durchlauf je Funktion"); kein SymbolGraph unter `--solid`, wenn keine
 Typdeklarationen existieren (gemessen 2,7 ms, niedrige Priorität).
 
 **Cross-Layer-Validierung — Grenzen (erster vertikaler Schnitt):**
