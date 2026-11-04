@@ -14,7 +14,7 @@ import {extractTsMemberFacts} from './TsMembers.js';
 import type {ReexportValue} from '../DepsFacts.js';
 import {descendantsOfKind, descendantsOfKinds} from './NodeIndex.js';
 import {exportLookup} from './ExportLookup.js';
-import {rangeOfNode} from './SourcePositions.js';
+import {lineSpanOf, rangeOfNode} from './SourcePositions.js';
 
 interface FunctionMetrics {
     cyclomatic: number;
@@ -720,7 +720,7 @@ const measureBody = (fn: Node, body: Node): FunctionMetrics & {nondeterministic:
         cognitive: state.cognitive,
         nestingDepth: state.maxNesting,
         parameterCount: parameterCount(fn),
-        lineCount: fn.getEndLineNumber() - fn.getStartLineNumber() + 1,
+        lineCount: lineSpanOf(fn.getSourceFile(), fn),
         nondeterministic: state.nondeterministic
     };
 };

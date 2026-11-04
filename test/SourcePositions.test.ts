@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {Project} from 'ts-morph';
-import {lineAndColumnAt} from '../src/analysis/typescript/SourcePositions.js';
+import {lineAndColumnAt, lineSpanOf} from '../src/analysis/typescript/SourcePositions.js';
 import {TypeScriptAdapter} from '../src/analysis/TypeScriptAdapter.js';
 
 // lineAndColumnAt must answer exactly like ts-morph's getLineAndColumnAtPos —
@@ -24,6 +24,27 @@ for (const [index, text] of TEXTS.entries()) {
         for (let pos = 0; pos <= text.length; pos += 1) {
             assert.deepEqual(lineAndColumnAt(sourceFile, pos), sourceFile.getLineAndColumnAtPos(pos), `pos ${pos}`);
         }
+    });
+}
+
+// lineSpanOf must equal getEndLineNumber() - getStartLineNumber() + 1 for
+// every node — functions with JSDoc, multi-line expressions, the same line
+// breaks as above.
+const SPAN_TEXTS: readonly string[] = [
+    '/** doc */\nfunction a(): void {\n    return;\n}\n',
+    'const f = (x: number) =>\r\n    x +\r\n    1;\r\n',
+    'class C {\r    m(): void {\r        g();\r    }\r}\n',
+    'const s = `a\nb`;\u2028function h() {\n  return 1;\n}',
+    'export default function () {}'
+];
+
+for (const [index, text] of SPAN_TEXTS.entries()) {
+    test(`lineSpanOf equals ts-morph's line numbers for every node: text #${index}`, () => {
+        const project = new Project({useInMemoryFileSystem: true});
+        const sourceFile = project.createSourceFile(`/s${index}.ts`, text);
+        sourceFile.forEachDescendant((node) => {
+            assert.equal(lineSpanOf(sourceFile, node), node.getEndLineNumber() - node.getStartLineNumber() + 1, `${node.getKindName()} at ${node.getPos()}`);
+        });
     });
 }
 

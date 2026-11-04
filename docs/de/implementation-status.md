@@ -427,6 +427,22 @@ genannten lokalen Projekten; keine ist eine allgemeine Genauigkeitsaussage.
   (`test/fixtures/architecture`: Loader-Fehler, Zuordnung inkl. Mehrfachtreffer
   und Dateien außerhalb der Wurzel, alle vier Kantenurteile, Paketverbote und
   -namen, Report-Zusammenfassung und Markdown, CLI-Fail-fast und JSON).
+- **Die letzte Zeilenzählung auf der Positionstabelle (Nachtrag):** Die
+  Worker-Profile der parallelen Extraktion zeigten noch ≈ 4 % in ts-morphs
+  `getLineNumberAtPos` — dem Textdurchlauf ab Dateianfang, den „Klassen-Member
+  und Quellbereiche" für jeden Bereich ersetzt hatte. Ein Aufrufer war
+  geblieben: der `lineCount` einer Funktion (`getEndLineNumber() -
+  getStartLineNumber() + 1`). Er kommt jetzt aus der Umbruchtabelle je Datei
+  (`lineSpanOf`, `SourcePositions.ts`). ts-morph geht vor dem Zählen der `\n`
+  zum Zeilenanfang zurück; zwischen Zeilenanfang und Position liegt kein
+  `\n`, die Zeile der Position selbst ist also dieselbe Zahl — exakt, nicht
+  angenähert. In `src/` wird keine Zeilen-API von ts-morph mehr aufgerufen.
+  Gemessen in vier abwechselnden Paaren à 5 Runden gegen HEAD: Extraktion
+  1,82–1,86 s → 1,58–1,59 s (≈ −14 %), gesamt 2,35–2,41 s → 2,09–2,11 s.
+  Facts der 652 gemessenen Dateien byte-identisch. Tests in
+  `test/SourcePositions.test.ts`: `lineSpanOf` gegen ts-morph für jeden
+  Knoten von Texten mit JSDoc, LF, CRLF, einzelnem CR und U+2028 (per
+  Mutationsprobe bestätigt).
 - **Das TypeScript-Parsen (geprüft, nichts übernommen):** `parse()` kostet
   ≈ 17 % des CPU-Profils, ≈ 14 Punkte davon im Parser von TypeScript selbst.
   Gemessen auf den 652 Dateien (bester von 7 Läufen, alle Dateien
@@ -2200,7 +2216,7 @@ zu liefern.
 
 ## Qualitätssicherung
 
-- **node:test-Suite** (`npm test`, `test/*.test.ts`): 613 Tests, 0 fehlgeschlagen,
+- **node:test-Suite** (`npm test`, `test/*.test.ts`): 618 Tests, 0 fehlgeschlagen,
   Lauf vom 2026-11-04 (Regeln pos./neg., Extraktion, Schema-Validierung, i18n,
   Determinismus, SARIF, Eval, Semantik-Groundedness, Datenschutz,
   Finding-Trennung, semantische Modelle, Identitäten, Metriken).

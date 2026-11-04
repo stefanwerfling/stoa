@@ -77,3 +77,12 @@ export const rangeOfNode = (sourceFile: SourceFile, node: Node): SourceRange => 
     const end = lineAndColumnAt(sourceFile, node.getEnd());
     return {startLine: start.line, startCol: start.column, endLine: end.line, endCol: end.column};
 };
+
+/**
+ * How many lines a node spans — what `node.getEndLineNumber() -
+ * node.getStartLineNumber() + 1` returns. ts-morph steps back to the line
+ * start before counting `\n`; no `\n` lies between a line start and the
+ * position, so the line of the position itself is the same number.
+ */
+export const lineSpanOf = (sourceFile: SourceFile, node: Node): number =>
+    lineAndColumnAt(sourceFile, node.getEnd()).line - lineAndColumnAt(sourceFile, node.getStart()).line + 1;

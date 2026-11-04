@@ -398,6 +398,21 @@ the named local projects; none is a general accuracy claim.
   (`test/fixtures/architecture`: loader errors, assignment incl. multiple
   matches and outside-root files, all four edge verdicts, package bans and
   names, report summary and markdown, CLI fail-fast and JSON).
+- **The last line count on the position table (follow-up):** the worker
+  profiles of the parallel extraction still showed ≈ 4 % in ts-morph's
+  `getLineNumberAtPos` — the text scan from the file start that "Class
+  members and source ranges" had replaced for every range. One caller was
+  left: a function's `lineCount` (`getEndLineNumber() -
+  getStartLineNumber() + 1`). It now comes from the per-file break table
+  (`lineSpanOf`, `SourcePositions.ts`). ts-morph steps back to the line start
+  before counting `\n`; no `\n` lies between a line start and the position,
+  so the line of the position itself is the same number — exact, not
+  approximated. No ts-morph line API is called in `src/` any more. Measured
+  in four alternating pairs of 5 rounds against HEAD: extraction
+  1.82–1.86 s → 1.58–1.59 s (≈ −14 %), total 2.35–2.41 s → 2.09–2.11 s.
+  Facts of the 652 measured files byte-identical. Tests in
+  `test/SourcePositions.test.ts`: `lineSpanOf` against ts-morph for every
+  node of texts with JSDoc, LF, CRLF, lone CR and U+2028 (mutation-checked).
 - **The TypeScript parse (examined, nothing adopted):** `parse()` takes
   ≈ 17 % of the CPU profile, ≈ 14 points of it inside TypeScript's own parser.
   Measured on the 652 files (best of 7 runs, all files kept alive): `parse()`
@@ -2017,7 +2032,7 @@ fails fast (exit 1, concrete errors) instead of silently yielding 0 findings.
 
 ## Quality assurance
 
-- **node:test suite** (`npm test`, `test/*.test.ts`): 613 tests, 0 failed,
+- **node:test suite** (`npm test`, `test/*.test.ts`): 618 tests, 0 failed,
   as of the 2026-11-04 run (rules pos./neg., extraction, schema validation,
   i18n, determinism, SARIF, evaluation, semantic groundedness, privacy,
   finding-model separation, semantic models, identities, metrics).
