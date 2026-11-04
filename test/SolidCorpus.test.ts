@@ -48,7 +48,9 @@ test('E7: every SOLID finding has a unique identity (file, rule, symbol) — sev
         {rootPath: join(fixtures, 'dip-layer')},
         {rootPath: join(fixtures, 'dip-concrete')},
         {rootPath: join(fixtures, 'contracts')},
-        {rootPath: join(fixtures, 'dip-declared', 'project'), architecture: loadArchitectureConfig(join(fixtures, 'dip-declared', 'stoa.architecture.json'))}
+        {rootPath: join(fixtures, 'dip-declared', 'project'), architecture: loadArchitectureConfig(join(fixtures, 'dip-declared', 'stoa.architecture.json'))},
+        // phase 3: an import and a re-export of one file must stay ONE identity
+        {rootPath: join(fixtures, 'dip-declared-ts', 'project'), architecture: loadArchitectureConfig(join(fixtures, 'dip-declared-ts', 'stoa.architecture.json'))}
     ];
     for (const run of runs) {
         const solidFindings = analyze({...run, knowledgeDir, ruleSetDir, config: DEFAULT_CONFIG, solid: true}).report.findings.filter((finding) => finding.rule.id.startsWith('R-SOLID-'));

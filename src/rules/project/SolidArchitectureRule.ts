@@ -15,14 +15,22 @@ import {resolvePrinciple} from './FlutterLayoutRules.js';
  * config is given, and then INSTEAD of stage 1 (user decision: one semantics
  * per run under the rule id; the declaration supersedes the heuristic).
  *
- * - **Layer edge:** a resolved ModuleGraph edge (TS `deps.import`, Dart
+ * - **Layer edge:** a resolved ModuleGraph edge (TS `deps.import` and — since
+ *   0.3.0 — TS re-exports `export … from` (`deps.reexport`), Dart
  *   `import`/`export` from E2; type-only imports included — they are a
  *   compile-time dependency, marked in the evidence) whose two files sit in
  *   different layers and whose direction `allow` does not list. One finding
- *   per (importing file, imported file) at its first import site.
- * - **Package ban:** an unresolved import (a package — Dart `package:`/
- *   `dart:`, npm) whose package name (`packageNameOf`) is banned for the
- *   importing file's layer. One finding per (file, package).
+ *   per (importing file, imported file) at its first site, citing every site
+ *   (an import and a re-export of one file, or a type-only and a value
+ *   import of it, are one dependency — one finding identity).
+ * - **Package ban:** an unresolved import or re-export of a PACKAGE (Dart
+ *   `package:`/`dart:`; TS only when the ModuleGraph marks it `external` — an
+ *   unresolved project reference such as a tsconfig alias without an analyzed
+ *   target is never a package) whose package name (`packageNameOf`) is banned
+ *   for the importing file's layer. One finding per (file, package).
+ *
+ * Module identity only: the finding names files and packages, never symbols;
+ * which symbols cross the boundary is the SymbolGraph's (a later, finer rule).
  *
  * A file without a layer never leads to a finding (unknown); a file that
  * matches several layers belongs to the first (the report lists it as a
@@ -79,31 +87,40 @@ const compareText = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 
 const firstOf = (evidence: readonly ImportEvidence[]): ImportEvidence =>
     [...evidence].sort((a, b) => a.range.startLine - b.range.startLine || a.range.startCol - b.range.startCol || compareText(a.factId, b.factId))[0] as ImportEvidence;
 
-// TS re-export entries (`deps.reexport`, semantic consolidation phase 2) are
-// not judged yet: whether a barrel's re-export counts as an architectural
-// dependency is decided in phase 3 — until then the findings stay unchanged.
-const isReexport = (entry: {origin?: string}): boolean => entry.origin === 'deps.reexport';
+// The directive a ModuleGraph entry stands for: Dart `import`/`export`, TS `export` (a re-export) or `import`.
+const directiveOf = (entry: {origin?: string; dartDirective?: string}): string => entry.dartDirective ?? (entry.origin === 'deps.reexport' ? 'export' : 'import');
 
-const edgeViolations = (graph: ModuleGraph, model: ArchitectureModel): Violation[] =>
-    graph.edges
-        .filter((edge) => !isReexport(edge) && model.edgeVerdict(edge.from, edge.to) === 'forbidden')
-        .map((edge) => ({
+// Forbidden edges, one violation per (importing file, imported file) — every site of every edge between them.
+const edgeViolations = (graph: ModuleGraph, model: ArchitectureModel): Violation[] => {
+    const byPair = new Map<string, Violation>();
+    for (const edge of graph.edges.filter((candidate) => model.edgeVerdict(candidate.from, candidate.to) === 'forbidden')) {
+        const key = `${edge.from}\n${edge.to}`;
+        const violation = byPair.get(key) ?? {
             kind: 'edge' as const,
             file: edge.from,
             fromLayer: model.layerOf(edge.from) as string,
             toLayer: model.layerOf(edge.to) as string,
             target: basename(edge.to),
             symbol: model.relativePath(edge.to),
-            evidence: edge.evidence,
-            detail: edge.evidence.map((site) => ({
+            evidence: [],
+            detail: []
+        };
+        violation.evidence.push(...edge.evidence);
+        violation.detail.push(
+            ...edge.evidence.map((site) => ({
                 fact: factOf(edge.origin),
-                value: `${basename(edge.from)}:${site.range.startLine} ${edge.dartDirective ?? 'import'}${edge.isTypeOnly ? ' type' : ''} '${edge.specifier}' → ${model.relativePath(edge.to)} (${model.layerOf(edge.to) ?? ''})`
+                value: `${basename(edge.from)}:${site.range.startLine} ${directiveOf(edge)}${edge.isTypeOnly ? ' type' : ''} '${edge.specifier}' → ${model.relativePath(edge.to)} (${model.layerOf(edge.to) ?? ''})`
             }))
-        }));
+        );
+        byPair.set(key, violation);
+    }
+    return [...byPair.values()];
+};
 
 const packageViolations = (graph: ModuleGraph, model: ArchitectureModel): Violation[] => {
     const byKey = new Map<string, Violation>();
-    for (const entry of graph.unresolved.filter((candidate) => !isReexport(candidate))) {
+    // `external === false`: a TS project reference that did not resolve — not a package.
+    for (const entry of graph.unresolved.filter((candidate) => candidate.external !== false)) {
         const name = packageNameOf(entry.specifier);
         const layer = model.layerOf(entry.from);
         if (name === null || layer === null || !model.isPackageForbidden(entry.from, name)) {
@@ -112,7 +129,7 @@ const packageViolations = (graph: ModuleGraph, model: ArchitectureModel): Violat
         const key = `${entry.from}\n${name}`;
         const violation = byKey.get(key) ?? {kind: 'package' as const, file: entry.from, fromLayer: layer, toLayer: name, target: name, symbol: `package:${name}`, evidence: [], detail: []};
         violation.evidence.push(...entry.evidence);
-        violation.detail.push(...entry.evidence.map((site) => ({fact: factOf(entry.origin), value: `${basename(entry.from)}:${site.range.startLine} ${entry.dartDirective ?? 'import'} '${entry.specifier}' (package ${name})`})));
+        violation.detail.push(...entry.evidence.map((site) => ({fact: factOf(entry.origin), value: `${basename(entry.from)}:${site.range.startLine} ${directiveOf(entry)} '${entry.specifier}' (package ${name})`})));
         byKey.set(key, violation);
     }
     return [...byKey.values()];
@@ -120,9 +137,9 @@ const packageViolations = (graph: ModuleGraph, model: ArchitectureModel): Violat
 
 export class SolidDipLayerDeclaredRule implements ProjectRule {
     public readonly id = 'R-SOLID-DIP-LAYER-DIRECTION';
-    /** Stage 2 (E6d); stage 1 (heuristic, experimental) is 0.1.0. */
-    public readonly version = '0.2.0';
-    public readonly requiredFactKinds = ['deps.import', 'dart.importSpec', 'dart.classDecl'];
+    /** Stage 2 (E6d: 0.2.0; 0.3.0 — TS re-exports judged, one finding per file pair, only external packages banned); stage 1 (heuristic, experimental) is 0.1.0. */
+    public readonly version = '0.3.0';
+    public readonly requiredFactKinds = ['deps.import', 'deps.reexport', 'dart.importSpec', 'dart.classDecl'];
 
     public constructor(private readonly architecture: ArchitectureModel) {}
 

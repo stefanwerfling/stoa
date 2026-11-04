@@ -329,6 +329,54 @@
   (`test/fixtures/architecture`: loader errors, assignment incl. multiple
   matches and outside-root files, all four edge verdicts, package bans and
   names, report summary and markdown, CLI fail-fast and JSON).
+- **Architecture rule on the consolidated models (semantic consolidation,
+  phase 3):** `R-SOLID-DIP-LAYER-DIRECTION` stage 2 → 0.3.0.
+  - **Re-exports are dependencies:** TS `export … from` (`deps.reexport`
+    entries of the ModuleGraph) is judged like an import (evidence directive
+    `export`), consistent with Dart `export` directives, judged since E6d — a
+    barrel in the UI layer re-exporting the data layer is a UI → data
+    dependency; a re-export of a banned package is a package violation.
+  - **One finding per file pair:** edge violations are grouped by (importing
+    file, imported file), every site cited — as documented since E6d; before,
+    one finding per ModuleGraph edge, and an `import type` plus an import
+    (or an import plus a re-export) of the same file would have shared one
+    identity (none occurred on the measured projects; with re-exports it
+    would).
+  - **Packages vs. project modules:** a package ban applies only to entries
+    the ModuleGraph marks `external` (TS) — an unresolved tsconfig alias is a
+    project reference, never a package; Dart entries are unchanged.
+  - **Unchanged by design:** module identity only (findings name files and
+    packages, not symbols); type-only imports visible (`type` in the
+    evidence); dynamic `import()`, DI and runtime wiring produce no fact and
+    are never a violation.
+  - **Measured:** the SOLID corpus (stage 2), the dip-declared fixture,
+    swipemeister and mwpa (scratch configs, Dart), stoa/src and
+    flyingfish/backend (scratch TS configs: 2 and 54 findings) — every
+    finding byte-identical except the rule version 0.2.0 → 0.3.0; no project
+    had a re-export across layers, a duplicate pair or an unresolved alias on
+    a ban list. Without `--architecture` all outputs are byte-identical.
+  - **Symbol level (concept, not implemented):** which symbols cross a
+    forbidden boundary is now available from the SymbolGraph (binding,
+    definition, re-export hops) — the basis for a finer later rule (e.g.
+    "UI uses the concrete class `Api` of the data layer" instead of "UI
+    imports `api.ts`"), kept separate from the module identity of this rule.
+  - **DI, service and plugin registrations (concept only, nothing
+    detected):** these create runtime edges no import shows — a
+    `GetIt.registerSingleton<Repo>(ApiRepo())`, an Angular/Nest provider, a
+    plugin registry keyed by strings. Statically sound only where the
+    registration is a literal call with resolvable types (then: a
+    framework-specific fact "binds abstraction A to implementation B in file
+    F", judged against the layers of A, B and F); lookups by string keys,
+    reflection, configuration files and conditional registration stay
+    unknown and must never become violations. Worth doing only per framework
+    with real projects to calibrate on; none is planned yet.
+  - Tests: `test/SolidArchitectureRule.test.ts` (new TS fixture
+    `test/fixtures/solid/dip-declared-ts` with a tsconfig alias: re-export of
+    a layer and of a package, import type + re-export of one file = one
+    finding, unresolved alias on the ban list not reported, resolved alias
+    reported, dynamic import silent, exact list, determinism; the E6d
+    expectations now read 0.3.0) and the identity-uniqueness test in
+    `test/SolidCorpus.test.ts` over the new fixture.
 - **SymbolGraph as the one ES-module name resolver (semantic consolidation,
   phase 2):**
   - **One resolver, clear responsibilities:** ModuleResolver/ModuleGraph —
@@ -354,8 +402,8 @@
     a named one has exactly the range of the `deps.export` the same specifier
     produces, so local and re-exported names are told apart. `deps.export`
     is unchanged. The ModuleGraph adds them as entries with `origin:
-    'deps.reexport'` (ignored by `R-DEP-CYCLE`, the layer rules and — until
-    phase 3 decides — `R-SOLID-DIP-LAYER-DIRECTION` stage 2). The SymbolGraph
+    'deps.reexport'` (ignored by `R-DEP-CYCLE` and the stage-1 layer rule; judged by
+    stage 2 since phase 3). The SymbolGraph
     follows them to the defining file (`definitions`, every hop in `via`):
     local/explicit beats `export *`; two `export *` with different
     definitions → `ambiguous` (both kept); `export *` never provides

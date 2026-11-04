@@ -355,6 +355,59 @@
   (`test/fixtures/architecture`: Loader-Fehler, Zuordnung inkl. Mehrfachtreffer
   und Dateien außerhalb der Wurzel, alle vier Kantenurteile, Paketverbote und
   -namen, Report-Zusammenfassung und Markdown, CLI-Fail-fast und JSON).
+- **Architekturregel auf den konsolidierten Modellen (semantische
+  Konsolidierung, Phase 3):** `R-SOLID-DIP-LAYER-DIRECTION` Stufe 2 → 0.3.0.
+  - **Re-Exporte sind Abhängigkeiten:** TS-`export … from` (`deps.reexport`-
+    Einträge des ModuleGraph) wird wie ein Import beurteilt (Evidenz-Direktive
+    `export`), konsistent mit Dart-`export`-Direktiven, die seit E6d beurteilt
+    werden — ein Barrel in der UI-Schicht, das die Datenschicht re-exportiert,
+    ist eine Abhängigkeit UI → Daten; der Re-Export eines verbotenen Pakets ist
+    ein Paketverstoß.
+  - **Ein Finding je Dateipaar:** Kantenverstöße werden nach (importierende
+    Datei, importierte Datei) gruppiert, jede Stelle zitiert — wie seit E6d
+    dokumentiert; vorher ein Finding je ModuleGraph-Kante, sodass ein `import
+    type` plus ein Import (oder ein Import plus ein Re-Export) derselben Datei
+    eine Identität geteilt hätten (auf den gemessenen Projekten kam das nicht
+    vor; mit Re-Exporten würde es).
+  - **Pakete gegenüber Projektmodulen:** Ein Paketverbot gilt nur für
+    Einträge, die der ModuleGraph als `external` markiert (TS) — ein
+    unaufgelöster tsconfig-Alias ist eine Projektreferenz, nie ein Paket;
+    Dart-Einträge bleiben unverändert.
+  - **Bewusst unverändert:** nur Modulidentität (Findings nennen Dateien und
+    Pakete, keine Symbole); Type-only-Importe sichtbar (`type` in der
+    Evidenz); dynamisches `import()`, DI und Laufzeitverdrahtung erzeugen
+    keinen Fact und sind nie ein Verstoß.
+  - **Gemessen:** SOLID-Korpus (Stufe 2), dip-declared-Fixture, swipemeister
+    und mwpa (Scratch-Konfigurationen, Dart), stoa/src und flyingfish/backend
+    (Scratch-TS-Konfigurationen: 2 und 54 Findings) — jedes Finding
+    byte-identisch bis auf die Regelversion 0.2.0 → 0.3.0; kein Projekt hatte
+    einen Re-Export über Schichten, ein doppeltes Paar oder einen
+    unaufgelösten Alias auf einer Verbotsliste. Ohne `--architecture` sind alle
+    Ausgaben byte-identisch.
+  - **Symbolebene (Konzept, nicht umgesetzt):** Welche Symbole eine verbotene
+    Grenze überqueren, liefert jetzt der SymbolGraph (Bindung, Definition,
+    Re-Export-Schritte) — die Grundlage für eine spätere, feinere Regel (etwa
+    „UI nutzt die konkrete Klasse `Api` der Datenschicht“ statt „UI importiert
+    `api.ts`“), getrennt von der Modulidentität dieser Regel.
+  - **DI-, Service- und Plugin-Registrierungen (nur Konzept, nichts
+    erkannt):** Sie erzeugen Laufzeitkanten, die kein Import zeigt — ein
+    `GetIt.registerSingleton<Repo>(ApiRepo())`, ein Angular-/Nest-Provider,
+    eine Plugin-Registry mit String-Schlüsseln. Statisch belastbar nur, wo die
+    Registrierung ein literaler Aufruf mit auflösbaren Typen ist (dann: ein
+    frameworkspezifischer Fact „bindet Abstraktion A an Implementierung B in
+    Datei F“, beurteilt gegen die Schichten von A, B und F); Lookups über
+    String-Schlüssel, Reflection, Konfigurationsdateien und bedingte
+    Registrierung bleiben unbekannt und dürfen nie zu Verstößen werden. Nur
+    sinnvoll je Framework mit echten Projekten zur Kalibrierung; derzeit nicht
+    geplant.
+  - Tests: `test/SolidArchitectureRule.test.ts` (neues TS-Fixture
+    `test/fixtures/solid/dip-declared-ts` mit tsconfig-Alias: Re-Export einer
+    Schicht und eines Pakets, import type + Re-Export einer Datei = ein
+    Finding, unaufgelöster Alias auf der Verbotsliste nicht gemeldet,
+    aufgelöster Alias gemeldet, dynamischer Import still, exakte Liste,
+    Determinismus; die E6d-Erwartungen lauten jetzt 0.3.0) und der
+    Identitäts-Eindeutigkeitstest in `test/SolidCorpus.test.ts` über das neue
+    Fixture.
 - **SymbolGraph als einziger ES-Modul-Namensauflöser (semantische
   Konsolidierung, Phase 2):**
   - **Ein Resolver, klare Zuständigkeiten:** ModuleResolver/ModuleGraph —
@@ -382,8 +435,8 @@
     den derselbe Specifier erzeugt, damit lokale und re-exportierte Namen
     unterscheidbar sind. `deps.export` bleibt unverändert. Der ModuleGraph
     nimmt sie als Einträge mit `origin: 'deps.reexport'` auf (ignoriert von
-    `R-DEP-CYCLE`, den Schichtregeln und — bis Phase 3 entscheidet —
-    `R-SOLID-DIP-LAYER-DIRECTION` Stufe 2). Der SymbolGraph verfolgt sie bis
+    `R-DEP-CYCLE` und der Schichtregel Stufe 1; seit Phase 3 von Stufe 2
+    beurteilt). Der SymbolGraph verfolgt sie bis
     zur definierenden Datei (`definitions`, jeder Schritt in `via`):
     lokal/explizit schlägt `export *`; zwei `export *` mit verschiedenen
     Definitionen → `ambiguous` (beide behalten); `export *` liefert nie

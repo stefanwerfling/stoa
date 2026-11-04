@@ -1,0 +1,9 @@
+{
+  "version": "1.0.0",
+  "layers": [
+    { "name": "ui", "include": ["src/ui/**"] },
+    { "name": "data", "include": ["src/data/**"] }
+  ],
+  "allow": [],
+  "forbidPackages": [ { "layer": "ui", "packages": ["axios", "@scope/net", "@app/missing"] } ]
+}
