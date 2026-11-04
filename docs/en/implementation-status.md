@@ -397,6 +397,28 @@ the named local projects; none is a general accuracy claim.
   (`test/fixtures/architecture`: loader errors, assignment incl. multiple
   matches and outside-root files, all four edge verdicts, package bans and
   names, report summary and markdown, CLI fail-fast and JSON).
+- **The TypeScript parse (examined, nothing adopted):** `parse()` takes
+  ≈ 17 % of the CPU profile, ≈ 14 points of it inside TypeScript's own parser.
+  Measured on the 652 files (best of 7 runs, all files kept alive): `parse()`
+  of the adapter ≈ 434–462 ms, TypeScript's
+  `createLanguageServiceSourceFile` with parent pointers alone ≈ 305–368 ms;
+  without parent pointers ≈ 232 ms, without JSDoc ≈ 278–287 ms; a lib-free
+  Project per file ≈ 8 ms in all. None of the gaps is a safe lever:
+  - ts-morph always parses with parent pointers (its document registry
+    hard-codes it) and navigates by them, so the ≈ 100 ms parent walk stays.
+  - JSDoc is part of the facts (`refsOf` reads identifiers inside JSDoc,
+    token queries include JSDoc — see "Class members and source ranges"), so
+    skipping its parse would change facts.
+  - The ≈ 94 ms between TypeScript's parse and ts-morph's `createSourceFile`
+    is ts-morph's own per-file bookkeeping (SourceFile wrapper, file and
+    directory caches, in-project marking) — the very objects the extraction
+    navigates; only bypassing ts-morph's internals could cut it (≈ 4 % end
+    to end at most).
+  - Files parsed twice (scripts and `declare global` files, which go to the
+    shared lib Project after the module check): 3 of 652, 1 KB together.
+  No code changed. What remains as a lever is outside the parse: running
+  files in parallel (worker threads) — an architecture question, not a
+  parse optimization.
 - **Building the node index in one walk (follow-up):** building the index
   took ≈ 15.5 % of the profile — two walks per file (a raw one numbering the
   nodes, then `forEachDescendant` collecting the wrappers) plus the check
@@ -2049,7 +2071,8 @@ for richer suppression; LLM-output evaluation at scale.
 
 **Open from the evaluator-integrity track (2026-11-04):** in the TS
 extraction, the parse
-itself (≈ 15 %) and ts-morph's wrapper creation (≈ 9 %, needed by the
+itself (≈ 15 %; examined without a safe lever, see "The TypeScript parse" —
+parallel files would be the next step) and ts-morph's wrapper creation (≈ 9 %, needed by the
 extraction's navigation — wrapping lazily was measured without gain, see
 "Wrapping only what is queried"; the second walk around it is gone, see
 "Building the node index in one walk"); not building the SymbolGraph under

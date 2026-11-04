@@ -426,6 +426,30 @@ genannten lokalen Projekten; keine ist eine allgemeine Genauigkeitsaussage.
   (`test/fixtures/architecture`: Loader-Fehler, Zuordnung inkl. Mehrfachtreffer
   und Dateien außerhalb der Wurzel, alle vier Kantenurteile, Paketverbote und
   -namen, Report-Zusammenfassung und Markdown, CLI-Fail-fast und JSON).
+- **Das TypeScript-Parsen (geprüft, nichts übernommen):** `parse()` kostet
+  ≈ 17 % des CPU-Profils, ≈ 14 Punkte davon im Parser von TypeScript selbst.
+  Gemessen auf den 652 Dateien (bester von 7 Läufen, alle Dateien
+  festgehalten): `parse()` des Adapters ≈ 434–462 ms, TypeScripts
+  `createLanguageServiceSourceFile` mit Elternverweisen allein
+  ≈ 305–368 ms; ohne Elternverweise ≈ 232 ms, ohne JSDoc ≈ 278–287 ms; ein
+  lib-freies Project je Datei zusammen ≈ 8 ms. Keine der Lücken ist ein
+  sicherer Hebel:
+  - ts-morph parst immer mit Elternverweisen (seine Document-Registry legt es
+    fest) und navigiert über sie, der Elterndurchlauf von ≈ 100 ms bleibt.
+  - JSDoc gehört zu den Facts (`refsOf` liest Bezeichner in JSDoc,
+    Token-Abfragen schließen JSDoc ein — siehe „Klassen-Member und
+    Quellbereiche"); es nicht zu parsen, änderte Facts.
+  - Die ≈ 94 ms zwischen TypeScripts Parsen und ts-morphs `createSourceFile`
+    sind ts-morphs eigene Verwaltung je Datei (SourceFile-Wrapper, Datei- und
+    Verzeichnis-Caches, Projekt-Markierung) — genau die Objekte, über die die
+    Extraktion navigiert; kürzen ließe sie sich nur an ts-morphs Interna
+    vorbei (höchstens ≈ 4 % Ende-zu-Ende).
+  - Doppelt geparste Dateien (Skripte und Dateien mit `declare global`, die
+    nach der Modulprüfung ins gemeinsame Lib-Project gehen): 3 von 652,
+    zusammen 1 KB.
+  Kein Code geändert. Als Hebel bleibt, was außerhalb des Parsens liegt:
+  Dateien parallel verarbeiten (Worker-Threads) — eine Architekturfrage,
+  keine Parse-Optimierung.
 - **Knotenindex in einem Durchlauf (Nachtrag):** Der Aufbau des Index
   kostete ≈ 15,5 % des Profils — zwei Durchläufe je Datei (ein roher, der
   die Knoten nummeriert, danach `forEachDescendant`, der die Wrapper
@@ -2233,7 +2257,8 @@ Suppression; LLM-Ausgabe-Evaluierung im Maßstab.
 
 **Offen aus dem Evaluator-Integritäts-Folgeauftrag (2026-11-04):** in der
 TS-Extraktion das Parsen
-selbst (≈ 15 %) und ts-morphs Wrapper-Erzeugung (≈ 9 %, von der Navigation
+selbst (≈ 15 %; ohne sicheren Hebel geprüft, siehe „Das TypeScript-Parsen" —
+der nächste Schritt wären parallele Dateien) und ts-morphs Wrapper-Erzeugung (≈ 9 %, von der Navigation
 der Extraktion gebraucht — lazy Einhüllen wurde ohne Gewinn gemessen, siehe
 „Nur Abgefragtes einhüllen"; der zweite Durchlauf drumherum ist entfallen,
 siehe „Knotenindex in einem Durchlauf"); kein SymbolGraph unter `--solid`, wenn keine
