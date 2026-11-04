@@ -102,6 +102,21 @@ sequenceDiagram
     O->>U: report (JSON/SARIF/Markdown) + exit code
 ```
 
+### Realized: the semantic model layer (as of 2026-11-04)
+
+The diagram above is the design intent. The implementation adds a model layer
+between the fact store and the rule engine: after extraction the pipeline
+builds, once per run, the `ModuleGraph` (resolved import edges over exactly
+the analyzed files), the `DartLibraryIndex`, the `FlutterWidgetGraph` and —
+only when an active rule declares `usesTypeModel` — the `SymbolGraph` (the
+single ES-module name resolver). The `TypeModel` is built lazily from facts,
+ModuleGraph and SymbolGraph on a rule's first access. Project rules receive
+these models together with the explicit list of analyzed files
+(`analyzedFiles`) and must not build a second resolver of their own. Measured
+on real projects, extraction takes 85–97 % of the runtime; graphs and rule
+evaluation together stay under 400 ms. Details, limits and measurements:
+[implementation-status.md](./implementation-status.md).
+
 ## 4. Components in Detail
 
 ### A. Source Analysis
@@ -257,3 +272,8 @@ The permitted dependency direction is strictly **left → right**. Forbidden:
 See [open-questions.md](./open-questions.md). Core points: incremental
 analysis/caching granularity, project-wide (interprocedural) data flow analysis
 vs. effort, unified fact schema across very different languages.
+
+Open points from the implementation (2026-11-04): unique method identities
+in the TS/Dart/PHP adapters, stable symbols instead of `anonymous@<line>`, and
+fewer syntax-tree walks in the TS extraction — see "Not yet done" in
+[implementation-status.md](./implementation-status.md).

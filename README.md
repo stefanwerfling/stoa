@@ -8,8 +8,10 @@ An LLM is an optional, switchable adapter.
 
 > **Status:** past the MVP. The deterministic core (ingestion → facts → rule
 > engine → findings → reports), a knowledge base of 6 source-checked principles,
-> 40 rules across 10 quality dimensions (incl. a TypeORM/Doctrine persistence pack,
-> a robustness pack and a UI/UX accessibility pack), SARIF 2.1.0 / JSON / Markdown
+> 40 declarative rules across 10 quality dimensions (incl. a TypeORM/Doctrine
+> persistence pack, a robustness pack and a UI/UX accessibility pack) plus
+> procedural cross-file rules (dependency cycles, Flutter lifecycle/layout,
+> opt-in SOLID and contract checks), SARIF 2.1.0 / JSON / Markdown
 > output, localized output (`--lang en|de`), a golden-corpus evaluator with a
 > per-language breakdown, and an optional, off-by-default, grounded semantic (LLM)
 > layer are implemented. See [docs/en/roadmap.md](docs/en/roadmap.md) and, for what
@@ -19,7 +21,7 @@ An LLM is an optional, switchable adapter.
 > - *Implemented and unit-tested:* TypeScript/JavaScript (`ts-morph`), PHP
 >   (`php-parser`/glayzzle), Dart and C/C++ (tree-sitter / `web-tree-sitter`,
 >   in-process WASM); the evaluator (with a per-language/category breakdown); the
->   grounded semantic layer. 40 rules, including two backend-trust-boundary checks
+>   grounded semantic layer. 40 declarative rules, including two backend-trust-boundary checks
 >   (`R-VALIDATION-MISSING-BACKEND`, `R-VALIDATION-MASS-ASSIGNMENT`) — a first,
 >   deliberately single-layer slice of cross-layer validation consistency (see
 >   implementation-status for scope) — and two C/C++ memory-safety checks
@@ -38,10 +40,14 @@ An LLM is an optional, switchable adapter.
 >   colour are declared together on an element's inline style (WCAG 1.4.3). The
 >   cascade/rendered contrast, visible focus and dynamic states are deliberately out
 >   of scope for the static analyser and designed as a future, opt-in visual slice.
-> - *In the golden corpus (precision/recall measured):* **TypeScript and PHP
->   only.** Dart and C/C++ are covered by adapter tests; the HTML/JSX/Vue/Angular/
->   Flutter a11y packs each have their own **curated** corpus at 100/100 — curated,
->   not external.
+> - *In the golden corpora (precision/recall measured):* the main corpus is
+>   **TypeScript and PHP** (TP 44); a separate **SOLID corpus** covers the four
+>   registered SOLID rules on **Dart and TypeScript** (TP 7). C/C++ is covered by
+>   adapter and rule tests only; the HTML/JSX/Vue/Angular/Flutter a11y packs each
+>   have their own **curated** corpus at 100/100 — curated, not external.
+>   `stoa eval` exits `0` (passed), `1` (failed or technical error) or `2`
+>   (incomplete analysis — never a pass); a finding identity produced twice is a
+>   rule defect and fails the evaluation.
 > - *Evaluated on independent external projects:* **not yet** — `stoa eval` works
 >   on any project, but no externally-validated corpus ships here.
 > - *Validation Trace IDs / cross-layer contracts:* opt-in (`--contracts <file>`),
@@ -61,7 +67,9 @@ An LLM is an optional, switchable adapter.
 >   delta — the CI/pre-commit use case on an existing codebase with a backlog.
 >   Not a git-diff/PR mode (no VCS integration) — a stored-snapshot baseline.
 > - *Planned / not yet validated:* richer context facts, PSR-4 PHP import
->   resolution, Dart/C/C++ dependency facts.
+>   resolution, C/C++ include facts, Dart edges in the dependency-cycle and
+>   dead-export rules (Dart imports are already extracted and used by the module
+>   graph and the SOLID layer rule).
 >
 > **Analysis completion integrity:** `coverage.status` (`complete` |
 > `partial` | `failed`) is the single, centrally-managed verdict on

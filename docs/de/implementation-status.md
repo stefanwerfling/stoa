@@ -1,8 +1,78 @@
 # Umsetzungsstand
 
-> Stand: 2026-10-31. Diese Seite beschreibt, was **tatsächlich implementiert** ist.
+> Stand: 2026-11-04. Diese Seite beschreibt, was **tatsächlich implementiert** ist.
 > Die übrigen `docs/`-Dokumente beschreiben die **Entwurfsabsicht** (Konzeptphase)
 > und bleiben als Begründung gültig; wo die Umsetzung abweicht, zählt diese Seite.
+> Die Einträge unter „Realisierte Architektur" sind ein **chronologisches
+> Protokoll** (neueste zuerst). Eine Aussage wie „noch liest keine Regel es"
+> gilt zum Zeitpunkt dieses Eintrags; spätere Einträge können sie ablösen. Die
+> folgende Übersicht ist der aktuelle Stand.
+
+## Aktueller Stand im Überblick (2026-11-04)
+
+**Implementiert (mit Tests):**
+- Sprachadapter: TypeScript/JavaScript, PHP, Dart/Flutter, C/C++ sowie
+  statische Markup-Extraktion für HTML, JSX, Vue-SFC und Angular-Templates.
+- 40 deklarative Regeln (`rules/default/*.json`) und die prozeduralen
+  Projektregeln: `R-DEP-CYCLE` (immer aktiv), `R-UNUSED-EXPORT`
+  (`--dead-exports`), die acht Flutter-Lifecycle-/Layout-Regeln (immer aktiv,
+  nur Dart), die SOLID-Regeln (`--solid`) und die Validation-Contract-Prüfungen
+  (`--contracts`). Die Tabelle im Regelkatalog unten listet die deklarativen
+  und einen Teil der prozeduralen Regeln; die vollständige Liste steht in
+  `docs/de/rule-model.md`.
+- Semantische Modelle, je Lauf einmal gebaut und geteilt: `ModuleGraph`
+  (aufgelöste Import-Kanten, projektkonfigurationsbewusst), `SymbolGraph` (der
+  einzige ES-Modul-Namensauflöser: benannte/Default-/Namespace-Importe,
+  Re-Exporte, externe und unaufgelöste Bindungen), `TypeModel` (deklarierte
+  Typen und Supertypen, lazy beim ersten Zugriff gebaut), `DartLibraryIndex`
+  und `FlutterWidgetGraph`. Der SymbolGraph wird **nur** gebaut, wenn eine
+  aktive Regel `usesTypeModel` deklariert (heute: die SOLID-Regeln
+  LSP/ISP/DIP-concrete unter `--solid`); sonst gar nicht.
+- Speicherbegrenzte Pipeline mit `coverage.status` `complete`/`partial`/`failed`
+  und Exit-Codes 0/2/1; Pro-Datei-Fact-Cache (`--cache`); Baseline-/Diff-Modus
+  (`--baseline`, `--only-new`, `--update-baseline`).
+- Evaluator (`stoa eval`) mit Exit-Codes 0 = bestanden, 1 = nicht bestanden
+  oder technischer Fehler, 2 = unvollständige Analyse. Eine doppelt erzeugte
+  Finding-Identität (Datei + Regel + Symbol) ist ein Regeldefekt und lässt die
+  Evaluierung scheitern; `--update-baseline` verweigert, eine solche Baseline
+  zu schreiben.
+- Opt-in-Metriken (`--memory-stats`, `AnalyzeOptions.onMetrics`): Datei-,
+  Fact-, Finding- und Graph-Zählungen, Phasenzeiten, Peak-RSS.
+
+**Experimentell (opt-in, wenige oder keine Treffer in echten Projekten):** die
+SOLID-Regeln (`R-SOLID-DIP-LAYER-DIRECTION`, `-LSP-CONTRACT-COMPATIBILITY`,
+`-ISP-INTERFACE-COHESION`, `-DIP-CONCRETE-DEPENDENCY`). Die SRP-Regel
+(`R-SOLID-SRP-RESPONSIBILITY-COHESION`) ist gebaut und getestet, aber bewusst
+**nicht registriert**.
+
+**Nur heuristisch (Risikosignale, kein Beweis):** `R-VALIDATION-MISSING-BACKEND`,
+`R-VALIDATION-MASS-ASSIGNMENT` (namensbasierte Senken), als `heuristic`
+markierte Validation-Dataflow-Kanten, `R-SOLID-DIP-LAYER-DIRECTION`
+(semantisch-heuristisch, Konfidenz 0.5), namensbasierte Persistenz-Erkennung.
+
+**Nicht implementiert:** C/C++-Include-/Abhängigkeits-Facts; Dart-Kanten in
+`R-DEP-CYCLE`/`R-UNUSED-EXPORT` (Dart-Importe werden als `dart.importSpec`
+extrahiert und von ModuleGraph und DIP-Schichtregel genutzt, die beiden
+Abhängigkeitsregeln lesen aber nur TS-/PHP-Kanten); PSR-4-Auflösung für PHP;
+ein Git-Diff-/PR-Modus; gerenderte (Browser-)Barrierefreiheitsprüfungen;
+API-Request-/DTO-Facts für eine durchgehende FE/BE-Kette; Validierung an
+unabhängigen externen Korpora.
+
+**Bekannte Einschränkungen (offen):**
+- Finding-Identitäten der TS-/Dart-/PHP-Adapter nutzen den nackten
+  Methodennamen als Symbol; `A.run` und `B.run` in einer Datei können daher
+  kollidieren. Seit der Evaluator-Integritätsarbeit lässt eine solche
+  Kollision `stoa eval` scheitern und blockiert `--update-baseline`; die
+  Adapter sind noch nicht geändert.
+- Symbole der Form `anonymous@<Zeile>` verschieben sich, wenn sich Zeilen
+  darüber ändern; solche Findings sind in einer Baseline nicht änderungsstabil.
+- Die Extraktion dominiert Laufzeit und Speicher (siehe Messeintrag unten);
+  der TS-Adapter durchläuft jeden Syntaxbaum etwa elfmal. Noch nicht optimiert.
+
+**Tests und Messungen:** siehe „Qualitätssicherung" unten und den datierten
+Messeintrag „Messung und Speicherprofil". Alle Zahlen auf dieser Seite stammen
+aus den kuratierten Korpora und Fixtures dieses Repositorys oder aus den
+genannten lokalen Projekten; keine ist eine allgemeine Genauigkeitsaussage.
 
 ## Realisierte Architektur
 
@@ -1305,9 +1375,9 @@ eingeführt hat, nicht den gesamten Backlog.
   Exit-Code ungleich 0 und lässt die bestehende Baseline-Datei
   byte-identisch zurück.
 
-## Regelkatalog (40)
+## Regelkatalog (40 deklarative Regeln + Projektregeln)
 
-Deklarative Regeln (`rules/default/*.json`), Default aktiv:
+Deklarative Regeln (`rules/default/*.json`, 40), Default aktiv:
 
 | Regel | Prinzip | Dimension | Sprachen |
 |-------|---------|-----------|----------|
@@ -1352,7 +1422,12 @@ Deklarative Regeln (`rules/default/*.json`), Default aktiv:
 | R-A11Y-FLUTTER-ICONBUTTON-LABEL | marcus.purpose | Barrierefreiheit, Bedienbarkeit | Flutter/Dart (Widget, `tooltip`) |
 | R-A11Y-FLUTTER-TEXTFIELD-LABEL | marcus.purpose | Barrierefreiheit, Bedienbarkeit | Flutter/Dart (Widget, `InputDecoration.labelText`) |
 
-Prozedurale Regeln (`ProjectRule`, cross-file):
+Prozedurale Regeln (`ProjectRule`, cross-file). Nicht in dieser Tabelle: die
+acht Flutter-Lifecycle-/Layout-Regeln (`R-FLUTTER-*`, immer aktiv, Dart) und
+die SOLID-Regeln `R-SOLID-LSP-CONTRACT-COMPATIBILITY`,
+`R-SOLID-ISP-INTERFACE-COHESION`, `R-SOLID-DIP-CONCRETE-DEPENDENCY`
+(`--solid`, experimentell) — siehe `docs/de/rule-model.md` und die
+Protokolleinträge oben:
 
 | Regel | Prinzip | Dimension | Hinweis |
 |-------|---------|-----------|---------|
@@ -1749,13 +1824,20 @@ zu liefern.
 
 ## Qualitätssicherung
 
-- **273 node:test-Fälle** grün (Regeln pos./neg., Extraktion, Schema-Validierung,
-  i18n, Determinismus, SARIF, Eval, Semantik-Groundedness, Datenschutz,
-  Finding-Trennung).
-- **Golden-Korpus** (`test/corpus/`, **nur TS+PHP**) mit Ground-Truth; Eval
+- **node:test-Suite** (`npm test`, `test/*.test.ts`): 531 Tests, 0 fehlgeschlagen,
+  Lauf vom 2026-11-04 (Regeln pos./neg., Extraktion, Schema-Validierung, i18n,
+  Determinismus, SARIF, Eval, Semantik-Groundedness, Datenschutz,
+  Finding-Trennung, semantische Modelle, Identitäten, Metriken).
+- **Golden-Korpus** (`test/corpus/project/`, TS+PHP) mit Ground-Truth; Eval
   derzeit **Precision 100 % · Recall 100 %** (TP 44) mit sprachbezogener
-  Aufschlüsselung (`byLanguage`). Precision-Gate je Regel (AC-5). Dart und C/C++
-  werden durch **Adaptertests** abgedeckt, noch **nicht** durch den Golden-Korpus.
+  Aufschlüsselung (`byLanguage`). Precision-Gate je Regel (AC-5).
+- **SOLID-Korpus** (`test/corpus/solid/`, Dart + TS): die vier registrierten
+  SOLID-Regeln, 100 %/100 % (TP 7, FP 0, FN 0) mit und ohne deklarierte
+  Architektur (`expected.json`, `expected-architecture.json`); ohne `--solid`
+  kein Finding; jede erzeugte Identität ist eindeutig
+  (`test/SolidCorpus.test.ts`).
+- C/C++ ist durch **Adapter- und Regeltests** abgedeckt und wurde an externen
+  Repositorys erprobt, hat aber **keinen** Golden-Korpus mit Precision/Recall.
 - **Wichtig:** Diese Werte gelten nur für den kleinen, kuratierten Korpus und
   sind **keine** allgemeine Zuverlässigkeitsgarantie für beliebige Projekte.
 - **UI/UX-Korpus** (`test/fixtures/html/`, statisches HTML) mit positiven,
@@ -1862,11 +1944,23 @@ zu liefern.
 
 ## Noch offen
 
-Weitere Dart-/C-/C++-Facts (Imports/Deps); Baseline-/Suppression-Workflow;
-Diff-/PR-Modus; PSR-4-Auflösung, damit R-DEP-CYCLE/R-UNUSED-EXPORT auch PHP
-abdecken; generischer ESLint-Fact-Adapter; Kontext-Facts
-(`flag.generatedCode`, `hasTests`) für reichhaltigere Suppression;
-LLM-Ausgabe-Evaluierung im Maßstab.
+C/C++-Include-/Abhängigkeits-Facts; Dart-Kanten in R-DEP-CYCLE/R-UNUSED-EXPORT
+(Dart-Importe liegen als `dart.importSpec` im ModuleGraph, die beiden Regeln
+lesen aber nur TS-/PHP-Kanten); ein Git-Diff-/PR-Modus (die
+Snapshot-Baseline existiert, siehe „Baseline-/Diff-Modus"); ein
+Suppression-Workflow über die Baseline hinaus; PSR-4-Auflösung, damit
+R-DEP-CYCLE/R-UNUSED-EXPORT auch PHP abdecken; generischer ESLint-Fact-Adapter;
+Kontext-Facts (`flag.generatedCode`, `hasTests`) für reichhaltigere
+Suppression; LLM-Ausgabe-Evaluierung im Maßstab.
+
+**Offen aus dem Evaluator-Integritäts-Folgeauftrag (2026-11-04):** eindeutige
+Methoden-Identitäten in den TS-/Dart-/PHP-Adaptern (ein nackter Methodenname
+kollidiert über Klassen in einer Datei — jetzt ein harter statt ein stiller
+Evaluierungs-/Baseline-Fehler); stabile Symbole statt `anonymous@<Zeile>`;
+weniger Vollbaum-Durchläufe in der TS-Extraktion (der gemessene Hebel für
+Laufzeit und Speicherspitze, Facts müssen byte-identisch bleiben); kein
+SymbolGraph unter `--solid`, wenn keine Typdeklarationen existieren (gemessen
+2,7 ms, niedrige Priorität).
 
 **Cross-Layer-Validierung — Grenzen (erster vertikaler Schnitt):**
 `R-VALIDATION-MISSING-BACKEND` (Kategorie „Missing Backend Validation") und

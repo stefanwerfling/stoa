@@ -102,6 +102,22 @@ sequenceDiagram
     O->>U: Bericht (JSON/SARIF/Markdown) + Exit-Code
 ```
 
+### Realisiert: die semantische Modellschicht (Stand 2026-11-04)
+
+Das Diagramm oben ist die Entwurfsabsicht. Die Umsetzung ergänzt eine
+Modellschicht zwischen Fact Store und Rule Engine: Nach der Extraktion baut die
+Pipeline je Lauf einmal den `ModuleGraph` (aufgelöste Import-Kanten über genau
+die analysierten Dateien), den `DartLibraryIndex`, den `FlutterWidgetGraph`
+und — nur wenn eine aktive Regel `usesTypeModel` deklariert — den
+`SymbolGraph` (den einzigen ES-Modul-Namensauflöser). Das `TypeModel` entsteht
+lazy aus Facts, ModuleGraph und SymbolGraph beim ersten Zugriff einer Regel.
+Projektregeln erhalten diese Modelle zusammen mit der expliziten Liste der
+analysierten Dateien (`analyzedFiles`) und bauen keinen zweiten eigenen
+Auflöser. Gemessen an echten Projekten entfallen 85–97 % der Laufzeit auf die
+Extraktion; Graphen und Regelauswertung zusammen bleiben unter 400 ms.
+Details, Grenzen und Messungen:
+[implementation-status.md](./implementation-status.md).
+
 ## 4. Komponenten im Detail
 
 ### A. Source Analysis
@@ -259,3 +275,8 @@ Erlaubte Abhängigkeitsrichtung ist strikt **links → rechts**. Verboten:
 Siehe [open-questions.md](./open-questions.md). Kernpunkte: inkrementelle
 Analyse/Caching-Granularität, projektweite (interprozedurale) Datenflussanalyse
 vs. Aufwand, einheitliches Fact-Schema über sehr unterschiedliche Sprachen.
+
+Offene Punkte aus der Umsetzung (2026-11-04): eindeutige Methoden-Identitäten
+in den TS-/Dart-/PHP-Adaptern, stabile Symbole statt `anonymous@<Zeile>` und
+weniger Syntaxbaum-Durchläufe in der TS-Extraktion — siehe „Noch offen" in
+[implementation-status.md](./implementation-status.md).
