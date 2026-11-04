@@ -59,9 +59,10 @@ corpora.
 **Known limitations (open):**
 - Extraction dominates runtime and memory (see the measurement entry below).
   The TS adapter no longer wraps every token, builds no type checker for
-  export questions and answers the per-kind node queries from one index per
-  file (together ≈ −65 % extraction time, see "Fewer token walks" and "One
-  node index per file"); parsing and releasing are now a large share.
+  export questions, answers the per-kind node queries from one index per
+  file and walks each function once (together ≈ −74 % extraction time, see
+  "Fewer token walks", "One node index per file", "One walk per function");
+  parsing, releasing and wrapping all nodes once now dominate.
 
 **Tests and measurements:** see "Quality assurance" below and the dated
 measurement entry "Measurement and memory profile". All numbers on this
@@ -393,6 +394,25 @@ the named local projects; none is a general accuracy claim.
   (`test/fixtures/architecture`: loader errors, assignment incl. multiple
   matches and outside-root files, all four edge verdicts, package bans and
   names, report summary and markdown, CLI fail-fast and JSON).
+- **One walk per function in the TS extraction (follow-up):** each function's
+  body was walked twice through ts-morph's `forEachChild` (a wrapper array
+  per node) — once for the complexity metrics, once for the
+  nondeterminism check — and each class member's reference scope twice (a
+  `getChildren` walk plus `getDescendantsOfKind(Identifier)`). Now
+  `measureBody` computes metrics and nondeterminism in one `ts.forEachChild`
+  walk (same children, same `getText()` slices), and `referenceCandidates`
+  finds property accesses, `new` and identifiers in one walk and takes
+  their wrappers from the file's node index (a scope holding JSDoc keeps the
+  full `getDescendants` path, which also walks JSDoc). Facts byte-identical
+  (same hash over 50,046 facts of 652 files), findings of 18 runs unchanged.
+  Measured (extractFacts only, same files, minimum of 3 rounds, alternating
+  runs): 3.2–3.3 s → 2.5–2.6 s (≈ −20 %; ≈ −74 % against 9.7 s before the
+  three follow-ups). Kept as it was (byte-identical): an expression body
+  (`() => Math.random()`) is not inspected itself, only its children — such
+  an arrow is not flagged and a top-level `&&` in it is not counted. Tests:
+  `test/TsExtractionShortcuts.test.ts` (+1: metrics and nondeterminism with
+  nested functions, `new Date()` with and without arguments, values from
+  the two walks before).
 - **One node index per file in the TS extraction (follow-up):** the fact
   families asked the same tree the same questions again and again — each
   `getDescendantsOfKind` (file-wide for catch clauses, property assignments,
@@ -1777,7 +1797,7 @@ fails fast (exit 1, concrete errors) instead of silently yielding 0 findings.
 
 ## Quality assurance
 
-- **node:test suite** (`npm test`, `test/*.test.ts`): 549 tests, 0 failed,
+- **node:test suite** (`npm test`, `test/*.test.ts`): 550 tests, 0 failed,
   as of the 2026-11-04 run (rules pos./neg., extraction, schema validation,
   i18n, determinism, SARIF, evaluation, semantic groundedness, privacy,
   finding-model separation, semantic models, identities, metrics).
@@ -1899,10 +1919,11 @@ baseline; PSR-4 resolution so R-DEP-CYCLE / R-UNUSED-EXPORT cover PHP; a
 generic ESLint fact adapter; context facts (`flag.generatedCode`, `hasTests`)
 for richer suppression; LLM-output evaluation at scale.
 
-**Open from the evaluator-integrity track (2026-11-04):** the TS
-extraction's remaining raw walks per function (metrics, nondeterminism) and
-its identifier walks (the node queries come from one index per file since
-"One node index per file"; facts must stay byte-identical); not building the SymbolGraph under
+**Open from the evaluator-integrity track (2026-11-04):** in the TS
+extraction, parsing and releasing (≈ 28 % of the profile) and wrapping every
+node once for the index (≈ 12 %) — the per-family and per-function walks are
+merged ("One node index per file", "One walk per function"); an expression
+body is not inspected itself (see there; changing it changes facts); not building the SymbolGraph under
 `--solid` when no type declarations exist (measured 2.7 ms, low priority).
 
 **Cross-layer validation — limits (first vertical slice):**

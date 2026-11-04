@@ -86,7 +86,7 @@ export const extractFacts = (sourceFile: SourceFile, info: AdapterInfo): Fact[] 
     });
     const symbols = declarationSymbols(functions.map(({fn}) => functionBase(fn)));
     for (const [index, {fn, body}] of functions.entries()) {
-        const metrics = computeMetrics(fn, body);
+        const metrics = measureBody(fn, body);
         const symbol = symbols[index] as string;
         const kindOf = subjectKindOf(fn);
         const range = rangeOf(sourceFile, fn);
@@ -97,7 +97,7 @@ export const extractFacts = (sourceFile: SourceFile, info: AdapterInfo): Fact[] 
         facts.push(build({kind: 'metric.parameterCount', kindOf, symbol, range, value: metrics.parameterCount}));
         facts.push(build({kind: 'metric.functionLength', kindOf, symbol, range, value: metrics.lineCount}));
         facts.push(build({kind: 'doc.hasComplexityRationale', kindOf, symbol, range, value: hasComplexityRationale(fn)}));
-        facts.push(build({kind: 'ast.usesNondeterminism', kindOf, symbol, range, value: usesNondeterminism(body)}));
+        facts.push(build({kind: 'ast.usesNondeterminism', kindOf, symbol, range, value: metrics.nondeterministic}));
     }
 
     descendantsOfKind(sourceFile, SyntaxKind.CatchClause).forEach((clause, index) => {
@@ -648,26 +648,6 @@ const collectExportNames = (sourceFile: SourceFile): ExportedName[] => {
 // RNG, which undermines reproducibility and testability (marcus.control).
 const NONDETERMINISTIC_CALLS: ReadonlySet<string> = new Set(['Math.random', 'Date.now', 'performance.now']);
 
-const usesNondeterminism = (body: Node): boolean => {
-    let found = false;
-    const walk = (node: Node): void => {
-        node.forEachChild((child) => {
-            if (FUNCTION_LIKE_KINDS.has(child.getKind())) {
-                return;
-            }
-            if (Node.isCallExpression(child) && NONDETERMINISTIC_CALLS.has(child.getExpression().getText())) {
-                found = true;
-            }
-            if (Node.isNewExpression(child) && child.getExpression().getText() === 'Date' && child.getArguments().length === 0) {
-                found = true;
-            }
-            walk(child);
-        });
-    };
-    walk(body);
-    return found;
-};
-
 // Identifier texts referenced anywhere outside an import declaration. Walks
 // the compiler tree directly — the same children ts-morph's
 // getDescendantsOfKind(Identifier) visits (`getChildren`, JSDoc included) —
@@ -720,54 +700,57 @@ const countExports = (sourceFile: SourceFile): number =>
 
 const functionLikeNodes = (sourceFile: SourceFile): Node[] => descendantsOfKinds(sourceFile, FUNCTION_LIKE_KINDS);
 
-const computeMetrics = (fn: Node, body: Node): FunctionMetrics => {
-    const state = {cyclomatic: 1, cognitive: 0, maxNesting: 0};
-    visit(body, 0, state);
-
+/**
+ * One walk over a function's body for everything measured per function: the
+ * complexity metrics and whether it calls a non-deterministic API. Nested
+ * functions are their own units and are skipped. Walks the compiler tree
+ * (`ts.forEachChild`) — the same children ts-morph's `forEachChild` visits,
+ * without building a wrapper array per node; texts are the same
+ * `getText()` slices ts-morph returns.
+ */
+const measureBody = (fn: Node, body: Node): FunctionMetrics & {nondeterministic: boolean} => {
+    const file = body.getSourceFile().compilerNode;
+    const state = {cyclomatic: 1, cognitive: 0, maxNesting: 0, nondeterministic: false};
+    const visit = (node: ts.Node, nesting: number): void => {
+        ts.forEachChild(node, (child) => {
+            const kind = child.kind as SyntaxKind;
+            if (FUNCTION_LIKE_KINDS.has(kind)) {
+                return undefined;
+            }
+            if (CYCLOMATIC_KINDS.has(kind)) {
+                state.cyclomatic += 1;
+            }
+            if (ts.isBinaryExpression(child) && LOGICAL_OPERATORS.has(child.operatorToken.kind as SyntaxKind)) {
+                state.cyclomatic += 1;
+                state.cognitive += 1;
+            }
+            if (ts.isCallExpression(child) && NONDETERMINISTIC_CALLS.has(child.expression.getText(file))) {
+                state.nondeterministic = true;
+            }
+            if (ts.isNewExpression(child) && child.expression.getText(file) === 'Date' && (child.arguments?.length ?? 0) === 0) {
+                state.nondeterministic = true;
+            }
+            const isNesting = NESTING_KINDS.has(kind);
+            if (isNesting) {
+                state.cognitive += 1 + nesting;
+            }
+            const childNesting = isNesting ? nesting + 1 : nesting;
+            if (childNesting > state.maxNesting) {
+                state.maxNesting = childNesting;
+            }
+            visit(child, childNesting);
+            return undefined;
+        });
+    };
+    visit(body.compilerNode, 0);
     return {
         cyclomatic: state.cyclomatic,
         cognitive: state.cognitive,
         nestingDepth: state.maxNesting,
         parameterCount: parameterCount(fn),
-        lineCount: fn.getEndLineNumber() - fn.getStartLineNumber() + 1
+        lineCount: fn.getEndLineNumber() - fn.getStartLineNumber() + 1,
+        nondeterministic: state.nondeterministic
     };
-};
-
-interface MetricState {
-    cyclomatic: number;
-    cognitive: number;
-    maxNesting: number;
-}
-
-const visit = (node: Node, nesting: number, state: MetricState): void => {
-    node.forEachChild((child) => {
-        if (FUNCTION_LIKE_KINDS.has(child.getKind())) {
-            // Nested functions are measured as their own units; skip them here.
-            return;
-        }
-
-        const kind = child.getKind();
-
-        if (CYCLOMATIC_KINDS.has(kind)) {
-            state.cyclomatic += 1;
-        }
-        if (Node.isBinaryExpression(child) && LOGICAL_OPERATORS.has(child.getOperatorToken().getKind())) {
-            state.cyclomatic += 1;
-            state.cognitive += 1;
-        }
-
-        const isNesting = NESTING_KINDS.has(kind);
-        if (isNesting) {
-            state.cognitive += 1 + nesting;
-        }
-
-        const childNesting = isNesting ? nesting + 1 : nesting;
-        if (childNesting > state.maxNesting) {
-            state.maxNesting = childNesting;
-        }
-
-        visit(child, childNesting, state);
-    });
 };
 
 const functionBody = (fn: Node): Node | undefined => {

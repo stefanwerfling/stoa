@@ -61,10 +61,11 @@ unabhängigen externen Korpora.
 **Bekannte Einschränkungen (offen):**
 - Die Extraktion dominiert Laufzeit und Speicher (siehe Messeintrag unten).
   Der TS-Adapter hüllt nicht mehr jeden Token ein, baut für Exportfragen
-  keinen TypeChecker und beantwortet die Knotenabfragen je Art aus einem
-  Index je Datei (zusammen ≈ −65 % Extraktionszeit, siehe „Weniger
-  Token-Durchläufe" und „Ein Knotenindex je Datei"); Parsen und Freigeben
-  sind jetzt ein großer Anteil.
+  keinen TypeChecker, beantwortet die Knotenabfragen je Art aus einem Index
+  je Datei und durchläuft jede Funktion einmal (zusammen ≈ −74 %
+  Extraktionszeit, siehe „Weniger Token-Durchläufe", „Ein Knotenindex je
+  Datei", „Ein Durchlauf je Funktion"); Parsen, Freigeben und das einmalige
+  Einhüllen aller Knoten dominieren jetzt.
 
 **Tests und Messungen:** siehe „Qualitätssicherung" unten und den datierten
 Messeintrag „Messung und Speicherprofil". Alle Zahlen auf dieser Seite stammen
@@ -422,6 +423,27 @@ genannten lokalen Projekten; keine ist eine allgemeine Genauigkeitsaussage.
   (`test/fixtures/architecture`: Loader-Fehler, Zuordnung inkl. Mehrfachtreffer
   und Dateien außerhalb der Wurzel, alle vier Kantenurteile, Paketverbote und
   -namen, Report-Zusammenfassung und Markdown, CLI-Fail-fast und JSON).
+- **Ein Durchlauf je Funktion in der TS-Extraktion (Nachtrag):** Der Rumpf
+  jeder Funktion wurde zweimal über ts-morphs `forEachChild` durchlaufen
+  (ein Wrapper-Array je Knoten) — einmal für die Komplexitätsmetriken,
+  einmal für die Nichtdeterminismus-Prüfung —, und der Referenzbereich jedes
+  Klassen-Members zweimal (ein `getChildren`-Durchlauf plus
+  `getDescendantsOfKind(Identifier)`). Jetzt berechnet `measureBody` Metriken
+  und Nichtdeterminismus in einem `ts.forEachChild`-Durchlauf (dieselben
+  Kinder, dieselben `getText()`-Ausschnitte), und `referenceCandidates`
+  findet Property-Zugriffe, `new` und Bezeichner in einem Durchlauf und
+  nimmt ihre Wrapper aus dem Knotenindex der Datei (ein Bereich mit JSDoc
+  behält den vollen `getDescendants`-Weg, der auch JSDoc durchläuft). Facts
+  byte-identisch (derselbe Hash über 50.046 Facts von 652 Dateien), Befunde
+  von 18 Läufen unverändert. Gemessen (nur extractFacts, dieselben Dateien,
+  Minimum aus 3 Runden, abwechselnde Läufe): 3,2–3,3 s → 2,5–2,6 s
+  (≈ −20 %; ≈ −74 % gegenüber 9,7 s vor den drei Nachträgen). Unverändert
+  belassen (byte-identisch): Ein Ausdrucksrumpf (`() => Math.random()`) wird
+  nicht selbst geprüft, nur seine Kinder — ein solcher Pfeil wird nicht
+  markiert, und ein `&&` auf oberster Ebene darin zählt nicht. Tests:
+  `test/TsExtractionShortcuts.test.ts` (+1: Metriken und Nichtdeterminismus
+  mit verschachtelten Funktionen, `new Date()` mit und ohne Argumente,
+  Werte aus den zwei Durchläufen davor).
 - **Ein Knotenindex je Datei in der TS-Extraktion (Nachtrag):** Die
   Fact-Familien stellten demselben Baum immer wieder dieselben Fragen — jedes
   `getDescendantsOfKind` (dateiweit für Catch-Klauseln, Property-Zuweisungen,
@@ -1944,7 +1966,7 @@ zu liefern.
 
 ## Qualitätssicherung
 
-- **node:test-Suite** (`npm test`, `test/*.test.ts`): 549 Tests, 0 fehlgeschlagen,
+- **node:test-Suite** (`npm test`, `test/*.test.ts`): 550 Tests, 0 fehlgeschlagen,
   Lauf vom 2026-11-04 (Regeln pos./neg., Extraktion, Schema-Validierung, i18n,
   Determinismus, SARIF, Eval, Semantik-Groundedness, Datenschutz,
   Finding-Trennung, semantische Modelle, Identitäten, Metriken).
@@ -2073,11 +2095,12 @@ R-DEP-CYCLE/R-UNUSED-EXPORT auch PHP abdecken; generischer ESLint-Fact-Adapter;
 Kontext-Facts (`flag.generatedCode`, `hasTests`) für reichhaltigere
 Suppression; LLM-Ausgabe-Evaluierung im Maßstab.
 
-**Offen aus dem Evaluator-Integritäts-Folgeauftrag (2026-11-04):** die
-verbleibenden Roh-Durchläufe je Funktion (Metriken, Nichtdeterminismus) und
-die Bezeichner-Durchläufe der TS-Extraktion (die Knotenabfragen kommen seit
-„Ein Knotenindex je Datei" aus einem Index je Datei; Facts müssen
-byte-identisch bleiben); kein SymbolGraph unter `--solid`, wenn keine
+**Offen aus dem Evaluator-Integritäts-Folgeauftrag (2026-11-04):** in der
+TS-Extraktion Parsen und Freigeben (≈ 28 % des Profils) und das einmalige
+Einhüllen aller Knoten für den Index (≈ 12 %) — die Durchläufe je
+Fact-Familie und je Funktion sind zusammengeführt („Ein Knotenindex je
+Datei", „Ein Durchlauf je Funktion"); ein Ausdrucksrumpf wird nicht selbst
+geprüft (siehe dort; eine Änderung ändert Facts); kein SymbolGraph unter `--solid`, wenn keine
 Typdeklarationen existieren (gemessen 2,7 ms, niedrige Priorität).
 
 **Cross-Layer-Validierung — Grenzen (erster vertikaler Schnitt):**

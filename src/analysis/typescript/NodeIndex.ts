@@ -105,6 +105,13 @@ const indexedOfKind = (index: FileIndex, node: Node, kind: SyntaxKind): Array<{n
     return hits;
 };
 
+/** The wrapper of a compiler node of `node`'s file, as the index holds it — undefined when the index has none for it. */
+export const indexedWrapper = (node: Node, compilerNode: ts.Node): Node | undefined => {
+    const index = fileIndex(node);
+    const number = index.order.get(compilerNode);
+    return number === undefined ? undefined : index.wrappers?.[number];
+};
+
 /** Same result as `node.getDescendantsOfKind(kind)`, from the per-file index. */
 export const descendantsOfKind = <K extends SyntaxKind>(node: Node, kind: K): Array<KindToNodeMappings[K]> => {
     const hits = indexedOfKind(fileIndex(node), node, kind);

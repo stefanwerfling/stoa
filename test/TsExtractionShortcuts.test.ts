@@ -69,3 +69,53 @@ test('member references: a property access inside JSDoc still counts as static a
     assert.deepEqual(run?.staticAccess, [{prefix: null, name: 'Base', member: 'Inner'}]);
     assert.deepEqual(run?.instantiates, [{prefix: null, name: 'Map', member: null}]);
 });
+
+test('one walk per function: metrics and nondeterminism skip nested functions (values from the two walks before)', () => {
+    const source = [
+        'export function outer(a: boolean, b: boolean): number {',
+        '    const t = Date.now();',
+        '    const later = () => Math.random() > 0.5 && a;',
+        '    if (a && b) {',
+        '        for (const x of [1, 2]) {',
+        '            while (x > t) {',
+        '                return b ? 1 : 2;',
+        '            }',
+        '        }',
+        '    }',
+        '    return later() ? 0 : 1;',
+        '}',
+        'export function stamps(): Date[] {',
+        '    return [new Date(), new Date(0)];',
+        '}',
+        'export function fixed(): Date {',
+        '    return new Date(0) ?? null;',
+        '}',
+        'export const clock = {',
+        '    now(): number {',
+        '        return performance.now();',
+        '    }',
+        '};',
+        'export function onlyNested(): () => number {',
+        '    return () => Math.random();',
+        '}',
+        ''
+    ].join('\n');
+    const kinds = ['metric.cyclomaticComplexity', 'metric.cognitiveComplexity', 'metric.nestingDepth', 'ast.usesNondeterminism'];
+    const bySymbol: Record<string, unknown[]> = {};
+    for (const fact of factsOf('m.ts', source)) {
+        if (kinds.includes(fact.kind)) {
+            (bySymbol[fact.subject.symbol ?? ''] ??= []).push(fact.value);
+        }
+    }
+    assert.deepEqual(bySymbol, {
+        outer: [7, 12, 4, true],
+        'outer.later': [1, 0, 0, true],
+        stamps: [1, 0, 0, true],
+        fixed: [2, 1, 0, false],
+        'clock.now': [1, 0, 0, true],
+        onlyNested: [1, 0, 0, false],
+        // Current limitation, kept byte-identical: an expression body is not
+        // inspected itself, only its children — `() => Math.random()` is not flagged.
+        'onlyNested.(anonymous)#0': [1, 0, 0, false]
+    });
+});

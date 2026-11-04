@@ -18,7 +18,7 @@ import {
     type StructTypeDeclValue,
     type StructTypeRef
 } from '../StructFacts.js';
-import {descendantsOfKind} from './NodeIndex.js';
+import {indexedWrapper} from './NodeIndex.js';
 
 type Build = (spec: FactSpec) => Fact;
 
@@ -298,36 +298,40 @@ const bodyShape = (body: Node | undefined): {body: StructBody; throwsType: strin
     return {body: 'normal', throwsType: null};
 };
 
+/** Whether a compiler node carries JSDoc — the children `getChildren` adds and `ts.forEachChild` skips. */
+const hasJsDoc = (node: ts.Node): boolean => ((node as {jsDoc?: readonly unknown[]}).jsDoc?.length ?? 0) > 0;
+
+const REFERENCE_KINDS: ReadonlySet<ts.SyntaxKind> = new Set([ts.SyntaxKind.PropertyAccessExpression, ts.SyntaxKind.NewExpression, ts.SyntaxKind.Identifier]);
+
 /**
  * The nodes refsOf inspects: `scope` and its descendants that are property
  * accesses, `new` expressions or identifiers — the same set as filtering
- * `[scope, ...scope.getDescendants()]`, without wrapping every token. The
- * compiler tree is walked like getDescendants (`getChildren`, JSDoc included);
- * only the hits are wrapped. Property accesses and `new` come from
- * getDescendantsOfKind (node walk, no JSDoc); should JSDoc hold one (e.g.
- * `@augments a.B`), the full getDescendants path is taken instead.
+ * `[scope, ...scope.getDescendants()]`. One compiler walk (`ts.forEachChild`)
+ * finds them and the file's node index supplies their wrappers.
+ * `getDescendants` also walks JSDoc (`getChildren`), which `forEachChild`
+ * skips; a scope holding JSDoc anywhere (e.g. `@augments a.B` on a nested
+ * class) therefore takes the full getDescendants path, as does any hit the
+ * index cannot supply.
  */
 const referenceCandidates = (scope: Node): Node[] => {
-    const file = scope.getSourceFile().compilerNode;
-    const rawExpressions = new Set<ts.Node>();
-    let identifiers = 0;
-    const walk = (node: ts.Node): void => {
-        for (const child of node.getChildren(file)) {
-            if (child.kind === ts.SyntaxKind.PropertyAccessExpression || child.kind === ts.SyntaxKind.NewExpression) {
-                rawExpressions.add(child);
-            } else if (child.kind === ts.SyntaxKind.Identifier) {
-                identifiers += 1;
-            }
-            walk(child);
+    let jsDoc = hasJsDoc(scope.compilerNode);
+    const hits: ts.Node[] = [];
+    const walk = (node: ts.Node): undefined => {
+        if (hasJsDoc(node)) {
+            jsDoc = true;
         }
+        if (REFERENCE_KINDS.has(node.kind)) {
+            hits.push(node);
+        }
+        ts.forEachChild(node, walk);
+        return undefined;
     };
-    walk(scope.compilerNode);
-    const expressions = [...descendantsOfKind(scope, SyntaxKind.PropertyAccessExpression), ...descendantsOfKind(scope, SyntaxKind.NewExpression)];
-    const identifierNodes = identifiers === 0 ? [] : scope.getDescendantsOfKind(SyntaxKind.Identifier);
-    if (expressions.length !== rawExpressions.size || expressions.some((node) => !rawExpressions.has(node.compilerNode)) || identifierNodes.length !== identifiers) {
+    ts.forEachChild(scope.compilerNode, walk);
+    const wrappers = jsDoc ? [] : hits.map((hit) => indexedWrapper(scope, hit));
+    if (jsDoc || wrappers.some((wrapper) => wrapper === undefined)) {
         return [scope, ...scope.getDescendants()];
     }
-    return [scope, ...expressions, ...identifierNodes];
+    return [scope, ...(wrappers as Node[])];
 };
 
 const refsOf = (
