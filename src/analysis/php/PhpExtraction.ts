@@ -116,6 +116,12 @@ export const extractFacts = (program: PhpNode, content: string, filePath: string
         }
     }
 
+    // Class-level identities: a class's name, or `(anonymous)` for
+    // `new class …` — numbered `(anonymous)#n` when one file holds several.
+    const classes = collect(program, (node) => node.kind === 'class');
+    const classSymbols = new Map(uniqueSymbols(classes.map(nodeName)).map((symbol, index) => [classes[index] as PhpNode, symbol]));
+    const classSymbol = (cls: PhpNode): string => classSymbols.get(cls) ?? nodeName(cls);
+
     for (const cls of collect(program, isDoctrineMigration)) {
         // Two Doctrine migration styles: raw SQL via $this->addSql('...') and the
         // DBAL Schema API ($schema->dropTable(), $table->addColumn(...)). Raw SQL
@@ -178,7 +184,7 @@ export const extractFacts = (program: PhpNode, content: string, filePath: string
 
         const descriptor = migrationMissingDown(cls);
         if (descriptor !== null) {
-            facts.push(build({kind: 'migration.noDown', kindOf: 'class', symbol: nodeName(cls), range: rangeOf(cls), value: descriptor}));
+            facts.push(build({kind: 'migration.noDown', kindOf: 'class', symbol: classSymbol(cls), range: rangeOf(cls), value: descriptor}));
         }
     }
 
@@ -203,7 +209,7 @@ export const extractFacts = (program: PhpNode, content: string, filePath: string
                 const eager = attributes.find((attribute) => RELATION_ATTRIBUTES.has(attributeShortName(attribute)) && relationIsEager(attribute));
                 const relation = eager !== undefined ? attributeShortName(eager) : docRelation;
                 if (relation !== null) {
-                    facts.push(build({kind: 'orm.eagerRelation', kindOf: 'statement', symbol: `${nodeName(cls)}.${nodeName(property)}`, range: rangeOf(eager ?? statement), value: relation}));
+                    facts.push(build({kind: 'orm.eagerRelation', kindOf: 'statement', symbol: `${classSymbol(cls)}.${nodeName(property)}`, range: rangeOf(eager ?? statement), value: relation}));
                 }
             }
         }
@@ -211,7 +217,7 @@ export const extractFacts = (program: PhpNode, content: string, filePath: string
         // A subclass may inherit its key from a base entity/mapped superclass, so
         // only a standalone @Entity without any #[ORM\Id] property is reported.
         if (!isPhpNode(cls.extends) && !hasPrimaryKey) {
-            facts.push(build({kind: 'orm.entityNoPrimaryKey', kindOf: 'class', symbol: nodeName(cls), range: rangeOf(cls), value: 'entity has no primary key column'}));
+            facts.push(build({kind: 'orm.entityNoPrimaryKey', kindOf: 'class', symbol: classSymbol(cls), range: rangeOf(cls), value: 'entity has no primary key column'}));
         }
     }
 

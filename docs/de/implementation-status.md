@@ -59,12 +59,6 @@ API-Request-/DTO-Facts für eine durchgehende FE/BE-Kette; Validierung an
 unabhängigen externen Korpora.
 
 **Bekannte Einschränkungen (offen):**
-- Befunde auf Klassenebene benennen eine anonyme Klasse `(anonymous)`: zwei
-  anonyme Doctrine-Migrationsklassen in einer PHP-Datei teilen eine
-  `R-MIGRATION-NO-DOWN`-Identität (lässt `stoa eval` scheitern, blockiert
-  `--update-baseline`). Die Kollisionen bei Funktionen, Methoden und
-  Eager-Relationen sind behoben (siehe „Qualifizierte
-  Funktionsidentitäten").
 - Symbole der Form `anonymous@<Zeile>` verschieben sich, wenn sich Zeilen
   darüber ändern; solche Findings sind in einer Baseline nicht änderungsstabil.
 - Die Extraktion dominiert Laufzeit und Speicher (siehe Messeintrag unten);
@@ -459,11 +453,18 @@ genannten lokalen Projekten; keine ist eine allgemeine Genauigkeitsaussage.
   `test/corpus/expected.json` (`tags` → `Order.tags`, `messages` →
   `Thread.messages`, `customer` → `Order.customer`/`Invoice.customer`,
   `parent` → `Node.parent`, `source` → `Edge.source`), Korpus weiter TP 44 /
-  FP 0 / FN 0. Die CLI-Kollisionstests nutzen jetzt den verbleibenden Fall:
-  zwei anonyme Doctrine-Migrationsklassen in einer PHP-Datei, beide
-  `(anonymous)`. Tests: `test/FunctionIdentity.test.ts` (7: `uniqueSymbols`,
+  FP 0 / FN 0. PHP-Befunde auf Klassenebene (`R-MIGRATION-NO-DOWN`,
+  `R-ORM-ENTITY-NO-PK`, das Eager-Relation-Präfix) nummerieren anonyme
+  Klassen als `(anonymous)#n`, wenn eine Datei mehrere enthält (eine
+  einzelne bleibt `(anonymous)`; TS erlaubt höchstens eine, den
+  Default-Export). Da keine Regel mehr kollidiert, erzwingen die
+  CLI-Kollisionstests eine über den Test-Hook
+  `STOA_TEST_DUPLICATE_IDENTITY=1` (kein dokumentiertes Flag, wie
+  `STOA_TEST_FORCE_INCOMPLETE`: wiederholt den ersten Befund mit derselben
+  Identität). Tests: `test/FunctionIdentity.test.ts` (7: `uniqueSymbols`,
   je Adapter einer, der `A.run`/`B.run`-Fall auf Befundebene, der
-  Eager-Relation-Fall in TS und PHP); Widget-Graph-, Layout- und
+  Eager-Relation-Fall in TS und PHP), der Fall anonymer Klassen in
+  `test/EvalIntegrityCli.test.ts`; Widget-Graph-, Layout- und
   ORM-Erwartungen angepasst.
 - **Messung und Speicherprofil (Evaluator-Integritäts-Folgeauftrag,
   Phase 4):** `--memory-stats` / `AnalyzeOptions.onMetrics` melden jetzt die
@@ -1864,7 +1865,7 @@ zu liefern.
 
 ## Qualitätssicherung
 
-- **node:test-Suite** (`npm test`, `test/*.test.ts`): 538 Tests, 0 fehlgeschlagen,
+- **node:test-Suite** (`npm test`, `test/*.test.ts`): 539 Tests, 0 fehlgeschlagen,
   Lauf vom 2026-11-04 (Regeln pos./neg., Extraktion, Schema-Validierung, i18n,
   Determinismus, SARIF, Eval, Semantik-Groundedness, Datenschutz,
   Finding-Trennung, semantische Modelle, Identitäten, Metriken).
@@ -1993,9 +1994,7 @@ R-DEP-CYCLE/R-UNUSED-EXPORT auch PHP abdecken; generischer ESLint-Fact-Adapter;
 Kontext-Facts (`flag.generatedCode`, `hasTests`) für reichhaltigere
 Suppression; LLM-Ausgabe-Evaluierung im Maßstab.
 
-**Offen aus dem Evaluator-Integritäts-Folgeauftrag (2026-11-04):** ein
-eindeutiges Symbol für anonyme Klassen in Befunden auf Klassenebene (zwei
-anonyme PHP-Migrationsklassen in einer Datei); stabile Symbole statt `anonymous@<Zeile>`;
+**Offen aus dem Evaluator-Integritäts-Folgeauftrag (2026-11-04):** stabile Symbole statt `anonymous@<Zeile>`;
 weniger Vollbaum-Durchläufe in der TS-Extraktion (der gemessene Hebel für
 Laufzeit und Speicherspitze, Facts müssen byte-identisch bleiben); kein
 SymbolGraph unter `--solid`, wenn keine Typdeklarationen existieren (gemessen

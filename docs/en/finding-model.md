@@ -199,11 +199,10 @@ line) gets `#n` on every occurrence. Anonymous functions keep
 `anonymous@<line>`. A collision is a rule defect: `stoa eval` fails on it,
 and `--update-baseline` refuses to write a baseline that repeats an identity
 (`loadBaseline` could not read it back) — exit 1, the existing file
-untouched. `R-ORM-EAGER-RELATION` names a finding `Entity.property`.
-**Known open collision:** class-level findings name an anonymous class
-`(anonymous)`, so two anonymous Doctrine migration classes in one PHP file
-(`new class extends AbstractMigration`) share one `R-MIGRATION-NO-DOWN`
-identity.
+untouched. `R-ORM-EAGER-RELATION` names a finding `Entity.property`;
+class-level findings name an anonymous class `(anonymous)`, numbered
+`(anonymous)#n` when one PHP file holds several (`new class extends
+AbstractMigration`). No rule is known to produce a colliding identity.
 
 ## 7. Limits
 

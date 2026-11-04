@@ -191,6 +191,20 @@ const loadAnalyzeInputsOrFail = (values: CliValues): {contract: ReturnType<typeo
     return loadedContract === null || loadedArchitecture === null ? null : {contract: loadedContract.contract, architecture: loadedArchitecture.config};
 };
 
+// Test-only hook, not a documented flag (like STOA_TEST_FORCE_INCOMPLETE):
+// repeats the first finding under a fresh id but with the same identity
+// (file, rule, symbol). The adapters and rules give every finding its own
+// identity, so this is how the collision handling — a failed `eval`, a
+// refused `--update-baseline` — is tested end-to-end through the real CLI.
+// Invisible to a normal run.
+const withTestDuplicate = (result: AnalysisResult): AnalysisResult => {
+    const first = result.report.findings[0];
+    if (process.env.STOA_TEST_DUPLICATE_IDENTITY !== '1' || first === undefined) {
+        return result;
+    }
+    return {...result, report: {...result.report, findings: [...result.report.findings, {...first, id: `${first.id}:test-duplicate`}]}};
+};
+
 const runAnalyze = async (values: CliValues, target: string): Promise<number> => {
     // Option-combination validation up front, before any analysis work —
     // an invalid combination is a usage error, not something that should
@@ -269,6 +283,8 @@ const runAnalyze = async (values: CliValues, target: string): Promise<number> =>
         process.stdout.write(`${render(values.format, buildFailedReport(message), lang)}\n`);
         return EXIT_ERROR;
     }
+
+    result = withTestDuplicate(result);
 
     const semanticId = values.semantic ?? 'noop';
     if (semanticId !== 'noop') {
@@ -389,6 +405,7 @@ const runEval = async (values: CliValues, target: string): Promise<number> => {
         process.stderr.write(`${(error as Error).message}\n`);
         return EXIT_ERROR;
     }
+    analyzed = withTestDuplicate(analyzed);
     const {coverage} = analyzed.report;
     if (coverage.status !== 'complete') {
         process.stderr.write(`[stoa] WARNING: the underlying analysis was not complete (status: ${coverage.status}) — this evaluation is INCOMPLETE: its precision/recall reflect only the files actually reached, and it never passes.\n`);

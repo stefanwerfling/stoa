@@ -116,8 +116,8 @@ test('2.2: an incomplete scan compared against a baseline reports nothing as fix
 // sites of one class/build() round-trips through --update-baseline (before, the
 // written baseline repeated an identity and could not be read back); a project
 // that still collides is refused loudly instead of producing an unreadable file.
-const analyzeAt = (path: string, args: string[]): CliRun => {
-    const result = spawnSync('node', ['--import', 'tsx', 'src/Cli.ts', 'analyze', path, ...args], {cwd: root, encoding: 'utf8'});
+const analyzeAt = (path: string, args: string[], env: NodeJS.ProcessEnv = {}): CliRun => {
+    const result = spawnSync('node', ['--import', 'tsx', 'src/Cli.ts', 'analyze', path, ...args], {cwd: root, encoding: 'utf8', env: {...process.env, ...env}});
     return {status: result.status ?? 1, stdout: result.stdout, stderr: result.stderr};
 };
 
@@ -143,14 +143,14 @@ test('--update-baseline on findings that share an identity exits 1 with the reas
     try {
         const project = join(dir, 'project');
         spawnSync('mkdir', ['-p', project]);
-        // Two anonymous Doctrine migration classes in one file: both
-        // `(anonymous)` for R-MIGRATION-NO-DOWN (an open identity case).
+        // No rule produces a colliding identity any more; the test-only hook
+        // STOA_TEST_DUPLICATE_IDENTITY repeats the first finding.
         writeFileSync(join(project, 'm.php'), '<?php\n$first = new class extends AbstractMigration {\n    public function up(Schema $schema): void {}\n};\n$second = new class extends AbstractMigration {\n    public function up(Schema $schema): void {}\n};\n');
         const path = join(dir, 'baseline.json');
         writeFileSync(path, '{"version": 1, "findings": []}\n');
-        const result = analyzeAt(project, ['--baseline', path, '--update-baseline', '--format', 'json']);
+        const result = analyzeAt(project, ['--baseline', path, '--update-baseline', '--format', 'json'], {STOA_TEST_DUPLICATE_IDENTITY: '1'});
         assert.equal(result.status, 1);
-        assert.match(result.stderr, /refusing to update baseline .*share an identity.*m\.php::R-MIGRATION-NO-DOWN::\(anonymous\)/);
+        assert.match(result.stderr, /refusing to update baseline .*share an identity.*m\.php::R-MIGRATION-NO-DOWN::\(anonymous\)#0/);
         assert.equal(readFileSync(path, 'utf8'), '{"version": 1, "findings": []}\n');
     } finally {
         rmSync(dir, {recursive: true, force: true});

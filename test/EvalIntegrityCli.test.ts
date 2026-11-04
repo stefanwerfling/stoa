@@ -65,10 +65,10 @@ before(() => {
     writeFileSync(join(project, 'c.ts'), fileWithEmptyCatch('gamma'));
     collidingProject = join(work, 'colliding');
     spawnSync('mkdir', ['-p', collidingProject]);
-    // A collision that remains after the qualified function and entity
-    // identities: two anonymous Doctrine migration classes in one file are
-    // both `(anonymous)` for R-MIGRATION-NO-DOWN (documented as open in
-    // implementation-status).
+    // Two anonymous Doctrine migration classes in one file: once both
+    // `(anonymous)` for R-MIGRATION-NO-DOWN, now `(anonymous)#0`/`#1`. No rule
+    // collides any more, so the duplicate test below forces one through the
+    // test-only hook STOA_TEST_DUPLICATE_IDENTITY (repeats the first finding).
     writeFileSync(join(collidingProject, 'm.php'), '<?php\n$first = new class extends AbstractMigration {\n    public function up(Schema $schema): void {}\n};\n$second = new class extends AbstractMigration {\n    public function up(Schema $schema): void {}\n};\n');
 });
 
@@ -184,26 +184,38 @@ test('markdown: the analysis status and the outcome are stated; an incomplete ru
     assert.match(result.stdout, /never a pass/);
 });
 
-test('exit 1: duplicate PRODUCED identities fail a complete evaluation even with 0 FP / 0 FN — listed in JSON, named on stderr and in Markdown, nothing dropped', () => {
+test('anonymous classes: two anonymous migration classes in one file are two identities, (anonymous)#0 and #1', () => {
     const run = stoa(['analyze', collidingProject, '--format', 'json']);
+    const symbols = (JSON.parse(run.stdout) as {findings: {rule: {id: string}; location: {symbol?: string}}[]}).findings
+        .filter((finding) => finding.rule.id === 'R-MIGRATION-NO-DOWN')
+        .map((finding) => finding.location.symbol);
+    assert.deepEqual(symbols, ['(anonymous)#0', '(anonymous)#1']);
+});
+
+test('exit 1: duplicate PRODUCED identities fail a complete evaluation even with 0 FP / 0 FN — listed in JSON, named on stderr and in Markdown, nothing dropped', () => {
+    const duplicate = {STOA_TEST_DUPLICATE_IDENTITY: '1'};
+    const run = stoa(['analyze', collidingProject, '--format', 'json'], duplicate);
     const produced = (JSON.parse(run.stdout) as {findings: {rule: {id: string}; location: {file: string; symbol?: string}}[]}).findings.map((finding) => ({
         file: finding.location.file.slice(collidingProject.length + 1),
         rule: finding.rule.id,
         symbol: finding.location.symbol ?? ''
     }));
     const unique = [...new Map(produced.map((key) => [`${key.file}::${key.rule}::${key.symbol}`, key])).values()];
-    assert.ok(unique.length < produced.length, 'the project produces an identity collision');
+    assert.equal(unique.length, produced.length - 1, 'the hook repeats exactly one identity');
+    const first = produced[0] as Key;
     const path = manifest('collision.json', unique);
-    const result = stoa(['eval', collidingProject, '--expected', path, '--format', 'json']);
+    const result = stoa(['eval', collidingProject, '--expected', path, '--format', 'json'], duplicate);
     const json = JSON.parse(result.stdout) as EvalJson & {duplicates: Key[]; overall: {producedCount: number}};
     assert.equal(result.status, 1);
     assert.deepEqual([json.outcome, json.analysis.status], ['failed', 'complete']);
     assert.deepEqual([json.overall.falsePositives, json.overall.falseNegatives], [0, 0], 'the metrics alone would pass');
-    assert.deepEqual(json.duplicates, [{file: 'm.php', rule: 'R-MIGRATION-NO-DOWN', symbol: '(anonymous)'}]);
+    assert.deepEqual(json.duplicates, [first]);
     assert.equal(json.overall.producedCount, produced.length, 'nothing dropped');
     assert.match(result.stderr, /identity collision: 1 produced finding/);
-    const markdown = stoa(['eval', collidingProject, '--expected', path]);
+    const markdown = stoa(['eval', collidingProject, '--expected', path], duplicate);
     assert.equal(markdown.status, 1);
     assert.match(markdown.stdout, /- Outcome: failed/);
-    assert.match(markdown.stdout, /identity collision — fails the evaluation[\s\S]*m\.php · R-MIGRATION-NO-DOWN · \(anonymous\)/);
+    assert.ok(markdown.stdout.includes(`identity collision — fails the evaluation`), markdown.stdout);
+    assert.ok(markdown.stdout.includes(`${first.file} · ${first.rule} · ${first.symbol}`), markdown.stdout);
+    assert.equal(stoa(['eval', collidingProject, '--expected', path, '--format', 'json']).status, 0, 'without the hook the same manifest passes — the failure above is the duplicate alone');
 });

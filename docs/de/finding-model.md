@@ -201,10 +201,10 @@ C++-Überladungen, zwei Closures in einer Zeile), erhält bei jedem Vorkommen
 Regelfehler: `stoa eval` scheitert daran, und `--update-baseline` verweigert
 eine Baseline, die eine Identität wiederholt (`loadBaseline` könnte sie nicht
 wieder lesen) — Exit 1, die bestehende Datei bleibt unverändert. `R-ORM-EAGER-RELATION` benennt einen
-Befund `Entity.property`. **Bekannte offene Kollision:** Befunde auf
-Klassenebene benennen eine anonyme Klasse `(anonymous)`, zwei anonyme
-Doctrine-Migrationsklassen in einer PHP-Datei (`new class extends
-AbstractMigration`) teilen also eine `R-MIGRATION-NO-DOWN`-Identität.
+Befund `Entity.property`; Befunde auf Klassenebene benennen eine anonyme Klasse
+`(anonymous)`, nummeriert als `(anonymous)#n`, wenn eine PHP-Datei mehrere
+enthält (`new class extends AbstractMigration`). Keine Regel erzeugt bekannt
+eine kollidierende Identität.
 
 ## 7. Grenzen
 

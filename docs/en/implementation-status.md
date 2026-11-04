@@ -57,11 +57,6 @@ facts for an end-to-end FE/BE chain; validation on independent external
 corpora.
 
 **Known limitations (open):**
-- Class-level findings name an anonymous class `(anonymous)`: two anonymous
-  Doctrine migration classes in one PHP file share an `R-MIGRATION-NO-DOWN`
-  identity (fails `stoa eval`, blocks `--update-baseline`). The function,
-  method and eager-relation collisions are fixed (see "Qualified function
-  identities").
 - Symbols of the form `anonymous@<line>` shift when lines above them change,
   so such findings are not stable across edits in a baseline.
 - Extraction dominates runtime and memory (see the measurement entry below);
@@ -426,12 +421,19 @@ the named local projects; none is a general accuracy claim.
   eager-relation expectations in `test/corpus/expected.json` (`tags` →
   `Order.tags`, `messages` → `Thread.messages`, `customer` →
   `Order.customer`/`Invoice.customer`, `parent` → `Node.parent`, `source` →
-  `Edge.source`), corpus still TP 44 / FP 0 / FN 0. The CLI collision tests
-  now use the remaining case: two anonymous Doctrine migration classes in
-  one PHP file, both `(anonymous)`. Tests: `test/FunctionIdentity.test.ts`
+  `Edge.source`), corpus still TP 44 / FP 0 / FN 0. Class-level PHP
+  findings (`R-MIGRATION-NO-DOWN`, `R-ORM-ENTITY-NO-PK`, the eager-relation
+  prefix) number anonymous classes `(anonymous)#n` when a file holds
+  several (a single one stays `(anonymous)`; TS allows at most one, the
+  default export). With no rule left that collides, the CLI collision
+  tests force one through the test-only environment hook
+  `STOA_TEST_DUPLICATE_IDENTITY=1` (not a documented flag, like
+  `STOA_TEST_FORCE_INCOMPLETE`: repeats the first finding with the same
+  identity). Tests: `test/FunctionIdentity.test.ts`
   (7: `uniqueSymbols`, one per adapter, the finding-level `A.run`/`B.run`
-  case, the eager-relation case in TS and PHP); widget-graph, layout and
-  ORM expectations updated.
+  case, the eager-relation case in TS and PHP), the anonymous-class case in
+  `test/EvalIntegrityCli.test.ts`; widget-graph, layout and ORM
+  expectations updated.
 - **Measurement and memory profile (evaluator-integrity track, phase 4):**
   `--memory-stats` / `AnalyzeOptions.onMetrics` now report the run's
   `PipelineMetrics` (src/PipelineMetrics.ts) — counts (deterministic), phase
@@ -1704,7 +1706,7 @@ fails fast (exit 1, concrete errors) instead of silently yielding 0 findings.
 
 ## Quality assurance
 
-- **node:test suite** (`npm test`, `test/*.test.ts`): 538 tests, 0 failed,
+- **node:test suite** (`npm test`, `test/*.test.ts`): 539 tests, 0 failed,
   as of the 2026-11-04 run (rules pos./neg., extraction, schema validation,
   i18n, determinism, SARIF, evaluation, semantic groundedness, privacy,
   finding-model separation, semantic models, identities, metrics).
@@ -1826,9 +1828,7 @@ baseline; PSR-4 resolution so R-DEP-CYCLE / R-UNUSED-EXPORT cover PHP; a
 generic ESLint fact adapter; context facts (`flag.generatedCode`, `hasTests`)
 for richer suppression; LLM-output evaluation at scale.
 
-**Open from the evaluator-integrity track (2026-11-04):** a unique symbol
-for anonymous classes in class-level findings (two anonymous PHP migration
-classes in one file); stable symbols instead of `anonymous@<line>`; fewer full-tree
+**Open from the evaluator-integrity track (2026-11-04):** stable symbols instead of `anonymous@<line>`; fewer full-tree
 walks in the TS extraction (the measured runtime and peak-memory lever,
 facts must stay byte-identical); not building the SymbolGraph under
 `--solid` when no type declarations exist (measured 2.7 ms, low priority).
