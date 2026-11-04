@@ -2172,8 +2172,9 @@ fails fast (exit 1, concrete errors) instead of silently yielding 0 findings.
   separates real changes from shifted positions; exit 1 on any difference.
   `--jobs N` checks parallel extraction against the sequential run. The
   default targets (`scripts/compare-targets.json`) cover this repository
-  only; your own projects go in a targets file outside the repository
-  (`--targets`). Grammars are loaded as in the CLI.
+  only; your own projects go in `.stoa/compare-targets.json` (ignored by git
+  like all of `.stoa/`, together with their architecture configs) and are
+  passed with `--targets .stoa/compare-targets.json`. Grammars are loaded as in the CLI.
 
 ## Deviations from the concept (deliberate, documented)
 

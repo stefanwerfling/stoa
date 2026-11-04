@@ -22,8 +22,10 @@
 // Targets: a JSON array of {name, path, solid?, deadExports?, architecture?,
 // contracts?}; relative paths resolve against the targets file's directory.
 // The default (scripts/compare-targets.json) covers this repository only —
-// keep a list of your own projects outside the repository and pass it with
-// `--targets`.
+// keep a list of your own projects in `.stoa/compare-targets.json` (ignored by
+// git, like the rest of `.stoa/`; architecture configs it names can sit next
+// to it) and pass it with `--targets .stoa/compare-targets.json`. Keep an
+// architecture config's file name: it appears in the findings' text.
 
 import {mkdirSync, readFileSync, readdirSync, writeFileSync} from 'node:fs';
 import {dirname, join, resolve, sep} from 'node:path';

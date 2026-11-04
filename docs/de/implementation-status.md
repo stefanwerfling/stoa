@@ -2363,8 +2363,10 @@ zu liefern.
   — das trennt echte Änderungen von verschobenen Positionen; Exit 1 bei jeder
   Abweichung. `--jobs N` prüft die parallele Extraktion gegen den
   sequentiellen Lauf. Die Standardziele (`scripts/compare-targets.json`)
-  umfassen nur dieses Repository; eigene Projekte kommen über eine Zieldatei
-  außerhalb des Repositorys (`--targets`). Grammatiken werden wie in der CLI
+  umfassen nur dieses Repository; eigene Projekte kommen in
+  `.stoa/compare-targets.json` (von git ignoriert wie ganz `.stoa/`, samt
+  zugehöriger Architektur-Konfigurationen) und werden mit
+  `--targets .stoa/compare-targets.json` übergeben. Grammatiken werden wie in der CLI
   geladen.
 
 ## Abweichungen vom Konzept (bewusst, dokumentiert)
