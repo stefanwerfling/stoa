@@ -426,6 +426,26 @@ genannten lokalen Projekten; keine ist eine allgemeine Genauigkeitsaussage.
   (`test/fixtures/architecture`: Loader-Fehler, Zuordnung inkl. Mehrfachtreffer
   und Dateien außerhalb der Wurzel, alle vier Kantenurteile, Paketverbote und
   -namen, Report-Zusammenfassung und Markdown, CLI-Fail-fast und JSON).
+- **Knotenindex in einem Durchlauf (Nachtrag):** Der Aufbau des Index
+  kostete ≈ 15,5 % des Profils — zwei Durchläufe je Datei (ein roher, der
+  die Knoten nummeriert, danach `forEachDescendant`, der die Wrapper
+  sammelt) und die Prüfung, dass beide übereinstimmen. Nur ≈ 8,6 % davon
+  waren ts-morphs Wrapper-Erzeugung; der Rest waren der zweite Durchlauf,
+  das Traversal-Objekt und der Kind-Schnappschuss je Knoten von
+  `forEachDescendant` und die Prüfung. Der rohe Durchlauf holt den Wrapper
+  jedes Knotens jetzt direkt aus ts-morphs Wrapper-Fabrik und -Cache —
+  derselben, die `forEachDescendant` nutzt, die Wrapper sind also dieselben
+  Objekte. Die Fabrik (`_getNodeFromCompilerNode`) ist ts-morph-intern:
+  Fehlt sie in einer Version oder liefert sie den Wrapper eines anderen
+  Knotens, fällt der Index wie bisher auf `forEachDescendant` mit
+  Abgleich zurück. Gemessen in vier abwechselnden Paaren à 5 Runden gegen
+  HEAD: Extraktion 2,04–2,08 s → 1,86–1,87 s (≈ −9 %), gesamt
+  2,55–2,60 s → 2,40–2,42 s. Facts der 652 gemessenen Dateien
+  byte-identisch, Befunde von 18 Läufen unverändert, Golden- und
+  SOLID-Korpus unverändert. Tests in `test/NodeIndex.test.ts`: Ein Index,
+  der vor jedem Einhüllen entsteht, gibt die Wrapper aus, die ts-morph
+  später ausgibt; eine fehlende Fabrik und eine, die einen anderen Knoten
+  liefert, antworten beide wie ts-morph (per Mutationsprobe bestätigt).
 - **Klassen-Member und Quellbereiche (Nachtrag):** Das Profil zeigte
   `classMembers` bei ≈ 5 % und alle `rangeOf` zusammen bei ≈ 8 %. Den
   größten Teil davon verursachte ts-morphs `getLineAndColumnAtPos`, das bei
@@ -2082,7 +2102,7 @@ zu liefern.
 
 ## Qualitätssicherung
 
-- **node:test-Suite** (`npm test`, `test/*.test.ts`): 586 Tests, 0 fehlgeschlagen,
+- **node:test-Suite** (`npm test`, `test/*.test.ts`): 589 Tests, 0 fehlgeschlagen,
   Lauf vom 2026-11-04 (Regeln pos./neg., Extraktion, Schema-Validierung, i18n,
   Determinismus, SARIF, Eval, Semantik-Groundedness, Datenschutz,
   Finding-Trennung, semantische Modelle, Identitäten, Metriken).
@@ -2213,9 +2233,10 @@ Suppression; LLM-Ausgabe-Evaluierung im Maßstab.
 
 **Offen aus dem Evaluator-Integritäts-Folgeauftrag (2026-11-04):** in der
 TS-Extraktion das Parsen
-selbst (≈ 15 %) und ts-morphs Wrapper-Erzeugung (≈ 10 %, von der Navigation
+selbst (≈ 15 %) und ts-morphs Wrapper-Erzeugung (≈ 9 %, von der Navigation
 der Extraktion gebraucht — lazy Einhüllen wurde ohne Gewinn gemessen, siehe
-„Nur Abgefragtes einhüllen"); kein SymbolGraph unter `--solid`, wenn keine
+„Nur Abgefragtes einhüllen"; der zweite Durchlauf drumherum ist entfallen,
+siehe „Knotenindex in einem Durchlauf"); kein SymbolGraph unter `--solid`, wenn keine
 Typdeklarationen existieren (gemessen 2,7 ms, niedrige Priorität).
 
 **Cross-Layer-Validierung — Grenzen (erster vertikaler Schnitt):**

@@ -7,12 +7,18 @@ import type {KindToNodeMappings, Node} from 'ts-morph';
  * returns exactly what ts-morph's `node.getDescendantsOfKind(kind)` returns —
  * the same wrappers, in the same order — from one walk per file:
  *
- * - one raw compiler walk (`ts.forEachChild`, preorder) numbers every node,
- *   records where its subtree ends and lists the node numbers per kind;
- * - one `sourceFile.forEachDescendant` (the same preorder) collects the
- *   wrappers, checked node for node against the raw numbering. The
- *   descendants of any node of one kind are then a contiguous slice of that
- *   kind's numbers, found by binary search.
+ * one raw compiler walk (`ts.forEachChild`, preorder) numbers every node,
+ * records where its subtree ends, lists the node numbers per kind and takes
+ * each node's wrapper from ts-morph's wrapper cache — the same factory and
+ * cache `forEachDescendant` uses, so the wrappers are the very same objects,
+ * without `forEachDescendant`'s per-node traversal objects and child
+ * snapshots. The descendants of any node of one kind are then a contiguous
+ * slice of that kind's numbers, found by binary search.
+ *
+ * The factory is ts-morph's internal `_getNodeFromCompilerNode`; should a
+ * ts-morph version lack it, or hand back a wrapper of another node, the
+ * wrappers come from `sourceFile.forEachDescendant` instead, checked node for
+ * node against the raw numbering (as before 2026-11-04).
  *
  * Only node kinds take the index: for a token kind (Identifier, StringLiteral)
  * ts-morph walks `getChildren` (JSDoc included), which neither walk mirrors, so
@@ -34,10 +40,22 @@ const indexes = new WeakMap<ts.SourceFile, FileIndex>();
 
 const isNodeKind = (kind: SyntaxKind): boolean => kind >= SyntaxKind.FirstNode && kind < SyntaxKind.FirstJSDocNode;
 
+type WrapperFactory = (compilerNode: ts.Node) => Node;
+
+/** ts-morph's own wrapper factory for nodes of this file, or null when this ts-morph version has none. */
+const wrapperFactory = (sourceFile: Node): WrapperFactory | null => {
+    const internal = sourceFile as unknown as {_getNodeFromCompilerNode?: unknown};
+    const factory = internal._getNodeFromCompilerNode;
+    return typeof factory === 'function' ? (compilerNode) => (factory as (node: ts.Node) => Node).call(sourceFile, compilerNode) : null;
+};
+
 const buildIndex = (sourceFile: Node): FileIndex => {
     const order = new Map<ts.Node, number>();
     const subtreeEnd: number[] = [];
     const numbersByKind = new Map<SyntaxKind, number[]>();
+    const wrap = wrapperFactory(sourceFile);
+    const wrappers: Node[] = [];
+    let wrapped = wrap !== null;
     let next = 0;
     const visit = (node: ts.Node): undefined => {
         const number = next;
@@ -49,17 +67,27 @@ const buildIndex = (sourceFile: Node): FileIndex => {
         } else {
             numbers.push(number);
         }
+        if (wrapped && number > 0) {
+            const wrapper = (wrap as WrapperFactory)(node);
+            wrapped = wrapper.compilerNode === node;
+            wrappers.push(wrapper);
+        }
         ts.forEachChild(node, visit);
         subtreeEnd[number] = next - 1;
         return undefined;
     };
+    wrappers.push(sourceFile);
     visit(sourceFile.compilerNode);
+    return {order, subtreeEnd, numbersByKind, wrappers: wrapped ? wrappers : walkedWrappers(sourceFile, order, next)};
+};
+
+/** The wrappers in `forEachDescendant` order, or null when they do not line up with the raw numbering. */
+const walkedWrappers = (sourceFile: Node, order: ReadonlyMap<ts.Node, number>, count: number): Node[] | null => {
     const wrappers: Node[] = [sourceFile];
     sourceFile.forEachDescendant((node) => {
         wrappers.push(node);
     });
-    const aligned = wrappers.length === next && wrappers.every((wrapper, number) => order.get(wrapper.compilerNode) === number);
-    return {order, subtreeEnd, numbersByKind, wrappers: aligned ? wrappers : null};
+    return wrappers.length === count && wrappers.every((wrapper, number) => order.get(wrapper.compilerNode) === number) ? wrappers : null;
 };
 
 const fileIndex = (node: Node): FileIndex => {

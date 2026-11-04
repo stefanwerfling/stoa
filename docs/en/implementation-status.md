@@ -397,6 +397,24 @@ the named local projects; none is a general accuracy claim.
   (`test/fixtures/architecture`: loader errors, assignment incl. multiple
   matches and outside-root files, all four edge verdicts, package bans and
   names, report summary and markdown, CLI fail-fast and JSON).
+- **Building the node index in one walk (follow-up):** building the index
+  took ≈ 15.5 % of the profile — two walks per file (a raw one numbering the
+  nodes, then `forEachDescendant` collecting the wrappers) plus the check
+  that both line up. Only ≈ 8.6 % of it was ts-morph creating the wrappers;
+  the rest was the second walk, `forEachDescendant`'s per-node traversal
+  object and child snapshot, and the check. The raw walk now takes each
+  node's wrapper straight from ts-morph's wrapper factory and cache — the
+  one `forEachDescendant` uses, so the wrappers are the very same objects.
+  That factory (`_getNodeFromCompilerNode`) is internal to ts-morph: should
+  a version lack it, or hand back a wrapper of another node, the index falls
+  back to `forEachDescendant` with the alignment check as before. Measured
+  in four alternating pairs of 5 rounds against HEAD: extraction
+  2.04–2.08 s → 1.86–1.87 s (≈ −9 %), total 2.55–2.60 s → 2.40–2.42 s.
+  Facts of the 652 measured files byte-identical, findings of 18 runs
+  unchanged, golden and SOLID corpora unchanged. Tests in
+  `test/NodeIndex.test.ts`: an index built before anything is wrapped hands
+  out the wrappers ts-morph hands out later; a missing factory and one that
+  returns another node both answer like ts-morph (mutation-checked).
 - **Class members and source ranges (follow-up):** the profile put
   `classMembers` at ≈ 5 % and every `rangeOf` together at ≈ 8 %. Most of it
   was ts-morph's `getLineAndColumnAtPos`, which scans the text from the file
@@ -1907,7 +1925,7 @@ fails fast (exit 1, concrete errors) instead of silently yielding 0 findings.
 
 ## Quality assurance
 
-- **node:test suite** (`npm test`, `test/*.test.ts`): 586 tests, 0 failed,
+- **node:test suite** (`npm test`, `test/*.test.ts`): 589 tests, 0 failed,
   as of the 2026-11-04 run (rules pos./neg., extraction, schema validation,
   i18n, determinism, SARIF, evaluation, semantic groundedness, privacy,
   finding-model separation, semantic models, identities, metrics).
@@ -2031,9 +2049,10 @@ for richer suppression; LLM-output evaluation at scale.
 
 **Open from the evaluator-integrity track (2026-11-04):** in the TS
 extraction, the parse
-itself (≈ 15 %) and ts-morph's wrapper creation (≈ 10 %, needed by the
+itself (≈ 15 %) and ts-morph's wrapper creation (≈ 9 %, needed by the
 extraction's navigation — wrapping lazily was measured without gain, see
-"Wrapping only what is queried"); not building the SymbolGraph under
+"Wrapping only what is queried"; the second walk around it is gone, see
+"Building the node index in one walk"); not building the SymbolGraph under
 `--solid` when no type declarations exist (measured 2.7 ms, low priority).
 
 **Cross-layer validation — limits (first vertical slice):**

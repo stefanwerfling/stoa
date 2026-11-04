@@ -58,8 +58,7 @@ const KINDS: readonly SyntaxKind[] = [
     SyntaxKind.NoSubstitutionTemplateLiteral
 ];
 
-test('descendantsOfKind equals getDescendantsOfKind for every node and kind (same wrappers, same order)', () => {
-    const file = fileFor(source);
+const assertIndexMatchesTsMorph = (file: Node): void => {
     const nodes: Node[] = [file];
     file.forEachDescendant((node) => {
         nodes.push(node);
@@ -72,6 +71,51 @@ test('descendantsOfKind equals getDescendantsOfKind for every node and kind (sam
             actual.forEach((hit, at) => assert.equal(hit, expected[at], `${node.getKindName()} / ${SyntaxKind[kind]} #${at}`));
         }
     }
+};
+
+test('descendantsOfKind equals getDescendantsOfKind for every node and kind (same wrappers, same order)', () => {
+    assertIndexMatchesTsMorph(fileFor(source));
+});
+
+test('an index built before anything is wrapped hands out the wrappers ts-morph hands out later', () => {
+    const file = fileFor(source);
+    const calls = descendantsOfKind(file, SyntaxKind.CallExpression);
+    assert.ok(calls.length > 0);
+    assertIndexMatchesTsMorph(file);
+    file.forEachDescendant((node) => {
+        assert.equal(node.getParent()?.getDescendantsOfKind(node.getKind()).includes(node), true);
+    });
+});
+
+// Without ts-morph's internal wrapper factory — or with one that hands back
+// another node's wrapper — the wrappers come from forEachDescendant. Only the
+// index's own lookup of the factory (the first read) sees the replacement:
+// ts-morph itself, the fallback included, keeps reading the real method.
+const withFactory = (file: Node, factory: unknown): Node => {
+    let reads = 0;
+    const real = (file as unknown as Record<string, unknown>)._getNodeFromCompilerNode;
+    Object.defineProperty(file, '_getNodeFromCompilerNode', {
+        configurable: true,
+        get: () => {
+            reads += 1;
+            return reads === 1 ? factory : real;
+        }
+    });
+    try {
+        descendantsOfKind(file, SyntaxKind.CallExpression);
+    } finally {
+        delete (file as unknown as Record<string, unknown>)._getNodeFromCompilerNode;
+    }
+    return file;
+};
+
+test('without the internal wrapper factory the index still answers like ts-morph', () => {
+    assertIndexMatchesTsMorph(withFactory(fileFor(source), undefined));
+});
+
+test('a wrapper factory that hands back another node falls back to forEachDescendant', () => {
+    const file = fileFor(source);
+    assertIndexMatchesTsMorph(withFactory(file, () => file.getFirstDescendantOrThrow()));
 });
 
 test('descendantsOfKinds equals filtering forEachDescendant by kind', () => {
