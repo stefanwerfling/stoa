@@ -4,6 +4,7 @@ import type {Fact, SourceRange} from '../../Types.js';
 import type {FactSpec} from '../FactBuilder.js';
 import {ariaValueIsInvalid, hasRoleTokens, hasValidRole, isPositiveTabindexLiteral, isUnknownAriaName, parseTabindex} from '../AriaVocabulary.js';
 import {contrastViolation} from '../Contrast.js';
+import {descendantsOfKinds} from '../typescript/NodeIndex.js';
 
 type Build = (spec: FactSpec) => Fact;
 
@@ -11,6 +12,8 @@ type Build = (spec: FactSpec) => Fact;
 // the value is a dynamic JSX expression ({expr}) whose content is not knowable
 // statically. Presence (the attribute exists at all) is tracked by the map key.
 type Attrs = Map<string, string | null>;
+
+const JSX_ELEMENT_KINDS: ReadonlySet<SyntaxKind> = new Set([SyntaxKind.JsxOpeningElement, SyntaxKind.JsxSelfClosingElement]);
 
 // Only lowercase, simple intrinsic tags map to real DOM elements. Capitalised
 // (<Button/>) or member (<Foo.Bar/>) tags are React components whose
@@ -31,14 +34,8 @@ export const extractJsxA11yFacts = (sourceFile: SourceFile, build: Build): Fact[
     const facts: Fact[] = [];
     const counters = {img: 0, button: 0, field: 0, link: 0, role: 0, ariaAttr: 0, ariaVal: 0, tabindex: 0, ariaHidden: 0, frame: 0, contrast: 0};
 
-    // Node-only walk: JSX elements are never tokens, so wrapping every token
-    // (getDescendants) is not needed; the sort below fixes the order.
-    const elements: Array<JsxOpeningElement | JsxSelfClosingElement> = [];
-    sourceFile.forEachDescendant((node) => {
-        if (Node.isJsxOpeningElement(node) || Node.isJsxSelfClosingElement(node)) {
-            elements.push(node);
-        }
-    });
+    // From the per-file node index (no walk of its own); the sort fixes the order.
+    const elements = descendantsOfKinds(sourceFile, JSX_ELEMENT_KINDS) as Array<JsxOpeningElement | JsxSelfClosingElement>;
     elements.sort((a, b) => a.getStart() - b.getStart());
 
     // Literal htmlFor targets anywhere in the file; a control whose literal id is

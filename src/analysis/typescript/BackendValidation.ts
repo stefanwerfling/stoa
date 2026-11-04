@@ -1,9 +1,9 @@
 import {Node, SyntaxKind} from 'ts-morph';
-import type {ts} from 'ts-morph';
 import type {CallExpression, SourceFile} from 'ts-morph';
 import type {Fact, SourceRange} from '../../Types.js';
 import type {FactSpec} from '../FactBuilder.js';
 import {findInnerCall, resolveOneHop} from './OneHopResolution.js';
+import {descendantsOfKind, descendantsOfKinds} from './NodeIndex.js';
 
 type Build = (spec: FactSpec) => Fact;
 
@@ -70,27 +70,9 @@ const VALIDATOR_METHODS: ReadonlySet<string> = new Set([
 const VALIDATOR_NAME = /^(validate|parse|assert|ensure|check|guard)/i;
 const NOT_VALIDATORS: ReadonlySet<string> = new Set(['parseInt', 'parseFloat']);
 
-// Every function of the file in source order — a node walk (forEachDescendant),
-// not getDescendants(), which would also wrap every token. Memoized per
-// parse: the backend-validation and mass-assignment facts both read it. Keyed
-// by the compiler node, not the ts-morph SourceFile: re-parsing a path can
-// hand back the same wrapper, whose earlier nodes are then forgotten.
-const handlerCache = new WeakMap<ts.SourceFile, Node[]>();
-
-const handlerFunctions = (sourceFile: SourceFile): Node[] => {
-    const cached = handlerCache.get(sourceFile.compilerNode);
-    if (cached !== undefined) {
-        return cached;
-    }
-    const handlers: Node[] = [];
-    sourceFile.forEachDescendant((node) => {
-        if (FUNCTION_KINDS.has(node.getKind())) {
-            handlers.push(node);
-        }
-    });
-    handlerCache.set(sourceFile.compilerNode, handlers);
-    return handlers;
-};
+// Every function of the file in source order, from the per-file node index
+// (the backend-validation and mass-assignment facts both read it).
+const handlerFunctions = (sourceFile: SourceFile): Node[] => descendantsOfKinds(sourceFile, FUNCTION_KINDS);
 
 // Exported for reuse by the Validation Trace ID usage tracer
 // (ValidatorUsage.ts): the nearest enclosing function-like ancestor, the same
@@ -105,7 +87,7 @@ export const nearestFunction = (node: Node): Node | undefined => {
 // `req.body.sessionId`) is a narrow lookup (an id controlled by authorization), not
 // the structured-payload trust concern this rule targets, so it is not counted.
 const ownRequestInputs = (handler: Node): Node[] => {
-    return handler.getDescendantsOfKind(SyntaxKind.PropertyAccessExpression)
+    return descendantsOfKind(handler, SyntaxKind.PropertyAccessExpression)
         .filter((access) => isRequestInput(access) && nearestFunction(access) === handler && isWholeObjectUse(access));
 };
 
@@ -177,7 +159,7 @@ const distinctSources = (inputs: Node[]): string[] => {
 const isValidated = (handler: Node): boolean => {
     const derived = requestDerivedNames(handler);
     const boundNames = boundValidatorNames(handler);
-    for (const call of handler.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+    for (const call of descendantsOfKind(handler, SyntaxKind.CallExpression)) {
         if (isValidatorCall(call, boundNames) && callReferencesRequest(call, derived)) {
             return true;
         }
@@ -200,12 +182,12 @@ const isValidated = (handler: Node): boolean => {
 const REJECT_STATUS: ReadonlySet<number> = new Set([400, 422]);
 
 const rejectsBadInput = (handler: Node, rawAliases: ReadonlySet<string>): boolean => {
-    for (const statement of handler.getDescendantsOfKind(SyntaxKind.ThrowStatement)) {
+    for (const statement of descendantsOfKind(handler, SyntaxKind.ThrowStatement)) {
         if (guardedByRequestCondition(statement, handler, rawAliases)) {
             return true;
         }
     }
-    return handler.getDescendantsOfKind(SyntaxKind.CallExpression).some((call) => {
+    return descendantsOfKind(handler, SyntaxKind.CallExpression).some((call) => {
         const callee = call.getExpression();
         if (!Node.isPropertyAccessExpression(callee)) {
             return false;
@@ -247,7 +229,7 @@ const conditionReferencesRequest = (condition: Node, rawAliases: ReadonlySet<str
     if (Node.isPropertyAccessExpression(condition) && (isRequestInput(condition) || isRequestRootedExpression(condition))) {
         return true;
     }
-    for (const access of condition.getDescendantsOfKind(SyntaxKind.PropertyAccessExpression)) {
+    for (const access of descendantsOfKind(condition, SyntaxKind.PropertyAccessExpression)) {
         if (isRequestInput(access) || isRequestRootedExpression(access)) {
             return true;
         }
@@ -272,7 +254,7 @@ const conditionReferencesRequest = (condition: Node, rawAliases: ReadonlySet<str
 // freshly inside every handler that uses it.
 const boundValidatorNames = (handler: Node): ReadonlySet<string> => {
     const names = new Set<string>();
-    for (const declaration of handler.getSourceFile().getDescendantsOfKind(SyntaxKind.VariableDeclaration)) {
+    for (const declaration of descendantsOfKind(handler.getSourceFile(), SyntaxKind.VariableDeclaration)) {
         const nameNode = declaration.getNameNode();
         const initializer = declaration.getInitializer();
         if (initializer !== undefined && Node.isIdentifier(nameNode) && isValidatorBindExpression(initializer)) {
@@ -300,7 +282,7 @@ const isValidatorBindExpression = (expression: Node): boolean => {
 // later `schema.parse(body)` still counts as validating the request value.
 const requestDerivedNames = (handler: Node): Set<string> => {
     const names = new Set<string>();
-    for (const declaration of handler.getDescendantsOfKind(SyntaxKind.VariableDeclaration)) {
+    for (const declaration of descendantsOfKind(handler, SyntaxKind.VariableDeclaration)) {
         const initializer = declaration.getInitializer();
         const nameNode = declaration.getNameNode();
         if (initializer !== undefined && Node.isIdentifier(nameNode) && referencesRequest(initializer.getText(), new Set())) {
@@ -430,7 +412,7 @@ export const rawRequestSinksInFunction = (fn: Node): RawRequestSink[] => {
     }
     const rawNames = rawRequestAliasNames(fn);
     const sinks: RawRequestSink[] = [];
-    for (const call of fn.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+    for (const call of descendantsOfKind(fn, SyntaxKind.CallExpression)) {
         if (nearestFunction(call) !== fn) {
             continue;
         }
@@ -470,14 +452,14 @@ export const rawRequestSinksInFunction = (fn: Node): RawRequestSink[] => {
 // already-discovered alias still resolves.
 export const rawRequestAliasNames = (fn: Node): ReadonlySet<string> => {
     const names = new Set<string>();
-    for (const declaration of fn.getDescendantsOfKind(SyntaxKind.VariableDeclaration)) {
+    for (const declaration of descendantsOfKind(fn, SyntaxKind.VariableDeclaration)) {
         const initializer = declaration.getInitializer();
         const nameNode = declaration.getNameNode();
         if (initializer !== undefined && Node.isIdentifier(nameNode) && isRawRequestExpression(initializer, names)) {
             names.add(nameNode.getText());
         }
     }
-    for (const assignment of fn.getDescendantsOfKind(SyntaxKind.BinaryExpression)) {
+    for (const assignment of descendantsOfKind(fn, SyntaxKind.BinaryExpression)) {
         if (assignment.getOperatorToken().getText() !== '=') {
             continue;
         }

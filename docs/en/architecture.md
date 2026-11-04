@@ -273,5 +273,5 @@ See [open-questions.md](./open-questions.md). Core points: incremental
 analysis/caching granularity, project-wide (interprocedural) data flow analysis
 vs. effort, unified fact schema across very different languages.
 
-Open point from the implementation (2026-11-04): merging the remaining per-fact-family node walks of the TS extraction (token wrapping and the per-file type checker are gone since the "Fewer token walks" follow-up) — see "Not yet done" in
+Open point from the implementation (2026-11-04): the remaining raw per-function walks (metrics, nondeterminism) of the TS extraction; token wrapping, the per-file type checker and the per-fact-family node walks are gone since the "Fewer token walks" and "One node index per file" follow-ups — see "Not yet done" in
 [implementation-status.md](./implementation-status.md).

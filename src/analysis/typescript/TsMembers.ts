@@ -18,6 +18,7 @@ import {
     type StructTypeDeclValue,
     type StructTypeRef
 } from '../StructFacts.js';
+import {descendantsOfKind} from './NodeIndex.js';
 
 type Build = (spec: FactSpec) => Fact;
 
@@ -321,7 +322,7 @@ const referenceCandidates = (scope: Node): Node[] => {
         }
     };
     walk(scope.compilerNode);
-    const expressions = [...scope.getDescendantsOfKind(SyntaxKind.PropertyAccessExpression), ...scope.getDescendantsOfKind(SyntaxKind.NewExpression)];
+    const expressions = [...descendantsOfKind(scope, SyntaxKind.PropertyAccessExpression), ...descendantsOfKind(scope, SyntaxKind.NewExpression)];
     const identifierNodes = identifiers === 0 ? [] : scope.getDescendantsOfKind(SyntaxKind.Identifier);
     if (expressions.length !== rawExpressions.size || expressions.some((node) => !rawExpressions.has(node.compilerNode)) || identifierNodes.length !== identifiers) {
         return [scope, ...scope.getDescendants()];

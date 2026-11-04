@@ -58,9 +58,10 @@ corpora.
 
 **Known limitations (open):**
 - Extraction dominates runtime and memory (see the measurement entry below).
-  The TS adapter no longer wraps every token and no longer builds a type
-  checker for export questions (≈ −43 % extraction time, see "Fewer token
-  walks"); it still walks each tree once per fact family.
+  The TS adapter no longer wraps every token, builds no type checker for
+  export questions and answers the per-kind node queries from one index per
+  file (together ≈ −65 % extraction time, see "Fewer token walks" and "One
+  node index per file"); parsing and releasing are now a large share.
 
 **Tests and measurements:** see "Quality assurance" below and the dated
 measurement entry "Measurement and memory profile". All numbers on this
@@ -392,6 +393,32 @@ the named local projects; none is a general accuracy claim.
   (`test/fixtures/architecture`: loader errors, assignment incl. multiple
   matches and outside-root files, all four edge verdicts, package bans and
   names, report summary and markdown, CLI fail-fast and JSON).
+- **One node index per file in the TS extraction (follow-up):** the fact
+  families asked the same tree the same questions again and again — each
+  `getDescendantsOfKind` (file-wide for catch clauses, property assignments,
+  object literals, variable statements, calls; per function for calls,
+  property accesses, declarations, assignments, throws) and each
+  `forEachDescendant` (function-like nodes, request handlers, JSX elements)
+  was a walk of its own. Now `NodeIndex.ts` builds per parse one raw compiler
+  walk (preorder number, subtree end, numbers per kind) and one
+  `forEachDescendant` for the wrappers, checked node for node against the raw
+  numbering; `descendantsOfKind(node, kind)` then answers with the same
+  wrappers in the same order as `node.getDescendantsOfKind(kind)` by binary
+  search over the kind's numbers, `descendantsOfKinds` like a filtered
+  `forEachDescendant`. Token kinds (Identifier, StringLiteral — ts-morph
+  walks `getChildren` there, JSDoc included) and a file whose walks do not
+  line up keep the ts-morph path (on the 652 measured files: none). A first
+  variant that fetched the wrappers per kind with a file-wide
+  `getDescendantsOfKind` was slower than before (6.2–6.6 s) and was
+  discarded. Facts byte-identical (same hash over 50,046 facts of 652 files),
+  findings of 18 runs unchanged. Measured (extractFacts only, same files,
+  minimum of 3 rounds, alternating runs): 5.4–5.7 s → 3.3–3.4 s (≈ −40 %;
+  together with "Fewer token walks" ≈ −65 % against 9.7 s). Not changed: the
+  raw per-function walks of the metrics and the nondeterminism check, the
+  identifier walks, parsing. Tests: `test/NodeIndex.test.ts` (every node ×
+  20 kinds against `getDescendantsOfKind` incl. JSX, JSDoc and comment
+  statements; the kinds variant against `forEachDescendant`; token kinds;
+  a re-parse of the same path).
 - **Fewer token walks in the TS extraction (follow-up):** the TS extraction
   wrapped every token of a file several times — `getDescendants()` and
   `getDescendantsOfKind(Identifier)` wrap each token in a ts-morph object —
@@ -1750,7 +1777,7 @@ fails fast (exit 1, concrete errors) instead of silently yielding 0 findings.
 
 ## Quality assurance
 
-- **node:test suite** (`npm test`, `test/*.test.ts`): 545 tests, 0 failed,
+- **node:test suite** (`npm test`, `test/*.test.ts`): 549 tests, 0 failed,
   as of the 2026-11-04 run (rules pos./neg., extraction, schema validation,
   i18n, determinism, SARIF, evaluation, semantic groundedness, privacy,
   finding-model separation, semantic models, identities, metrics).
@@ -1872,10 +1899,10 @@ baseline; PSR-4 resolution so R-DEP-CYCLE / R-UNUSED-EXPORT cover PHP; a
 generic ESLint fact adapter; context facts (`flag.generatedCode`, `hasTests`)
 for richer suppression; LLM-output evaluation at scale.
 
-**Open from the evaluator-integrity track (2026-11-04):** merging the
-remaining per-family node walks of the TS extraction into fewer walks (token
-wrapping and the per-file type checker are removed, see "Fewer token walks";
-facts must stay byte-identical); not building the SymbolGraph under
+**Open from the evaluator-integrity track (2026-11-04):** the TS
+extraction's remaining raw walks per function (metrics, nondeterminism) and
+its identifier walks (the node queries come from one index per file since
+"One node index per file"; facts must stay byte-identical); not building the SymbolGraph under
 `--solid` when no type declarations exist (measured 2.7 ms, low priority).
 
 **Cross-layer validation — limits (first vertical slice):**

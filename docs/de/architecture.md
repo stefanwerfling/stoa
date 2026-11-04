@@ -276,5 +276,5 @@ Siehe [open-questions.md](./open-questions.md). Kernpunkte: inkrementelle
 Analyse/Caching-Granularität, projektweite (interprozedurale) Datenflussanalyse
 vs. Aufwand, einheitliches Fact-Schema über sehr unterschiedliche Sprachen.
 
-Offener Punkt aus der Umsetzung (2026-11-04): die verbleibenden Knoten-Durchläufe je Fact-Familie in der TS-Extraktion zusammenführen (Token-Einhüllung und TypeChecker je Datei sind seit dem Nachtrag „Weniger Token-Durchläufe" entfernt) — siehe „Noch offen" in
+Offener Punkt aus der Umsetzung (2026-11-04): die verbleibenden Roh-Durchläufe je Funktion (Metriken, Nichtdeterminismus) in der TS-Extraktion; Token-Einhüllung, TypeChecker je Datei und die Knoten-Durchläufe je Fact-Familie sind seit den Nachträgen „Weniger Token-Durchläufe" und „Ein Knotenindex je Datei" entfernt — siehe „Noch offen" in
 [implementation-status.md](./implementation-status.md).

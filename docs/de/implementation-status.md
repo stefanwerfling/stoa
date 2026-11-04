@@ -60,10 +60,11 @@ unabhängigen externen Korpora.
 
 **Bekannte Einschränkungen (offen):**
 - Die Extraktion dominiert Laufzeit und Speicher (siehe Messeintrag unten).
-  Der TS-Adapter hüllt nicht mehr jeden Token ein und baut für Exportfragen
-  keinen TypeChecker mehr (≈ −43 % Extraktionszeit, siehe „Weniger
-  Token-Durchläufe"); er durchläuft jeden Baum weiterhin einmal je
-  Fact-Familie.
+  Der TS-Adapter hüllt nicht mehr jeden Token ein, baut für Exportfragen
+  keinen TypeChecker und beantwortet die Knotenabfragen je Art aus einem
+  Index je Datei (zusammen ≈ −65 % Extraktionszeit, siehe „Weniger
+  Token-Durchläufe" und „Ein Knotenindex je Datei"); Parsen und Freigeben
+  sind jetzt ein großer Anteil.
 
 **Tests und Messungen:** siehe „Qualitätssicherung" unten und den datierten
 Messeintrag „Messung und Speicherprofil". Alle Zahlen auf dieser Seite stammen
@@ -421,6 +422,34 @@ genannten lokalen Projekten; keine ist eine allgemeine Genauigkeitsaussage.
   (`test/fixtures/architecture`: Loader-Fehler, Zuordnung inkl. Mehrfachtreffer
   und Dateien außerhalb der Wurzel, alle vier Kantenurteile, Paketverbote und
   -namen, Report-Zusammenfassung und Markdown, CLI-Fail-fast und JSON).
+- **Ein Knotenindex je Datei in der TS-Extraktion (Nachtrag):** Die
+  Fact-Familien stellten demselben Baum immer wieder dieselben Fragen — jedes
+  `getDescendantsOfKind` (dateiweit für Catch-Klauseln, Property-Zuweisungen,
+  Objektliterale, Variablen-Statements, Aufrufe; je Funktion für Aufrufe,
+  Property-Zugriffe, Deklarationen, Zuweisungen, `throw`) und jedes
+  `forEachDescendant` (funktionsartige Knoten, Request-Handler,
+  JSX-Elemente) war ein eigener Durchlauf. Jetzt baut `NodeIndex.ts` je Parse
+  einen Roh-Durchlauf über den Compiler-Baum (Vorordnungsnummer,
+  Teilbaum-Ende, Nummern je Art) und ein `forEachDescendant` für die Wrapper,
+  Knoten für Knoten gegen die Roh-Nummerierung geprüft;
+  `descendantsOfKind(node, kind)` antwortet dann per Binärsuche über die
+  Nummern der Art mit denselben Wrappern in derselben Reihenfolge wie
+  `node.getDescendantsOfKind(kind)`, `descendantsOfKinds` wie ein gefiltertes
+  `forEachDescendant`. Token-Arten (Identifier, StringLiteral — ts-morph läuft
+  dort über `getChildren`, JSDoc eingeschlossen) und eine Datei, deren
+  Durchläufe nicht übereinstimmen, behalten den ts-morph-Weg (auf den 652
+  gemessenen Dateien: keine). Eine erste Variante, die die Wrapper je Art per
+  dateiweitem `getDescendantsOfKind` holte, war langsamer als vorher
+  (6,2–6,6 s) und wurde verworfen. Facts byte-identisch (derselbe Hash über
+  50.046 Facts von 652 Dateien), Befunde von 18 Läufen unverändert. Gemessen
+  (nur extractFacts, dieselben Dateien, Minimum aus 3 Runden, abwechselnde
+  Läufe): 5,4–5,7 s → 3,3–3,4 s (≈ −40 %; zusammen mit „Weniger
+  Token-Durchläufe" ≈ −65 % gegenüber 9,7 s). Nicht geändert: die
+  Roh-Durchläufe je Funktion für Metriken und Nichtdeterminismus, die
+  Bezeichner-Durchläufe, das Parsen. Tests: `test/NodeIndex.test.ts` (jeder
+  Knoten × 20 Arten gegen `getDescendantsOfKind` inkl. JSX, JSDoc und
+  Kommentar-Statements; die Arten-Variante gegen `forEachDescendant`;
+  Token-Arten; ein erneuter Parse desselben Pfads).
 - **Weniger Token-Durchläufe in der TS-Extraktion (Nachtrag):** Die
   TS-Extraktion hüllte jeden Token einer Datei mehrfach ein —
   `getDescendants()` und `getDescendantsOfKind(Identifier)` erzeugen für
@@ -1915,7 +1944,7 @@ zu liefern.
 
 ## Qualitätssicherung
 
-- **node:test-Suite** (`npm test`, `test/*.test.ts`): 545 Tests, 0 fehlgeschlagen,
+- **node:test-Suite** (`npm test`, `test/*.test.ts`): 549 Tests, 0 fehlgeschlagen,
   Lauf vom 2026-11-04 (Regeln pos./neg., Extraktion, Schema-Validierung, i18n,
   Determinismus, SARIF, Eval, Semantik-Groundedness, Datenschutz,
   Finding-Trennung, semantische Modelle, Identitäten, Metriken).
@@ -2045,9 +2074,9 @@ Kontext-Facts (`flag.generatedCode`, `hasTests`) für reichhaltigere
 Suppression; LLM-Ausgabe-Evaluierung im Maßstab.
 
 **Offen aus dem Evaluator-Integritäts-Folgeauftrag (2026-11-04):** die
-verbleibenden Knoten-Durchläufe je Fact-Familie der TS-Extraktion zu
-weniger Durchläufen zusammenführen (Token-Einhüllung und TypeChecker je
-Datei sind entfernt, siehe „Weniger Token-Durchläufe"; Facts müssen
+verbleibenden Roh-Durchläufe je Funktion (Metriken, Nichtdeterminismus) und
+die Bezeichner-Durchläufe der TS-Extraktion (die Knotenabfragen kommen seit
+„Ein Knotenindex je Datei" aus einem Index je Datei; Facts müssen
 byte-identisch bleiben); kein SymbolGraph unter `--solid`, wenn keine
 Typdeklarationen existieren (gemessen 2,7 ms, niedrige Priorität).
 

@@ -1,5 +1,6 @@
 import {Node, SyntaxKind} from 'ts-morph';
 import {isSameBinding, tracksBinding} from './SymbolResolution.js';
+import {descendantsOfKind} from './NodeIndex.js';
 
 /**
  * Whether a `const result = schema.safeParse(...)` result is PROVABLY
@@ -94,7 +95,7 @@ const referencesSuccess = (condition: Node, resultDeclaration: Node, negate: boo
 // distinguish "missing" (nothing related exists) from "unresolved"
 // (something related exists, just not in a provably sound shape).
 const mentionsSuccess = (condition: Node, resultDeclaration: Node): boolean => {
-    for (const access of condition.getDescendantsOfKind(SyntaxKind.PropertyAccessExpression)) {
+    for (const access of descendantsOfKind(condition, SyntaxKind.PropertyAccessExpression)) {
         if (access.getName() === 'success' && isSameBinding(access.getExpression(), resultDeclaration)) {
             return true;
         }
@@ -111,7 +112,7 @@ const mentionsSuccess = (condition: Node, resultDeclaration: Node): boolean => {
 export const verifySafeParseGuard = (resultDeclaration: Node, accessSite: Node, scope: Node): SafeParseGuardResult => {
     let mentionedButUnsound = false;
 
-    for (const ifStatement of scope.getDescendantsOfKind(SyntaxKind.IfStatement)) {
+    for (const ifStatement of descendantsOfKind(scope, SyntaxKind.IfStatement)) {
         const condition = ifStatement.getExpression();
 
         // Nested-if idiom: `if (result.success) { …accessSite… }` (success,

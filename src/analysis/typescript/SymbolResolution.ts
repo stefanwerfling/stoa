@@ -1,4 +1,5 @@
 import {Node, SyntaxKind} from 'ts-morph';
+import {descendantsOfKind} from './NodeIndex.js';
 
 /**
  * Symbol-identity helpers shared by the dataflow tracers (`ValidationDataflow.ts`,
@@ -38,7 +39,7 @@ export const isReassignedAnywhere = (declared: Node, scope: Node): boolean => {
     if (symbolOf(declared) === undefined) {
         return false;
     }
-    for (const assignment of scope.getDescendantsOfKind(SyntaxKind.BinaryExpression)) {
+    for (const assignment of descendantsOfKind(scope, SyntaxKind.BinaryExpression)) {
         if (!ASSIGNMENT_OPERATORS.has(assignment.getOperatorToken().getText())) {
             continue;
         }
@@ -106,7 +107,7 @@ export const destructuredProperty = (declared: Node, propertyName: string, scope
     if (isReassignedAnywhere(declared, scope)) {
         return null;
     }
-    for (const decl of scope.getDescendantsOfKind(SyntaxKind.VariableDeclaration)) {
+    for (const decl of descendantsOfKind(scope, SyntaxKind.VariableDeclaration)) {
         const nameNode = decl.getNameNode();
         const initializer = decl.getInitializer();
         if (!Node.isObjectBindingPattern(nameNode) || initializer === undefined) {

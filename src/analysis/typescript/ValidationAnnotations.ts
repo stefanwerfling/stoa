@@ -3,6 +3,7 @@ import type {Expression, SourceFile, VariableStatement} from 'ts-morph';
 import type {Fact, SourceRange} from '../../Types.js';
 import type {FactSpec} from '../FactBuilder.js';
 import type {NormalizationKind} from '../../contracts/ValidationContract.js';
+import {descendantsOfKind} from './NodeIndex.js';
 
 type Build = (spec: FactSpec) => Fact;
 
@@ -118,7 +119,7 @@ export const extractValidationAnnotations = (sourceFile: SourceFile, build: Buil
  */
 export const annotatedSchemas = (sourceFile: SourceFile): AnnotatedSchema[] => {
     const schemas: AnnotatedSchema[] = [];
-    for (const statement of sourceFile.getDescendantsOfKind(SyntaxKind.VariableStatement)) {
+    for (const statement of descendantsOfKind(sourceFile, SyntaxKind.VariableStatement)) {
         const rawId = annotationId(statement);
         if (rawId === null) {
             continue;

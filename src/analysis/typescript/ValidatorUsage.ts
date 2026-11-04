@@ -4,6 +4,7 @@ import type {Fact, SourceRange} from '../../Types.js';
 import type {FactSpec} from '../FactBuilder.js';
 import {annotatedSchemas} from './ValidationAnnotations.js';
 import {isRawRequestExpression, isRequestRootedExpression, nearestFunction, rawRequestAliasNames, rawRequestSinksInFunction} from './BackendValidation.js';
+import {descendantsOfKind} from './NodeIndex.js';
 
 type Build = (spec: FactSpec) => Fact;
 
@@ -90,7 +91,7 @@ export const extractValidatorUsageFacts = (sourceFile: SourceFile, build: Build)
 // reuse by the dataflow tracer (ValidationDataflow.ts): both need exactly
 // this same "find every parse-like call on this schema" scan.
 export const findParseCalls = (sourceFile: SourceFile, schemaName: string): CallExpression[] => {
-    return sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression).filter((call) => {
+    return descendantsOfKind(sourceFile, SyntaxKind.CallExpression).filter((call) => {
         const callee = call.getExpression();
         return Node.isPropertyAccessExpression(callee)
             && Node.isIdentifier(callee.getExpression())

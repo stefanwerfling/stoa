@@ -12,6 +12,7 @@ import {extractValidationDataflowFacts} from './ValidationDataflow.js';
 import {destructiveDdl, nullableNoDefault, unguardedDdl} from '../MigrationSql.js';
 import {extractTsMemberFacts} from './TsMembers.js';
 import type {ReexportValue} from '../DepsFacts.js';
+import {descendantsOfKind, descendantsOfKinds} from './NodeIndex.js';
 
 interface FunctionMetrics {
     cyclomatic: number;
@@ -99,11 +100,11 @@ export const extractFacts = (sourceFile: SourceFile, info: AdapterInfo): Fact[] 
         facts.push(build({kind: 'ast.usesNondeterminism', kindOf, symbol, range, value: usesNondeterminism(body)}));
     }
 
-    sourceFile.getDescendantsOfKind(SyntaxKind.CatchClause).forEach((clause, index) => {
+    descendantsOfKind(sourceFile, SyntaxKind.CatchClause).forEach((clause, index) => {
         const block = clause.getBlock();
         const empty = block.getStatements().length === 0;
-        const hasThrow = block.getDescendantsOfKind(SyntaxKind.ThrowStatement).length > 0;
-        const hasCall = block.getDescendantsOfKind(SyntaxKind.CallExpression).length > 0;
+        const hasThrow = descendantsOfKind(block, SyntaxKind.ThrowStatement).length > 0;
+        const hasCall = descendantsOfKind(block, SyntaxKind.CallExpression).length > 0;
         const range = rangeOf(sourceFile, clause);
         const symbol = `catch#${index}`;
 
@@ -137,7 +138,7 @@ export const extractFacts = (sourceFile: SourceFile, info: AdapterInfo): Fact[] 
     // Class model (E3): neutral struct.typeDecl facts with embedded members.
     facts.push(...extractTsMemberFacts(sourceFile, build));
 
-    sourceFile.getDescendantsOfKind(SyntaxKind.PropertyAssignment).forEach((property, index) => {
+    descendantsOfKind(sourceFile, SyntaxKind.PropertyAssignment).forEach((property, index) => {
         if (property.getName() !== 'synchronize') {
             return;
         }
@@ -148,7 +149,7 @@ export const extractFacts = (sourceFile: SourceFile, info: AdapterInfo): Fact[] 
         facts.push(build({kind: 'orm.synchronizeEnabled', kindOf: 'statement', symbol: `synchronize#${index}`, range: rangeOf(sourceFile, property), value}));
     });
 
-    sourceFile.getDescendantsOfKind(SyntaxKind.ObjectLiteralExpression).forEach((object, index) => {
+    descendantsOfKind(sourceFile, SyntaxKind.ObjectLiteralExpression).forEach((object, index) => {
         const properties = object.getProperties();
         const syncEnabled = properties.some(
             (p) => Node.isPropertyAssignment(p) && p.getName() === 'synchronize' && synchronizeValue(p) !== null
@@ -174,7 +175,7 @@ export const extractFacts = (sourceFile: SourceFile, info: AdapterInfo): Fact[] 
             ...sourceFile.getDescendantsOfKind(SyntaxKind.StringLiteral),
             ...sourceFile.getDescendantsOfKind(SyntaxKind.NoSubstitutionTemplateLiteral)
         ];
-        const calls = sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression);
+        const calls = descendantsOfKind(sourceFile, SyntaxKind.CallExpression);
 
         const candidates: {node: Node; descriptor: string}[] = [];
         for (const literal of literals) {
@@ -457,7 +458,7 @@ const hasColumnGuardInScope = (call: CallExpression): boolean => {
         call.getFirstAncestor(
             (node) => Node.isMethodDeclaration(node) || Node.isFunctionDeclaration(node) || Node.isFunctionExpression(node) || Node.isArrowFunction(node)
         ) ?? call.getSourceFile();
-    return scope.getDescendantsOfKind(SyntaxKind.CallExpression).some((candidate) => {
+    return descendantsOfKind(scope, SyntaxKind.CallExpression).some((candidate) => {
         const callee = candidate.getExpression();
         return Node.isPropertyAccessExpression(callee) && callee.getName() === 'hasColumn';
     });
@@ -717,15 +718,7 @@ const importedNames = (decl: ImportDeclaration): string[] => {
 const countExports = (sourceFile: SourceFile): number =>
     collectExportNames(sourceFile).length + sourceFile.getExportAssignments().filter((assignment) => assignment.isExportEquals()).length;
 
-const functionLikeNodes = (sourceFile: SourceFile): Node[] => {
-    const nodes: Node[] = [];
-    sourceFile.forEachDescendant((node) => {
-        if (FUNCTION_LIKE_KINDS.has(node.getKind())) {
-            nodes.push(node);
-        }
-    });
-    return nodes;
-};
+const functionLikeNodes = (sourceFile: SourceFile): Node[] => descendantsOfKinds(sourceFile, FUNCTION_LIKE_KINDS);
 
 const computeMetrics = (fn: Node, body: Node): FunctionMetrics => {
     const state = {cyclomatic: 1, cognitive: 0, maxNesting: 0};
@@ -903,7 +896,7 @@ const catchReadsError = (clause: CatchClause): boolean => {
     }
     const bound = Node.isIdentifier(nameNode)
         ? [nameNode]
-        : nameNode.getDescendantsOfKind(SyntaxKind.BindingElement).map((element) => element.getNameNode()).filter(Node.isIdentifier);
+        : descendantsOfKind(nameNode, SyntaxKind.BindingElement).map((element) => element.getNameNode()).filter(Node.isIdentifier);
     const names = new Set(bound.map((identifier) => identifier.getText()));
     return clause
         .getBlock()

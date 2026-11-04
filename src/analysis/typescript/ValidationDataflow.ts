@@ -10,6 +10,7 @@ import {findParseCalls, isFedByRequest} from './ValidatorUsage.js';
 import {findInnerCall, resolveOneHop} from './OneHopResolution.js';
 import {destructuredProperty, isReassignedAnywhere, tracksBinding} from './SymbolResolution.js';
 import {verifySafeParseGuard} from './SafeParseGuard.js';
+import {descendantsOfKind} from './NodeIndex.js';
 
 type Build = (spec: FactSpec) => Fact;
 
@@ -130,7 +131,7 @@ const isDataAccessOf = (node: Node, resultDeclaration: Node, scope: Node): boole
 // First `<result>.data` property access tracking `resultDeclaration`'s
 // binding, found anywhere in `fn`, in source order.
 const findDataAccess = (fn: Node, resultDeclaration: Node): Node | undefined => {
-    return fn.getDescendantsOfKind(SyntaxKind.PropertyAccessExpression).find((access) => isDataAccessOf(access, resultDeclaration, fn));
+    return descendantsOfKind(fn, SyntaxKind.PropertyAccessExpression).find((access) => isDataAccessOf(access, resultDeclaration, fn));
 };
 
 interface SinkTrace {
@@ -145,7 +146,7 @@ interface SinkTrace {
 }
 
 const traceSink = (fn: Node, matches: (node: Node) => boolean): SinkTrace | null => {
-    for (const outer of fn.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+    for (const outer of descendantsOfKind(fn, SyntaxKind.CallExpression)) {
         if (nearestFunction(outer) !== fn) {
             continue;
         }

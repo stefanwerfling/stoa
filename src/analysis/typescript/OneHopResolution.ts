@@ -1,6 +1,7 @@
 import {Node, SyntaxKind} from 'ts-morph';
 import type {CallExpression} from 'ts-morph';
 import {tracksBinding} from './SymbolResolution.js';
+import {descendantsOfKind} from './NodeIndex.js';
 
 const FUNCTION_KINDS: ReadonlySet<SyntaxKind> = new Set([
     SyntaxKind.FunctionDeclaration,
@@ -97,7 +98,7 @@ export const findInnerCall = (declaration: Node, isSink: (calleeName: string) =>
         if (body === undefined) {
             return null;
         }
-        for (const call of body.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+        for (const call of descendantsOfKind(body, SyntaxKind.CallExpression)) {
             if (nearestFunctionLocal(call) !== declaration) {
                 continue;
             }
