@@ -122,6 +122,10 @@ const typeModelCache = new WeakMap<readonly unknown[], WeakMap<object, WeakMap<o
 /** Whether the pipeline must build the SymbolGraph for these rules: only when one of them reads the TypeModel. */
 export const needsSymbolGraph = (rules: readonly ProjectRule[]): boolean => rules.some((rule) => rule.usesTypeModel === true);
 
+/** The TypeModel `typeModelOf` already built for this fact array, index and module graph — `undefined` when no rule asked for one. Never builds (metrics only). */
+export const builtTypeModel = (facts: readonly unknown[], dartLibraryIndex?: object, moduleGraph?: object): TypeModel | undefined =>
+    typeModelCache.get(facts)?.get(dartLibraryIndex ?? NONE)?.get(moduleGraph ?? NONE);
+
 /** The input's type model, or one built from its facts (memoized per fact array, index and module graph, so several rules share it). */
 export const typeModelOf = (input: ProjectRuleInput): TypeModel => {
     if (input.typeModel !== undefined) {

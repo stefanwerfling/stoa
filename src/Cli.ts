@@ -15,6 +15,7 @@ import {evaluate, evaluationOutcome} from './evaluation/Evaluator.js';
 import type {EvaluationAnalysis} from './evaluation/EvaluationTypes.js';
 import {toMarkdown as evaluationMarkdown} from './evaluation/EvaluationReporter.js';
 import {analyze} from './Pipeline.js';
+import type {PipelineMetrics} from './PipelineMetrics.js';
 import {toJson, toMarkdown} from './reporting/Reporter.js';
 import {toSarif} from './reporting/SarifReporter.js';
 import {createSemanticAdapter} from './semantic/SemanticAdapters.js';
@@ -83,6 +84,19 @@ type CliValues = {
 };
 
 const formatMB = (bytes: number): string => `${Math.round(bytes / (1024 * 1024))} MB`;
+
+// `--memory-stats` only: the run's measurement (see PipelineMetrics.ts) — one
+// readable summary, then the same data as one JSON line for scripts.
+const metricsLines = (metrics: PipelineMetrics): string => {
+    const t = metrics.timingsMs;
+    const symbols = metrics.symbolGraph === null ? 'not built' : `${metrics.symbolGraph.bindings} bindings / ${metrics.symbolGraph.nodes} nodes`;
+    const types = metrics.typeModel === null ? 'not built' : `${metrics.typeModel.types} types`;
+    return (
+        `[stoa] metrics: ${metrics.files.analyzed} files | ${metrics.facts} facts | ${metrics.findings} findings | modules ${metrics.moduleGraph.nodes} nodes / ${metrics.moduleGraph.edges} edges | symbols ${symbols} | type model ${types}\n` +
+        `[stoa] timings (ms): discovery ${t.discovery} | read ${t.read} | extraction ${t.extraction} | graphs ${t.graphs} | evaluation ${t.evaluation} | total ${t.total} | peak rss ${formatMB(metrics.peakRssBytes)}\n` +
+        `[stoa] metrics-json ${JSON.stringify(metrics)}\n`
+    );
+};
 
 // `--memory-stats` only — summed once, at the very end, from the already-
 // collected facts (never accumulated incrementally; see AnalyzeOptions.onProgress's
@@ -234,7 +248,8 @@ const runAnalyze = async (values: CliValues, target: string): Promise<number> =>
                           process.stderr.write(
                               `[stoa] ${progress.phase}: files ${progress.filesProcessed}/${progress.filesSelected} | facts ${progress.factsExtracted} | heap ${formatMB(snapshot.heapUsed)}/${formatMB(snapshot.heapSizeLimit)} (total ${formatMB(snapshot.heapTotal)}) | rss ${formatMB(snapshot.rss)} | external ${formatMB(snapshot.external)} | ${elapsed}s\n`
                           );
-                      }
+                      },
+                      onMetrics: (metrics) => process.stderr.write(metricsLines(metrics))
                   }
                 : {}),
             // Test-only hook, not a documented flag: deterministically forces

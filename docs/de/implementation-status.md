@@ -355,6 +355,48 @@
   (`test/fixtures/architecture`: Loader-Fehler, Zuordnung inkl. Mehrfachtreffer
   und Dateien außerhalb der Wurzel, alle vier Kantenurteile, Paketverbote und
   -namen, Report-Zusammenfassung und Markdown, CLI-Fail-fast und JSON).
+- **Messung und Speicherprofil (Evaluator-Integritäts-Folgeauftrag,
+  Phase 4):** `--memory-stats` / `AnalyzeOptions.onMetrics` melden jetzt die
+  `PipelineMetrics` des Laufs (src/PipelineMetrics.ts) — Zählwerte
+  (deterministisch), Phasenzeiten und Peak-RSS
+  (`process.resourceUsage().maxRSS`; nicht deterministisch, zum Vergleich von
+  Läufen auf einer Maschine). Nur beobachtend: Report und Findings sind mit
+  und ohne byte-identisch. Gemessen (gebaute CLI, je ein Lauf; Zeiten in ms):
+
+  | Projekt | Dateien | Facts | Extraktion | Graphen | Evaluierung | gesamt | Peak-RSS |
+  |---|---|---|---|---|---|---|---|
+  | stoa/src | 97 | 12.633 | 4.467 | 28 | 78 | 4.604 | 475 MB |
+  | flyingfish Backend | 241 | 9.861 | 4.048 | 32 | 64 | 4.190 | 414 MB |
+  | flyingfish Frontend | 102 | 12.455 | 4.173 | 18 | 61 | 4.283 | 439 MB |
+  | swipemeister (Dart) | 166 | 7.821 | 2.752 | 120 | 262 | 3.171 | 248 MB |
+  | velyo (Dart) | 52 | 4.353 | 1.620 | 85 | 174 | 1.902 | 234 MB |
+  | Golden-Korpus | 34 | 461 | 517 | 2 | 6 | 544 | 256 MB |
+
+  Befunde: (1) Die Extraktion macht 85–97 % der Zeit aus; Graphen und alle
+  Regeln zusammen bleiben unter 400 ms. (2) Was der Lauf HÄLT, ist klein —
+  Facts und Modelle 13–26 MB auf diesen Projekten (gemessen nach erzwungener
+  GC, nur in einem Messskript) —, während der V8-Heap während der Extraktion
+  auf 200–335 MB und der RSS auf 333–475 MB wächst; ein kleines Projekt
+  braucht bereits ~250 MB (Grammatiken, Code). Der Peak ist kurzlebiger Müll
+  der dateiweisen Extraktion, keine gehaltene Datenmenge. (3) Ein CPU-Profil
+  von flyingfish/backend verortet 71 % der Zeit in ts-morph: Die
+  TS-Extraktion durchläuft den ganzen Baum jeder Datei etwa elfmal
+  (`getDescendantsOfKind`/`forEachDescendant` je Fact-Familie), und jeder
+  Durchlauf hüllt Compiler-Knoten in ts-morph-Objekte. (4) Keine Kopien: Die
+  Graphen halten Pfade, Fact-IDs und Referenzen (Identitätsprüfung, siehe
+  Eintrag zur semantischen Konsolidierung); das Facts-Array lebt für einen
+  `analyze()`-Aufruf. Bewusst nicht geändert: Facts zu begrenzen oder zu
+  streamen oder Graph-Aufbau und Evaluierung zu entkoppeln, könnte höchstens
+  die ~20 MB Gehaltenes sparen (≲ 5–10 % des Peaks) und gefährdete die
+  projektweiten Regeln; der gemessene Hebel sind die wiederholten
+  Baumdurchläufe der TS-Extraktion — eine eigene, gemessene Änderung (Facts
+  müssen byte-identisch bleiben). Bekannte kleine Verschwendung: Mit
+  `--solid` wird der SymbolGraph auch gebaut, wenn am Ende keine Regel ein
+  TypeModel baut (kein `struct.typeDecl`: flyingfish/schemas, 2,7 ms). Tests:
+  `test/PipelineMetrics.test.ts` (ein Aufruf; Zählwerte stimmen mit dem Report
+  überein; SymbolGraph/TypeModel nur, wenn gebaut; Zählwerte reproduzierbar;
+  Report mit und ohne identisch; CLI-Zusammenfassung und JSON-Zeile auf
+  stderr, stdout unverändert).
 - **`analyzedFiles`-Vertrag (Evaluator-Integritäts-Folgeauftrag, Phase 3):**
   Die RuleEngine leitete `ProjectRuleInput.analyzedFiles` aus
   `facts.map(subject.file)` ab, während der Vertrag (und der ModuleGraph seit
@@ -860,7 +902,12 @@ stoa eval <pfad> --expected <datei> [--format markdown|json] [--solid] [--archit
   Dateien, bisher extrahierte Facts, Heap genutzt/Limit/gesamt, RSS,
   External Memory, verstrichene Zeit — plus eine abschließende Summenzeile
   (Dateien, Facts, Findings, Evidence-Graph-Nodes/-Edges, Cache-Hits bei
-  `--cache`). stdout (der eigentliche Report) bleibt unverändert.
+  `--cache`) und die Messwerte des Laufs (`PipelineMetrics`, auch
+  `AnalyzeOptions.onMetrics`): Dateien, Facts, Findings, ModuleGraph-Knoten/
+  -Kanten, SymbolGraph-Bindungen/-Knoten und TypeModel-Typen (oder „not
+  built“), Phasenzeiten (Discovery, Lesen, Extraktion, Graphen, Evaluierung,
+  gesamt) und Peak-RSS — einmal lesbar, einmal als `[stoa] metrics-json`-Zeile.
+  stdout (der eigentliche Report) bleibt unverändert.
   Standardmäßig aus — die untenstehenden Defaults benötigen für
   einen typischen Lauf keine Anpassung.
 - `--cache` speichert/nutzt Pro-Datei-Facts unter `<root>/.stoa/cache` über

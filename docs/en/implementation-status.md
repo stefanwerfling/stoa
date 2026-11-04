@@ -329,6 +329,46 @@
   (`test/fixtures/architecture`: loader errors, assignment incl. multiple
   matches and outside-root files, all four edge verdicts, package bans and
   names, report summary and markdown, CLI fail-fast and JSON).
+- **Measurement and memory profile (evaluator-integrity track, phase 4):**
+  `--memory-stats` / `AnalyzeOptions.onMetrics` now report the run's
+  `PipelineMetrics` (src/PipelineMetrics.ts) — counts (deterministic), phase
+  timings and peak RSS (`process.resourceUsage().maxRSS`; not deterministic,
+  for comparing runs on one machine). Observational only: report and
+  findings are byte-identical with or without it. Measured (built CLI, one
+  run each; times in ms):
+
+  | project | files | facts | extraction | graphs | evaluation | total | peak RSS |
+  |---|---|---|---|---|---|---|---|
+  | stoa/src | 97 | 12,633 | 4,467 | 28 | 78 | 4,604 | 475 MB |
+  | flyingfish backend | 241 | 9,861 | 4,048 | 32 | 64 | 4,190 | 414 MB |
+  | flyingfish frontend | 102 | 12,455 | 4,173 | 18 | 61 | 4,283 | 439 MB |
+  | swipemeister (Dart) | 166 | 7,821 | 2,752 | 120 | 262 | 3,171 | 248 MB |
+  | velyo (Dart) | 52 | 4,353 | 1,620 | 85 | 174 | 1,902 | 234 MB |
+  | golden corpus | 34 | 461 | 517 | 2 | 6 | 544 | 256 MB |
+
+  Findings: (1) extraction is 85–97 % of the time; graphs plus every rule
+  stay under 400 ms. (2) What the run RETAINS is small — facts and models
+  13–26 MB on these projects (measured after forced GC, in a measurement
+  script only) — while the V8 heap grows to 200–335 MB and RSS to 333–475 MB
+  during extraction; a small project already needs ~250 MB (grammars, code).
+  The peak is short-lived garbage of the per-file extraction, not held data.
+  (3) A CPU profile of flyingfish/backend puts 71 % of the time in ts-morph:
+  the TS extraction walks each file's whole tree about eleven times
+  (`getDescendantsOfKind`/`forEachDescendant` per fact family), and every
+  walk wraps compiler nodes in ts-morph objects. (4) No copies: the graphs
+  hold paths, fact ids and references (identity check, see the semantic
+  consolidation entry); the facts array lives for one `analyze()` call.
+  Not changed, deliberately: bounding/streaming the facts or decoupling graph
+  building from evaluation could save at most the ~20 MB retained (≲ 5–10 %
+  of the peak) while risking the project-wide rules; the measured lever is
+  the TS extraction's repeated walks — a separate, measured change
+  (facts must stay byte-identical). Known small waste: with `--solid` the
+  SymbolGraph is built even when no rule ends up building a TypeModel (no
+  `struct.typeDecl`: flyingfish/schemas, 2.7 ms). Tests:
+  `test/PipelineMetrics.test.ts` (one call; counts agree with the report;
+  SymbolGraph/TypeModel only when built; counts reproducible; report
+  identical with and without; CLI summary and JSON line on stderr, stdout
+  unchanged).
 - **`analyzedFiles` contract (evaluator-integrity track, phase 3):** the
   RuleEngine derived `ProjectRuleInput.analyzedFiles` from
   `facts.map(subject.file)`, while the contract (and the ModuleGraph, since
@@ -801,8 +841,12 @@ stoa eval <path> --expected <file> [--format markdown|json] [--solid] [--archite
   current phase (`analysis`/`evaluation`), files processed/selected, facts
   extracted so far, heap used/limit/total, RSS, external memory, elapsed
   time — plus a final totals line (files, facts, findings, Evidence Graph
-  nodes/edges, cache hits if `--cache` was used). stdout (the report itself)
-  is unaffected. Off by default — the defaults below need no tuning for a
+  nodes/edges, cache hits if `--cache` was used), and the run's metrics
+  (`PipelineMetrics`, also `AnalyzeOptions.onMetrics`): files, facts,
+  findings, ModuleGraph nodes/edges, SymbolGraph bindings/nodes and TypeModel
+  types (or "not built"), phase timings (discovery, read, extraction, graphs,
+  evaluation, total) and peak RSS — once readable, once as a
+  `[stoa] metrics-json` line. stdout (the report itself) is unaffected. Off by default — the defaults below need no tuning for a
   typical run.
 - `--cache` stores/reuses per-file facts under `<root>/.stoa/cache` across
   runs (see "Per-file fact cache" below) — off by default; omitting it is

@@ -28,7 +28,8 @@ import {flutterLifecycleRules} from './rules/project/FlutterLifecycleRules.js';
 import {DeadExportRule} from './rules/project/DeadExportRule.js';
 import {solidRules} from './rules/project/SolidRules.js';
 import {ValidationContractRule} from './rules/project/ValidationContractRule.js';
-import {needsSymbolGraph, type ProjectRule} from './rules/ProjectRule.js';
+import {builtTypeModel, needsSymbolGraph, type ProjectRule} from './rules/ProjectRule.js';
+import {moduleGraphMetrics, PhaseClock, symbolGraphMetrics, typeModelMetrics, type PipelineMetrics} from './PipelineMetrics.js';
 import type {ValidationContract} from './contracts/ValidationContract.js';
 import {ArchitectureModel, type ArchitectureConfig} from './architecture/ArchitectureConfig.js';
 import {ENGINE_VERSION} from './Version.js';
@@ -88,6 +89,13 @@ export interface AnalyzeOptions {
      * is read from or written to disk beyond the analysis target itself.
      */
     cacheDir?: string;
+    /**
+     * Opt-in measurement (CLI `--memory-stats`): called once at the end with
+     * counts, phase timings and the peak RSS of the run (see
+     * PipelineMetrics.ts). Purely observational — the report is identical
+     * with or without it.
+     */
+    onMetrics?: (metrics: PipelineMetrics) => void;
 }
 
 /** One `onProgress` snapshot's non-memory half — see AnalyzeOptions.onProgress. */
@@ -148,6 +156,9 @@ export const analyze = (options: AnalyzeOptions): AnalysisResult => {
     const ruleEngine = new RuleEngine(knowledgeBase, ruleSet, options.lang ?? 'en', projectRules);
 
     const startedAt = Date.now();
+    // Observational timing only (monotonic clock): read by `onMetrics`,
+    // never by anything that decides a fact, finding or report field.
+    const clock = new PhaseClock();
     const excludedByReason: Partial<Record<ExclusionReason, number>> = {};
     const excludedSample: ExcludedFile[] = [];
     const recordExcluded = (excluded: ExcludedFile): void => {
@@ -157,12 +168,14 @@ export const analyze = (options: AnalyzeOptions): AnalysisResult => {
         }
     };
 
-    const files = collectFiles(options.rootPath, {
-        include: options.config.include,
-        exclude: options.config.exclude,
-        ...(options.config.maxFileBytes !== undefined ? {maxFileBytes: options.config.maxFileBytes} : {}),
-        onExcluded: recordExcluded
-    });
+    const files = clock.time('discovery', () =>
+        collectFiles(options.rootPath, {
+            include: options.config.include,
+            exclude: options.config.exclude,
+            ...(options.config.maxFileBytes !== undefined ? {maxFileBytes: options.config.maxFileBytes} : {}),
+            onExcluded: recordExcluded
+        })
+    );
     options.onProgress?.(takeMemorySnapshot(), {phase: 'discovery', filesSelected: files.length, filesProcessed: 0, factsExtracted: 0, elapsedMs: Date.now() - startedAt});
 
     const typeExtractor = options.typecheck === true ? new TypeDiagnosticsExtractor() : null;
@@ -187,6 +200,7 @@ export const analyze = (options: AnalyzeOptions): AnalysisResult => {
     let hasCoverageGap = false;
     let stoppedAtFile: string | undefined;
     let stoppedAtIndex: number | undefined;
+    const ingestionStart = clock.sinceStart();
     for (const [index, meta] of files.entries()) {
         if (index % checkEveryFiles === 0) {
             const snapshot = takeMemorySnapshot();
@@ -224,7 +238,7 @@ export const analyze = (options: AnalyzeOptions): AnalysisResult => {
         // between discovery and read is the realistic cause.
         let file;
         try {
-            file = readFileContent(meta);
+            file = clock.time('read', () => readFileContent(meta));
         } catch (error) {
             skipped += 1;
             hasCoverageGap = true;
@@ -260,7 +274,9 @@ export const analyze = (options: AnalyzeOptions): AnalysisResult => {
         analyzedPaths.add(meta.path);
     }
 
+    clock.add('ingestion', clock.sinceStart() - ingestionStart);
     options.onProgress?.(takeMemorySnapshot(), {phase: 'evaluation', filesSelected: files.length, filesProcessed: analyzed + skipped, factsExtracted: facts.length, elapsedMs: Date.now() - startedAt});
+    const graphsStart = clock.sinceStart();
     // Phase 0: build the reusable, project-wide ModuleGraph once, here —
     // after all facts exist, before evaluation. Config-aware module resolution
     // (tsconfig paths/baseUrl, package exports/imports — see ModuleResolution.ts)
@@ -292,9 +308,12 @@ export const analyze = (options: AnalyzeOptions): AnalysisResult => {
     // run actually produced widget trees; the Flutter layout rules (Phase 2,
     // rules/project/FlutterLayoutRules.ts) consume it.
     const flutterWidgetGraph = buildFlutterWidgetGraph(facts, dartLibraryIndex);
+    clock.add('graphs', clock.sinceStart() - graphsStart);
     // The rules get the same explicit file list as the ModuleGraph's nodes —
     // never a set re-derived from the facts (see ProjectRuleInput.analyzedFiles).
-    const findings: Finding[] = ruleEngine.evaluate(facts, moduleGraph, symbolGraph, flutterWidgetGraph.nodes.length > 0 ? flutterWidgetGraph : undefined, dartLibraryIndex, analyzedPaths);
+    const findings: Finding[] = clock.time('evaluation', () =>
+        ruleEngine.evaluate(facts, moduleGraph, symbolGraph, flutterWidgetGraph.nodes.length > 0 ? flutterWidgetGraph : undefined, dartLibraryIndex, analyzedPaths)
+    );
     // RuleEngine.evaluate() is one atomic, synchronous pass with no internal
     // checkpointing — it cannot be partially applied or safely interrupted
     // (declarative rules iterate per-subject; project rules need the full
@@ -339,6 +358,24 @@ export const analyze = (options: AnalyzeOptions): AnalysisResult => {
         findings,
         ...architectureSummaryOf(architectureModel, analyzedPaths)
     };
+
+    options.onMetrics?.({
+        files: {selected: files.length, analyzed, skipped, cancelled: filesCancelled, cacheHits},
+        facts: facts.length,
+        findings: findings.length,
+        moduleGraph: moduleGraphMetrics(moduleGraph),
+        symbolGraph: symbolGraphMetrics(symbolGraph),
+        typeModel: typeModelMetrics(builtTypeModel(facts, dartLibraryIndex, moduleGraph)),
+        timingsMs: {
+            discovery: clock.total('discovery'),
+            read: clock.total('read'),
+            extraction: Math.round((clock.total('ingestion') - clock.total('read')) * 10) / 10,
+            graphs: clock.total('graphs'),
+            evaluation: clock.total('evaluation'),
+            total: clock.sinceStart()
+        },
+        peakRssBytes: process.resourceUsage().maxRSS * 1024
+    });
 
     return {report, facts};
 };

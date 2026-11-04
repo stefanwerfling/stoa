@@ -137,7 +137,7 @@ node dist/Cli.js analyze ./src --lang de            # localized output (en defau
 node dist/Cli.js analyze ./src --typecheck          # + in-process TypeScript type checker as a fact source
 node dist/Cli.js analyze . --include 'src/**/*.ts' --exclude '**/*.test.ts'  # glob file selection
 node dist/Cli.js analyze ./src --format sarif   # SARIF 2.1.0 for CI / code scanning
-node dist/Cli.js analyze . --memory-stats       # progress + heap/RSS to stderr every 100 files
+node dist/Cli.js analyze . --memory-stats       # progress + heap/RSS every 100 files, then run metrics (counts, phase timings, peak RSS) to stderr
 node dist/Cli.js analyze . --cache              # cache per-file facts under .stoa/cache for faster re-runs
 node dist/Cli.js analyze . --baseline .stoa/baseline.json --update-baseline  # accept current findings as the baseline
 node dist/Cli.js analyze . --baseline .stoa/baseline.json --only-new         # CI: report only what's new since then
