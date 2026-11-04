@@ -2,9 +2,6 @@
 import {dirname, join, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {parseArgs} from 'node:util';
-import {initCpp} from './analysis/CppAdapter.js';
-import {initDart} from './analysis/DartAdapter.js';
-import {initHtml} from './analysis/HtmlAdapter.js';
 import {applyBaseline, IncompleteAnalysisError, loadBaseline, onlyNewFindings, saveBaseline} from './Baseline.js';
 import {applyFindingFilter, parseFindingFilter} from './FindingFilter.js';
 import {loadConfig} from './Config.js';
@@ -14,7 +11,7 @@ import {loadExpected} from './evaluation/Corpus.js';
 import {evaluate, evaluationOutcome} from './evaluation/Evaluator.js';
 import type {EvaluationAnalysis} from './evaluation/EvaluationTypes.js';
 import {toMarkdown as evaluationMarkdown} from './evaluation/EvaluationReporter.js';
-import {analyze} from './Pipeline.js';
+import {analyzeAsync} from './Pipeline.js';
 import type {PipelineMetrics} from './PipelineMetrics.js';
 import {toJson, toMarkdown} from './reporting/Reporter.js';
 import {toSarif} from './reporting/SarifReporter.js';
@@ -80,6 +77,7 @@ type CliValues = {
     'min-confidence'?: string;
     certainty?: string[];
     'no-experimental'?: boolean;
+    jobs?: string;
     help?: boolean;
 };
 
@@ -126,8 +124,8 @@ const USAGE = [
     'stoa – Stoic Code Analysis Engine',
     '',
     'Usage:',
-    '  stoa analyze <path> [--format markdown|json|sarif] [--lang en|de] [--include <glob>]... [--exclude <glob>]... [--typecheck] [--dead-exports] [--solid] [--architecture <file>] [--contracts <file>] [--semantic noop|anthropic] [--config <file>] [--knowledge <dir>] [--rules <dir>] [--memory-stats] [--cache] [--baseline <file>] [--update-baseline] [--only-new] [--min-confidence <0..1>] [--certainty <list>]... [--no-experimental]',
-    '  stoa eval <path> --expected <file> [--format markdown|json] [--solid] [--architecture <file>] [--contracts <file>] [--knowledge <dir>] [--rules <dir>]',
+    '  stoa analyze <path> [--format markdown|json|sarif] [--lang en|de] [--include <glob>]... [--exclude <glob>]... [--typecheck] [--dead-exports] [--solid] [--architecture <file>] [--contracts <file>] [--semantic noop|anthropic] [--config <file>] [--knowledge <dir>] [--rules <dir>] [--memory-stats] [--cache] [--baseline <file>] [--update-baseline] [--only-new] [--min-confidence <0..1>] [--certainty <list>]... [--no-experimental] [--jobs <n>]',
+    '  stoa eval <path> --expected <file> [--format markdown|json] [--solid] [--architecture <file>] [--contracts <file>] [--knowledge <dir>] [--rules <dir>] [--jobs <n>]',
     ''
 ].join('\n');
 
@@ -205,6 +203,21 @@ const withTestDuplicate = (result: AnalysisResult): AnalysisResult => {
     return {...result, report: {...result.report, findings: [...result.report.findings, {...first, id: `${first.id}:test-duplicate`}]}};
 };
 
+// `--jobs <n>`: how many files are parsed at once (worker threads, see
+// Pipeline.ts `analyzeAsync`); absent = 1, the sequential path. Anything but a
+// whole number >= 1 is a usage error.
+const jobsOf = (values: CliValues): number | null => {
+    if (values.jobs === undefined) {
+        return 1;
+    }
+    const jobs = Number(values.jobs);
+    if (!/^\d+$/.test(values.jobs) || !Number.isSafeInteger(jobs) || jobs < 1) {
+        process.stderr.write(`error: --jobs expects a whole number >= 1, got '${values.jobs}'\n`);
+        return null;
+    }
+    return jobs;
+};
+
 const runAnalyze = async (values: CliValues, target: string): Promise<number> => {
     // Option-combination validation up front, before any analysis work —
     // an invalid combination is a usage error, not something that should
@@ -215,6 +228,10 @@ const runAnalyze = async (values: CliValues, target: string): Promise<number> =>
     }
     if (values['update-baseline'] === true && values.baseline === undefined) {
         process.stderr.write('error: --update-baseline requires --baseline <file>\n');
+        return EXIT_ERROR;
+    }
+    const jobs = jobsOf(values);
+    if (jobs === null) {
         return EXIT_ERROR;
     }
     const findingFilter = parseFindingFilter({
@@ -233,18 +250,16 @@ const runAnalyze = async (values: CliValues, target: string): Promise<number> =>
         return EXIT_ERROR;
     }
     const validationContract = inputs.contract;
-    // Load the tree-sitter (WASM) grammars once before the synchronous pipeline
-    // runs. Sequentially, not concurrently: both call the shared web-tree-sitter
-    // Parser.init(), which is not safe to race. On failure those files are skipped.
-    await initDart().catch(() => undefined);
-    await initCpp().catch(() => undefined);
-    await initHtml().catch(() => undefined);
+    // analyzeAsync loads the tree-sitter (WASM) grammars first (see
+    // DefaultAdapters.ts `initGrammars`); a grammar that fails to load leaves
+    // its files skipped.
     const memoryStats = values['memory-stats'] === true;
     const rootPath = resolve(target);
     let result: AnalysisResult;
     try {
-        result = analyze({
+        result = await analyzeAsync({
             rootPath,
+            jobs,
             knowledgeDir: knowledgeDirOf(values),
             ruleSetDir: ruleSetDirOf(values),
             config: configFor(values),
@@ -371,12 +386,12 @@ const runEval = async (values: CliValues, target: string): Promise<number> => {
     if (inputs === null) {
         return 1;
     }
-    // Load the tree-sitter grammars so eval covers Dart and C/C++ too, not only
-    // the synchronously-parsed TS/PHP. Sequentially (shared Parser.init() is not
-    // safe to race); on failure those files are skipped.
-    await initDart().catch(() => undefined);
-    await initCpp().catch(() => undefined);
-    await initHtml().catch(() => undefined);
+    const jobs = jobsOf(values);
+    if (jobs === null) {
+        return EXIT_ERROR;
+    }
+    // analyzeAsync loads the tree-sitter grammars first, so eval covers Dart,
+    // C/C++ and HTML too; a grammar that fails to load leaves its files skipped.
     const root = resolve(target);
     let expected;
     try {
@@ -388,8 +403,9 @@ const runEval = async (values: CliValues, target: string): Promise<number> => {
     }
     let analyzed: AnalysisResult;
     try {
-        analyzed = analyze({
+        analyzed = await analyzeAsync({
             rootPath: root,
+            jobs,
             knowledgeDir: knowledgeDirOf(values),
             ruleSetDir: ruleSetDirOf(values),
             config: configFor(values),
@@ -453,6 +469,7 @@ const main = async (): Promise<number> => {
             'min-confidence': {type: 'string'},
             certainty: {type: 'string', multiple: true},
             'no-experimental': {type: 'boolean', default: false},
+            jobs: {type: 'string'},
             help: {type: 'boolean', default: false}
         }
     });

@@ -1,15 +1,12 @@
 import {statSync} from 'node:fs';
 import {dirname} from 'node:path';
-import {AdapterRegistry} from './analysis/AdapterRegistry.js';
-import {CppAdapter} from './analysis/CppAdapter.js';
-import {DartAdapter} from './analysis/DartAdapter.js';
-import {AngularAdapter} from './analysis/AngularAdapter.js';
-import {HtmlAdapter} from './analysis/HtmlAdapter.js';
-import {VueAdapter} from './analysis/VueAdapter.js';
-import {PhpAdapter} from './analysis/PhpAdapter.js';
-import {TypeScriptAdapter} from './analysis/TypeScriptAdapter.js';
+import type {AdapterRegistry} from './analysis/AdapterRegistry.js';
+import {createAdapterRegistry, initGrammars} from './analysis/DefaultAdapters.js';
+import type {FileMeta, FileRef, LanguageAdapter} from './analysis/LanguageAdapter.js';
 import {TypeDiagnosticsExtractor} from './analysis/typescript/TypeDiagnostics.js';
+import {ExtractionPool} from './ExtractionPool.js';
 import {FactCache} from './FactCache.js';
+import {extractFile, type FileOutcome} from './FileExtraction.js';
 import {collectFiles, readFileContent} from './Ingestion.js';
 import {loadProjectConfig} from './config/ProjectConfig.js';
 import {ModuleResolver} from './analysis/ModuleResolution.js';
@@ -79,7 +76,12 @@ export interface AnalyzeOptions {
      * Exists for tests (a deterministic trigger, e.g. `criticalRatio: 0`) and
      * for embedding Stoa under a tighter/looser budget than the default.
      */
-    memoryGuard?: {checkEveryFiles?: number; criticalRatio?: number};
+    memoryGuard?: {
+        checkEveryFiles?: number;
+        criticalRatio?: number;
+        /** The ratio extraction workers check their own heaps against (`analyzeAsync` with `jobs` > 1); defaults to `criticalRatio`. Exists so a test can trigger a worker's guard alone. */
+        workerCriticalRatio?: number;
+    };
     /**
      * Opt-in: a directory for the fact cache (see FactCache.ts). Caches ONLY
      * per-file fact extraction, keyed by (running engine code, adapter id,
@@ -96,6 +98,18 @@ export interface AnalyzeOptions {
      * with or without it.
      */
     onMetrics?: (metrics: PipelineMetrics) => void;
+}
+
+/** `analyzeAsync`'s options: `analyze`'s, plus how many files are parsed at once. */
+export interface AnalyzeAsyncOptions extends AnalyzeOptions {
+    /**
+     * Opt-in (CLI `--jobs`): parse and extract files on this many worker
+     * threads. 1 (the default) runs exactly `analyze`'s sequential path. The
+     * report is the same for every value — results are applied in file order
+     * —; what grows is memory: every worker holds its own adapters and its
+     * own heap (measured ≈ +40 % peak RSS with 2 workers, ≈ +100 % with 4).
+     */
+    jobs?: number;
 }
 
 /** One `onProgress` snapshot's non-memory half — see AnalyzeOptions.onProgress. */
@@ -132,14 +146,111 @@ const EXCLUDED_SAMPLE_LIMIT = 20;
  * given input and set of versions (see docs architecture §6).
  */
 export const analyze = (options: AnalyzeOptions): AnalysisResult => {
-    const registry = new AdapterRegistry()
-        .register(new TypeScriptAdapter())
-        .register(new PhpAdapter())
-        .register(new DartAdapter())
-        .register(new CppAdapter())
-        .register(new AngularAdapter())
-        .register(new HtmlAdapter())
-        .register(new VueAdapter());
+    const run = startRun(options);
+    const ingestion = new Ingestion(run, options);
+    const ingestionStart = run.clock.sinceStart();
+    for (const [index, meta] of run.files.entries()) {
+        if (ingestion.memoryCritical(index)) {
+            ingestion.stopAt(index, meta);
+            break;
+        }
+        const prepared = ingestion.prepare(meta);
+        const outcome = prepared.kind === 'extract' ? extractFile(prepared.adapter, prepared.file, options.rootPath) : prepared.outcome;
+        ingestion.commit(index, meta, prepared.file, outcome);
+    }
+    run.clock.add('ingestion', run.clock.sinceStart() - ingestionStart);
+    return finishRun(run, ingestion, options);
+};
+
+/**
+ * `analyze` with the grammars loaded first and, with `jobs` > 1, the files
+ * parsed and extracted on that many worker threads (see ExtractionPool.ts).
+ * Everything else stays on this thread and in file order: discovery, the
+ * memory guard, reading, the fact cache, `--typecheck`, and applying each
+ * file's outcome (`Ingestion.commit`) — so the report equals the sequential
+ * one. At most `jobs` × WINDOW_PER_JOB files are read but not yet applied, so
+ * file contents and facts in flight stay bounded. Only an aborted run can
+ * differ: the main-thread guard samples at the same file positions, but
+ * workers also check their own heaps (see ExtractionWorker.ts), and either
+ * stops the run at the first file not yet applied.
+ */
+export const analyzeAsync = async (options: AnalyzeAsyncOptions): Promise<AnalysisResult> => {
+    await initGrammars();
+    const jobs = options.jobs ?? 1;
+    if (jobs <= 1) {
+        return analyze(options);
+    }
+    const pool = new ExtractionPool(jobs, {rootDir: options.rootPath, criticalRatio: options.memoryGuard?.workerCriticalRatio ?? options.memoryGuard?.criticalRatio ?? DEFAULT_CRITICAL_RATIO});
+    pool.start();
+    let run: Run;
+    try {
+        run = startRun(options);
+    } catch (error) {
+        await pool.close();
+        throw error;
+    }
+    const ingestion = new Ingestion(run, options);
+    const window: Array<{index: number; meta: FileMeta; file: FileRef | undefined; outcome: Promise<FileOutcome>}> = [];
+    const applyHead = async (): Promise<void> => {
+        const head = window.shift() as (typeof window)[number];
+        ingestion.commit(head.index, head.meta, head.file, await head.outcome);
+    };
+    const ingestionStart = run.clock.sinceStart();
+    try {
+        let stopIndex: number | undefined;
+        for (const [index, meta] of run.files.entries()) {
+            if (ingestion.memoryCritical(index)) {
+                stopIndex = index;
+                break;
+            }
+            const prepared = ingestion.prepare(meta);
+            const outcome = prepared.kind === 'extract' ? pool.extract(index, meta, prepared.file) : Promise.resolve(prepared.outcome);
+            // Marks the promise handled: one left behind by a stopped run
+            // (never awaited) must not surface as an unhandled rejection.
+            outcome.catch(() => undefined);
+            window.push({index, meta, file: prepared.file, outcome});
+            while (window.length >= jobs * WINDOW_PER_JOB && !ingestion.stopped) {
+                await applyHead();
+            }
+            if (ingestion.stopped) {
+                break;
+            }
+        }
+        while (window.length > 0 && !ingestion.stopped) {
+            await applyHead();
+        }
+        if (!ingestion.stopped && stopIndex !== undefined) {
+            ingestion.stopAt(stopIndex, run.files[stopIndex] as FileMeta);
+        }
+    } finally {
+        await pool.close();
+    }
+    run.clock.add('ingestion', run.clock.sinceStart() - ingestionStart);
+    return finishRun(run, ingestion, options);
+};
+
+/** Files read ahead per worker in `analyzeAsync` — enough to keep every worker busy while one slow file holds up applying the others. */
+const WINDOW_PER_JOB = 4;
+
+/** What one run sets up before ingestion and needs again when it finishes. */
+interface Run {
+    registry: AdapterRegistry;
+    ruleEngine: RuleEngine;
+    projectRules: ProjectRule[];
+    architectureModel: ArchitectureModel | undefined;
+    /** Milliseconds since the run started — for `onProgress` only (observational, like `clock`). */
+    elapsedMs: () => number;
+    // Observational timing only (monotonic clock): read by `onMetrics`,
+    // never by anything that decides a fact, finding or report field.
+    clock: PhaseClock;
+    files: FileMeta[];
+    excludedByReason: Partial<Record<ExclusionReason, number>>;
+    excludedSample: ExcludedFile[];
+    recordExcluded: (excluded: ExcludedFile) => void;
+}
+
+const startRun = (options: AnalyzeOptions): Run => {
+    const registry = createAdapterRegistry();
     const knowledgeBase = KnowledgeBase.loadFromDirectory(options.knowledgeDir, options.config.knowledgeBase);
     const ruleSet = RuleSet.loadFromDirectory(options.ruleSetDir, options.config.ruleSet);
     const architectureModel = architectureModelOf(options);
@@ -156,8 +267,7 @@ export const analyze = (options: AnalyzeOptions): AnalysisResult => {
     const ruleEngine = new RuleEngine(knowledgeBase, ruleSet, options.lang ?? 'en', projectRules);
 
     const startedAt = Date.now();
-    // Observational timing only (monotonic clock): read by `onMetrics`,
-    // never by anything that decides a fact, finding or report field.
+    const elapsedMs = (): number => Date.now() - startedAt;
     const clock = new PhaseClock();
     const excludedByReason: Partial<Record<ExclusionReason, number>> = {};
     const excludedSample: ExcludedFile[] = [];
@@ -176,15 +286,22 @@ export const analyze = (options: AnalyzeOptions): AnalysisResult => {
             onExcluded: recordExcluded
         })
     );
-    options.onProgress?.(takeMemorySnapshot(), {phase: 'discovery', filesSelected: files.length, filesProcessed: 0, factsExtracted: 0, elapsedMs: Date.now() - startedAt});
+    options.onProgress?.(takeMemorySnapshot(), {phase: 'discovery', filesSelected: files.length, filesProcessed: 0, factsExtracted: 0, elapsedMs: elapsedMs()});
+    return {registry, ruleEngine, projectRules, architectureModel, elapsedMs, clock, files, excludedByReason, excludedSample, recordExcluded};
+};
 
-    const typeExtractor = options.typecheck === true ? new TypeDiagnosticsExtractor() : null;
-    const cache = options.cacheDir !== undefined ? new FactCache(options.cacheDir) : null;
+/** A file the pipeline settled itself, or one whose adapter still has to parse it. */
+type Prepared = {kind: 'settled'; outcome: FileOutcome; file?: FileRef} | {kind: 'extract'; adapter: LanguageAdapter; file: FileRef};
 
-    const checkEveryFiles = options.memoryGuard?.checkEveryFiles ?? DEFAULT_MEMORY_CHECK_INTERVAL;
-    const criticalRatio = options.memoryGuard?.criticalRatio ?? DEFAULT_CRITICAL_RATIO;
-
-    const facts: Fact[] = [];
+/**
+ * The ingestion state of one run: the facts and counts so far, and the
+ * per-file steps both drivers share — the memory guard, `prepare` (adapter,
+ * read, cache) and `commit` (applying a file's outcome). Outcomes are
+ * committed in file order by both drivers, so facts, counts and the excluded
+ * sample come out the same, sequential or parallel.
+ */
+class Ingestion {
+    public readonly facts: Fact[] = [];
     // The EXPLICIT set of files successfully analyzed — the authoritative node
     // set for the ModuleGraph (Phase 0 correction P5). Uses `meta.path`
     // verbatim, the SAME value the adapters bind as a fact's `subject.file`
@@ -193,40 +310,69 @@ export const analyze = (options: AnalyzeOptions): AnalysisResult => {
     // Deriving the set from `facts.map(subject.file)` instead would couple node
     // presence to the incidental "every extractor emits file.lineCount"
     // invariant — a file analyzed but emitting no fact would silently vanish.
-    const analyzedPaths = new Set<string>();
-    let analyzed = 0;
-    let skipped = 0;
-    let cacheHits = 0;
-    let hasCoverageGap = false;
-    let stoppedAtFile: string | undefined;
-    let stoppedAtIndex: number | undefined;
-    const ingestionStart = clock.sinceStart();
-    for (const [index, meta] of files.entries()) {
-        if (index % checkEveryFiles === 0) {
-            const snapshot = takeMemorySnapshot();
-            options.onProgress?.(snapshot, {phase: 'analysis', filesSelected: files.length, filesProcessed: index, factsExtracted: facts.length, elapsedMs: Date.now() - startedAt});
-            // Stop ingesting further files rather than let V8 crash with a
-            // fatal "JavaScript heap out of memory" error. Facts and findings
-            // already produced are kept (never discarded) and reported as
-            // genuinely partial via `coverage.status` — never silently
-            // presented as a complete analysis. No global.gc() call here: by
-            // design, this guard is a last resort, not a substitute for
-            // bounded object lifetimes elsewhere in the pipeline.
-            if (isMemoryCritical(snapshot, criticalRatio)) {
-                stoppedAtFile = meta.path;
-                stoppedAtIndex = index;
-                break;
-            }
-        }
+    public readonly analyzedPaths = new Set<string>();
+    public analyzed = 0;
+    public skipped = 0;
+    public cacheHits = 0;
+    public hasCoverageGap = false;
+    public stoppedAtFile: string | undefined;
+    public stoppedAtIndex: number | undefined;
+    public readonly criticalRatio: number;
+    public readonly cache: FactCache | null;
+    private readonly typeExtractor: TypeDiagnosticsExtractor | null;
+    private readonly checkEveryFiles: number;
 
+    public constructor(
+        private readonly run: Run,
+        private readonly options: AnalyzeOptions
+    ) {
+        this.typeExtractor = options.typecheck === true ? new TypeDiagnosticsExtractor() : null;
+        this.cache = options.cacheDir !== undefined ? new FactCache(options.cacheDir) : null;
+        this.checkEveryFiles = options.memoryGuard?.checkEveryFiles ?? DEFAULT_MEMORY_CHECK_INTERVAL;
+        this.criticalRatio = options.memoryGuard?.criticalRatio ?? DEFAULT_CRITICAL_RATIO;
+    }
+
+    public get stopped(): boolean {
+        return this.stoppedAtIndex !== undefined;
+    }
+
+    /**
+     * The memory guard, sampled every `checkEveryFiles` files (by position, so
+     * at the same files on both drivers). Stop ingesting further files rather
+     * than let V8 crash with a fatal "JavaScript heap out of memory" error.
+     * Facts and findings already produced are kept (never discarded) and
+     * reported as genuinely partial via `coverage.status` — never silently
+     * presented as a complete analysis. No global.gc() call here: by design,
+     * this guard is a last resort, not a substitute for bounded object
+     * lifetimes elsewhere in the pipeline.
+     */
+    public memoryCritical(index: number): boolean {
+        if (index % this.checkEveryFiles !== 0) {
+            return false;
+        }
+        const snapshot = takeMemorySnapshot();
+        this.options.onProgress?.(snapshot, {
+            phase: 'analysis',
+            filesSelected: this.run.files.length,
+            filesProcessed: index,
+            factsExtracted: this.facts.length,
+            elapsedMs: this.run.elapsedMs()
+        });
+        return isMemoryCritical(snapshot, this.criticalRatio);
+    }
+
+    public stopAt(index: number, meta: FileMeta): void {
+        this.stoppedAtFile = meta.path;
+        this.stoppedAtIndex = index;
+    }
+
+    public prepare(meta: FileMeta): Prepared {
         // Resolved by path alone (FileMeta, no content) — a file nothing can
         // parse is never read at all. Not a coverage gap: Stoa simply has no
         // adapter for this language, the same as an excluded-by-config file.
-        const adapter = registry.resolve(meta);
+        const adapter = this.run.registry.resolve(meta);
         if (adapter === null) {
-            skipped += 1;
-            recordExcluded({path: meta.path, reason: 'unsupported_language'});
-            continue;
+            return {kind: 'settled', outcome: {kind: 'unsupported'}};
         }
 
         // Content is read lazily, right here, only once a matching adapter
@@ -236,46 +382,65 @@ export const analyze = (options: AnalyzeOptions): AnalysisResult => {
         // here is a genuine coverage gap (forces `status: 'partial'`), not
         // an intentional exclusion — a race with a concurrent delete/move
         // between discovery and read is the realistic cause.
-        let file;
+        let file: FileRef;
         try {
-            file = clock.time('read', () => readFileContent(meta));
+            file = this.run.clock.time('read', () => readFileContent(meta));
         } catch (error) {
-            skipped += 1;
-            hasCoverageGap = true;
-            recordExcluded({path: meta.path, reason: 'read_error', detail: (error as Error).message});
-            continue;
+            return {kind: 'settled', outcome: {kind: 'readError', detail: (error as Error).message}};
         }
 
-        const cachedAdapterFacts = cache?.get(adapter.id, file) ?? null;
+        const cachedAdapterFacts = this.cache?.get(adapter.id, file) ?? null;
         if (cachedAdapterFacts !== null) {
-            facts.push(...cachedAdapterFacts);
-            cacheHits += 1;
-        } else {
-            const parsed = adapter.parse(file);
-            if (!parsed.ok) {
-                skipped += 1;
-                hasCoverageGap = true;
-                recordExcluded({path: meta.path, reason: 'read_error', detail: `parse failed: ${parsed.diagnostics.join('; ')}`});
-                continue;
-            }
-            const extracted = adapter.extractFacts(parsed, {rootDir: options.rootPath});
-            facts.push(...extracted);
-            cache?.set(adapter.id, file, extracted);
-            parsed.release?.();
+            return {kind: 'settled', outcome: {kind: 'extracted', adapterId: adapter.id, facts: cachedAdapterFacts, cached: true}, file};
+        }
+        return {kind: 'extract', adapter, file};
+    }
+
+    /** Applies one file's outcome to the run — called in file order. */
+    public commit(index: number, meta: FileMeta, file: FileRef | undefined, outcome: FileOutcome): void {
+        switch (outcome.kind) {
+            case 'unsupported':
+                this.skipped += 1;
+                this.run.recordExcluded({path: meta.path, reason: 'unsupported_language'});
+                return;
+            case 'readError':
+                this.skipped += 1;
+                this.hasCoverageGap = true;
+                this.run.recordExcluded({path: meta.path, reason: 'read_error', detail: outcome.detail});
+                return;
+            case 'parseFailed':
+                this.skipped += 1;
+                this.hasCoverageGap = true;
+                this.run.recordExcluded({path: meta.path, reason: 'read_error', detail: `parse failed: ${outcome.diagnostics.join('; ')}`});
+                return;
+            case 'memoryCritical':
+                this.stopAt(index, meta);
+                return;
+            case 'extracted':
+                break;
+        }
+        this.facts.push(...outcome.facts);
+        if (outcome.cached) {
+            this.cacheHits += 1;
+        } else if (file !== undefined) {
+            this.cache?.set(outcome.adapterId, file, outcome.facts);
         }
 
         // Deliberately NOT cached: tsc diagnostics depend on the file's
         // tsconfig and on every file it imports, so the FactCache's
         // content-of-this-file key cannot tell when they are stale.
-        if (typeExtractor !== null && TS_EXTENSIONS.some((ext) => file.path.endsWith(ext))) {
-            facts.push(...typeExtractor.extract(file));
+        if (this.typeExtractor !== null && file !== undefined && TS_EXTENSIONS.some((ext) => file.path.endsWith(ext))) {
+            this.facts.push(...this.typeExtractor.extract(file));
         }
-        analyzed += 1;
-        analyzedPaths.add(meta.path);
+        this.analyzed += 1;
+        this.analyzedPaths.add(meta.path);
     }
+}
 
-    clock.add('ingestion', clock.sinceStart() - ingestionStart);
-    options.onProgress?.(takeMemorySnapshot(), {phase: 'evaluation', filesSelected: files.length, filesProcessed: analyzed + skipped, factsExtracted: facts.length, elapsedMs: Date.now() - startedAt});
+const finishRun = (run: Run, ingestion: Ingestion, options: AnalyzeOptions): AnalysisResult => {
+    const {registry, ruleEngine, projectRules, architectureModel, clock, files, elapsedMs, excludedByReason, excludedSample} = run;
+    const {facts, analyzedPaths, analyzed, skipped, cacheHits, hasCoverageGap, stoppedAtFile, stoppedAtIndex, cache} = ingestion;
+    options.onProgress?.(takeMemorySnapshot(), {phase: 'evaluation', filesSelected: files.length, filesProcessed: analyzed + skipped, factsExtracted: facts.length, elapsedMs: elapsedMs()});
     const graphsStart = clock.sinceStart();
     // Phase 0: build the reusable, project-wide ModuleGraph once, here —
     // after all facts exist, before evaluation. Config-aware module resolution
@@ -319,7 +484,7 @@ export const analyze = (options: AnalyzeOptions): AnalysisResult => {
     // (declarative rules iterate per-subject; project rules need the full
     // fact set at once, see rules/ProjectRule.ts). A second snapshot here
     // cannot change the outcome, only make its cost visible in diagnostics.
-    options.onProgress?.(takeMemorySnapshot(), {phase: 'evaluation', filesSelected: files.length, filesProcessed: analyzed + skipped, factsExtracted: facts.length, elapsedMs: Date.now() - startedAt});
+    options.onProgress?.(takeMemorySnapshot(), {phase: 'evaluation', filesSelected: files.length, filesProcessed: analyzed + skipped, factsExtracted: facts.length, elapsedMs: elapsedMs()});
 
     // The memory guard's abort tail: every selected file after the one it
     // stopped at was never even looked at. Represented as a COUNT (and

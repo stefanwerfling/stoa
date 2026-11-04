@@ -99,7 +99,11 @@ An LLM is an optional, switchable adapter.
 > `--cache` narrows this further for repeated runs — a per-file fact cache,
 > invalidated by content hash and by the running engine's own code (never by
 > a rule/contract, which stay fresh on every run by construction); measured
-> warm-cache run on the same repository: 0.84s / 203 MB. Discovery reads only
+> warm-cache run on the same repository: 0.84s / 203 MB. An opt-in `--jobs <n>`
+> trades memory for time — files are parsed on `n` worker threads, the report
+> stays byte-identical, peak RSS grows with every worker (measured on a
+> 952-file repository: 4.8s / 0.8 GB sequential, 3.8s / 1.45 GB with 4
+> workers). Discovery reads only
 > file METADATA up front (path + size); content is read lazily, one file at a
 > time, only once a matching adapter is known — a file nothing can parse is
 > never read. A root `.gitignore` is honored (narrow slice: root-only, no
@@ -147,6 +151,7 @@ node dist/Cli.js analyze . --include 'src/**/*.ts' --exclude '**/*.test.ts'  # g
 node dist/Cli.js analyze ./src --format sarif   # SARIF 2.1.0 for CI / code scanning
 node dist/Cli.js analyze . --memory-stats       # progress + heap/RSS every 100 files, then run metrics (counts, phase timings, peak RSS) to stderr
 node dist/Cli.js analyze . --cache              # cache per-file facts under .stoa/cache for faster re-runs
+node dist/Cli.js analyze . --jobs 4             # parse/extract on 4 worker threads (same report, more memory)
 node dist/Cli.js analyze . --baseline .stoa/baseline.json --update-baseline  # accept current findings as the baseline
 node dist/Cli.js analyze . --baseline .stoa/baseline.json --only-new         # CI: report only what's new since then
 node dist/Cli.js analyze . --min-confidence 0.7 --no-experimental            # hide low-confidence / experimental findings (count stays in the report)

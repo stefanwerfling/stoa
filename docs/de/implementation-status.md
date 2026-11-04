@@ -29,7 +29,8 @@
   aktive Regel `usesTypeModel` deklariert (heute: die SOLID-Regeln
   LSP/ISP/DIP-concrete unter `--solid`); sonst gar nicht.
 - Speicherbegrenzte Pipeline mit `coverage.status` `complete`/`partial`/`failed`
-  und Exit-Codes 0/2/1; Pro-Datei-Fact-Cache (`--cache`); Baseline-/Diff-Modus
+  und Exit-Codes 0/2/1; Pro-Datei-Fact-Cache (`--cache`); opt-in parallele
+  Extraktion auf Worker-Threads (`--jobs`); Baseline-/Diff-Modus
   (`--baseline`, `--only-new`, `--update-baseline`).
 - Evaluator (`stoa eval`) mit Exit-Codes 0 = bestanden, 1 = nicht bestanden
   oder technischer Fehler, 2 = unvollständige Analyse. Eine doppelt erzeugte
@@ -449,7 +450,8 @@ genannten lokalen Projekten; keine ist eine allgemeine Genauigkeitsaussage.
     zusammen 1 KB.
   Kein Code geändert. Als Hebel bleibt, was außerhalb des Parsens liegt:
   Dateien parallel verarbeiten (Worker-Threads) — eine Architekturfrage,
-  keine Parse-Optimierung.
+  keine Parse-Optimierung; inzwischen als opt-in `--jobs` umgesetzt, siehe
+  „Parallele Extraktion".
 - **Knotenindex in einem Durchlauf (Nachtrag):** Der Aufbau des Index
   kostete ≈ 15,5 % des Profils — zwei Durchläufe je Datei (ein roher, der
   die Knoten nummeriert, danach `forEachDescendant`, der die Wrapper
@@ -1239,9 +1241,9 @@ stoa analyze <pfad> [--format markdown|json|sarif] [--lang en|de]
                     [--semantic noop|anthropic] [--memory-stats] [--cache]
                     [--baseline <datei>] [--update-baseline] [--only-new]
                     [--min-confidence <0..1>] [--certainty <liste>]... [--no-experimental]
-                    [--config <datei>] [--knowledge <dir>] [--rules <dir>]
+                    [--config <datei>] [--knowledge <dir>] [--rules <dir>] [--jobs <n>]
 stoa eval <pfad> --expected <datei> [--format markdown|json] [--solid] [--architecture <datei>] [--contracts <datei>]
-                    [--knowledge <dir>] [--rules <dir>]
+                    [--knowledge <dir>] [--rules <dir>] [--jobs <n>]
 ```
 
 - **Formate:** Markdown (Mensch), JSON (Maschine), SARIF 2.1.0 (CI/Code Scanning).
@@ -1285,6 +1287,10 @@ stoa eval <pfad> --expected <datei> [--format markdown|json] [--solid] [--archit
 - `--cache` speichert/nutzt Pro-Datei-Facts unter `<root>/.stoa/cache` über
   Läufe hinweg (siehe "Pro-Datei-Fact-Cache" unten) — standardmäßig aus; ohne
   das Flag ist das Verhalten byte-identisch zum vorherigen.
+- `--jobs <n>` (auch für `eval`) parst und extrahiert auf `n` Worker-Threads —
+  gleicher Bericht, mehr Speicher, siehe „Parallele Extraktion" unten.
+  Standardmäßig aus (1, sequentiell); alles außer einer ganzen Zahl >= 1 ist ein
+  Aufruffehler (Exit 1).
 - `--baseline <datei>` / `--update-baseline` / `--only-new` — siehe
   "Baseline-/Diff-Modus" unten. Standardmäßig aus; ohne `--baseline` bleibt
   jeder Befund exakt wie vorher (kein `baselineStatus`, kein
@@ -1418,6 +1424,74 @@ lebt außerhalb des JS-Heaps). Behoben:
   die echten, reproduzierbaren Vorher/Nachher-Zahlen oben stammen aus
   manuellen Messungen realer externer Repositories mit `/usr/bin/time -v`,
   nicht aus einem CI-gesteuerten Benchmark.
+
+### Parallele Extraktion (opt-in, `--jobs`)
+
+`--jobs <n>` (für `analyze` und `eval`; `AnalyzeAsyncOptions.jobs` des neuen
+`analyzeAsync`) parst und extrahiert Dateien auf `n` Worker-Threads. Ohne den
+Schalter (oder mit 1) läuft der sequentielle Pfad, unverändert.
+
+- **Was wo läuft:** Jeder Worker (`src/ExtractionWorker.ts`) hat eigene
+  Adapter (`createAdapterRegistry()`, `src/analysis/DefaultAdapters.ts`) und
+  lädt die tree-sitter-Grammatiken selbst; er parst, extrahiert und gibt frei,
+  sonst nichts. Alles andere bleibt im Hauptthread: Dateisuche,
+  Speicherwächter, das Lesen jeder Datei, Fact-Cache, `--typecheck`, Graphen
+  und Regeln.
+- **Gleicher Bericht, per Konstruktion:** Das Ergebnis jeder Datei ist ein
+  `FileOutcome` (`src/FileExtraction.ts`). Beide Treiber — das synchrone
+  `analyze` und `analyzeAsync` — wenden die Ergebnisse in Dateireihenfolge über
+  dasselbe `Ingestion.commit` an. Facts, Zähler, die Stichprobe
+  ausgeschlossener Dateien und der Cache-Inhalt sind daher gleich, wie auch
+  immer die Worker drankommen.
+- **Begrenzter Speicher im Umlauf:** Höchstens `n` × 4 Dateien sind gelesen,
+  aber noch nicht angewendet, und jeder Worker hat höchstens 2 Dateien
+  gleichzeitig (`ExtractionPool`).
+- **Speicherwächter:** Der Wächter im Hauptthread misst an denselben
+  Dateipositionen wie bisher. Zusätzlich prüft jeder Worker vor jeder Datei
+  seinen eigenen Heap (eigener V8-Isolate, eigenes Heap-Limit,
+  `isHeapCritical`) und antwortet `memoryCritical`, statt zu parsen. In beiden
+  Fällen endet der Lauf an der ersten noch nicht angewendeten Datei, mit
+  `abortReason: memory_limit`; alle früheren Dateien bleiben erhalten.
+- **Fehler:** Ein Adapterfehler im Worker lässt den Lauf scheitern wie im
+  Hauptthread. Stirbt ein Worker (Ende, während er noch Antworten schuldet,
+  z. B. Heap erschöpft), scheitert der ganze Pool: Offene Aufgaben werden
+  abgewiesen, die CLI schreibt einen `failed`-Bericht (Exit 1). Nichts hängt,
+  keine Datei geht stillschweigend verloren.
+- **API:** `analyze()` bleibt synchron und sequentiell. `analyzeAsync()` lädt
+  die Grammatiken und läuft dann sequentiell (`jobs` ≤ 1) oder parallel. Die
+  CLI nutzt `analyzeAsync` für `analyze` und `eval`.
+- **Kosten:** Ein Worker braucht ≈ 0,4–0,6 s, um TypeScript, ts-morph und die
+  Grammatiken zu laden, bevor er die erste Datei bearbeitet. Alle Worker
+  starten deshalb zu Beginn von `analyzeAsync`, überlappend mit dem Laden von
+  Wissensbasis und Regelsatz und der Dateisuche. Jeder Worker hat eigenen Heap
+  und eigene Adapter, der Peak-RSS wächst also mit `n`.
+- **Gemessen** (Laufzeit der CLI, je zwei Läufe, auf einem Laptop mit 4 Kernen/
+  8 Threads unter Desktop-Last; Berichte in jedem Lauf byte-identisch):
+
+  | Ziel | Dateien | `--jobs 1` | `--jobs 2` | `--jobs 4` |
+  |---|---|---|---|---|
+  | flyingfish (TS) | 952 | 4,75–4,79 s, 0,80 GB | 3,89–4,16 s, 1,0 GB | 3,74–3,90 s, 1,45 GB |
+  | stoa (TS) | 494 | 2,95–2,96 s, 0,56 GB | 2,79–2,86 s, 0,86 GB | 2,76–2,80 s, 1,05 GB |
+  | swipemeister/app/lib (Dart) | 166 | 3,20–3,23 s, 0,25 GB | 2,44–2,52 s, 0,41 GB | 2,26–2,60 s, 0,62 GB |
+
+  Der Gewinn ist kleiner, als die Kernzahl erwarten lässt. Beim stoa-Lauf war
+  jeder Worker ≈ 1,8 s beschäftigt, bei insgesamt ≈ 2,1 s sequentieller
+  Extraktionsarbeit: Jeder Worker wärmt seinen eigenen JIT auf, und auf dieser
+  Maschine teilen sich vier ausgelastete Kerne einen niedrigeren Turbo-Takt
+  und die Hyper-Threads mit dem Desktop. Kleine Läufe können sogar langsamer
+  als sequentiell sein (der Worker-Start überwiegt). Deshalb opt-in, ohne
+  automatischen Standardwert.
+- **Tests:** `test/ParallelExtraction.test.ts` — `jobs` 3 gleicht dem
+  sequentiellen Lauf (Bericht und Facts byte für byte) auf Fixtures jedes
+  Adapters, auf dem ganzen Fixture-Baum mit allen Dateien ausgewählt und auf
+  einem Verzeichnis, das geparste, nicht unterstützte und unlesbare Dateien
+  mischt; mit Fact-Cache; Speicherwächter im Hauptthread und im Worker; ein
+  sterbender Worker (Test-Hook `STOA_TEST_WORKER_EXIT`); ein Adapterfehler;
+  CLI `--jobs 2` gleich der sequentiellen Ausgabe, ungültige `--jobs`-Werte
+  als Aufruffehler. Per Mutationsprobe bestätigt: Ergebnisse außer der Reihe
+  anwenden, den Worker-Wächter ignorieren oder den Cache nicht füllen lässt
+  jeweils Tests scheitern. Die Golden-Korpora bestehen mit `--jobs 4` wie ohne,
+  und 18 Vergleichsläufe liefern mit `jobs` 1 und 4 dieselben Befunde.
 
 ### Pro-Datei-Fact-Cache (opt-in, `--cache`)
 
@@ -2126,7 +2200,7 @@ zu liefern.
 
 ## Qualitätssicherung
 
-- **node:test-Suite** (`npm test`, `test/*.test.ts`): 589 Tests, 0 fehlgeschlagen,
+- **node:test-Suite** (`npm test`, `test/*.test.ts`): 613 Tests, 0 fehlgeschlagen,
   Lauf vom 2026-11-04 (Regeln pos./neg., Extraktion, Schema-Validierung, i18n,
   Determinismus, SARIF, Eval, Semantik-Groundedness, Datenschutz,
   Finding-Trennung, semantische Modelle, Identitäten, Metriken).
@@ -2257,8 +2331,9 @@ Suppression; LLM-Ausgabe-Evaluierung im Maßstab.
 
 **Offen aus dem Evaluator-Integritäts-Folgeauftrag (2026-11-04):** in der
 TS-Extraktion das Parsen
-selbst (≈ 15 %; ohne sicheren Hebel geprüft, siehe „Das TypeScript-Parsen" —
-der nächste Schritt wären parallele Dateien) und ts-morphs Wrapper-Erzeugung (≈ 9 %, von der Navigation
+selbst (≈ 15 %; ohne sicheren Hebel geprüft, siehe „Das TypeScript-Parsen";
+Dateien lassen sich jetzt opt-in parallel verarbeiten, siehe „Parallele
+Extraktion") und ts-morphs Wrapper-Erzeugung (≈ 9 %, von der Navigation
 der Extraktion gebraucht — lazy Einhüllen wurde ohne Gewinn gemessen, siehe
 „Nur Abgefragtes einhüllen"; der zweite Durchlauf drumherum ist entfallen,
 siehe „Knotenindex in einem Durchlauf"); kein SymbolGraph unter `--solid`, wenn keine

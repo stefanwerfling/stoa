@@ -1,6 +1,6 @@
 export * from './Types.js';
-export {analyze} from './Pipeline.js';
-export type {AnalyzeOptions} from './Pipeline.js';
+export {analyze, analyzeAsync} from './Pipeline.js';
+export type {AnalyzeAsyncOptions, AnalyzeOptions} from './Pipeline.js';
 export {loadConfig, DEFAULT_CONFIG} from './Config.js';
 export {collectFiles} from './Ingestion.js';
 export {KnowledgeBase} from './knowledge/KnowledgeBase.js';

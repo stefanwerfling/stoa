@@ -238,6 +238,10 @@ The permitted dependency direction is strictly **left → right**. Forbidden:
   report metadata, not in facts/findings.
 - **Reproducibility guarantee**: `analyze` twice on the same commit +
   same engine/rule/KB version ⇒ byte-identical findings (without LLM).
+  This includes the opt-in parallel extraction (`--jobs`): workers only parse
+  and extract, and every file's result is applied in file order, so the
+  report does not depend on scheduling (realized 2026-11-04, see
+  implementation-status "Parallel extraction").
 - **Version stamp** in every report: engine, adapter, rule set, and
   KB version (see versioning in the respective model documents).
 
@@ -273,5 +277,5 @@ See [open-questions.md](./open-questions.md). Core points: incremental
 analysis/caching granularity, project-wide (interprocedural) data flow analysis
 vs. effort, unified fact schema across very different languages.
 
-Open point from the implementation (2026-11-04): in the TS extraction, the TypeScript parse and ts-morph's wrapper creation remain (lazy wrapping and a syntactic export fallback brought no measurable gain; the parse is TypeScript's parser plus ts-morph's per-file bookkeeping, with no safe lever left inside it); token wrapping, the per-file type checker, the per-fact-family and per-function walks the costly release, the per-call line scans of ranges and the second index walk are gone since the "Fewer token walks", "One node index per file", "One walk per function", "Parse and release", "Class members and source ranges" and "Building the node index in one walk" follow-ups — see "Not yet done" in
+Open point from the implementation (2026-11-04): in the TS extraction, the TypeScript parse and ts-morph's wrapper creation remain (lazy wrapping and a syntactic export fallback brought no measurable gain; the parse is TypeScript's parser plus ts-morph's per-file bookkeeping, with no safe lever left inside it; files can be processed in parallel, opt-in `--jobs`); token wrapping, the per-file type checker, the per-fact-family and per-function walks the costly release, the per-call line scans of ranges and the second index walk are gone since the "Fewer token walks", "One node index per file", "One walk per function", "Parse and release", "Class members and source ranges" and "Building the node index in one walk" follow-ups — see "Not yet done" in
 [implementation-status.md](./implementation-status.md).

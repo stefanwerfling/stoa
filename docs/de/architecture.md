@@ -241,6 +241,10 @@ Erlaubte Abhängigkeitsrichtung ist strikt **links → rechts**. Verboten:
   Bericht-Metadaten, nicht in Facts/Findings.
 - **Reproduzierbarkeits-Garantie**: `analyze` zweimal auf gleichem Commit +
   gleicher Engine-/Regel-/KB-Version ⇒ byte-identische Findings (ohne LLM).
+  Das gilt auch für die opt-in parallele Extraktion (`--jobs`): Worker parsen
+  und extrahieren nur, und das Ergebnis jeder Datei wird in Dateireihenfolge
+  angewendet, der Bericht hängt also nicht von der Zuteilung ab (umgesetzt
+  2026-11-04, siehe implementation-status „Parallele Extraktion").
 - **Versionsstempel** in jedem Bericht: Engine-, Adapter-, Regelsatz- und
   KB-Version (siehe Versionierung in den jeweiligen Modell-Dokumenten).
 
@@ -276,5 +280,5 @@ Siehe [open-questions.md](./open-questions.md). Kernpunkte: inkrementelle
 Analyse/Caching-Granularität, projektweite (interprozedurale) Datenflussanalyse
 vs. Aufwand, einheitliches Fact-Schema über sehr unterschiedliche Sprachen.
 
-Offener Punkt aus der Umsetzung (2026-11-04): in der TS-Extraktion bleiben das TypeScript-Parsen und ts-morphs Wrapper-Erzeugung (lazy Einhüllen und ein syntaktischer Export-Rückweg ohne messbaren Gewinn; das Parsen ist TypeScripts Parser plus ts-morphs Verwaltung je Datei, ohne verbleibenden sicheren Hebel darin); Token-Einhüllung, TypeChecker je Datei, die Durchläufe je Fact-Familie und je Funktion das teure Freigeben, das Zeilenzählen je Bereich und der zweite Index-Durchlauf sind seit den Nachträgen „Weniger Token-Durchläufe", „Ein Knotenindex je Datei", „Ein Durchlauf je Funktion", „Parsen und Freigeben", „Klassen-Member und Quellbereiche" und „Knotenindex in einem Durchlauf" entfernt — siehe „Noch offen" in
+Offener Punkt aus der Umsetzung (2026-11-04): in der TS-Extraktion bleiben das TypeScript-Parsen und ts-morphs Wrapper-Erzeugung (lazy Einhüllen und ein syntaktischer Export-Rückweg ohne messbaren Gewinn; das Parsen ist TypeScripts Parser plus ts-morphs Verwaltung je Datei, ohne verbleibenden sicheren Hebel darin; Dateien lassen sich opt-in parallel verarbeiten, `--jobs`); Token-Einhüllung, TypeChecker je Datei, die Durchläufe je Fact-Familie und je Funktion das teure Freigeben, das Zeilenzählen je Bereich und der zweite Index-Durchlauf sind seit den Nachträgen „Weniger Token-Durchläufe", „Ein Knotenindex je Datei", „Ein Durchlauf je Funktion", „Parsen und Freigeben", „Klassen-Member und Quellbereiche" und „Knotenindex in einem Durchlauf" entfernt — siehe „Noch offen" in
 [implementation-status.md](./implementation-status.md).

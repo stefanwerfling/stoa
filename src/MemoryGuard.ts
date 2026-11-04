@@ -36,3 +36,13 @@ export const takeMemorySnapshot = (): MemorySnapshot => {
  * bounds, and not what this guard claims to catch).
  */
 export const isMemoryCritical = (snapshot: MemorySnapshot, ratio = 0.9): boolean => snapshot.heapUsed > ratio * snapshot.heapSizeLimit;
+
+/**
+ * The same test for the calling thread's own V8 heap — what an extraction
+ * worker (its own isolate, its own heap limit) checks before each file.
+ * `getHeapStatistics()` always describes the calling isolate.
+ */
+export const isHeapCritical = (ratio = 0.9): boolean => {
+    const heap = getHeapStatistics();
+    return heap.used_heap_size > ratio * heap.heap_size_limit;
+};
