@@ -427,6 +427,18 @@ genannten lokalen Projekten; keine ist eine allgemeine Genauigkeitsaussage.
   (`test/fixtures/architecture`: Loader-Fehler, Zuordnung inkl. Mehrfachtreffer
   und Dateien außerhalb der Wurzel, alle vier Kantenurteile, Paketverbote und
   -namen, Report-Zusammenfassung und Markdown, CLI-Fail-fast und JSON).
+- **`refsOf` auf Compiler-Knoten (geprüft, nicht übernommen):** Nach
+  „Klassen-Member und Quellbereiche" lag `classMembers` bei ≈ 3,0 % des
+  CPU-Profils, ≈ 1,9 Punkte davon in `refsOf` — ts-morph-Getter
+  (`getExpression`, `getName`, `getText`, `getParent`) und die Wrapper-Suche
+  je Kandidat. Erprobt: `refsOf` ganz auf den Compiler-Knoten seines
+  Durchlaufs (Text so, wie ts-morphs `getText` ihn definiert, JSDoc weiter
+  über ts-morph). Facts der 652 gemessenen Dateien byte-identisch, aber kein
+  messbarer Gewinn in vier abwechselnden Paaren à 5 Runden gegen HEAD
+  (Extraktion 1,51–1,63 s gegenüber 1,58–1,64 s): Die Wrapper gibt es
+  ohnehin (der Knotenindex hüllt jeden Knoten ein, siehe „Knotenindex in einem
+  Durchlauf"), weg fielen nur billige Getter-Aufrufe. Kein Code geändert; was
+  von `classMembers` bleibt, liegt unter dem, was diese Maschine messen kann.
 - **Die letzte Zeilenzählung auf der Positionstabelle (Nachtrag):** Die
   Worker-Profile der parallelen Extraktion zeigten noch ≈ 4 % in ts-morphs
   `getLineNumberAtPos` — dem Textdurchlauf ab Dateianfang, den „Klassen-Member

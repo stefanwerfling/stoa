@@ -398,6 +398,18 @@ the named local projects; none is a general accuracy claim.
   (`test/fixtures/architecture`: loader errors, assignment incl. multiple
   matches and outside-root files, all four edge verdicts, package bans and
   names, report summary and markdown, CLI fail-fast and JSON).
+- **`refsOf` on compiler nodes (examined, not adopted):** after "Class
+  members and source ranges", `classMembers` was ≈ 3.0 % of the CPU profile,
+  ≈ 1.9 points of it in `refsOf` — ts-morph getters (`getExpression`,
+  `getName`, `getText`, `getParent`) and the wrapper lookup per candidate.
+  Tried: `refsOf` entirely on the compiler nodes of its walk (text as
+  ts-morph's `getText` defines it, JSDoc still walked by ts-morph). Facts of
+  the 652 measured files byte-identical, but no measurable gain in four
+  alternating pairs of 5 rounds against HEAD (extraction 1.51–1.63 s against
+  1.58–1.64 s): the wrappers exist anyway (the node index wraps every node,
+  see "Building the node index in one walk"), so only cheap getter calls
+  went away. No code changed; what is left of `classMembers` is below what
+  this machine can measure.
 - **The last line count on the position table (follow-up):** the worker
   profiles of the parallel extraction still showed ≈ 4 % in ts-morph's
   `getLineNumberAtPos` — the text scan from the file start that "Class
