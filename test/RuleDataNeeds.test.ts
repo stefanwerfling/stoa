@@ -93,11 +93,11 @@ const EXPECTED: Record<string, {class: RuleClass; fields: string[]}> = {
     FlutterUncancelledSubscriptionRule: {class: 'symbol', fields: ['dartLibraryIndex', 'facts', 'identityScheme']},
     FlutterSetStateAfterAwaitRule: {class: 'symbol', fields: ['dartLibraryIndex', 'facts', 'identityScheme']},
     FlutterInheritedInInitStateRule: {class: 'symbol', fields: ['dartLibraryIndex', 'facts', 'identityScheme']},
+    DeadExportRule: {class: 'symbol', fields: ['analyzedFiles', 'facts', 'symbolGraph']},
     FlutterParentDataMisuseRule: {class: 'project', fields: ['flutterWidgetGraph']},
     FlutterUnboundedScrollableRule: {class: 'project', fields: ['flutterWidgetGraph']},
     FlutterTextFieldInRowRule: {class: 'project', fields: ['flutterWidgetGraph']},
     FlutterNestedScrollRule: {class: 'project', fields: ['flutterWidgetGraph']},
-    DeadExportRule: {class: 'project', fields: ['analyzedFiles', 'facts']},
     ValidationContractRule: {class: 'project', fields: ['facts']}
 };
 

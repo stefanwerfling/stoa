@@ -111,6 +111,13 @@ export interface SymbolGraph {
     imports: readonly SymbolEdge[];
     /** What `name`, exported by the analyzed file `file`, resolves to (re-exports followed). */
     resolveExport(file: string, name: string): ExportResolution;
+    /**
+     * Every name the analyzed file `file` exports, sorted: its own exports,
+     * its explicit re-exports, and what its `export *` re-exports provide
+     * (followed through analyzed files, `default` excepted, cycle-safe). Names
+     * only — whether one resolves, or is ambiguous, `resolveExport` says.
+     */
+    exportNames(file: string): string[];
 }
 
 interface ImportNameValue {
@@ -238,6 +245,22 @@ class ExportResolver {
         return this.trace(file, name, new Set()).result;
     }
 
+    public names(file: string, path: ReadonlySet<string> = new Set()): Set<string> {
+        if (path.has(file)) {
+            return new Set();
+        }
+        const inner = new Set([...path, file]);
+        const names = new Set(this.exportSites.get(file)?.keys() ?? []);
+        for (const reexport of this.reexportsByFile.get(file) ?? []) {
+            if (reexport.kind !== 'star') {
+                names.add(reexport.exportedAs);
+            } else if (reexport.target !== null) {
+                [...this.names(reexport.target, inner)].filter((name) => name !== 'default').forEach((name) => names.add(name));
+            }
+        }
+        return names;
+    }
+
     private trace(file: string, name: string, path: ReadonlySet<string>): Traced {
         const key = `${file}${SEP}${name}`;
         if (path.has(key)) {
@@ -353,7 +376,11 @@ export const buildSymbolGraph = (facts: readonly Fact[], moduleGraph: ModuleGrap
     for (const edge of imports) {
         edge.importEvidence.sort(compareEvidence);
     }
-    return {imports: imports.sort(compareEdges), resolveExport: (file, name) => resolver.resolve(file, name)};
+    return {
+        imports: imports.sort(compareEdges),
+        resolveExport: (file, name) => resolver.resolve(file, name),
+        exportNames: (file) => [...resolver.names(file)].sort()
+    };
 };
 
 const resolveGroup = (group: ImportGroup, modules: ModuleTargets, resolver: ExportResolver): SymbolEdge => {

@@ -10,7 +10,7 @@ import {extractFile, type FileOutcome} from './FileExtraction.js';
 import {IDENTITY_SCHEME, type IdentityScheme} from './FindingIdentity.js';
 import {assignSiteSymbols, MODULE_SCOPE} from './analysis/SiteIdentity.js';
 import {collectFiles, readFileContent} from './Ingestion.js';
-import {loadProjectConfig} from './config/ProjectConfig.js';
+import {loadProjectConfig, type ProjectConfig} from './config/ProjectConfig.js';
 import {ModuleResolver} from './analysis/ModuleResolution.js';
 import {buildModuleGraph} from './model/ModuleGraph.js';
 import {buildSymbolGraph} from './model/SymbolGraph.js';
@@ -269,6 +269,8 @@ const WINDOW_PER_JOB = 4;
 /** What one run sets up before ingestion and needs again when it finishes. */
 interface Run {
     ruleEngine: RuleEngine;
+    /** Read once from the analysis root: module resolution and the package entry points (R-UNUSED-EXPORT) use it. */
+    projectConfig: ProjectConfig;
     projectRules: ProjectRule[];
     architectureModel: ArchitectureModel | undefined;
     /** Milliseconds since the run started — for `onProgress` only (observational, like `clock`). */
@@ -287,8 +289,9 @@ const startRun = (options: AnalyzeOptions): Run => {
     const ruleSet = RuleSet.loadFromDirectory(options.ruleSetDir, options.config.ruleSet);
     const architectureModel = architectureModelOf(options);
     const projectRules: ProjectRule[] = [new DependencyCycleRule(), ...flutterLayoutRules(), ...flutterLifecycleRules()];
+    const projectConfig = loadProjectConfig(options.rootPath);
     if (options.deadExports === true) {
-        projectRules.push(new DeadExportRule());
+        projectRules.push(new DeadExportRule({patterns: options.config.entryPoints ?? [], project: projectConfig}));
     }
     if (options.validationContract !== undefined && options.validationContract !== null) {
         projectRules.push(new ValidationContractRule(options.validationContract));
@@ -319,7 +322,7 @@ const startRun = (options: AnalyzeOptions): Run => {
         })
     );
     options.onProgress?.(takeMemorySnapshot(), {phase: 'discovery', filesSelected: files.length, filesProcessed: 0, factsExtracted: 0, elapsedMs: elapsedMs()});
-    return {ruleEngine, projectRules, architectureModel, elapsedMs, clock, files, excludedByReason, excludedSample, recordExcluded};
+    return {ruleEngine, projectConfig, projectRules, architectureModel, elapsedMs, clock, files, excludedByReason, excludedSample, recordExcluded};
 };
 
 /** A file the pipeline settled itself, or one whose adapter still has to parse it. */
@@ -495,7 +498,7 @@ class Ingestion {
 }
 
 const finishRun = (run: Run, ingestion: Ingestion, options: AnalyzeOptions): AnalysisResult => {
-    const {ruleEngine, projectRules, architectureModel, clock, files, elapsedMs, excludedByReason, excludedSample} = run;
+    const {ruleEngine, projectConfig, projectRules, architectureModel, clock, files, elapsedMs, excludedByReason, excludedSample} = run;
     const {facts, analyzedPaths, analyzed, skipped, cacheHits, hasCoverageGap, stoppedAtFile, stoppedAtIndex, cache, adapterVersions} = ingestion;
     options.onProgress?.(takeMemorySnapshot(), {phase: 'evaluation', filesSelected: files.length, filesProcessed: analyzed + skipped, factsExtracted: facts.length, elapsedMs: elapsedMs()});
     const graphsStart = clock.sinceStart();
@@ -508,7 +511,7 @@ const finishRun = (run: Run, ingestion: Ingestion, options: AnalyzeOptions): Ana
     // passed to the rule engine for this one evaluate() call, and is released
     // with the rest of this function's locals afterward — it adds no persistent
     // or unbounded state (the FactCache stays strictly file-local, untouched).
-    const moduleResolver = new ModuleResolver(loadProjectConfig(options.rootPath));
+    const moduleResolver = new ModuleResolver(projectConfig);
     // Flutter quality Phase B: cross-file Dart name resolution (which
     // declaration a widget/controller name refers to), built only when Dart
     // files were analyzed — from facts + the project's own pubspec package
@@ -521,7 +524,8 @@ const finishRun = (run: Run, ingestion: Ingestion, options: AnalyzeOptions): Ana
     // right after the module graph from the same facts (deps.importName +
     // deps.export + deps.reexport) + its resolved edges — ONLY when an active
     // rule declares `usesTypeModel` (the TypeModel resolves TS names through
-    // it; nothing else reads it). One instance per run, shared by every rule.
+    // it) or `usesSymbolGraph` (R-UNUSED-EXPORT). One instance per run,
+    // shared by every rule.
     // Same discipline: strings/fact-ids only (no AST, no fact copy), lives
     // only for this evaluate() call.
     const symbolGraph = needsSymbolGraph(projectRules) ? buildSymbolGraph(facts, moduleGraph) : undefined;

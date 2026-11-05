@@ -256,6 +256,7 @@ The permitted dependency direction is strictly **left → right**. Forbidden:
   "externalTools": { "eslint": true, "tsc": true },
   "ruleSet": "default@1",          // versionierter Regelsatz
   "knowledgeBase": "marcus@1",     // versionierte KB
+  "entryPoints": ["src/index.ts"], // package entry points: their exports are public API (R-UNUSED-EXPORT)
   "thresholds": { "overrides": {} },
   "semantic": { "adapter": "noop" }, // LLM standardmäßig aus
   "baseline": ".stoa/baseline.json"

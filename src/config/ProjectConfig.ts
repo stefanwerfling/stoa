@@ -35,6 +35,17 @@ export interface ProjectConfig {
     /** Raw `package.json` `imports` field (`#`-prefixed subpath imports), consulted conservatively — see ModuleResolution.ts. */
     imports?: unknown;
     /**
+     * The package's entry files as `package.json` declares them (`main`,
+     * `module`, `types`/`typings`, every target in `exports` — subpath
+     * patterns with `*` excepted — and `bin`), relative to `configDir`, sorted
+     * and deduplicated. Raw: they usually name build output; EntryPoints.ts
+     * maps them onto analyzed files without guessing.
+     */
+    packageEntries?: string[];
+    /** Absolute `compilerOptions.outDir` and `rootDir` (after `extends`), used only to map a package entry from build output back to its source. */
+    outDir?: string;
+    rootDir?: string;
+    /**
      * Root `composer.json` PSR-4 mappings (`autoload` and `autoload-dev`),
      * in Composer's lookup order: longest namespace prefix first, each with
      * its directories (absolute) in declared order. Absent = no composer.json
@@ -54,7 +65,14 @@ interface PackageJsonShape {
     name?: unknown;
     exports?: unknown;
     imports?: unknown;
+    main?: unknown;
+    module?: unknown;
+    types?: unknown;
+    typings?: unknown;
+    bin?: unknown;
 }
+
+type TsConfigOptions = {baseUrl?: string; pathsBasePath?: string; paths?: Record<string, string[]>; outDir?: string; rootDir?: string};
 
 const dirOf = (rootPath: string): string => {
     try {
@@ -70,10 +88,10 @@ const dirOf = (rootPath: string): string => {
  * (including depth/cycle handling) deterministically through `ts.sys`. The
  * host's `readDirectory` is stubbed to `[]` so this never enumerates/globs the
  * project's source files — only the config files themselves (and their
- * `extends` targets) are read. Returns `baseUrl`/`paths` or `undefined` on any
+ * `extends` targets) are read. Returns `baseUrl`/`paths`/`outDir`/`rootDir` or `undefined` on any
  * problem (missing file, parse error, no such options) — never throws.
  */
-const readTsConfig = (configDir: string): {baseUrl?: string; pathsBasePath?: string; paths?: Record<string, string[]>} => {
+const readTsConfig = (configDir: string): TsConfigOptions => {
     const tsconfigPath = join(configDir, 'tsconfig.json');
     if (!existsSync(tsconfigPath)) {
         return {};
@@ -93,9 +111,15 @@ const readTsConfig = (configDir: string): {baseUrl?: string; pathsBasePath?: str
         };
         const parsed = ts.parseJsonConfigFileContent(readResult.config, host, configDir);
         const options = parsed.options;
-        const result: {baseUrl?: string; pathsBasePath?: string; paths?: Record<string, string[]>} = {};
+        const result: TsConfigOptions = {};
         if (typeof options.baseUrl === 'string') {
             result.baseUrl = options.baseUrl;
+        }
+        if (typeof options.outDir === 'string') {
+            result.outDir = options.outDir;
+        }
+        if (typeof options.rootDir === 'string') {
+            result.rootDir = options.rootDir;
         }
         // `pathsBasePath` is where TypeScript anchors `paths` when `baseUrl` is
         // absent (the declaring config's directory). It is typed `@internal` in
@@ -123,14 +147,41 @@ const readTsConfig = (configDir: string): {baseUrl?: string; pathsBasePath?: str
     }
 };
 
-const readPackageJson = (configDir: string): {packageName?: string; exports?: unknown; imports?: unknown} => {
+type PackageJsonOptions = {packageName?: string; exports?: unknown; imports?: unknown; packageEntries?: string[]};
+
+/** Every string target of an `exports` value — conditions and subpaths followed, a pattern subpath (`./*`) and `null` left out. */
+const exportTargets = (value: unknown, subpath = '.'): string[] => {
+    if (subpath.includes('*')) {
+        return [];
+    }
+    if (typeof value === 'string') {
+        return [value];
+    }
+    if (Array.isArray(value)) {
+        return value.flatMap((entry) => exportTargets(entry, subpath));
+    }
+    if (typeof value === 'object' && value !== null) {
+        return Object.entries(value as Record<string, unknown>).flatMap(([key, entry]) => exportTargets(entry, key.startsWith('.') ? key : subpath));
+    }
+    return [];
+};
+
+/** The entry files `package.json` declares (see `ProjectConfig.packageEntries`). */
+const packageEntriesOf = (parsed: PackageJsonShape): string[] => {
+    const single = [parsed.main, parsed.module, parsed.types, parsed.typings];
+    const bin = typeof parsed.bin === 'object' && parsed.bin !== null ? Object.values(parsed.bin as Record<string, unknown>) : [parsed.bin];
+    const entries = [...single, ...bin, ...exportTargets(parsed.exports)].filter((entry): entry is string => typeof entry === 'string' && entry.length > 0);
+    return [...new Set(entries)].sort();
+};
+
+const readPackageJson = (configDir: string): PackageJsonOptions => {
     const pkgPath = join(configDir, 'package.json');
     if (!existsSync(pkgPath)) {
         return {};
     }
     try {
         const parsed = JSON.parse(readFileSync(pkgPath, 'utf8')) as PackageJsonShape;
-        const result: {packageName?: string; exports?: unknown; imports?: unknown} = {};
+        const result: PackageJsonOptions = {};
         if (typeof parsed.name === 'string' && parsed.name.length > 0) {
             result.packageName = parsed.name;
         }
@@ -139,6 +190,10 @@ const readPackageJson = (configDir: string): {packageName?: string; exports?: un
         }
         if (parsed.imports !== undefined) {
             result.imports = parsed.imports;
+        }
+        const entries = packageEntriesOf(parsed);
+        if (entries.length > 0) {
+            result.packageEntries = entries;
         }
         return result;
     } catch {
@@ -205,6 +260,9 @@ export const loadProjectConfig = (rootPath: string): ProjectConfig => {
         ...(pkg.packageName !== undefined ? {packageName: pkg.packageName} : {}),
         ...(pkg.exports !== undefined ? {exports: pkg.exports} : {}),
         ...(pkg.imports !== undefined ? {imports: pkg.imports} : {}),
+        ...(pkg.packageEntries !== undefined ? {packageEntries: pkg.packageEntries} : {}),
+        ...(tsconfig.outDir !== undefined ? {outDir: tsconfig.outDir} : {}),
+        ...(tsconfig.rootDir !== undefined ? {rootDir: tsconfig.rootDir} : {}),
         ...(psr4 !== undefined ? {psr4} : {})
     };
 };

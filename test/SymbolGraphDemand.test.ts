@@ -67,7 +67,7 @@ const pipelineInput = (facts: Fact[], rules: readonly ProjectRule[]): ProjectRul
 
 const solidFacts = (): Fact[] => analyze({rootPath: solidFixtures, knowledgeDir, ruleSetDir, config: DEFAULT_CONFIG, solid: true}).facts;
 
-test('demand: only the TypeModel readers (LSP, ISP, DIP-concrete, SRP) declare usesTypeModel; without --solid no rule needs the SymbolGraph', () => {
+test('demand: only the TypeModel readers (LSP, ISP, DIP-concrete, SRP) declare usesTypeModel, only R-UNUSED-EXPORT usesSymbolGraph; without --solid and --dead-exports no rule needs the SymbolGraph', () => {
     assert.deepEqual(
         everyRule()
             .filter((rule) => rule.usesTypeModel === true)
@@ -83,14 +83,21 @@ test('demand: only the TypeModel readers (LSP, ISP, DIP-concrete, SRP) declare u
             'R-SOLID-SRP-RESPONSIBILITY-COHESION'
         ]
     );
-    // The pipeline's rule sets without --solid (with every other option on), and with it.
-    assert.equal(needsSymbolGraph([new DependencyCycleRule(), ...flutterLayoutRules(), ...flutterLifecycleRules(), new DeadExportRule()]), false);
+    assert.deepEqual(
+        everyRule()
+            .filter((rule) => rule.usesSymbolGraph === true)
+            .map((rule) => rule.id),
+        ['R-UNUSED-EXPORT']
+    );
+    // The pipeline's rule sets without --solid and --dead-exports, with --dead-exports, and with --solid.
+    assert.equal(needsSymbolGraph([new DependencyCycleRule(), ...flutterLayoutRules(), ...flutterLifecycleRules()]), false);
+    assert.equal(needsSymbolGraph([new DependencyCycleRule(), new DeadExportRule()]), true);
     assert.equal(needsSymbolGraph([new DependencyCycleRule(), ...solidRules()]), true);
     assert.equal(needsSymbolGraph([new DependencyCycleRule(), ...solidRules(architecture())]), true);
     assert.equal(needsSymbolGraph([]), false);
 });
 
-test('declarations are truthful: every rule runs on the pipeline input without a symbol graph unless it declares usesTypeModel — none reads the TypeModel undeclared', () => {
+test('declarations are truthful: every rule runs on the pipeline input without a symbol graph unless it declares usesTypeModel or usesSymbolGraph — none reads either undeclared', () => {
     const facts = solidFacts();
     for (const rule of everyRule()) {
         assert.doesNotThrow(() => rule.evaluate(pipelineInput(facts, [rule])), rule.id);
@@ -102,6 +109,13 @@ test('a rule that reads the TypeModel without declaring it fails loudly (no sile
     const inner = new SolidLspContractCompatibilityRule();
     const undeclared: ProjectRule = {id: inner.id, version: inner.version, evaluate: (input) => inner.evaluate(input)};
     assert.throws(() => undeclared.evaluate(pipelineInput(facts, [undeclared])), /does not declare `usesTypeModel`/);
+});
+
+test('a rule that reads the SymbolGraph without declaring it fails loudly (no silent second SymbolGraph)', () => {
+    const facts = solidFacts();
+    const inner = new DeadExportRule();
+    const undeclared: ProjectRule = {id: inner.id, version: inner.version, evaluate: (input) => inner.evaluate(input)};
+    assert.throws(() => undeclared.evaluate(pipelineInput(facts, [undeclared])), /does not declare `usesSymbolGraph`/);
 });
 
 test('the shared SymbolGraph changes no finding: TypeModel rules on the pipeline input equal the direct (self-built) path, also under reversed fact order', () => {

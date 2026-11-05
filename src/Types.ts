@@ -426,6 +426,13 @@ export interface StoaConfig {
     exclude: string[];
     /** Files larger than this (bytes) are excluded during discovery, same as a glob exclude — see Ingestion.ts DEFAULT_MAX_FILE_BYTES. Optional; defaults to DEFAULT_MAX_FILE_BYTES when omitted. */
     maxFileBytes?: number;
+    /**
+     * Package entry points, as globs relative to the analysis root
+     * (`index.ts`, `src/public/*.ts`): their exports — and what they
+     * re-export — are public API, which R-UNUSED-EXPORT does not report.
+     * Optional; the root package.json is consulted as well (EntryPoints.ts).
+     */
+    entryPoints?: string[];
     ruleSet: string;
     knowledgeBase: string;
     semantic: SemanticConfig;

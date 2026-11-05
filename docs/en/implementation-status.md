@@ -26,7 +26,8 @@
   supertypes, built lazily on first use), `DartLibraryIndex` and
   `FlutterWidgetGraph`. The SymbolGraph is built **only** when an active rule
   declares `usesTypeModel` (today: the SOLID LSP/ISP/DIP-concrete rules under
-  `--solid`); otherwise it is not built at all.
+  `--solid`) or `usesSymbolGraph` (R-UNUSED-EXPORT under `--dead-exports`);
+  otherwise it is not built at all.
 - Memory-bounded pipeline with `coverage.status` `complete`/`partial`/`failed`
   and exit codes 0/2/1; per-file fact cache (`--cache`); opt-in parallel
   extraction on worker threads (`--jobs`); baseline/diff mode
@@ -2199,6 +2200,9 @@ measurement, so none was made. No finding changed.
   | Symbol | R-SOLID-LSP-CONTRACT-COMPATIBILITY, R-SOLID-ISP-INTERFACE-COHESION, R-SOLID-DIP-CONCRETE-DEPENDENCY; the four Flutter lifecycle rules | `symbolGraph`/`typeModel` (SOLID), `dartLibraryIndex` (lifecycle: cross-file name resolution), `facts` |
   | Project | R-UNUSED-EXPORT, R-VALIDATION-CONTRACT; the four Flutter layout rules | all imports × all exports (`facts`, `analyzedFiles`); the evidence over all facts; the project widget graph |
 
+  Since R-UNUSED-EXPORT 1.1.0 (2026-11-05, see "External validation") that
+  rule reads the SymbolGraph and is in the symbol class.
+
   R-SOLID-SRP (not registered) reads the TypeModel (symbol). The test pins
   the exact fields per rule; a rule that starts reading more fails it.
 - **Dependencies between rules:** declarative rules meet only in the
@@ -2254,7 +2258,8 @@ measurement, so none was made. No finding changed.
     is computed by both DIP rules (≤ 19 ms on swipemeister) — too small for
     a shared cache; R-UNUSED-EXPORT resolves relative imports itself instead
     of using the ModuleGraph — switching would change findings (alias and
-    package imports), so it is not a phase-4 change (open point).
+    package imports), so it is not a phase-4 change (open point; done since
+    in R-UNUSED-EXPORT 1.1.0).
 - **Changed:** `AnalysisProgress` has a `graphs` phase (after the graphs,
   before the rules; `--memory-stats` prints it); new
   `scripts/measure-phases.ts`; `scripts/CompareTargets.ts` holds the target
@@ -2367,6 +2372,27 @@ golden corpora changed.
     entry (`package.json` `exports`), and 16 declarations re-exported through
     `export … from` (also chained, `types/retry.ts` → `types/options.ts` →
     `index.ts`). 12 TP (exported, used only in their own file).
+    **Fixed since (2026-11-05, R-UNUSED-EXPORT 1.1.0):** the rule reads the
+    shared SymbolGraph (now also built for `usesSymbolGraph`): an export is
+    used when an import binding reaches it directly or as a re-export hop
+    (`export {x} from`, `export *`, `export * as ns`, chains), and imports
+    resolve through the module graph (tsconfig paths, package
+    self-references), not relative-only. Exports of package entry points,
+    and everything they re-export, are public API and not reported. Entry
+    points (`src/config/EntryPoints.ts`): `entryPoints` in stoa.config.json
+    (globs relative to the analysis root), and `main`/`module`/`types`/
+    `typings`/`exports`/`bin` of the root package.json — counted only when
+    the path is an analyzed file, maps onto one by a source extension
+    (`index.js` → `index.ts`), or lies in the tsconfig `outDir` with a
+    `rootDir` set (`dist/index.d.ts` → `src/index.ts`); several candidates
+    or no match is no entry (nothing guessed; `exports` subpath patterns
+    with `*` are left out). ky declares `"entryPoints": ["index.ts"]` in its
+    manifest (`analyze.entryPoints`): 66 → 12 findings, exactly the 12 TP,
+    0 FP. On the other targets findings only drop: flyingfish/schemas
+    1070 → 2 (its package.json `types` is `src/index.ts`, which re-exports
+    the whole package; the 2 left are exported, used only in their own file
+    and not re-exported — true positives); no finding added anywhere; all
+    other changes are the rule version and texts. Tests: `test/DeadExport.test.ts`.
   - **R-DEP-UNUSED (PHP):** 24 of 24 FP — 20 imports used only in PHPDoc
     (`@param`, `@return`, `@throws`, `@var`, `@see`; PHPStan/Psalm and IDEs
     need them, PHP-CS-Fixer's `no_unused_imports` counts them as used), 3
@@ -3047,7 +3073,7 @@ exists, see "Baseline / diff mode"); a suppression workflow beyond the
 baseline; a generic ESLint fact adapter; context facts (`flag.generatedCode`, `hasTests`)
 for richer suppression; LLM-output evaluation at scale.
 
-**Open from the external validation (2026-11-05, measured, not fixed — see "External validation"; the else-if nesting is fixed since):** package entry points and `export … from` re-exports in R-UNUSED-EXPORT; PHPDoc, attribute and namespace-alias uses in the PHP R-DEP-UNUSED; generated code (`*.freezed.dart`) not excluded; Dart closures attributed to the enclosing function; PHP 8.4 syntax (`php-parser` defaults to 8.3).
+**Open from the external validation (2026-11-05, measured, not fixed — see "External validation"; the else-if nesting and R-UNUSED-EXPORT are fixed since):** PHPDoc, attribute and namespace-alias uses in the PHP R-DEP-UNUSED; generated code (`*.freezed.dart`) not excluded; Dart closures attributed to the enclosing function; PHP 8.4 syntax (`php-parser` defaults to 8.3).
 
 **Open from the evaluator-integrity track (2026-11-04):** in the TS
 extraction, the parse

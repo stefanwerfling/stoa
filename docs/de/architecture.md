@@ -259,6 +259,7 @@ Erlaubte Abhängigkeitsrichtung ist strikt **links → rechts**. Verboten:
   "externalTools": { "eslint": true, "tsc": true },
   "ruleSet": "default@1",          // versionierter Regelsatz
   "knowledgeBase": "marcus@1",     // versionierte KB
+  "entryPoints": ["src/index.ts"], // Paket-Einstiegspunkte: ihre Exporte sind öffentliche API (R-UNUSED-EXPORT)
   "thresholds": { "overrides": {} },
   "semantic": { "adapter": "noop" }, // LLM standardmäßig aus
   "baseline": ".stoa/baseline.json"

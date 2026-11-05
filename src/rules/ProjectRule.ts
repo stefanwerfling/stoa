@@ -1,8 +1,10 @@
 import type {Fact, Finding, RuleMaturity} from '../Types.js';
 import type {KnowledgeBase} from '../knowledge/KnowledgeBase.js';
 import type {IdentityScheme} from '../FindingIdentity.js';
-import type {ModuleGraph} from '../model/ModuleGraph.js';
-import type {SymbolGraph} from '../model/SymbolGraph.js';
+import {ModuleResolver} from '../analysis/ModuleResolution.js';
+import {EMPTY_PROJECT_CONFIG} from '../config/ProjectConfig.js';
+import {buildModuleGraph, type ModuleGraph} from '../model/ModuleGraph.js';
+import {buildSymbolGraph, type SymbolGraph} from '../model/SymbolGraph.js';
 import type {FlutterWidgetGraph} from '../model/FlutterWidgetGraph.js';
 import type {DartLibraryIndex} from '../model/DartLibraryIndex.js';
 import {buildTypeModel, type TypeModel} from '../model/TypeModel.js';
@@ -91,6 +93,13 @@ export interface ProjectRule {
      */
     readonly usesTypeModel?: boolean;
     /**
+     * True when `evaluate()` reads the SymbolGraph itself (`symbolGraphOf`),
+     * not through the TypeModel. Same contract as `usesTypeModel`: the
+     * pipeline builds the one shared graph only when a rule declares one of
+     * the two.
+     */
+    readonly usesSymbolGraph?: boolean;
+    /**
      * Declares exactly which fact KINDS this rule's `evaluate()` reads from
      * `input.facts` (not `analyzedFiles`, which every rule gets regardless).
      * Omit when the rule genuinely needs to scan the full fact set — absence
@@ -123,7 +132,24 @@ const NONE = {};
 const typeModelCache = new WeakMap<readonly unknown[], WeakMap<object, WeakMap<object, TypeModel>>>();
 
 /** Whether the pipeline must build the SymbolGraph for these rules: only when one of them reads the TypeModel. */
-export const needsSymbolGraph = (rules: readonly ProjectRule[]): boolean => rules.some((rule) => rule.usesTypeModel === true);
+export const needsSymbolGraph = (rules: readonly ProjectRule[]): boolean => rules.some((rule) => rule.usesTypeModel === true || rule.usesSymbolGraph === true);
+
+/**
+ * The input's symbol graph, or — for a caller that builds no graphs (a rule
+ * called directly in a test) — one built from its facts with relative-only
+ * resolution. A module graph without a symbol graph means the calling rule
+ * reads the graph without declaring `usesSymbolGraph`: that fails loudly,
+ * as in `typeModelOf`, instead of building a second, unshared resolver.
+ */
+export const symbolGraphOf = (input: ProjectRuleInput): SymbolGraph => {
+    if (input.symbolGraph !== undefined) {
+        return input.symbolGraph;
+    }
+    if (input.moduleGraph !== undefined) {
+        throw new Error('symbolGraphOf: a module graph without a symbol graph — the calling rule reads the SymbolGraph but does not declare `usesSymbolGraph`');
+    }
+    return buildSymbolGraph(input.facts, buildModuleGraph(input.facts, input.analyzedFiles, new ModuleResolver(EMPTY_PROJECT_CONFIG)));
+};
 
 /** The TypeModel `typeModelOf` already built for this fact array, index and module graph — `undefined` when no rule asked for one. Never builds (metrics only). */
 export const builtTypeModel = (facts: readonly unknown[], dartLibraryIndex?: object, moduleGraph?: object): TypeModel | undefined =>

@@ -7,5 +7,5 @@
     "license": "MIT",
     "licenseFile": "license",
     "root": "source",
-    "analyze": {"solid": true, "deadExports": true}
+    "analyze": {"solid": true, "deadExports": true, "entryPoints": ["index.ts"]}
 }

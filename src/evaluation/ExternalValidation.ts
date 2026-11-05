@@ -35,7 +35,8 @@ export interface ExternalManifest {
     sparse?: string[];
     /** The directory analyzed, relative to the checkout (default the checkout itself). */
     root?: string;
-    analyze: {solid?: boolean; deadExports?: boolean; exclude?: string[]};
+    /** `entryPoints`: package entry globs relative to `root` (StoaConfig.entryPoints). */
+    analyze: {solid?: boolean; deadExports?: boolean; exclude?: string[]; entryPoints?: string[]};
 }
 
 /** A reviewer's verdict on one produced finding. */

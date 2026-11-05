@@ -84,7 +84,8 @@ const analyzeProject = async (manifest: ExternalManifest): Promise<AnalysisRepor
         throw new Error(`${manifest.name}: the checkout is at ${head}, the manifest pins ${manifest.commit} — run "fetch ${manifest.name}"`);
     }
     const options = analysisOptionsOf({name: manifest.name, path: rootPath, ...(manifest.analyze.solid === true ? {solid: true} : {}), ...(manifest.analyze.deadExports === true ? {deadExports: true} : {})});
-    return (await analyzeAsync({...options, config: {...DEFAULT_CONFIG, exclude: [...DEFAULT_CONFIG.exclude, ...(manifest.analyze.exclude ?? [])]}})).report;
+    const entryPoints = manifest.analyze.entryPoints === undefined ? {} : {entryPoints: manifest.analyze.entryPoints};
+    return (await analyzeAsync({...options, config: {...DEFAULT_CONFIG, exclude: [...DEFAULT_CONFIG.exclude, ...(manifest.analyze.exclude ?? [])], ...entryPoints}})).report;
 };
 
 const labelsPath = (manifest: ExternalManifest): string => join(CORPUS, manifest.name, 'labels.json');
