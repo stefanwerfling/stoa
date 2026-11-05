@@ -1844,6 +1844,66 @@ Eine Identitätsdefinition — `findingKey`/`keyString` in
   Projekt-Findings getrennt bleiben und stabil bei einer deklarativen
   Zusammenführung gewinnt.
 
+## Speicher und Lebensdauern der Evaluation (Finding-Identity-Spezifikation, Phase 3, 2026-11-04)
+
+Zuerst gemessen (Phase 0, dann je Stufe mit Heap-Proben in einer
+Scratch-Kopie; ein erzwungener GC nur dort, als Messwerkzeug — nie im Code):
+Der Speicher geht nicht in die Evaluation. Der Peak-RSS entsteht in der
+Extraktion; während Graphen und Regeln wächst der gehaltene Heap um ≤ 2 MB
+(Graphen ≈ 1 MB, die deklarative Gruppierung ≈ 1,4 MB), und die Evaluation
+dauert 55 von 1.240 ms (flyingfish-Backend) bis 230 von 3.500 ms
+(swipemeister). Was die Messung dennoch fand und was sich änderte:
+
+- **Adapter nach der Ingestion freigegeben.** Die Adapter-Registry liegt
+  jetzt nicht mehr im Run, sondern in `Ingestion` und wird von
+  `Ingestion.finish()` verworfen, sobald die letzte Datei übernommen ist; die
+  Adapter-Versionen für den Bericht werden vorab gelesen. Die sequentielle
+  Schleife läuft in einer eigenen Funktion (`ingestSequentially`), damit der
+  Adapter der letzten Datei nicht über den Frame von `analyze` erreichbar
+  bleibt. Vorher blieb das gemeinsame Project des TypeScript-Adapters mit den
+  lib-Dateien (aufgebaut, sobald ein Skript oder eine `declare global`-Datei
+  geparst wurde) über Graphen und Regeln hinweg am Leben: gehaltener Heap
+  während der Evaluation des flyingfish-Backends 92–94 → 62–63 MB (−30 MB).
+  Projekte ohne solche Dateien sind unverändert (stoa, swipemeister, velyo).
+- **Deklarative Gruppierung endet vor den Projektregeln**
+  (`RuleEngine.evaluateDeclarative`): ≤ 1 MB, behalten, weil es nichts kostet.
+- **Dart-URI-Auflösung memoisiert.** `DartLibraryIndex` löste bei jeder
+  Namenssuche jede Import-URI erneut auf (Pfad join/normalize) und baute die
+  Deklarationsmenge einer Bibliothek jedes Mal neu; `resolveUri` und die
+  Deklarationen werden jetzt zwischengespeichert (rein über dem
+  unveränderlichen Index; der Schlüssel relativer URIs enthält das
+  Verzeichnis). Das war der Großteil von `R-SOLID-DIP-CONCRETE-DEPENDENCY` auf
+  Dart und des Widget-Graphen.
+
+| Ziel (5 Läufe, Median) | Evaluation ms | Graphen ms | gesamt ms | Peak-RSS MB |
+|---|---|---|---|---|
+| velyo (Dart) | 152,6 → 81,8 | 76,3 → 44,1 | 1.723 → 1.641 | 310 → 282 (Streuung 268–310) |
+| swipemeister + Architektur (Dart) | 216,4 → 159,2 | 98,0 → 72,7 | 3.427 → 3.299 | 452 → 450 |
+| flyingfish-Backend (TS) | 59,3 → 61,5 | 21,8 → 23,2 | 1.227 → 1.203 | 363 → 403 (Streuung 362–416, beide Seiten) |
+| flyingfish-Backend, `--jobs 4` | 84,5 → 67,0 | 45,9 → 30,9 | 1.901 → 1.880 | 1.007 → 997 |
+| stoa `src` (TS) | 65,5 → 64,1 | 20,6 → 19,7 | 1.124 → 1.119 | 366 → 373 |
+
+Facts, Findings und die Größen von ModuleGraph/SymbolGraph/TypeModel sind in
+jedem Lauf identisch (auch flyingfish-Frontend/-Schemas, mwpa); die
+Findings-Snapshots vorher/nachher sind identisch
+(`scripts/compare-findings.ts`). Der Peak-RSS zeigt keine Änderung über seine
+Streuung von Lauf zu Lauf hinaus — ihn bestimmt die Extraktion.
+
+- **Regelklassifizierung: nicht als Mechanismus eingeführt.** Nach dem, was
+  sie lesen: die 40 deklarativen Regeln sind lokal (Facts eines Subjekts);
+  `R-DEP-CYCLE` (immer aktiv) und die SOLID-Regeln brauchen den ModuleGraph;
+  nur die SOLID-Regeln mit `usesTypeModel` brauchen den SymbolGraph, der schon
+  jetzt nur dann gebaut wird; die Flutter-Layout-Regeln (immer aktiv) lesen
+  den Widget-Graphen, der ohne Dart leer ist; tote Exporte,
+  Flutter-Lifecycle, Validierungsverträge und SRP lesen die ganze Fact-Menge.
+  Jeder Graph wird also von einer immer aktiven Regel gebraucht oder schon
+  bei Bedarf gebaut, und die Projektregeln brauchen alle Facts — eine
+  Klassifizierung brächte einen Mechanismus ohne Speicher- oder Zeitgewinn.
+  Kein Streaming: keine Messung stützt es.
+- **Nicht verlässlich gemessen:** der transiente Müll je Regel (`heapUsed`
+  vor einem GC hängt davon ab, wann die junge Generation zuletzt
+  eingesammelt wurde).
+
 ## Baseline-/Diff-Modus (opt-in, `--baseline`)
 
 Verdrahtet `Finding.baselineStatus` (`'new' | 'known' | 'fixed'`), das seit
@@ -2371,7 +2431,7 @@ zu liefern.
 
 ## Qualitätssicherung
 
-- **node:test-Suite** (`npm test`, `test/*.test.ts`): 648 Tests, 0 fehlgeschlagen,
+- **node:test-Suite** (`npm test`, `test/*.test.ts`): 650 Tests, 0 fehlgeschlagen,
   Lauf vom 2026-11-04 (Regeln pos./neg., Extraktion, Schema-Validierung, i18n,
   Determinismus, SARIF, Eval, Semantik-Groundedness, Datenschutz,
   Finding-Trennung, semantische Modelle, Identitäten, Metriken).

@@ -80,6 +80,11 @@ export class DartLibraryIndex {
     private readonly files = new Map<string, FileInfo>();
     private readonly ownerOf = new Map<string, string>();
     private readonly exportCache = new Map<string, Answer>();
+    // Both pure over the index, which never changes after construction:
+    // every name lookup walks a library's directives and resolved each URI
+    // (path join/normalize) and re-collected its declarations anew.
+    private readonly uriCache = new Map<string, string | null>();
+    private readonly declaredCache = new Map<string, ReadonlySet<string>>();
 
     public constructor(
         facts: readonly Fact[],
@@ -153,6 +158,17 @@ export class DartLibraryIndex {
 
     /** The project file a Dart URI refers to from `from`, or null (external, or not in the analyzed set). */
     public resolveUri(from: string, uri: string): string | null {
+        const key = `${dirname(from)}\n${uri}`;
+        const cached = this.uriCache.get(key);
+        if (cached !== undefined) {
+            return cached;
+        }
+        const resolved = this.resolveUriUncached(from, uri);
+        this.uriCache.set(key, resolved);
+        return resolved;
+    }
+
+    private resolveUriUncached(from: string, uri: string): string | null {
         if (uri.startsWith('dart:')) {
             return null;
         }
@@ -174,13 +190,18 @@ export class DartLibraryIndex {
     }
 
     // Declarations of a library: its own file plus every part it owns.
-    private declaredIn(library: string): Set<string> {
+    private declaredIn(library: string): ReadonlySet<string> {
+        const cached = this.declaredCache.get(library);
+        if (cached !== undefined) {
+            return cached;
+        }
         const names = new Set(this.files.get(library)?.declared ?? []);
         for (const [part, owner] of this.ownerOf) {
             if (owner === library) {
                 this.files.get(part)?.declared.forEach((name) => names.add(name));
             }
         }
+        this.declaredCache.set(library, names);
         return names;
     }
 

@@ -1694,6 +1694,61 @@ before:
   `test/RuleGovernance.test.ts` E1a now checks that project findings stay
   apart and that stable wins in a declarative merge.
 
+## Evaluation memory and lifetimes (Finding Identity spec, phase 3, 2026-11-04)
+
+Measured first (phase 0, then per stage with heap probes in a scratch copy;
+a forced GC only there, as a measuring tool — never in the code): the
+evaluation is not where the memory goes. Peak RSS is reached in the
+extraction; during graphs and rules the retained heap grows by ≤ 2 MB
+(graphs ≈ 1 MB, the declarative grouping ≈ 1.4 MB), and the evaluation takes
+55 of 1,240 ms (flyingfish backend) to 230 of 3,500 ms (swipemeister).
+What the measurement did find, and what changed:
+
+- **Adapters released after the ingestion.** The adapter registry moved
+  from the run into `Ingestion` and is dropped by `Ingestion.finish()` once
+  the last file is applied; the report's adapter versions are read up front.
+  The sequential loop runs in a function of its own (`ingestSequentially`),
+  so the last file's adapter is not kept reachable from `analyze`'s frame.
+  Before, the TypeScript adapter's shared Project with the lib files (built
+  once a script or `declare global` file was parsed) stayed alive through
+  graphs and rules: retained heap during the evaluation of the flyingfish
+  backend 92–94 → 62–63 MB (−30 MB). Projects without such files are
+  unchanged (stoa, swipemeister, velyo).
+- **Declarative grouping ends before the project rules**
+  (`RuleEngine.evaluateDeclarative`): ≤ 1 MB, kept because it costs nothing.
+- **Dart URI resolution memoized.** `DartLibraryIndex` resolved every
+  import URI again (path join/normalize) for every name lookup and rebuilt a
+  library's declaration set each time; `resolveUri` and the declarations are
+  now cached (pure over the immutable index; the relative-URI key includes the
+  directory). This was most of `R-SOLID-DIP-CONCRETE-DEPENDENCY` on Dart and
+  of the widget graph.
+
+| target (5 runs, median) | evaluation ms | graphs ms | total ms | peak RSS MB |
+|---|---|---|---|---|
+| velyo (Dart) | 152.6 → 81.8 | 76.3 → 44.1 | 1,723 → 1,641 | 310 → 282 (spread 268–310) |
+| swipemeister + architecture (Dart) | 216.4 → 159.2 | 98.0 → 72.7 | 3,427 → 3,299 | 452 → 450 |
+| flyingfish backend (TS) | 59.3 → 61.5 | 21.8 → 23.2 | 1,227 → 1,203 | 363 → 403 (spread 362–416, both sides) |
+| flyingfish backend, `--jobs 4` | 84.5 → 67.0 | 45.9 → 30.9 | 1,901 → 1,880 | 1,007 → 997 |
+| stoa `src` (TS) | 65.5 → 64.1 | 20.6 → 19.7 | 1,124 → 1,119 | 366 → 373 |
+
+Facts, findings, ModuleGraph/SymbolGraph/TypeModel sizes are identical in
+every run (also flyingfish frontend/schemas, mwpa); the findings snapshots
+before/after are identical (`scripts/compare-findings.ts`). Peak RSS shows
+no change beyond its run-to-run spread — it is set by the extraction.
+
+- **Rule classification: not introduced as a mechanism.** By what they
+  read: the 40 declarative rules are local (one subject's facts);
+  `R-DEP-CYCLE` (always on) and the SOLID rules need the ModuleGraph; only
+  the SOLID rules with `usesTypeModel` need the SymbolGraph, which is
+  already built only then; the Flutter layout rules (always on) read the
+  widget graph, which is empty without Dart; dead exports, Flutter lifecycle,
+  validation contracts and SRP read the whole fact set. Every graph is thus
+  needed by an always-on rule or already built on demand, and the project
+  rules need all facts — a classification would add a mechanism with no
+  memory or time to gain. No streaming: nothing measured supports it.
+- **Not measured reliably:** the transient garbage per rule (`heapUsed`
+  before a GC depends on when the young generation was last collected).
+
 ## Baseline / diff mode (opt-in, `--baseline`)
 
 Wires up `Finding.baselineStatus` (`'new' | 'known' | 'fixed'`), present in
@@ -2173,7 +2228,7 @@ fails fast (exit 1, concrete errors) instead of silently yielding 0 findings.
 
 ## Quality assurance
 
-- **node:test suite** (`npm test`, `test/*.test.ts`): 648 tests, 0 failed,
+- **node:test suite** (`npm test`, `test/*.test.ts`): 650 tests, 0 failed,
   as of the 2026-11-04 run (rules pos./neg., extraction, schema validation,
   i18n, determinism, SARIF, evaluation, semantic groundedness, privacy,
   finding-model separation, semantic models, identities, metrics).

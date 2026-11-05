@@ -161,6 +161,18 @@ export const analyze = (options: AnalyzeOptions): AnalysisResult => {
     const run = startRun(options);
     const ingestion = new Ingestion(run, options);
     const ingestionStart = run.clock.sinceStart();
+    ingestSequentially(run, ingestion, options);
+    ingestion.finish();
+    run.clock.add('ingestion', run.clock.sinceStart() - ingestionStart);
+    return finishRun(run, ingestion, options);
+};
+
+/**
+ * The sequential ingestion loop, in a function of its own: its locals (the
+ * last file's adapter, among them) end with it instead of staying reachable
+ * from `analyze`'s frame while the graphs and rules run.
+ */
+const ingestSequentially = (run: Run, ingestion: Ingestion, options: AnalyzeOptions): void => {
     for (const [index, meta] of run.files.entries()) {
         if (ingestion.memoryCritical(index)) {
             ingestion.stopAt(index, meta);
@@ -170,8 +182,6 @@ export const analyze = (options: AnalyzeOptions): AnalysisResult => {
         const outcome = prepared.kind === 'extract' ? extractFile(prepared.adapter, prepared.file, contextOf(options)) : prepared.outcome;
         ingestion.commit(index, meta, prepared.file, outcome);
     }
-    run.clock.add('ingestion', run.clock.sinceStart() - ingestionStart);
-    return finishRun(run, ingestion, options);
 };
 
 /**
@@ -240,6 +250,7 @@ export const analyzeAsync = async (options: AnalyzeAsyncOptions): Promise<Analys
     } finally {
         await pool.close();
     }
+    ingestion.finish();
     run.clock.add('ingestion', run.clock.sinceStart() - ingestionStart);
     return finishRun(run, ingestion, options);
 };
@@ -249,7 +260,6 @@ const WINDOW_PER_JOB = 4;
 
 /** What one run sets up before ingestion and needs again when it finishes. */
 interface Run {
-    registry: AdapterRegistry;
     ruleEngine: RuleEngine;
     projectRules: ProjectRule[];
     architectureModel: ArchitectureModel | undefined;
@@ -265,7 +275,6 @@ interface Run {
 }
 
 const startRun = (options: AnalyzeOptions): Run => {
-    const registry = createAdapterRegistry();
     const knowledgeBase = KnowledgeBase.loadFromDirectory(options.knowledgeDir, options.config.knowledgeBase);
     const ruleSet = RuleSet.loadFromDirectory(options.ruleSetDir, options.config.ruleSet);
     const architectureModel = architectureModelOf(options);
@@ -302,7 +311,7 @@ const startRun = (options: AnalyzeOptions): Run => {
         })
     );
     options.onProgress?.(takeMemorySnapshot(), {phase: 'discovery', filesSelected: files.length, filesProcessed: 0, factsExtracted: 0, elapsedMs: elapsedMs()});
-    return {registry, ruleEngine, projectRules, architectureModel, elapsedMs, clock, files, excludedByReason, excludedSample, recordExcluded};
+    return {ruleEngine, projectRules, architectureModel, elapsedMs, clock, files, excludedByReason, excludedSample, recordExcluded};
 };
 
 /** A file the pipeline settled itself, or one whose adapter still has to parse it. */
@@ -334,6 +343,16 @@ class Ingestion {
     public stoppedAtIndex: number | undefined;
     public readonly criticalRatio: number;
     public readonly cache: FactCache | null;
+    /** The adapters' ids and versions, for the report — read once, so the adapters themselves can go (`finish`). */
+    public readonly adapterVersions: Record<string, string>;
+    /**
+     * The language adapters — needed only while files are prepared and
+     * extracted. Released by `finish`: an adapter may hold parser state
+     * worth tens of MB (the TypeScript adapter's shared Project with the lib
+     * files, once a script or `declare global` file was parsed), which the
+     * graphs and the rules never read.
+     */
+    private registry: AdapterRegistry | null;
     private readonly typeExtractor: TypeDiagnosticsExtractor | null;
     private readonly checkEveryFiles: number;
 
@@ -341,6 +360,9 @@ class Ingestion {
         private readonly run: Run,
         private readonly options: AnalyzeOptions
     ) {
+        const registry = createAdapterRegistry();
+        this.registry = registry;
+        this.adapterVersions = registry.versions();
         this.typeExtractor = options.typecheck === true ? new TypeDiagnosticsExtractor() : null;
         this.cache = options.cacheDir !== undefined && (options.identityScheme ?? IDENTITY_SCHEME) === IDENTITY_SCHEME ? new FactCache(options.cacheDir) : null;
         this.checkEveryFiles = options.memoryGuard?.checkEveryFiles ?? DEFAULT_MEMORY_CHECK_INTERVAL;
@@ -381,11 +403,19 @@ class Ingestion {
         this.stoppedAtIndex = index;
     }
 
+    /** Ends the ingestion: the adapters (and whatever parser state they hold) are released before the graphs and rules run. */
+    public finish(): void {
+        this.registry = null;
+    }
+
     public prepare(meta: FileMeta): Prepared {
         // Resolved by path alone (FileMeta, no content) — a file nothing can
         // parse is never read at all. Not a coverage gap: Stoa simply has no
         // adapter for this language, the same as an excluded-by-config file.
-        const adapter = this.run.registry.resolve(meta);
+        if (this.registry === null) {
+            throw new Error('Ingestion.prepare after finish(): the adapters are released');
+        }
+        const adapter = this.registry.resolve(meta);
         if (adapter === null) {
             return {kind: 'settled', outcome: {kind: 'unsupported'}};
         }
@@ -453,8 +483,8 @@ class Ingestion {
 }
 
 const finishRun = (run: Run, ingestion: Ingestion, options: AnalyzeOptions): AnalysisResult => {
-    const {registry, ruleEngine, projectRules, architectureModel, clock, files, elapsedMs, excludedByReason, excludedSample} = run;
-    const {facts, analyzedPaths, analyzed, skipped, cacheHits, hasCoverageGap, stoppedAtFile, stoppedAtIndex, cache} = ingestion;
+    const {ruleEngine, projectRules, architectureModel, clock, files, elapsedMs, excludedByReason, excludedSample} = run;
+    const {facts, analyzedPaths, analyzed, skipped, cacheHits, hasCoverageGap, stoppedAtFile, stoppedAtIndex, cache, adapterVersions} = ingestion;
     options.onProgress?.(takeMemorySnapshot(), {phase: 'evaluation', filesSelected: files.length, filesProcessed: analyzed + skipped, factsExtracted: facts.length, elapsedMs: elapsedMs()});
     const graphsStart = clock.sinceStart();
     // Phase 0: build the reusable, project-wide ModuleGraph once, here —
@@ -517,7 +547,7 @@ const finishRun = (run: Run, ingestion: Ingestion, options: AnalyzeOptions): Ana
         engine: ENGINE_VERSION,
         ruleSet: options.config.ruleSet,
         knowledgeBase: options.config.knowledgeBase,
-        adapters: registry.versions()
+        adapters: adapterVersions
     };
 
     const report: AnalysisReport = {

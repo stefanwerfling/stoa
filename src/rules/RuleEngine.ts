@@ -58,18 +58,8 @@ export class RuleEngine {
         dartLibraryIndex?: DartLibraryIndex,
         analyzedFiles: ReadonlySet<string> = new Set(facts.map((fact) => fact.subject.file))
     ): Finding[] {
-        const units = groupUnits(facts);
-        const keyed: KeyedFinding[] = [];
+        const keyed = this.evaluateDeclarative(facts);
         const projectFindings: Finding[] = [];
-
-        for (const rule of this.ruleSet.all()) {
-            for (const unit of units) {
-                const finding = this.applyRule(rule, unit);
-                if (finding !== null) {
-                    keyed.push(finding);
-                }
-            }
-        }
 
         for (const projectRule of this.projectRules) {
             const findings = projectRule.evaluate({
@@ -96,6 +86,25 @@ export class RuleEngine {
         const all = [...dedupe(keyed), ...projectFindings];
         all.sort(compareFindings);
         return all;
+    }
+
+    /**
+     * The declarative rules over the facts grouped per subject. In a method of
+     * its own so the grouping (one map entry per subject) ends here, before
+     * the project rules run.
+     */
+    private evaluateDeclarative(facts: Fact[]): KeyedFinding[] {
+        const units = groupUnits(facts);
+        const keyed: KeyedFinding[] = [];
+        for (const rule of this.ruleSet.all()) {
+            for (const unit of units) {
+                const finding = this.applyRule(rule, unit);
+                if (finding !== null) {
+                    keyed.push(finding);
+                }
+            }
+        }
+        return keyed;
     }
 
     public principleCount(): number {
