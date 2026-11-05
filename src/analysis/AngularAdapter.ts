@@ -2,6 +2,7 @@ import type {Node} from 'web-tree-sitter';
 import type {Fact} from '../Types.js';
 import {parseHtmlTree} from './HtmlAdapter.js';
 import type {FileMeta, FileRef, LanguageAdapter, ParseResult, ProjectContext} from './LanguageAdapter.js';
+import {assignSiteSymbols} from './SiteIdentity.js';
 import {extractTemplateA11yFacts, type BindingDialect} from './template/TemplateExtraction.js';
 
 // Angular template binding syntax → plain attribute + dynamic flag.
@@ -53,10 +54,10 @@ export class AngularAdapter implements LanguageAdapter {
         return {file, ok: true, diagnostics: [], handle: parsed.root, release: parsed.release};
     }
 
-    public extractFacts(parsed: ParseResult, _ctx: ProjectContext): Fact[] {
+    public extractFacts(parsed: ParseResult, ctx: ProjectContext): Fact[] {
         if (parsed.handle === undefined) {
             return [];
         }
-        return extractTemplateA11yFacts(parsed.handle as Node, parsed.file.content, parsed.file.path, {id: this.id, version: this.version}, ANGULAR_DIALECT);
+        return assignSiteSymbols(extractTemplateA11yFacts(parsed.handle as Node, parsed.file.content, parsed.file.path, {id: this.id, version: this.version}, ANGULAR_DIALECT), ctx.identityScheme);
     }
 }

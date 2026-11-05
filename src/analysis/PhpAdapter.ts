@@ -1,6 +1,7 @@
 import {Engine} from 'php-parser';
 import type {Fact} from '../Types.js';
 import type {FileMeta, FileRef, LanguageAdapter, ParseResult, ProjectContext} from './LanguageAdapter.js';
+import {assignSiteSymbols, schemeOf} from './SiteIdentity.js';
 import {extractFacts, type PhpNode} from './php/PhpExtraction.js';
 
 /**
@@ -34,13 +35,11 @@ export class PhpAdapter implements LanguageAdapter {
         }
     }
 
-    public extractFacts(parsed: ParseResult, _ctx: ProjectContext): Fact[] {
+    public extractFacts(parsed: ParseResult, ctx: ProjectContext): Fact[] {
         if (!parsed.ok || parsed.handle === undefined) {
             return [];
         }
-        return extractFacts(parsed.handle as PhpNode, parsed.file.content, parsed.file.path, {
-            id: this.id,
-            version: this.version
-        });
+        const facts = extractFacts(parsed.handle as PhpNode, parsed.file.content, parsed.file.path, {id: this.id, version: this.version, ...schemeOf(ctx)});
+        return assignSiteSymbols(facts, ctx.identityScheme);
     }
 }

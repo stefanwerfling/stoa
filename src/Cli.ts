@@ -2,8 +2,10 @@
 import {dirname, join, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {parseArgs} from 'node:util';
-import {applyBaseline, IncompleteAnalysisError, loadBaseline, onlyNewFindings, saveBaseline} from './Baseline.js';
+import {applyBaseline, baselineScheme, IncompleteAnalysisError, loadBaseline, onlyNewFindings, saveBaseline, schemeMismatchMessage, writeBaselineFile, type BaselineFile} from './Baseline.js';
+import {migrateBaseline, needsMigration} from './BaselineMigration.js';
 import {applyFindingFilter, parseFindingFilter} from './FindingFilter.js';
+import {IDENTITY_SCHEME, keyString} from './FindingIdentity.js';
 import {loadConfig} from './Config.js';
 import {loadValidationContract} from './contracts/ValidationContract.js';
 import {loadArchitectureConfig, type ArchitectureConfig} from './architecture/ArchitectureConfig.js';
@@ -11,7 +13,7 @@ import {loadExpected} from './evaluation/Corpus.js';
 import {evaluate, evaluationOutcome} from './evaluation/Evaluator.js';
 import type {EvaluationAnalysis} from './evaluation/EvaluationTypes.js';
 import {toMarkdown as evaluationMarkdown} from './evaluation/EvaluationReporter.js';
-import {analyzeAsync} from './Pipeline.js';
+import {analyzeAsync, type AnalyzeAsyncOptions} from './Pipeline.js';
 import type {PipelineMetrics} from './PipelineMetrics.js';
 import {toJson, toMarkdown} from './reporting/Reporter.js';
 import {toSarif} from './reporting/SarifReporter.js';
@@ -73,6 +75,7 @@ type CliValues = {
     cache?: boolean;
     baseline?: string;
     'update-baseline'?: boolean;
+    'migrate-baseline'?: boolean;
     'only-new'?: boolean;
     'min-confidence'?: string;
     certainty?: string[];
@@ -124,7 +127,7 @@ const USAGE = [
     'stoa – Stoic Code Analysis Engine',
     '',
     'Usage:',
-    '  stoa analyze <path> [--format markdown|json|sarif] [--lang en|de] [--include <glob>]... [--exclude <glob>]... [--typecheck] [--dead-exports] [--solid] [--architecture <file>] [--contracts <file>] [--semantic noop|anthropic] [--config <file>] [--knowledge <dir>] [--rules <dir>] [--memory-stats] [--cache] [--baseline <file>] [--update-baseline] [--only-new] [--min-confidence <0..1>] [--certainty <list>]... [--no-experimental] [--jobs <n>]',
+    '  stoa analyze <path> [--format markdown|json|sarif] [--lang en|de] [--include <glob>]... [--exclude <glob>]... [--typecheck] [--dead-exports] [--solid] [--architecture <file>] [--contracts <file>] [--semantic noop|anthropic] [--config <file>] [--knowledge <dir>] [--rules <dir>] [--memory-stats] [--cache] [--baseline <file>] [--update-baseline] [--migrate-baseline] [--only-new] [--min-confidence <0..1>] [--certainty <list>]... [--no-experimental] [--jobs <n>]',
     '  stoa eval <path> --expected <file> [--format markdown|json] [--solid] [--architecture <file>] [--contracts <file>] [--knowledge <dir>] [--rules <dir>] [--jobs <n>]',
     ''
 ].join('\n');
@@ -218,6 +221,99 @@ const jobsOf = (values: CliValues): number | null => {
     return jobs;
 };
 
+/**
+ * `--migrate-baseline`: analyzes the same code once more under the
+ * baseline's identity scheme, converts the baseline (BaselineMigration.ts),
+ * writes it in place and says what happened — entries carried over, and every
+ * entry no current finding reproduces (dropped, listed). Returns the
+ * converted baseline, or null after an error (reported).
+ */
+const migrateBaselineFile = async (path: string, baseline: BaselineFile, options: AnalyzeAsyncOptions, current: AnalysisReport): Promise<BaselineFile | null> => {
+    const scheme = baselineScheme(baseline);
+    try {
+        const legacy = await analyzeAsync({...options, jobs: 1, identityScheme: scheme});
+        const migration = migrateBaseline(baseline, legacy.report, current, options.rootPath);
+        writeBaselineFile(path, migration.baseline);
+        process.stderr.write(`[stoa] baseline ${path} migrated from finding identity scheme ${scheme} to ${IDENTITY_SCHEME}: ${migration.migrated} entr${migration.migrated === 1 ? 'y' : 'ies'} carried over, ${migration.unmatched.length} not reproduced by the current code (dropped).\n`);
+        for (const entry of migration.unmatched.slice(0, 20)) {
+            process.stderr.write(`[stoa]   dropped: ${keyString(entry)}\n`);
+        }
+        if (migration.unmatched.length > 20) {
+            process.stderr.write(`[stoa]   … and ${migration.unmatched.length - 20} more\n`);
+        }
+        return migration.baseline;
+    } catch (error) {
+        process.stderr.write(`${(error as Error).message}\n`);
+        return null;
+    }
+};
+
+/** What makes a baseline comparison less than reliable, on stderr — visible on any output format. */
+const warnAboutComparison = (report: AnalysisReport): void => {
+    if (report.baseline?.incomplete === true) {
+        // Same visibility as the partial-analysis warning — a provisional
+        // baseline comparison must never read like a complete one.
+        process.stderr.write('[stoa] WARNING: the analysis was incomplete — baseline new/known status is provisional, and nothing is reported as fixed (a file the scan never reached was never actually re-checked).\n');
+    }
+};
+
+/**
+ * The `--baseline` part of an analyze run: loads the baseline (migrating it
+ * first under `--migrate-baseline`), compares, optionally updates it and
+ * filters to new findings. Returns the compared result, or an exit code
+ * after an error (reported).
+ */
+const compareWithBaseline = async (values: CliValues, baselineFile: string, result: AnalysisResult, analysisOptions: AnalyzeAsyncOptions): Promise<AnalysisResult | number> => {
+    const rootPath = analysisOptions.rootPath;
+    const baselinePath = resolve(baselineFile);
+    let baseline;
+    try {
+        baseline = loadBaseline(baselinePath);
+    } catch (error) {
+        // A malformed baseline is a configuration error, never silently
+        // treated as "no baseline" — that would make every known finding
+        // look new, the opposite of what a baseline is for.
+        process.stderr.write(`${(error as Error).message}\n`);
+        return EXIT_ERROR;
+    }
+    if (baseline !== null && needsMigration(baseline)) {
+        if (values['migrate-baseline'] !== true) {
+            process.stderr.write(`${schemeMismatchMessage(baselinePath, baselineScheme(baseline))}\n`);
+            return EXIT_ERROR;
+        }
+        baseline = await migrateBaselineFile(baselinePath, baseline, analysisOptions, result.report);
+        if (baseline === null) {
+            return EXIT_ERROR;
+        }
+    }
+    let report = applyBaseline(result.report, baseline, rootPath);
+    warnAboutComparison(report);
+    if (values['update-baseline'] === true) {
+        // Reflects the CURRENT run (pre-filter) — updating the baseline
+        // and asking to see only the new findings in the same invocation
+        // would otherwise make the "new" set invisible to itself.
+        try {
+            saveBaseline(baselinePath, result.report, rootPath);
+        } catch (error) {
+            if (error instanceof IncompleteAnalysisError) {
+                // Not a separate failure mode — the underlying analysis
+                // being non-'complete' is already what drives the exit
+                // code below; just make the specific refusal visible too.
+                process.stderr.write(`${error.message}\n`);
+            } else {
+                // A genuine I/O/config error writing the baseline — this
+                // IS its own execution error, independent of coverage status.
+                process.stderr.write(`${(error as Error).message}\n`);
+                return EXIT_ERROR;
+            }
+        }
+    }
+    if (values['only-new'] === true) {
+        report = onlyNewFindings(report);
+    }
+    return {...result, report};
+};
+
 const runAnalyze = async (values: CliValues, target: string): Promise<number> => {
     // Option-combination validation up front, before any analysis work —
     // an invalid combination is a usage error, not something that should
@@ -228,6 +324,10 @@ const runAnalyze = async (values: CliValues, target: string): Promise<number> =>
     }
     if (values['update-baseline'] === true && values.baseline === undefined) {
         process.stderr.write('error: --update-baseline requires --baseline <file>\n');
+        return EXIT_ERROR;
+    }
+    if (values['migrate-baseline'] === true && values.baseline === undefined) {
+        process.stderr.write('error: --migrate-baseline requires --baseline <file>\n');
         return EXIT_ERROR;
     }
     const jobs = jobsOf(values);
@@ -255,20 +355,25 @@ const runAnalyze = async (values: CliValues, target: string): Promise<number> =>
     // its files skipped.
     const memoryStats = values['memory-stats'] === true;
     const rootPath = resolve(target);
+    // What decides the findings — shared with a legacy-scheme run for
+    // `--migrate-baseline`, so both runs see exactly the same analysis.
+    const analysisOptions: AnalyzeAsyncOptions = {
+        rootPath,
+        jobs,
+        knowledgeDir: knowledgeDirOf(values),
+        ruleSetDir: ruleSetDirOf(values),
+        config: configFor(values),
+        lang,
+        typecheck: values.typecheck === true,
+        deadExports: values['dead-exports'] === true,
+        solid: values.solid === true,
+        validationContract,
+        architecture: inputs.architecture
+    };
     let result: AnalysisResult;
     try {
         result = await analyzeAsync({
-            rootPath,
-            jobs,
-            knowledgeDir: knowledgeDirOf(values),
-            ruleSetDir: ruleSetDirOf(values),
-            config: configFor(values),
-            lang,
-            typecheck: values.typecheck === true,
-            deadExports: values['dead-exports'] === true,
-            solid: values.solid === true,
-            validationContract,
-            architecture: inputs.architecture,
+            ...analysisOptions,
             ...(values.cache === true ? {cacheDir: join(rootPath, '.stoa', 'cache')} : {}),
             ...(memoryStats
                 ? {
@@ -325,48 +430,11 @@ const runAnalyze = async (values: CliValues, target: string): Promise<number> =>
     }
 
     if (values.baseline !== undefined) {
-        const baselinePath = resolve(values.baseline);
-        let baseline;
-        try {
-            baseline = loadBaseline(baselinePath);
-        } catch (error) {
-            // A malformed baseline is a configuration error, never silently
-            // treated as "no baseline" — that would make every known finding
-            // look new, the opposite of what a baseline is for.
-            process.stderr.write(`${(error as Error).message}\n`);
-            return EXIT_ERROR;
+        const compared = await compareWithBaseline(values, values.baseline, result, analysisOptions);
+        if (typeof compared === 'number') {
+            return compared;
         }
-        let report = applyBaseline(result.report, baseline, rootPath);
-        if (report.baseline?.incomplete === true) {
-            // Same visibility as the partial-analysis warning above — a
-            // provisional baseline comparison must never read like a
-            // complete one, on any output format.
-            process.stderr.write('[stoa] WARNING: the analysis was incomplete — baseline new/known status is provisional, and nothing is reported as fixed (a file the scan never reached was never actually re-checked).\n');
-        }
-        if (values['update-baseline'] === true) {
-            // Reflects the CURRENT run (pre-filter) — updating the baseline
-            // and asking to see only the new findings in the same invocation
-            // would otherwise make the "new" set invisible to itself.
-            try {
-                saveBaseline(baselinePath, result.report, rootPath);
-            } catch (error) {
-                if (error instanceof IncompleteAnalysisError) {
-                    // Not a separate failure mode — the underlying analysis
-                    // being non-'complete' is already what drives the exit
-                    // code below; just make the specific refusal visible too.
-                    process.stderr.write(`${error.message}\n`);
-                } else {
-                    // A genuine I/O/config error writing the baseline — this
-                    // IS its own execution error, independent of coverage status.
-                    process.stderr.write(`${(error as Error).message}\n`);
-                    return EXIT_ERROR;
-                }
-            }
-        }
-        if (values['only-new'] === true) {
-            report = onlyNewFindings(report);
-        }
-        result = {...result, report};
+        result = compared;
     }
 
     // E1c: output filters act last — after the baseline comparison and after
@@ -465,6 +533,7 @@ const main = async (): Promise<number> => {
             cache: {type: 'boolean', default: false},
             baseline: {type: 'string'},
             'update-baseline': {type: 'boolean', default: false},
+            'migrate-baseline': {type: 'boolean', default: false},
             'only-new': {type: 'boolean', default: false},
             'min-confidence': {type: 'string'},
             certainty: {type: 'string', multiple: true},

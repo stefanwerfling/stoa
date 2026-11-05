@@ -94,7 +94,7 @@ test('2.2: an incomplete scan compared against a baseline reports nothing as fix
         const baselinePath = join(dir, 'baseline.json');
         // A baseline naming a finding that cannot possibly exist in this
         // fixture — on a COMPLETE scan this would be reported `fixed`.
-        writeFileSync(baselinePath, `${JSON.stringify({version: 1, findings: [{file: 'does/not/exist.ts', rule: 'R-NONEXISTENT', symbol: 'x'}]}, null, 2)}\n`);
+        writeFileSync(baselinePath, `${JSON.stringify({version: 1, identity: 2, findings: [{file: 'does/not/exist.ts', rule: 'R-NONEXISTENT', symbol: 'x'}]}, null, 2)}\n`);
 
         const result = runCli(['--baseline', baselinePath, '--format', 'json'], {STOA_TEST_FORCE_INCOMPLETE: '1'});
         // Analysis Completion Integrity (2.2): an incomplete scan must NEVER
@@ -147,11 +147,11 @@ test('--update-baseline on findings that share an identity exits 1 with the reas
         // STOA_TEST_DUPLICATE_IDENTITY repeats the first finding.
         writeFileSync(join(project, 'm.php'), '<?php\n$first = new class extends AbstractMigration {\n    public function up(Schema $schema): void {}\n};\n$second = new class extends AbstractMigration {\n    public function up(Schema $schema): void {}\n};\n');
         const path = join(dir, 'baseline.json');
-        writeFileSync(path, '{"version": 1, "findings": []}\n');
+        writeFileSync(path, '{"version": 1, "identity": 2, "findings": []}\n');
         const result = analyzeAt(project, ['--baseline', path, '--update-baseline', '--format', 'json'], {STOA_TEST_DUPLICATE_IDENTITY: '1'});
         assert.equal(result.status, 1);
-        assert.match(result.stderr, /refusing to update baseline .*share an identity.*m\.php::R-MIGRATION-NO-DOWN::\(anonymous\)#0/);
-        assert.equal(readFileSync(path, 'utf8'), '{"version": 1, "findings": []}\n');
+        assert.match(result.stderr, /refusing to update baseline .*produced by more than one finding.*m\.php::R-MIGRATION-NO-DOWN::\(anonymous\)#0/);
+        assert.equal(readFileSync(path, 'utf8'), '{"version": 1, "identity": 2, "findings": []}\n');
     } finally {
         rmSync(dir, {recursive: true, force: true});
     }

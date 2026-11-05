@@ -1,10 +1,13 @@
 import {Worker} from 'node:worker_threads';
 import type {FileMeta, FileRef} from './analysis/LanguageAdapter.js';
+import type {IdentityScheme} from './FindingIdentity.js';
 import type {FileOutcome} from './FileExtraction.js';
 
 /** What every extraction worker is started with. */
 export interface ExtractionWorkerConfig {
     rootDir: string;
+    /** The finding-identity scheme to extract under (AnalyzeOptions.identityScheme); the current one when absent. */
+    identityScheme?: IdentityScheme;
     /** The memory guard's ratio, checked by the worker against its own heap before each file. */
     criticalRatio: number;
 }

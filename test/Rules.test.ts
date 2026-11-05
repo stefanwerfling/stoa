@@ -240,7 +240,7 @@ test('the migration rules fire for Doctrine (PHP) via addSql, scoped to up() and
     assert.equal(bare.filter((f) => f.rule.id === 'R-MIGRATION-UNGUARDED-DDL').length, 1, 'unguarded CREATE TABLE');
     const noDown = bare.filter((f) => f.rule.id === 'R-MIGRATION-NO-DOWN');
     assert.equal(noDown.length, 1, 'no down() method');
-    assert.equal(noDown[0]?.location.symbol, 'Version20260102');
+    assert.equal(noDown[0]?.location.symbol, 'App\\Migrations\\Version20260102');
 });
 
 test('the migration rules fire for the Doctrine DBAL Schema API (no addSql)', () => {
@@ -263,13 +263,13 @@ test('R-ORM-EAGER-RELATION catches the constant fetch form (…::FETCH_EAGER), a
         (f) => f.rule.id === 'R-ORM-EAGER-RELATION'
     );
     assert.equal(attr.length, 1);
-    assert.equal(attr[0]?.location.symbol, 'Node.parent');
+    assert.equal(attr[0]?.location.symbol, 'App\\Entity\\Node.parent');
 
     const anno = analyzePath(join(root, 'test', 'corpus', 'project', 'DoctrineAnnotatedEagerConst.php')).filter(
         (f) => f.rule.id === 'R-ORM-EAGER-RELATION'
     );
     assert.equal(anno.length, 1);
-    assert.equal(anno[0]?.location.symbol, 'Edge.source');
+    assert.equal(anno[0]?.location.symbol, 'App\\Entity\\Edge.source');
 });
 
 test('the @Entity rules fire for Doctrine (PHP) via #[ORM] attributes', () => {
@@ -277,14 +277,14 @@ test('the @Entity rules fire for Doctrine (PHP) via #[ORM] attributes', () => {
         (f) => f.rule.id === 'R-ORM-ENTITY-NO-PK'
     );
     assert.equal(noPk.length, 1);
-    assert.equal(noPk[0]?.location.symbol, 'Session');
+    assert.equal(noPk[0]?.location.symbol, 'App\\Entity\\Session');
     assert.equal(noPk[0]?.interpretation.principles[0]?.id, 'marcus.judgment');
     assert.equal(noPk[0]?.severity, 'high');
 
     const eager = analyzePath(join(root, 'test', 'corpus', 'project', 'DoctrineEntityEager.php'));
     const eagerHits = eager.filter((f) => f.rule.id === 'R-ORM-EAGER-RELATION');
     assert.equal(eagerHits.length, 1, 'the EAGER ManyToOne, not the LAZY OneToMany');
-    assert.equal(eagerHits[0]?.location.symbol, 'Order.customer');
+    assert.equal(eagerHits[0]?.location.symbol, 'App\\Entity\\Order.customer');
     assert.equal(eagerHits[0]?.interpretation.principles[0]?.id, 'marcus.control');
     assert.equal(eager.filter((f) => f.rule.id === 'R-ORM-ENTITY-NO-PK').length, 0, '#[ORM\\Id] is a primary key');
 
@@ -299,12 +299,12 @@ test('the @Entity rules also fire for annotation-mapped Doctrine (docblock @ORM)
         (f) => f.rule.id === 'R-ORM-ENTITY-NO-PK'
     );
     assert.equal(noPk.length, 1);
-    assert.equal(noPk[0]?.location.symbol, 'Account');
+    assert.equal(noPk[0]?.location.symbol, 'App\\Entity\\Account');
 
     const eager = analyzePath(join(root, 'test', 'corpus', 'project', 'DoctrineAnnotatedEager.php'));
     const eagerHits = eager.filter((f) => f.rule.id === 'R-ORM-EAGER-RELATION');
     assert.equal(eagerHits.length, 1, 'the EAGER relation, not the LAZY one');
-    assert.equal(eagerHits[0]?.location.symbol, 'Invoice.customer');
+    assert.equal(eagerHits[0]?.location.symbol, 'App\\Entity\\Invoice.customer');
     assert.equal(eager.filter((f) => f.rule.id === 'R-ORM-ENTITY-NO-PK').length, 0, '@ORM\\Id is a primary key');
 
     const inherits = analyzePath(join(root, 'test', 'fixtures', 'orm', 'DoctrineAnnotatedInherits.php')).filter(

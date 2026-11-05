@@ -37,6 +37,7 @@ export const extractBackendValidationFacts = (sourceFile: SourceFile, build: Bui
         facts.push(build({
             kind: 'validation.backendInputUnvalidated',
             kindOf: 'function',
+            site: true,
             symbol: `handler#${index}`,
             range: rangeOfNode(sourceFile, inputs[0] ?? handler),
             value: distinctSources(inputs).join(', '),
@@ -366,6 +367,7 @@ export const extractMassAssignmentFacts = (sourceFile: SourceFile, build: Build)
             facts.push(build({
                 kind: 'validation.rawRequestMassAssignment',
                 kindOf: 'statement',
+                site: true,
                 symbol: `massAssign#${index}`,
                 range: rangeOfNode(sourceFile, site.call),
                 value: site.description,

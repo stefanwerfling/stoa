@@ -53,30 +53,30 @@ export const extractJsxA11yFacts = (sourceFile: SourceFile, build: Build): Fact[
         const evidence = `<${tag}>`;
 
         if (tag === 'img' && !hasSpread && !isDecorative(tag, attrs) && !attrs.has('alt') && !imgHasTextAlternative(attrs)) {
-            facts.push(build({kind: 'ui.imageMissingAlt', kindOf: 'statement', symbol: `img#${counters.img}`, range, value: evidence}));
+            facts.push(build({kind: 'ui.imageMissingAlt', kindOf: 'statement', site: true, symbol: `img#${counters.img}`, range, value: evidence}));
             counters.img += 1;
         }
 
         // A control is only exempt when aria-hidden; role=presentation/none is
         // ignored by the browser on a focusable element, so it still needs a name.
         if (tag === 'button' && !hasSpread && !isAriaHidden(attrs) && !hasAccessibleName(element, attrs)) {
-            facts.push(build({kind: 'ui.controlMissingName', kindOf: 'statement', symbol: `button#${counters.button}`, range, value: evidence}));
+            facts.push(build({kind: 'ui.controlMissingName', kindOf: 'statement', site: true, symbol: `button#${counters.button}`, range, value: evidence}));
             counters.button += 1;
         }
 
         if (tag === 'a' && attrs.has('href') && !hasSpread && !isAriaHidden(attrs) && !hasAccessibleName(element, attrs)) {
-            facts.push(build({kind: 'ui.linkMissingName', kindOf: 'statement', symbol: `link#${counters.link}`, range, value: evidence}));
+            facts.push(build({kind: 'ui.linkMissingName', kindOf: 'statement', site: true, symbol: `link#${counters.link}`, range, value: evidence}));
             counters.link += 1;
         }
 
         if (isLabelableControl(tag, attrs) && !hasSpread && !isAriaHidden(attrs) && !hasLabel(element, attrs, labelForIds)) {
-            facts.push(build({kind: 'ui.controlMissingLabel', kindOf: 'statement', symbol: `field#${counters.field}`, range, value: evidence}));
+            facts.push(build({kind: 'ui.controlMissingLabel', kindOf: 'statement', site: true, symbol: `field#${counters.field}`, range, value: evidence}));
             counters.field += 1;
         }
 
         const role = attrs.get('role');
         if (typeof role === 'string' && hasRoleTokens(role) && !hasValidRole(role)) {
-            facts.push(build({kind: 'ui.invalidRole', kindOf: 'statement', symbol: `role#${counters.role}`, range, value: `role="${role}"`}));
+            facts.push(build({kind: 'ui.invalidRole', kindOf: 'statement', site: true, symbol: `role#${counters.role}`, range, value: `role="${role}"`}));
             counters.role += 1;
         }
 
@@ -87,7 +87,7 @@ export const extractJsxA11yFacts = (sourceFile: SourceFile, build: Build): Fact[
             }
         }
         if (unknown.length > 0) {
-            facts.push(build({kind: 'ui.unknownAriaAttribute', kindOf: 'statement', symbol: `aria-attr#${counters.ariaAttr}`, range, value: unknown.join(', ')}));
+            facts.push(build({kind: 'ui.unknownAriaAttribute', kindOf: 'statement', site: true, symbol: `aria-attr#${counters.ariaAttr}`, range, value: unknown.join(', ')}));
             counters.ariaAttr += 1;
         }
 
@@ -98,23 +98,23 @@ export const extractJsxA11yFacts = (sourceFile: SourceFile, build: Build): Fact[
             }
         }
         if (invalidValues.length > 0) {
-            facts.push(build({kind: 'ui.invalidAriaValue', kindOf: 'statement', symbol: `aria-val#${counters.ariaVal}`, range, value: invalidValues.join(', ')}));
+            facts.push(build({kind: 'ui.invalidAriaValue', kindOf: 'statement', site: true, symbol: `aria-val#${counters.ariaVal}`, range, value: invalidValues.join(', ')}));
             counters.ariaVal += 1;
         }
 
         const tabIndex = attrs.get('tabIndex');
         if (typeof tabIndex === 'string' && isPositiveTabindexLiteral(tabIndex)) {
-            facts.push(build({kind: 'ui.positiveTabindex', kindOf: 'statement', symbol: `tabindex#${counters.tabindex}`, range, value: `tabindex="${tabIndex}"`}));
+            facts.push(build({kind: 'ui.positiveTabindex', kindOf: 'statement', site: true, symbol: `tabindex#${counters.tabindex}`, range, value: `tabindex="${tabIndex}"`}));
             counters.tabindex += 1;
         }
 
         if (attrs.get('aria-hidden') === 'true' && isFocusable(tag, attrs)) {
-            facts.push(build({kind: 'ui.ariaHiddenFocusable', kindOf: 'statement', symbol: `aria-hidden#${counters.ariaHidden}`, range, value: evidence}));
+            facts.push(build({kind: 'ui.ariaHiddenFocusable', kindOf: 'statement', site: true, symbol: `aria-hidden#${counters.ariaHidden}`, range, value: evidence}));
             counters.ariaHidden += 1;
         }
 
         if ((tag === 'iframe' || tag === 'frame') && !hasSpread && !isAriaHidden(attrs) && !hasFrameName(attrs)) {
-            facts.push(build({kind: 'ui.frameMissingTitle', kindOf: 'statement', symbol: `frame#${counters.frame}`, range, value: evidence}));
+            facts.push(build({kind: 'ui.frameMissingTitle', kindOf: 'statement', site: true, symbol: `frame#${counters.frame}`, range, value: evidence}));
             counters.frame += 1;
         }
 
@@ -126,7 +126,7 @@ export const extractJsxA11yFacts = (sourceFile: SourceFile, build: Build): Fact[
             const style = jsxStyleDeclarations(element);
             const lowContrast = style === null ? null : contrastViolation(style.declarations, style.vars);
             if (lowContrast !== null) {
-                facts.push(build({kind: 'ui.lowContrastText', kindOf: 'statement', symbol: `contrast#${counters.contrast}`, range, value: lowContrast}));
+                facts.push(build({kind: 'ui.lowContrastText', kindOf: 'statement', site: true, symbol: `contrast#${counters.contrast}`, range, value: lowContrast}));
                 counters.contrast += 1;
             }
         }

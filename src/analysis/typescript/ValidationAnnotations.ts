@@ -101,6 +101,7 @@ export const extractValidationAnnotations = (sourceFile: SourceFile, build: Buil
         facts.push(build({
             kind: 'validation.contractAnnotation',
             kindOf: 'statement',
+            site: true,
             symbol: `annotation#${index}`,
             range: rangeOfNode(sourceFile, schema.statement),
             value,

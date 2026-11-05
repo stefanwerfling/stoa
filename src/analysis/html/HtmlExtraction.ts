@@ -65,7 +65,7 @@ export const extractFacts = (root: Node, content: string, filePath: string, info
             // tree; a non-empty aria-label or a resolving aria-labelledby is also a
             // text alternative (WCAG 1.1.1) — none of these is a violation.
             if (!attrs.has('alt') && !isDecorative(tag, attrs) && !imgHasTextAlternative(attrs, idToElement)) {
-                facts.push(build({kind: 'ui.imageMissingAlt', kindOf: 'statement', symbol, range: rangeOf(startTag), value: evidence(startTag)}));
+                facts.push(build({kind: 'ui.imageMissingAlt', kindOf: 'statement', site: true, symbol, range: rangeOf(startTag), value: evidence(startTag)}));
             }
         } else if (tag === 'button') {
             const symbol = `button#${buttonIndex}`;
@@ -73,20 +73,20 @@ export const extractFacts = (root: Node, content: string, filePath: string, info
             // A control is only exempt when aria-hidden; role=presentation/none is
             // ignored by the browser on a focusable element, so it still needs a name.
             if (!isAriaHidden(attrs) && !hasAccessibleName(element, attrs, idToElement)) {
-                facts.push(build({kind: 'ui.controlMissingName', kindOf: 'statement', symbol, range: rangeOf(startTag), value: evidence(startTag)}));
+                facts.push(build({kind: 'ui.controlMissingName', kindOf: 'statement', site: true, symbol, range: rangeOf(startTag), value: evidence(startTag)}));
             }
         } else if (isLabelableControl(tag, attrs)) {
             const symbol = `field#${fieldIndex}`;
             fieldIndex += 1;
             if (!isAriaHidden(attrs) && !hasLabel(element, attrs, labelForIds, idToElement)) {
-                facts.push(build({kind: 'ui.controlMissingLabel', kindOf: 'statement', symbol, range: rangeOf(startTag), value: evidence(startTag)}));
+                facts.push(build({kind: 'ui.controlMissingLabel', kindOf: 'statement', site: true, symbol, range: rangeOf(startTag), value: evidence(startTag)}));
             }
         } else if (tag === 'a' && attrs.has('href')) {
             // Only an <a> with an href is a link; a bare anchor is not a control.
             const symbol = `link#${linkIndex}`;
             linkIndex += 1;
             if (!isAriaHidden(attrs) && !hasAccessibleName(element, attrs, idToElement)) {
-                facts.push(build({kind: 'ui.linkMissingName', kindOf: 'statement', symbol, range: rangeOf(startTag), value: evidence(startTag)}));
+                facts.push(build({kind: 'ui.linkMissingName', kindOf: 'statement', site: true, symbol, range: rangeOf(startTag), value: evidence(startTag)}));
             }
         }
 
@@ -95,7 +95,7 @@ export const extractFacts = (root: Node, content: string, filePath: string, info
         // nobody — a name/role/value defect. tabindex="-1" removes it from the tab
         // order, so that is correctly hidden and not flagged.
         if (attrs.get('aria-hidden') === 'true' && isFocusable(tag, attrs)) {
-            facts.push(build({kind: 'ui.ariaHiddenFocusable', kindOf: 'statement', symbol: `aria-hidden#${ariaHiddenIndex}`, range: rangeOf(startTag), value: evidence(startTag)}));
+            facts.push(build({kind: 'ui.ariaHiddenFocusable', kindOf: 'statement', site: true, symbol: `aria-hidden#${ariaHiddenIndex}`, range: rangeOf(startTag), value: evidence(startTag)}));
             ariaHiddenIndex += 1;
         }
 
@@ -103,7 +103,7 @@ export const extractFacts = (root: Node, content: string, filePath: string, info
         // an author-forbidden abstract role) conveys no role at all.
         const role = attrs.get('role');
         if (role !== undefined && hasRoleTokens(role) && !hasValidRole(role)) {
-            facts.push(build({kind: 'ui.invalidRole', kindOf: 'statement', symbol: `role#${roleIndex}`, range: rangeOf(startTag), value: `role="${role}"`}));
+            facts.push(build({kind: 'ui.invalidRole', kindOf: 'statement', site: true, symbol: `role#${roleIndex}`, range: rangeOf(startTag), value: `role="${role}"`}));
             roleIndex += 1;
         }
 
@@ -112,7 +112,7 @@ export const extractFacts = (root: Node, content: string, filePath: string, info
         // assistive tech — the intended state/relationship never reaches the user.
         const unknownAria = unknownAriaAttributes(attrs);
         if (unknownAria.length > 0) {
-            facts.push(build({kind: 'ui.unknownAriaAttribute', kindOf: 'statement', symbol: `aria-attr#${ariaAttrIndex}`, range: rangeOf(startTag), value: unknownAria.join(', ')}));
+            facts.push(build({kind: 'ui.unknownAriaAttribute', kindOf: 'statement', site: true, symbol: `aria-attr#${ariaAttrIndex}`, range: rangeOf(startTag), value: unknownAria.join(', ')}));
             ariaAttrIndex += 1;
         }
 
@@ -121,7 +121,7 @@ export const extractFacts = (root: Node, content: string, filePath: string, info
         // and ignored — the intended state is not conveyed.
         const invalidValues = invalidAriaValues(attrs);
         if (invalidValues.length > 0) {
-            facts.push(build({kind: 'ui.invalidAriaValue', kindOf: 'statement', symbol: `aria-val#${ariaValueIndex}`, range: rangeOf(startTag), value: invalidValues.join(', ')}));
+            facts.push(build({kind: 'ui.invalidAriaValue', kindOf: 'statement', site: true, symbol: `aria-val#${ariaValueIndex}`, range: rangeOf(startTag), value: invalidValues.join(', ')}));
             ariaValueIndex += 1;
         }
 
@@ -131,7 +131,7 @@ export const extractFacts = (root: Node, content: string, filePath: string, info
         // (programmatically focusable only) are both legitimate.
         const tabindex = attrs.get('tabindex');
         if (tabindex !== undefined && isPositiveTabindexLiteral(tabindex)) {
-            facts.push(build({kind: 'ui.positiveTabindex', kindOf: 'statement', symbol: `tabindex#${tabindexIndex}`, range: rangeOf(startTag), value: `tabindex="${tabindex}"`}));
+            facts.push(build({kind: 'ui.positiveTabindex', kindOf: 'statement', site: true, symbol: `tabindex#${tabindexIndex}`, range: rangeOf(startTag), value: `tabindex="${tabindex}"`}));
             tabindexIndex += 1;
         }
 
@@ -140,14 +140,14 @@ export const extractFacts = (root: Node, content: string, filePath: string, info
         // element is present: a fragment without one may be included into a page
         // that carries the language on its root.
         if (tag === 'html' && (attrs.get('lang') ?? attrs.get('xml:lang') ?? '').trim().length === 0) {
-            facts.push(build({kind: 'ui.documentMissingLang', kindOf: 'statement', symbol: `html#${htmlIndex}`, range: rangeOf(startTag), value: evidence(startTag)}));
+            facts.push(build({kind: 'ui.documentMissingLang', kindOf: 'statement', site: true, symbol: `html#${htmlIndex}`, range: rangeOf(startTag), value: evidence(startTag)}));
             htmlIndex += 1;
         }
 
         // A viewport meta that disables pinch-zoom (user-scalable=no) or caps the
         // zoom below 200% (maximum-scale < 2) stops users from enlarging text.
         if (tag === 'meta' && (attrs.get('name') ?? '').trim().toLowerCase() === 'viewport' && blocksZoom(attrs.get('content') ?? '')) {
-            facts.push(build({kind: 'ui.viewportBlocksZoom', kindOf: 'statement', symbol: `viewport#${viewportIndex}`, range: rangeOf(startTag), value: `content="${attrs.get('content') ?? ''}"`}));
+            facts.push(build({kind: 'ui.viewportBlocksZoom', kindOf: 'statement', site: true, symbol: `viewport#${viewportIndex}`, range: rangeOf(startTag), value: `content="${attrs.get('content') ?? ''}"`}));
             viewportIndex += 1;
         }
 
@@ -156,7 +156,7 @@ export const extractFacts = (root: Node, content: string, filePath: string, info
         // author intended is silently dropped.
         const dangling = danglingIdrefs(attrs, documentIds);
         if (dangling.length > 0) {
-            facts.push(build({kind: 'ui.danglingAriaIdref', kindOf: 'statement', symbol: `idref#${danglingIdrefIndex}`, range: rangeOf(startTag), value: dangling.join(', ')}));
+            facts.push(build({kind: 'ui.danglingAriaIdref', kindOf: 'statement', site: true, symbol: `idref#${danglingIdrefIndex}`, range: rangeOf(startTag), value: dangling.join(', ')}));
             danglingIdrefIndex += 1;
         }
 
@@ -164,7 +164,7 @@ export const extractFacts = (root: Node, content: string, filePath: string, info
         // the shared id is reported at every occurrence so all sites are visible.
         const elementId = attrs.get('id');
         if (elementId !== undefined && duplicatedIds.has(elementId.trim())) {
-            facts.push(build({kind: 'ui.duplicateId', kindOf: 'statement', symbol: `dupid#${duplicateIdIndex}`, range: rangeOf(startTag), value: `id="${elementId}"`}));
+            facts.push(build({kind: 'ui.duplicateId', kindOf: 'statement', site: true, symbol: `dupid#${duplicateIdIndex}`, range: rangeOf(startTag), value: `id="${elementId}"`}));
             duplicateIdIndex += 1;
         }
 
@@ -172,7 +172,7 @@ export const extractFacts = (root: Node, content: string, filePath: string, info
         // — its embedded document cannot supply one across the boundary, so without
         // it the frame is announced only as "frame". A hidden frame is exempt.
         if ((tag === 'iframe' || tag === 'frame') && !isAriaHidden(attrs) && !hasFrameName(attrs, idToElement)) {
-            facts.push(build({kind: 'ui.frameMissingTitle', kindOf: 'statement', symbol: `frame#${frameIndex}`, range: rangeOf(startTag), value: evidence(startTag)}));
+            facts.push(build({kind: 'ui.frameMissingTitle', kindOf: 'statement', site: true, symbol: `frame#${frameIndex}`, range: rangeOf(startTag), value: evidence(startTag)}));
             frameIndex += 1;
         }
 
@@ -184,7 +184,7 @@ export const extractFacts = (root: Node, content: string, filePath: string, info
         // is judged regardless of those (WCAG 1.4.3 is about visually rendered text).
         const lowContrast = inlineContrastViolation(attrs);
         if (lowContrast !== null) {
-            facts.push(build({kind: 'ui.lowContrastText', kindOf: 'statement', symbol: `contrast#${contrastIndex}`, range: rangeOf(startTag), value: lowContrast}));
+            facts.push(build({kind: 'ui.lowContrastText', kindOf: 'statement', site: true, symbol: `contrast#${contrastIndex}`, range: rangeOf(startTag), value: lowContrast}));
             contrastIndex += 1;
         }
     }

@@ -30,7 +30,8 @@
 - Memory-bounded pipeline with `coverage.status` `complete`/`partial`/`failed`
   and exit codes 0/2/1; per-file fact cache (`--cache`); opt-in parallel
   extraction on worker threads (`--jobs`); baseline/diff mode
-  (`--baseline`, `--only-new`, `--update-baseline`).
+  (`--baseline`, `--only-new`, `--update-baseline`), with a versioned
+  finding-identity scheme and an explicit `--migrate-baseline`.
 - Evaluator (`stoa eval`) with exit codes 0 = passed, 1 = failed or technical
   error, 2 = incomplete analysis. A finding identity (file + rule + symbol)
   that is produced twice is a rule defect and fails the evaluation;
@@ -1182,7 +1183,7 @@ stoa analyze <path> [--format markdown|json|sarif] [--lang en|de]
                     [--include <glob>]... [--exclude <glob>]...
                     [--typecheck] [--dead-exports] [--solid] [--architecture <file>]
                     [--contracts <file>] [--semantic noop|anthropic] [--memory-stats] [--cache]
-                    [--baseline <file>] [--update-baseline] [--only-new]
+                    [--baseline <file>] [--update-baseline] [--migrate-baseline] [--only-new]
                     [--min-confidence <0..1>] [--certainty <list>]... [--no-experimental]
                     [--config <file>] [--knowledge <dir>] [--rules <dir>] [--jobs <n>]
 stoa eval <path> --expected <file> [--format markdown|json] [--solid] [--architecture <file>]
@@ -1233,6 +1234,10 @@ stoa eval <path> --expected <file> [--format markdown|json] [--solid] [--archite
 - `--baseline <file>` / `--update-baseline` / `--only-new` — see "Baseline /
   diff mode" below. Off by default; omitting `--baseline` leaves every
   finding exactly as before (no `baselineStatus`, no `AnalysisReport.baseline`).
+- `--migrate-baseline` (needs `--baseline`) — converts a baseline written
+  under an older finding-identity scheme in place before comparing (see
+  "Finding identity scheme 2" below). Without it such a baseline is an
+  error (exit 1), never compared.
 - `--min-confidence <0..1>` / `--certainty <list>` (repeatable or
   comma-separated: `syntactic`, `semantic-heuristic`, `external-tool`) /
   `--no-experimental` — output filters, applied after the baseline step; the
@@ -1586,6 +1591,62 @@ separate change this round deliberately did not attempt without that prior
 dependency analysis. This is the single largest open item in "memory-bounded
 evaluation": `RuleEngine.evaluate(facts)` remains one atomic, unbounded pass
 over the full fact set, by necessity today, not by oversight.
+
+## Finding identity scheme 2 (Finding Identity spec, phase 1, 2026-11-04)
+
+A finding's identity is (project-relative file, rule id, `location.symbol`)
+— positions stay out of it. Phase 1 makes the symbol part stable and
+unambiguous across all four languages and versions it.
+
+- **Two layers, kept apart.** Declaration names (functions, types) come
+  from the adapters (`declarationSymbols`/`variantBases` in
+  `src/FindingIdentity.ts`); finding sites below a declaration are named by
+  one shared post-pass, `assignSiteSymbols` (`src/analysis/SiteIdentity.ts`).
+  An extractor marks a site fact with `FactSpec.site` and keeps naming it by
+  its legacy per-file ordinal (`catch#3`); the pass renames it relative to
+  the innermost enclosing function (its `metric.cyclomaticComplexity` fact)
+  or type (`struct.typeDecl`) whose range contains it, numbered per (scope,
+  kind) in source order: `Service.load>catch#0`. Imports are named by module
+  (`import:./db`). A site outside every declaration keeps the ordinal. The
+  pass needs no symbol resolution; it reads ranges the adapters already
+  produce (the SymbolGraph resolves ES import names, not declarations, and
+  is not involved).
+- **Namespaces:** PHP namespaces prefix function and class symbols
+  (`App\Svc\Repo.find`, `App\Entity\Order.customer`); C++ namespaces are
+  joined with `::` (`(anonymous)` for an anonymous one); TS `namespace A.B`
+  no longer yields `A.B.B`; an unnamed Dart extension is `(extension on T)`.
+- **Overloads and accessors:** a shared base is told apart by its variant
+  before any `#n` — `A.size:get`/`A.size:set`, `f(int)`/`f(double)`.
+- **Versioning:** `IDENTITY_SCHEME = 2`. The scheme travels through
+  `AnalyzeOptions.identityScheme` → `ProjectContext` → `AdapterInfo` (and
+  the worker config under `--jobs`); a run under an older scheme bypasses
+  the fact cache. A baseline stores `"identity": 2`; a file without the
+  field is scheme 1. `applyBaseline` throws on a mismatch, the CLI exits 1
+  with the way out. `--migrate-baseline` (`src/BaselineMigration.ts`)
+  analyzes the same code under both schemes (sequentially), pairs findings
+  by `Finding.id` (rule, file, position — equal in both runs, only symbols
+  differ), carries entries over, and drops and lists entries no current
+  finding reproduces; it refuses a non-`complete` run and an identity
+  collision. Best run on the code state the baseline was written for.
+- **Golden changes (renames only):** under both schemes every corpus
+  produces the same findings (paired by `Finding.id`: 0 added, 0 lost); only
+  `location.symbol` changed — main corpus 28, JSX 14, Flutter 6,
+  catch-intent 6, eval-multi 3, validation-dataflow 13, eval fixtures 1 each.
+  HTML, Vue, Angular and the SOLID corpora are unchanged (file-level sites,
+  or symbols without sites).
+- **Limits:** `tsc#`/`promise#` (type diagnostics, produced in the
+  pipeline, not by an adapter), `reexport#` and `directive#` keep per-file
+  ordinals; so do sites outside a function or type (a `// stoa:validation`
+  annotation on a top-level schema constant, static markup). A site whose enclosing declaration is
+  renamed is renamed with it — that is a real identity change, which
+  `--migrate-baseline` does not cover (it pairs by position on one code
+  state).
+- **Tests:** `test/IdentityScheme.test.ts` (namespaces TS/PHP/C++,
+  PHP class namespace incl. ORM/DDL, Dart extension, overloads, TS module
+  names, site stability under an edit in another declaration for all four
+  languages incl. a scheme-1 contrast, imports, fact order, `--jobs` 2 =
+  sequential, baseline scheme guard, `migrateBaseline`, CLI refuse/migrate/
+  usage error); the existing identity tests are updated to the new names.
 
 ## Baseline / diff mode (opt-in, `--baseline`)
 
@@ -2066,7 +2127,7 @@ fails fast (exit 1, concrete errors) instead of silently yielding 0 findings.
 
 ## Quality assurance
 
-- **node:test suite** (`npm test`, `test/*.test.ts`): 619 tests, 0 failed,
+- **node:test suite** (`npm test`, `test/*.test.ts`): 635 tests, 0 failed,
   as of the 2026-11-04 run (rules pos./neg., extraction, schema validation,
   i18n, determinism, SARIF, evaluation, semantic groundedness, privacy,
   finding-model separation, semantic models, identities, metrics).

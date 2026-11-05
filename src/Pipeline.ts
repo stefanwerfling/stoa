@@ -2,11 +2,12 @@ import {statSync} from 'node:fs';
 import {dirname} from 'node:path';
 import type {AdapterRegistry} from './analysis/AdapterRegistry.js';
 import {createAdapterRegistry, initGrammars} from './analysis/DefaultAdapters.js';
-import type {FileMeta, FileRef, LanguageAdapter} from './analysis/LanguageAdapter.js';
+import type {FileMeta, FileRef, LanguageAdapter, ProjectContext} from './analysis/LanguageAdapter.js';
 import {TypeDiagnosticsExtractor} from './analysis/typescript/TypeDiagnostics.js';
 import {ExtractionPool} from './ExtractionPool.js';
 import {FactCache} from './FactCache.js';
 import {extractFile, type FileOutcome} from './FileExtraction.js';
+import {IDENTITY_SCHEME, type IdentityScheme} from './FindingIdentity.js';
 import {collectFiles, readFileContent} from './Ingestion.js';
 import {loadProjectConfig} from './config/ProjectConfig.js';
 import {ModuleResolver} from './analysis/ModuleResolution.js';
@@ -92,6 +93,14 @@ export interface AnalyzeOptions {
      */
     cacheDir?: string;
     /**
+     * The finding-identity scheme of the symbols (FindingIdentity.ts); the
+     * current one when absent. Another one only for `--migrate-baseline`
+     * (src/BaselineMigration.ts), which needs a run's findings under the
+     * scheme of an old baseline; such a run bypasses the fact cache, whose
+     * entries hold current-scheme facts.
+     */
+    identityScheme?: IdentityScheme;
+    /**
      * Opt-in measurement (CLI `--memory-stats`): called once at the end with
      * counts, phase timings and the peak RSS of the run (see
      * PipelineMetrics.ts). Purely observational — the report is identical
@@ -111,6 +120,9 @@ export interface AnalyzeAsyncOptions extends AnalyzeOptions {
      */
     jobs?: number;
 }
+
+/** What an adapter is told about the run: the analysis root and the identity scheme. */
+const contextOf = (options: AnalyzeOptions): ProjectContext => ({rootDir: options.rootPath, ...(options.identityScheme !== undefined ? {identityScheme: options.identityScheme} : {})});
 
 /** One `onProgress` snapshot's non-memory half — see AnalyzeOptions.onProgress. */
 export interface AnalysisProgress {
@@ -155,7 +167,7 @@ export const analyze = (options: AnalyzeOptions): AnalysisResult => {
             break;
         }
         const prepared = ingestion.prepare(meta);
-        const outcome = prepared.kind === 'extract' ? extractFile(prepared.adapter, prepared.file, options.rootPath) : prepared.outcome;
+        const outcome = prepared.kind === 'extract' ? extractFile(prepared.adapter, prepared.file, contextOf(options)) : prepared.outcome;
         ingestion.commit(index, meta, prepared.file, outcome);
     }
     run.clock.add('ingestion', run.clock.sinceStart() - ingestionStart);
@@ -183,7 +195,7 @@ export const analyzeAsync = async (options: AnalyzeAsyncOptions): Promise<Analys
     // In parallel, this thread parses nothing — the workers load the
     // grammars they need themselves (see ExtractionWorker.ts) —, and the
     // workers start first, so their start overlaps everything below.
-    const pool = new ExtractionPool(jobs, {rootDir: options.rootPath, criticalRatio: options.memoryGuard?.workerCriticalRatio ?? options.memoryGuard?.criticalRatio ?? DEFAULT_CRITICAL_RATIO});
+    const pool = new ExtractionPool(jobs, {...contextOf(options), criticalRatio: options.memoryGuard?.workerCriticalRatio ?? options.memoryGuard?.criticalRatio ?? DEFAULT_CRITICAL_RATIO});
     pool.start();
     let run: Run;
     try {
@@ -330,7 +342,7 @@ class Ingestion {
         private readonly options: AnalyzeOptions
     ) {
         this.typeExtractor = options.typecheck === true ? new TypeDiagnosticsExtractor() : null;
-        this.cache = options.cacheDir !== undefined ? new FactCache(options.cacheDir) : null;
+        this.cache = options.cacheDir !== undefined && (options.identityScheme ?? IDENTITY_SCHEME) === IDENTITY_SCHEME ? new FactCache(options.cacheDir) : null;
         this.checkEveryFiles = options.memoryGuard?.checkEveryFiles ?? DEFAULT_MEMORY_CHECK_INTERVAL;
         this.criticalRatio = options.memoryGuard?.criticalRatio ?? DEFAULT_CRITICAL_RATIO;
     }

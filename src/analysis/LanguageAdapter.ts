@@ -1,3 +1,4 @@
+import type {IdentityScheme} from '../FindingIdentity.js';
 import type {Fact} from '../Types.js';
 
 /** Just enough to pick an adapter and report progress — no file content. See Ingestion.ts: discovery produces these first, content is read lazily only once a file is actually about to be parsed. */
@@ -31,6 +32,8 @@ export interface ParseResult {
 
 export interface ProjectContext {
     rootDir: string;
+    /** The finding-identity scheme of the symbols (FindingIdentity.ts); the current one when absent. */
+    identityScheme?: IdentityScheme;
 }
 
 /**

@@ -23,26 +23,26 @@ const ids = (findings: Finding[], rule: string): string[] => findings.filter((f)
 
 test('the same ui.* a11y rules fire on JSX intrinsics, honouring dynamic values and spreads', () => {
     const findings = analyzePath(join(corpus, 'Widgets.tsx'));
-    assert.deepEqual(ids(findings, 'R-A11Y-IMG-ALT'), ['img#0'], 'only the img with no alt; alt="…", alt={expr} and {...spread} are fine');
-    assert.deepEqual(ids(findings, 'R-A11Y-ARIA-INVALID-ROLE'), ['role#0'], 'the typo role; a valid role is fine');
-    assert.deepEqual(ids(findings, 'R-A11Y-ARIA-UNKNOWN-ATTR'), ['aria-attr#0'], 'the misspelled aria-* name');
-    assert.deepEqual(ids(findings, 'R-A11Y-ARIA-INVALID-VALUE'), ['aria-val#0'], 'the out-of-range enumerated value');
-    assert.deepEqual(ids(findings, 'R-A11Y-POSITIVE-TABINDEX'), ['tabindex#0'], 'the literal tabIndex={5}');
-    assert.deepEqual(ids(findings, 'R-A11Y-ARIA-HIDDEN-FOCUSABLE'), ['aria-hidden#0'], 'the focusable aria-hidden control');
-    assert.deepEqual(ids(findings, 'R-A11Y-FRAME-TITLE'), ['frame#0'], 'the untitled iframe; a titled one is fine');
+    assert.deepEqual(ids(findings, 'R-A11Y-IMG-ALT'), ['Widgets>img#0'], 'only the img with no alt; alt="…", alt={expr} and {...spread} are fine');
+    assert.deepEqual(ids(findings, 'R-A11Y-ARIA-INVALID-ROLE'), ['Widgets>role#0'], 'the typo role; a valid role is fine');
+    assert.deepEqual(ids(findings, 'R-A11Y-ARIA-UNKNOWN-ATTR'), ['Widgets>aria-attr#0'], 'the misspelled aria-* name');
+    assert.deepEqual(ids(findings, 'R-A11Y-ARIA-INVALID-VALUE'), ['Widgets>aria-val#0'], 'the out-of-range enumerated value');
+    assert.deepEqual(ids(findings, 'R-A11Y-POSITIVE-TABINDEX'), ['Widgets>tabindex#0'], 'the literal tabIndex={5}');
+    assert.deepEqual(ids(findings, 'R-A11Y-ARIA-HIDDEN-FOCUSABLE'), ['Widgets>aria-hidden#0'], 'the focusable aria-hidden control');
+    assert.deepEqual(ids(findings, 'R-A11Y-FRAME-TITLE'), ['Widgets>frame#0'], 'the untitled iframe; a titled one is fine');
 });
 
 test('JSX name rules: accessible name from text/aria/nested img, dynamic content and wrapping labels honoured', () => {
     const findings = analyzePath(join(corpus, 'Names.tsx'));
     assert.deepEqual(
         ids(findings, 'R-A11Y-CONTROL-NAME'),
-        ['button#0', 'button#1'],
+        ['Names>button#0', 'Names>button#1'],
         'the empty button and the decorative-img-only button; text / {dynamic} / aria-label / nested span / component child / img[alt] are names'
     );
-    assert.deepEqual(ids(findings, 'R-A11Y-LINK-NAME'), ['link#0'], 'the empty link; text, aria-label and a bare <a> without href are fine');
+    assert.deepEqual(ids(findings, 'R-A11Y-LINK-NAME'), ['Names>link#0'], 'the empty link; text, aria-label and a bare <a> without href are fine');
     assert.deepEqual(
         ids(findings, 'R-A11Y-FORM-LABEL'),
-        ['field#0', 'field#1'],
+        ['Names>field#0', 'Names>field#1'],
         'the bare input and the bare select; aria-label, <label htmlFor> by literal id, a wrapping <label>, a submit input and a dynamic id are all not flagged'
     );
 });
@@ -57,7 +57,7 @@ test('R-A11Y-CONTRAST-TEXT works on style={{…}} object literals, honouring num
     const findings = analyzePath(join(corpus, 'Contrast.tsx'));
     assert.deepEqual(
         ids(findings, 'R-A11Y-CONTRAST-TEXT'),
-        ['contrast#0', 'contrast#1'],
+        ['Palette>contrast#0', 'Palette>contrast#1'],
         'grey-on-white (normal) and a sub-3:1 large-text pair (fontSize: 24); a passing pair, a 3:1-ok large pair, black, a dynamic background, a colour with no background and a translucent colour are all fine'
     );
 });

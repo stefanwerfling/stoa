@@ -194,15 +194,31 @@ Komplexitäts-, Größen- und Seiteneffekt-Regeln) benennen die Adapter mit
 allen umschließenden benannten Bereichen: `Service.run`, `outer.inner`,
 `api.run` (ein an `api` gebundenes Objektliteral) in TS, `A.run` für eine
 Dart-Klasse/-Mixin/-Extension und eine PHP-Klasse/-Trait/-Interface/-Enum,
-`Buffer::reset` in C++ (Namespaces werden nicht ergänzt); eine Basis, die in
-einer Datei dennoch mehrfach vorkommt (ein Getter/Setter-Paar,
-C++-Überladungen), erhält bei jedem Vorkommen `#n`. Eine Funktion ohne Namen
+`Buffer::reset` in C++. Namespaces gehören zum Namen (Identitätsschema 2):
+`App\Svc\Repo.find` in PHP (auch bei Symbolen auf Klassenebene wie
+`App\Entity\Order.customer`), `app::io::Buffer::reset` in C++ (ein anonymer
+Namespace heißt `(anonymous)`; Definitionen innerhalb und außerhalb der
+Klasse heißen gleich), `A.B.run` für TS `namespace A.B`; eine unbenannte
+Dart-Extension heißt `(extension on T)`. Eine Basis, die in einer Datei
+dennoch mehrfach vorkommt, wird zuerst nach dem unterschieden, was die
+Deklarationen unterscheidet — ein TS-Accessor-Paar heißt
+`A.size:get`/`A.size:set`, C++-Überladungen `f(int)`/`f(double)` — und erst
+danach mit `#n`. Eine Funktion ohne Namen
 übernimmt den Namen, an den sie gebunden ist (`const handler = () => …` →
 `handler`, eine Objekt-Property, ein Klassenfeld, PHP `$handler = function
 …`); ein Callback heißt `<Bereich>.(anonymous)#n`, nummeriert innerhalb
 seines Bereichs (`C.go.(anonymous)#1`, `pair.(anonymous)#0` für einen
 Callback in `const pair = list.map(…)`) — nie nach seiner Zeile, eine
 Änderung darüber oder in einem anderen Bereich benennt ihn also nicht um.
+Eine Befund-STELLE innerhalb einer Deklaration (ein catch, eine
+DDL-Anweisung, ein a11y-Element, ein Validierungs-Handler …) heißt relativ zur
+innersten umschließenden Funktion oder zum innersten Typ und wird je
+(Bereich, Art) nummeriert: `Service.load>catch#0`, `Widgets>img#1`,
+`Version20260101.up>loss#0` — ein neues catch in einer anderen Funktion
+nummeriert sie nicht mehr um. Ein Import-Befund heißt nach seinem Modul
+(`import:node:fs`, `#n` nur für dasselbe Modul, das zweimal importiert wird).
+Eine Stelle außerhalb jeder Funktion und jedes Typs (statisches HTML,
+Vue-/Angular-Templates, eine annotierte Konstante auf oberster Ebene) behält die Ordnungszahl je Datei (`img#3`).
 Eine Kollision ist ein
 Regelfehler: `stoa eval` scheitert daran, und `--update-baseline` verweigert
 eine Baseline, die eine Identität wiederholt (`loadBaseline` könnte sie nicht
@@ -211,6 +227,21 @@ Befund `Entity.property`; Befunde auf Klassenebene benennen eine anonyme Klasse
 `(anonymous)`, nummeriert als `(anonymous)#n`, wenn eine PHP-Datei mehrere
 enthält (`new class extends AbstractMigration`). Keine Regel erzeugt bekannt
 eine kollidierende Identität.
+
+**Identitätsschema (Version):** die obigen Benennungsregeln sind Schema 2
+(`IDENTITY_SCHEME` in `src/FindingIdentity.ts`); Schema 1 ist die frühere
+Benennung (keine Namespaces, `#n` für Überladungen und Accessor-Paare,
+Ordnungszahlen je Datei für Stellen). Eine Baseline hält ihr Schema fest
+(`"identity": 2`; eine Datei ohne das Feld ist Schema 1). Eine Baseline eines
+anderen Schemas wird nie verglichen — Schlüssel zweier Schemata würden
+bekannte Befunde als neu und andere als behoben melden, stillschweigend —,
+die CLI endet mit Exit 1 und nennt den Ausweg: `--migrate-baseline`
+analysiert denselben Code unter dem Schema der Baseline und dem aktuellen,
+paart jeden Befund über seine Position mit sich selbst (`Finding.id`, in
+beiden Läufen gleich) und schreibt die Baseline an Ort und Stelle neu;
+Einträge, die kein aktueller Befund reproduziert, entfallen und werden
+aufgelistet. Eine unvollständige Analyse und eine Identitätskollision lehnt
+sie ab. Eine stille Migration gibt es nicht.
 
 ## 7. Grenzen
 

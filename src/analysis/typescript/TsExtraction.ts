@@ -1,8 +1,8 @@
 import {Node, SyntaxKind, ts} from 'ts-morph';
-import type {Block, CallExpression, CatchClause, ClassDeclaration, Decorator, ImportDeclaration, MethodDeclaration, ObjectLiteralExpression, PropertyAssignment, SourceFile} from 'ts-morph';
+import type {Block, CallExpression, CatchClause, ClassDeclaration, Decorator, ImportDeclaration, MethodDeclaration, ObjectLiteralExpression, PropertyAssignment, PropertyDeclaration, SourceFile, VariableDeclaration} from 'ts-morph';
 import type {Fact, SourceRange, SubjectKind} from '../../Types.js';
-import {declarationSymbols, type DeclarationBase} from '../../FindingIdentity.js';
-import {factBuilder, type AdapterInfo} from '../FactBuilder.js';
+import {declarationSymbols, type DeclarationBase, type IdentityScheme} from '../../FindingIdentity.js';
+import {factBuilder, identitySchemeOf, type AdapterInfo} from '../FactBuilder.js';
 import {isDeepImport} from '../ImportPath.js';
 import {extractJsxA11yFacts} from '../jsx/JsxA11y.js';
 import {extractBackendValidationFacts, extractMassAssignmentFacts} from './BackendValidation.js';
@@ -75,6 +75,7 @@ const LOGICAL_OPERATORS: ReadonlySet<SyntaxKind> = new Set([
  * for logical-operator occurrences), intended as a signal, not a verdict.
  */
 export const extractFacts = (sourceFile: SourceFile, info: AdapterInfo): Fact[] => {
+    const scheme = identitySchemeOf(info);
     const facts: Fact[] = [];
     const filePath = sourceFile.getFilePath();
     const build = factBuilder(info, filePath);
@@ -86,7 +87,7 @@ export const extractFacts = (sourceFile: SourceFile, info: AdapterInfo): Fact[] 
         const body = functionBody(fn);
         return body === undefined ? [] : [{fn, body}];
     });
-    const symbols = declarationSymbols(functions.map(({fn}) => functionBase(fn)));
+    const symbols = declarationSymbols(functions.map(({fn}) => functionBase(fn, scheme)), scheme);
     for (const [index, {fn, body}] of functions.entries()) {
         const metrics = measureBody(fn, body);
         const symbol = symbols[index] as string;
@@ -110,9 +111,9 @@ export const extractFacts = (sourceFile: SourceFile, info: AdapterInfo): Fact[] 
         const range = rangeOfNode(sourceFile, clause);
         const symbol = `catch#${index}`;
 
-        facts.push(build({kind: 'ast.emptyCatch', kindOf: 'catch-clause', symbol, range, value: empty}));
-        facts.push(build({kind: 'ast.catchSwallowsError', kindOf: 'catch-clause', symbol, range, value: !hasThrow && !hasCall && !catchReadsError(clause)}));
-        facts.push(build({kind: 'doc.catchHasRationale', kindOf: 'catch-clause', symbol, range, value: blockHasComment(block)}));
+        facts.push(build({kind: 'ast.emptyCatch', kindOf: 'catch-clause', site: true, symbol, range, value: empty}));
+        facts.push(build({kind: 'ast.catchSwallowsError', kindOf: 'catch-clause', site: true, symbol, range, value: !hasThrow && !hasCall && !catchReadsError(clause)}));
+        facts.push(build({kind: 'doc.catchHasRationale', kindOf: 'catch-clause', site: true, symbol, range, value: blockHasComment(block)}));
     });
 
     const referenced = referencedIdentifiers(sourceFile);
@@ -120,18 +121,18 @@ export const extractFacts = (sourceFile: SourceFile, info: AdapterInfo): Fact[] 
         const module = decl.getModuleSpecifierValue();
         const range = rangeOfNode(sourceFile, decl);
         const symbol = `import#${index}`;
-        facts.push(build({kind: 'deps.import', kindOf: 'import', symbol, range, value: {module, isTypeOnly: decl.isTypeOnly()}}));
+        facts.push(build({kind: 'deps.import', kindOf: 'import', site: true, symbol, range, value: {module, isTypeOnly: decl.isTypeOnly()}}));
 
         const names = importedNames(decl);
         if (names.length > 0 && names.every((name) => !referenced.has(name))) {
-            facts.push(build({kind: 'deps.importUnused', kindOf: 'import', symbol, range, value: module}));
+            facts.push(build({kind: 'deps.importUnused', kindOf: 'import', site: true, symbol, range, value: module}));
         }
         if (isDeepImport(module, '/')) {
-            facts.push(build({kind: 'deps.importDeep', kindOf: 'import', symbol, range, value: module}));
+            facts.push(build({kind: 'deps.importDeep', kindOf: 'import', site: true, symbol, range, value: module}));
         }
 
         for (const binding of importedBindings(decl)) {
-            facts.push(build({kind: 'deps.importName', kindOf: 'import', symbol, range, value: {module, name: binding.name, kind: binding.kind}}));
+            facts.push(build({kind: 'deps.importName', kindOf: 'import', site: true, symbol, range, value: {module, name: binding.name, kind: binding.kind}}));
         }
     });
 
@@ -148,7 +149,7 @@ export const extractFacts = (sourceFile: SourceFile, info: AdapterInfo): Fact[] 
         if (value === null) {
             return;
         }
-        facts.push(build({kind: 'orm.synchronizeEnabled', kindOf: 'statement', symbol: `synchronize#${index}`, range: rangeOfNode(sourceFile, property), value}));
+        facts.push(build({kind: 'orm.synchronizeEnabled', kindOf: 'statement', site: true, symbol: `synchronize#${index}`, range: rangeOfNode(sourceFile, property), value}));
     });
 
     descendantsOfKind(sourceFile, SyntaxKind.ObjectLiteralExpression).forEach((object, index) => {
@@ -164,6 +165,7 @@ export const extractFacts = (sourceFile: SourceFile, info: AdapterInfo): Fact[] 
                 build({
                     kind: 'orm.syncWithMigrations',
                     kindOf: 'statement',
+                    site: true,
                     symbol: `syncWithMigrations#${index}`,
                     range: rangeOfNode(sourceFile, object),
                     value: 'synchronize + migrations'
@@ -197,7 +199,7 @@ export const extractFacts = (sourceFile: SourceFile, info: AdapterInfo): Fact[] 
         // ordered by source position so symbols stay deterministic.
         candidates.sort((a, b) => a.node.getStart() - b.node.getStart());
         candidates.forEach((candidate, index) => {
-            facts.push(build({kind: 'migration.unguardedDdl', kindOf: 'statement', symbol: `ddl#${index}`, range: rangeOfNode(sourceFile, candidate.node), value: candidate.descriptor}));
+            facts.push(build({kind: 'migration.unguardedDdl', kindOf: 'statement', site: true, symbol: `ddl#${index}`, range: rangeOfNode(sourceFile, candidate.node), value: candidate.descriptor}));
         });
 
         // Dropping a table or column in up() destroys data on the forward path,
@@ -224,7 +226,7 @@ export const extractFacts = (sourceFile: SourceFile, info: AdapterInfo): Fact[] 
         }
         losses.sort((a, b) => a.node.getStart() - b.node.getStart());
         losses.forEach((loss, index) => {
-            facts.push(build({kind: 'migration.dataLoss', kindOf: 'statement', symbol: `loss#${index}`, range: rangeOfNode(sourceFile, loss.node), value: loss.descriptor}));
+            facts.push(build({kind: 'migration.dataLoss', kindOf: 'statement', site: true, symbol: `loss#${index}`, range: rangeOfNode(sourceFile, loss.node), value: loss.descriptor}));
         });
 
         // Adding a NOT NULL column without a default breaks on a non-empty table:
@@ -250,7 +252,7 @@ export const extractFacts = (sourceFile: SourceFile, info: AdapterInfo): Fact[] 
         }
         nullables.sort((a, b) => a.node.getStart() - b.node.getStart());
         nullables.forEach((nullable, index) => {
-            facts.push(build({kind: 'migration.nullableNoDefault', kindOf: 'statement', symbol: `nullable#${index}`, range: rangeOfNode(sourceFile, nullable.node), value: nullable.descriptor}));
+            facts.push(build({kind: 'migration.nullableNoDefault', kindOf: 'statement', site: true, symbol: `nullable#${index}`, range: rangeOfNode(sourceFile, nullable.node), value: nullable.descriptor}));
         });
 
         for (const cls of sourceFile.getClasses()) {
@@ -770,22 +772,32 @@ const ownName = (fn: Node): string | undefined => {
  * initializer IS a function is that function's own name (`ownName`), not a
  * second scope.
  */
-const scopeName = (node: Node): string | undefined => {
-    if (Node.isClassDeclaration(node) || Node.isClassExpression(node) || Node.isModuleDeclaration(node)) {
+const scopeName = (node: Node, scheme: IdentityScheme): string | undefined => {
+    if (Node.isModuleDeclaration(node)) {
+        // `namespace A.B {}` is two nested declarations; ts-morph names the
+        // outer one `A.B`, which with the inner `B` made `A.B.B` (scheme 1).
+        return scheme === 1 ? node.getName() : node.compilerNode.name.text;
+    }
+    if (Node.isClassDeclaration(node) || Node.isClassExpression(node)) {
         return node.getName();
     }
     if (FUNCTION_LIKE_KINDS.has(node.getKind())) {
         return ownName(node);
     }
     if (Node.isVariableDeclaration(node) || Node.isPropertyAssignment(node) || Node.isPropertyDeclaration(node)) {
-        const initializer = node.getInitializer();
-        const nameNode = node.getNameNode();
-        if (initializer === undefined || FUNCTION_LIKE_KINDS.has(initializer.getKind())) {
-            return undefined;
-        }
-        return Node.isIdentifier(nameNode) || Node.isStringLiteral(nameNode) || Node.isPrivateIdentifier(nameNode) ? nameNode.getText().replace(/^['"]|['"]$/g, '') : undefined;
+        return bindingScopeName(node);
     }
     return undefined;
+};
+
+/** A binding whose initializer is not itself a function (`const api = {run() {}}`): its name scopes what it holds. */
+const bindingScopeName = (node: VariableDeclaration | PropertyAssignment | PropertyDeclaration): string | undefined => {
+    const initializer = node.getInitializer();
+    const nameNode = node.getNameNode();
+    if (initializer === undefined || FUNCTION_LIKE_KINDS.has(initializer.getKind())) {
+        return undefined;
+    }
+    return Node.isIdentifier(nameNode) || Node.isStringLiteral(nameNode) || Node.isPrivateIdentifier(nameNode) ? nameNode.getText().replace(/^['"]|['"]$/g, '') : undefined;
 };
 
 /**
@@ -795,16 +807,17 @@ const scopeName = (node: Node): string | undefined => {
  * `<scope>.(anonymous)`, numbered within that scope (`declarationSymbols`) —
  * never by its line, which any edit above it would shift.
  */
-const functionBase = (fn: Node): DeclarationBase => {
+const functionBase = (fn: Node, scheme: IdentityScheme): DeclarationBase => {
     const scopes: string[] = [];
     for (let node = fn.getParent(); node !== undefined; node = node.getParent()) {
-        const name = scopeName(node);
+        const name = scopeName(node, scheme);
         if (name !== undefined && name.length > 0) {
             scopes.unshift(name);
         }
     }
     const own = ownName(fn);
-    return {base: [...scopes, own ?? '(anonymous)'].join('.'), anonymous: own === undefined};
+    const variant = Node.isGetAccessorDeclaration(fn) ? ':get' : Node.isSetAccessorDeclaration(fn) ? ':set' : undefined;
+    return {base: [...scopes, own ?? '(anonymous)'].join('.'), anonymous: own === undefined, ...(variant !== undefined ? {variant} : {})};
 };
 
 const subjectKindOf = (fn: Node): SubjectKind => {

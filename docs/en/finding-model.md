@@ -193,20 +193,48 @@ layout: `Page.build>Expanded#2`, numbered per file). Functions and methods
 by the adapters with every enclosing named scope: `Service.run`,
 `outer.inner`, `api.run` (an object literal bound to `api`) in TS, `A.run`
 for a Dart class/mixin/extension and a PHP class/trait/interface/enum,
-`Buffer::reset` in C++ (namespaces are not added); a base that still occurs
-twice in one file (a getter/setter pair, C++ overloads) gets `#n` on every
-occurrence. A function without a name takes the name it is bound to
+`Buffer::reset` in C++. Namespaces belong to the name (identity scheme 2):
+`App\Svc\Repo.find` in PHP (also on class-level symbols such as
+`App\Entity\Order.customer`), `app::io::Buffer::reset` in C++ (an anonymous
+namespace is `(anonymous)`; in-class and out-of-class definitions name the
+same), `A.B.run` for TS `namespace A.B`; an unnamed Dart extension is
+`(extension on T)`. A base that still occurs twice in one file is told apart
+first by what distinguishes the declarations — a TS accessor pair is
+`A.size:get`/`A.size:set`, C++ overloads `f(int)`/`f(double)` — and only
+then by `#n`. A function without a name takes the name it is bound to
 (`const handler = () => …` → `handler`, an object property, a class field,
 PHP `$handler = function …`); a callback is `<scope>.(anonymous)#n`,
 numbered within its scope (`C.go.(anonymous)#1`, `pair.(anonymous)#0` for a
 callback in `const pair = list.map(…)`) — never by its line, so an edit
-above it or in another scope does not rename it. A collision is a rule defect: `stoa eval` fails on it,
+above it or in another scope does not rename it. A finding SITE inside a
+declaration (a catch, a DDL statement, an a11y element, a validation
+handler …) is named relative to the innermost enclosing function or type and
+numbered per (scope, kind): `Service.load>catch#0`, `Widgets>img#1`,
+`Version20260101.up>loss#0` — a new catch in another function no longer
+renumbers it. An import finding is named by its module (`import:node:fs`,
+`#n` only for the same module imported twice). A site outside every
+function or type (static HTML, Vue/Angular templates, an annotated top-level
+constant) keeps
+the per-file ordinal (`img#3`). A collision is a rule defect: `stoa eval` fails on it,
 and `--update-baseline` refuses to write a baseline that repeats an identity
 (`loadBaseline` could not read it back) — exit 1, the existing file
 untouched. `R-ORM-EAGER-RELATION` names a finding `Entity.property`;
 class-level findings name an anonymous class `(anonymous)`, numbered
 `(anonymous)#n` when one PHP file holds several (`new class extends
 AbstractMigration`). No rule is known to produce a colliding identity.
+
+**Identity scheme (version):** the naming rules above are scheme 2
+(`IDENTITY_SCHEME` in `src/FindingIdentity.ts`); scheme 1 is the earlier
+naming (no namespaces, `#n` for overloads and accessor pairs, per-file site
+ordinals). A baseline records its scheme (`"identity": 2`; a file without it
+is scheme 1). A baseline of another scheme is never compared — keys of two
+schemes would mark known findings new and report others fixed, silently —
+the CLI exits 1 and names the way out: `--migrate-baseline` analyzes the same
+code under the baseline's scheme and the current one, pairs each finding with
+itself by position (`Finding.id`, equal in both runs) and rewrites the
+baseline in place; entries no current finding reproduces are dropped and
+listed. It refuses a partial analysis and an identity collision. There is no
+silent migration.
 
 ## 7. Limits
 

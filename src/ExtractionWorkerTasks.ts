@@ -43,7 +43,7 @@ const handle = async (task: ExtractionTask): Promise<ExtractionReply> => {
             loaded.add(grammar);
             await grammar().catch(() => undefined);
         }
-        return {index: task.index, outcome: extractFile(adapter, task.file, config.rootDir)};
+        return {index: task.index, outcome: extractFile(adapter, task.file, {rootDir: config.rootDir, ...(config.identityScheme !== undefined ? {identityScheme: config.identityScheme} : {})})};
     } catch (error) {
         return {index: task.index, error: error instanceof Error ? (error.stack ?? error.message) : String(error)};
     }

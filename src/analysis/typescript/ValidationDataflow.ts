@@ -83,6 +83,7 @@ export const extractValidationDataflowFacts = (sourceFile: SourceFile, build: Bu
             facts.push(build({
                 kind: 'validation.dataflowGraph',
                 kindOf: 'statement',
+                site: true,
                 symbol: `dataflow#${index}`,
                 range: rangeOfNode(sourceFile, call),
                 value: {id: schema.rawId, graph} as unknown as Record<string, unknown>,

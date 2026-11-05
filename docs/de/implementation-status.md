@@ -31,7 +31,8 @@
 - Speicherbegrenzte Pipeline mit `coverage.status` `complete`/`partial`/`failed`
   und Exit-Codes 0/2/1; Pro-Datei-Fact-Cache (`--cache`); opt-in parallele
   Extraktion auf Worker-Threads (`--jobs`); Baseline-/Diff-Modus
-  (`--baseline`, `--only-new`, `--update-baseline`).
+  (`--baseline`, `--only-new`, `--update-baseline`), mit versioniertem
+  Finding-Identitätsschema und expliziter `--migrate-baseline`.
 - Evaluator (`stoa eval`) mit Exit-Codes 0 = bestanden, 1 = nicht bestanden
   oder technischer Fehler, 2 = unvollständige Analyse. Eine doppelt erzeugte
   Finding-Identität (Datei + Regel + Symbol) ist ein Regeldefekt und lässt die
@@ -1267,7 +1268,7 @@ stoa analyze <pfad> [--format markdown|json|sarif] [--lang en|de]
                     [--include <glob>]... [--exclude <glob>]...
                     [--typecheck] [--dead-exports] [--solid] [--architecture <datei>] [--contracts <datei>]
                     [--semantic noop|anthropic] [--memory-stats] [--cache]
-                    [--baseline <datei>] [--update-baseline] [--only-new]
+                    [--baseline <datei>] [--update-baseline] [--migrate-baseline] [--only-new]
                     [--min-confidence <0..1>] [--certainty <liste>]... [--no-experimental]
                     [--config <datei>] [--knowledge <dir>] [--rules <dir>] [--jobs <n>]
 stoa eval <pfad> --expected <datei> [--format markdown|json] [--solid] [--architecture <datei>] [--contracts <datei>]
@@ -1323,6 +1324,11 @@ stoa eval <pfad> --expected <datei> [--format markdown|json] [--solid] [--archit
   "Baseline-/Diff-Modus" unten. Standardmäßig aus; ohne `--baseline` bleibt
   jeder Befund exakt wie vorher (kein `baselineStatus`, kein
   `AnalysisReport.baseline`).
+- `--migrate-baseline` (braucht `--baseline`) — wandelt eine unter einem
+  älteren Finding-Identitätsschema geschriebene Baseline vor dem Vergleich an
+  Ort und Stelle um (siehe "Finding-Identitätsschema 2" unten). Ohne den
+  Schalter ist eine solche Baseline ein Fehler (Exit 1) und wird nie
+  verglichen.
 - `--min-confidence <0..1>` / `--certainty <liste>` (wiederholbar oder
   kommagetrennt: `syntactic`, `semantic-heuristic`, `external-tool`) /
   `--no-experimental` — Ausgabefilter, angewendet nach dem Baseline-Schritt; der
@@ -1723,6 +1729,70 @@ Abhängigkeitsanalyse versucht hat. Dies ist der größte offene Punkt der
 "speicherbegrenzten Auswertung": `RuleEngine.evaluate(facts)` bleibt ein
 einziger, atomarer, unbegrenzter Durchlauf über das vollständige Fact-Set —
 aus Notwendigkeit heute, nicht aus Versehen.
+
+## Finding-Identitätsschema 2 (Finding-Identity-Spezifikation, Phase 1, 2026-11-04)
+
+Die Identität eines Befunds ist (projektrelative Datei, Regel-ID,
+`location.symbol`) — Positionen gehören nicht dazu. Phase 1 macht den
+Symbolteil in allen vier Sprachen stabil und eindeutig und versioniert ihn.
+
+- **Zwei Ebenen, getrennt.** Deklarationsnamen (Funktionen, Typen) kommen aus
+  den Adaptern (`declarationSymbols`/`variantBases` in
+  `src/FindingIdentity.ts`); Befund-Stellen unterhalb einer Deklaration
+  benennt ein gemeinsamer Nachlauf, `assignSiteSymbols`
+  (`src/analysis/SiteIdentity.ts`). Ein Extraktor markiert einen Stellen-Fact
+  mit `FactSpec.site` und benennt ihn weiter mit der alten Ordnungszahl je
+  Datei (`catch#3`); der Nachlauf benennt ihn relativ zur innersten
+  umschließenden Funktion (ihr `metric.cyclomaticComplexity`-Fact) oder zum
+  innersten Typ (`struct.typeDecl`), dessen Bereich ihn enthält, je (Bereich,
+  Art) in Quelltextreihenfolge nummeriert: `Service.load>catch#0`. Importe
+  heißen nach ihrem Modul (`import:./db`). Eine Stelle außerhalb jeder
+  Deklaration behält die Ordnungszahl. Der Nachlauf braucht keine
+  Symbolauflösung; er liest Bereiche, die die Adapter ohnehin erzeugen (der
+  SymbolGraph löst ES-Importnamen auf, keine Deklarationen, und ist nicht
+  beteiligt).
+- **Namespaces:** PHP-Namespaces stehen vor Funktions- und Klassensymbolen
+  (`App\Svc\Repo.find`, `App\Entity\Order.customer`); C++-Namespaces werden
+  mit `::` verbunden (`(anonymous)` für einen anonymen); TS `namespace A.B`
+  ergibt nicht mehr `A.B.B`; eine unbenannte Dart-Extension heißt
+  `(extension on T)`.
+- **Überladungen und Accessoren:** eine geteilte Basis wird vor jedem `#n`
+  über ihre Variante unterschieden — `A.size:get`/`A.size:set`,
+  `f(int)`/`f(double)`.
+- **Versionierung:** `IDENTITY_SCHEME = 2`. Das Schema läuft über
+  `AnalyzeOptions.identityScheme` → `ProjectContext` → `AdapterInfo` (und
+  unter `--jobs` über die Worker-Konfiguration); ein Lauf unter einem älteren
+  Schema umgeht den Fact-Cache. Eine Baseline speichert `"identity": 2`;
+  eine Datei ohne das Feld ist Schema 1. `applyBaseline` wirft bei
+  Abweichung, die CLI endet mit Exit 1 und nennt den Ausweg.
+  `--migrate-baseline` (`src/BaselineMigration.ts`) analysiert denselben
+  Code unter beiden Schemata (sequentiell), paart Befunde über `Finding.id`
+  (Regel, Datei, Position — in beiden Läufen gleich, nur die Symbole
+  unterscheiden sich), übernimmt Einträge und lässt Einträge, die kein
+  aktueller Befund reproduziert, mit Auflistung entfallen; einen nicht
+  `complete`-Lauf und eine Identitätskollision lehnt sie ab. Am besten auf
+  dem Codestand ausführen, für den die Baseline geschrieben wurde.
+- **Golden-Änderungen (nur Umbenennungen):** unter beiden Schemata erzeugt
+  jedes Korpus dieselben Befunde (über `Finding.id` gepaart: 0 hinzu,
+  0 verloren); geändert hat sich nur `location.symbol` — Hauptkorpus 28,
+  JSX 14, Flutter 6, catch-intent 6, eval-multi 3, validation-dataflow 13,
+  Eval-Fixtures je 1. HTML, Vue, Angular und die SOLID-Korpora sind
+  unverändert (Stellen auf Dateiebene oder Symbole ohne Stellen).
+- **Grenzen:** `tsc#`/`promise#` (Typdiagnosen, in der Pipeline erzeugt,
+  nicht von einem Adapter), `reexport#` und `directive#` behalten
+  Ordnungszahlen je Datei; ebenso Stellen außerhalb einer Funktion oder eines
+  Typs (eine `// stoa:validation`-Annotation an einer Schema-Konstante auf
+  oberster Ebene, statisches Markup). Eine Stelle, deren
+  umschließende Deklaration umbenannt wird, wird mit umbenannt — eine echte
+  Identitätsänderung, die `--migrate-baseline` nicht abdeckt (sie paart über
+  die Position auf einem Codestand).
+- **Tests:** `test/IdentityScheme.test.ts` (Namespaces TS/PHP/C++,
+  PHP-Klassen-Namespace inkl. ORM/DDL, Dart-Extension, Überladungen,
+  TS-Modulnamen, Stabilität der Stellen bei einer Änderung in einer anderen
+  Deklaration für alle vier Sprachen inkl. Schema-1-Gegenprobe, Importe,
+  Fact-Reihenfolge, `--jobs` 2 = sequentiell, Schema-Prüfung der Baseline,
+  `migrateBaseline`, CLI Ablehnung/Migration/Aufruffehler); die bestehenden
+  Identitätstests sind auf die neuen Namen umgestellt.
 
 ## Baseline-/Diff-Modus (opt-in, `--baseline`)
 
@@ -2251,7 +2321,7 @@ zu liefern.
 
 ## Qualitätssicherung
 
-- **node:test-Suite** (`npm test`, `test/*.test.ts`): 619 Tests, 0 fehlgeschlagen,
+- **node:test-Suite** (`npm test`, `test/*.test.ts`): 635 Tests, 0 fehlgeschlagen,
   Lauf vom 2026-11-04 (Regeln pos./neg., Extraktion, Schema-Validierung, i18n,
   Determinismus, SARIF, Eval, Semantik-Groundedness, Datenschutz,
   Finding-Trennung, semantische Modelle, Identitäten, Metriken).

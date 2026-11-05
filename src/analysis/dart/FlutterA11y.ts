@@ -81,15 +81,15 @@ export const extractFlutterA11yFacts = (root: Node, build: Build, identity: File
         const anchor = anchorOf(site, widget);
 
         if (widget === 'Image' && !named.has('semanticLabel') && !isExcludedFromSemantics(named)) {
-            facts.push(build({kind: 'ui.flutterImageNoSemanticLabel', kindOf: 'statement', symbol: `image#${imageIndex}`, range: rangeOf(anchor), value: evidence(site)}));
+            facts.push(build({kind: 'ui.flutterImageNoSemanticLabel', kindOf: 'statement', site: true, symbol: `image#${imageIndex}`, range: rangeOf(anchor), value: evidence(site)}));
             imageIndex += 1;
         }
         if (widget === 'IconButton' && !named.has('tooltip')) {
-            facts.push(build({kind: 'ui.flutterIconButtonNoTooltip', kindOf: 'statement', symbol: `iconButton#${iconButtonIndex}`, range: rangeOf(anchor), value: evidence(site)}));
+            facts.push(build({kind: 'ui.flutterIconButtonNoTooltip', kindOf: 'statement', site: true, symbol: `iconButton#${iconButtonIndex}`, range: rangeOf(anchor), value: evidence(site)}));
             iconButtonIndex += 1;
         }
         if ((widget === 'TextField' || widget === 'TextFormField') && isTextFieldUnlabelled(named, prefixes)) {
-            facts.push(build({kind: 'ui.flutterTextFieldNoLabel', kindOf: 'statement', symbol: `textField#${textFieldIndex}`, range: rangeOf(anchor), value: evidence(site)}));
+            facts.push(build({kind: 'ui.flutterTextFieldNoLabel', kindOf: 'statement', site: true, symbol: `textField#${textFieldIndex}`, range: rangeOf(anchor), value: evidence(site)}));
             textFieldIndex += 1;
         }
     }

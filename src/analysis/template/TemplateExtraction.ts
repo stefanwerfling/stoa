@@ -52,13 +52,13 @@ export const extractTemplateA11yFacts = (root: Node, content: string, filePath: 
         const evidenceText = evidence(startTag);
 
         if (tag === 'img' && !isDecorative(tag, attrs) && !attrs.has('alt') && !imgHasTextAlternative(attrs)) {
-            facts.push(build({kind: 'ui.imageMissingAlt', kindOf: 'statement', symbol: `img#${counters.img}`, range, value: evidenceText}));
+            facts.push(build({kind: 'ui.imageMissingAlt', kindOf: 'statement', site: true, symbol: `img#${counters.img}`, range, value: evidenceText}));
             counters.img += 1;
         }
 
         const role = attrs.get('role');
         if (typeof role === 'string' && hasRoleTokens(role) && !hasValidRole(role)) {
-            facts.push(build({kind: 'ui.invalidRole', kindOf: 'statement', symbol: `role#${counters.role}`, range, value: `role="${role}"`}));
+            facts.push(build({kind: 'ui.invalidRole', kindOf: 'statement', site: true, symbol: `role#${counters.role}`, range, value: `role="${role}"`}));
             counters.role += 1;
         }
 
@@ -69,7 +69,7 @@ export const extractTemplateA11yFacts = (root: Node, content: string, filePath: 
             }
         }
         if (unknown.length > 0) {
-            facts.push(build({kind: 'ui.unknownAriaAttribute', kindOf: 'statement', symbol: `aria-attr#${counters.ariaAttr}`, range, value: unknown.join(', ')}));
+            facts.push(build({kind: 'ui.unknownAriaAttribute', kindOf: 'statement', site: true, symbol: `aria-attr#${counters.ariaAttr}`, range, value: unknown.join(', ')}));
             counters.ariaAttr += 1;
         }
 
@@ -80,23 +80,23 @@ export const extractTemplateA11yFacts = (root: Node, content: string, filePath: 
             }
         }
         if (invalidValues.length > 0) {
-            facts.push(build({kind: 'ui.invalidAriaValue', kindOf: 'statement', symbol: `aria-val#${counters.ariaVal}`, range, value: invalidValues.join(', ')}));
+            facts.push(build({kind: 'ui.invalidAriaValue', kindOf: 'statement', site: true, symbol: `aria-val#${counters.ariaVal}`, range, value: invalidValues.join(', ')}));
             counters.ariaVal += 1;
         }
 
         const tabindex = attrs.get('tabindex');
         if (typeof tabindex === 'string' && isPositiveTabindexLiteral(tabindex)) {
-            facts.push(build({kind: 'ui.positiveTabindex', kindOf: 'statement', symbol: `tabindex#${counters.tabindex}`, range, value: `tabindex="${tabindex}"`}));
+            facts.push(build({kind: 'ui.positiveTabindex', kindOf: 'statement', site: true, symbol: `tabindex#${counters.tabindex}`, range, value: `tabindex="${tabindex}"`}));
             counters.tabindex += 1;
         }
 
         if (attrs.get('aria-hidden') === 'true' && isFocusable(tag, attrs)) {
-            facts.push(build({kind: 'ui.ariaHiddenFocusable', kindOf: 'statement', symbol: `aria-hidden#${counters.ariaHidden}`, range, value: evidenceText}));
+            facts.push(build({kind: 'ui.ariaHiddenFocusable', kindOf: 'statement', site: true, symbol: `aria-hidden#${counters.ariaHidden}`, range, value: evidenceText}));
             counters.ariaHidden += 1;
         }
 
         if ((tag === 'iframe' || tag === 'frame') && !isAriaHidden(attrs) && !hasFrameName(attrs)) {
-            facts.push(build({kind: 'ui.frameMissingTitle', kindOf: 'statement', symbol: `frame#${counters.frame}`, range, value: evidenceText}));
+            facts.push(build({kind: 'ui.frameMissingTitle', kindOf: 'statement', site: true, symbol: `frame#${counters.frame}`, range, value: evidenceText}));
             counters.frame += 1;
         }
 
@@ -105,7 +105,7 @@ export const extractTemplateA11yFacts = (root: Node, content: string, filePath: 
         {
             const lowContrast = contrastFromAttrs(attrs);
             if (lowContrast !== null) {
-                facts.push(build({kind: 'ui.lowContrastText', kindOf: 'statement', symbol: `contrast#${counters.contrast}`, range, value: lowContrast}));
+                facts.push(build({kind: 'ui.lowContrastText', kindOf: 'statement', site: true, symbol: `contrast#${counters.contrast}`, range, value: lowContrast}));
                 counters.contrast += 1;
             }
         }

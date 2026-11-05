@@ -1,11 +1,11 @@
 {
   "description": "R-ERR-SWALLOWED regression corpus (SwipeMeister false positives): a catch that documents the ignore with a comment, or reads its error binding (assignment, return, argument), is not swallowed. Only the undocumented catches that never read the error remain.",
   "findings": [
-    { "file": "CatchIntent.ts", "rule": "R-ERR-SWALLOWED", "symbol": "catch#3" },
-    { "file": "CatchIntent.ts", "rule": "R-ERR-SWALLOWED", "symbol": "catch#4" },
-    { "file": "CatchIntent.dart", "rule": "R-ERR-SWALLOWED", "symbol": "catch#2" },
-    { "file": "CatchIntent.dart", "rule": "R-ERR-SWALLOWED", "symbol": "catch#3" },
-    { "file": "CatchIntent.php", "rule": "R-ERR-SWALLOWED", "symbol": "catch#2" },
-    { "file": "catch_intent.cpp", "rule": "R-ERR-SWALLOWED", "symbol": "catch#2" }
+    { "file": "CatchIntent.ts", "rule": "R-ERR-SWALLOWED", "symbol": "swallowed>catch#0" },
+    { "file": "CatchIntent.ts", "rule": "R-ERR-SWALLOWED", "symbol": "overwritten>catch#0" },
+    { "file": "CatchIntent.dart", "rule": "R-ERR-SWALLOWED", "symbol": "swallowed>catch#0" },
+    { "file": "CatchIntent.dart", "rule": "R-ERR-SWALLOWED", "symbol": "swallowedEmpty>catch#0" },
+    { "file": "CatchIntent.php", "rule": "R-ERR-SWALLOWED", "symbol": "swallowed>catch#0" },
+    { "file": "catch_intent.cpp", "rule": "R-ERR-SWALLOWED", "symbol": "swallowed>catch#0" }
   ]
 }

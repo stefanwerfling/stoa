@@ -13,7 +13,9 @@ import {analyze} from '../src/Pipeline.js';
 // Function identities of the language adapters: a function's symbol is its
 // name qualified by the enclosing named scopes, so two classes' `run` in one
 // file are two identities (they used to share the bare `run` — the evaluator
-// then failed and `--update-baseline` refused). Remaining duplicates get `#n`.
+// then failed and `--update-baseline` refused). Under identity scheme 2 a
+// shared name is told apart by what it is first (an accessor's kind, a C++
+// overload's parameter types), remaining duplicates get `#n`.
 // A function without a name takes its binding's name, or is
 // `<scope>.(anonymous)#n`, numbered within its scope — never its line.
 
@@ -62,7 +64,7 @@ test('declarationSymbols: anonymous bases are always numbered per base, names st
     );
 });
 
-test('TypeScript: methods by class, nested functions by their function, object-literal methods by their variable; accessor pairs get #n, callbacks are numbered in their scope', () => {
+test('TypeScript: methods by class, nested functions by their function, object-literal methods by their variable; accessor pairs by kind, callbacks are numbered in their scope', () => {
     const source = [
         'export class A {',
         '    constructor() {}',
@@ -82,7 +84,7 @@ test('TypeScript: methods by class, nested functions by their function, object-l
         'export const pair = [1].map(() => 1).map(() => 2);',
         ''
     ].join('\n');
-    assert.deepEqual(symbolsOf('a.ts', source), ['A.constructor', 'A.run', 'A.size#0', 'A.size#1', 'B.run', 'outer', 'outer.inner', 'api.run', 'pair.(anonymous)#0', 'pair.(anonymous)#1']);
+    assert.deepEqual(symbolsOf('a.ts', source), ['A.constructor', 'A.run', 'A.size:get', 'A.size:set', 'B.run', 'outer', 'outer.inner', 'api.run', 'pair.(anonymous)#0', 'pair.(anonymous)#1']);
 });
 
 test('TypeScript: a function bound to a variable, property or class field takes that name; a callback is <scope>.(anonymous)#n', () => {
@@ -130,9 +132,9 @@ test('PHP: methods by class and trait; a closure takes its variable, or is <scop
     assert.deepEqual(symbolsOf('a.php', source), ['A.run', 'A.run.f', 'A.run.rows.(anonymous)#0', 'A.run.(anonymous)#0', 'T.run', 'top']);
 });
 
-test('C++: in-class definitions by class like out-of-class ones; overloads get #n', () => {
+test('C++: in-class definitions by class like out-of-class ones; overloads by their parameter types', () => {
     const source = ['struct A { void run() {} };', 'class B { public: void run() {} };', 'void C::run() {}', 'void f(int a) {}', 'void f(double b) {}', ''].join('\n');
-    assert.deepEqual(symbolsOf('a.cpp', source), ['A::run', 'B::run', 'C::run', 'f#0', 'f#1']);
+    assert.deepEqual(symbolsOf('a.cpp', source), ['A::run', 'B::run', 'C::run', 'f(int)', 'f(double)']);
 });
 
 test('two classes with the same method in one file: two identities on the finding, too', () => {

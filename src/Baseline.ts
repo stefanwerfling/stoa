@@ -1,6 +1,6 @@
 import {existsSync, mkdirSync, readFileSync, statSync, writeFileSync} from 'node:fs';
 import {dirname} from 'node:path';
-import {findingKey, keyString, type FindingKey} from './FindingIdentity.js';
+import {duplicateIdentityText, duplicateKeys, findingKey, IDENTITY_SCHEME, identityField, keyString, type FindingKey, type IdentityScheme} from './FindingIdentity.js';
 import type {AnalysisReport, Finding} from './Types.js';
 
 /**
@@ -13,8 +13,24 @@ import type {AnalysisReport, Finding} from './Types.js';
  */
 export interface BaselineFile {
     version: 1;
+    /**
+     * The finding-identity scheme its keys follow (FindingIdentity.ts).
+     * Absent in a file written before schemes were recorded — that is
+     * scheme 1. A baseline of another scheme than the running one is never
+     * compared (`applyBaseline` throws); `--migrate-baseline` converts it
+     * (src/BaselineMigration.ts).
+     */
+    identity?: IdentityScheme;
     findings: FindingKey[];
 }
+
+/** The identity scheme of a loaded baseline: its `identity`, or 1 for a file that has none. */
+export const baselineScheme = (baseline: BaselineFile): IdentityScheme => baseline.identity ?? 1;
+
+/** The message for a baseline written under another identity scheme: what happened and the explicit way out. */
+export const schemeMismatchMessage = (path: string, scheme: IdentityScheme): string =>
+    `baseline ${path} uses finding identity scheme ${scheme}, this stoa uses scheme ${IDENTITY_SCHEME} — its entries cannot be compared as they are. ` +
+    'Convert it explicitly with --migrate-baseline (best on the code state the baseline was written for); nothing was compared or written.';
 
 /** Thrown by `saveBaseline` when asked to overwrite a baseline from an incomplete analysis — a distinct type so callers can tell this apart from a plain I/O/parse error without string-matching the message. */
 export class IncompleteAnalysisError extends Error {}
@@ -43,15 +59,24 @@ const parseBaselineFile = (path: string): BaselineFile => {
     if (typeof raw !== 'object' || raw === null) {
         throw new Error(`baseline file ${path} is malformed: expected a JSON object, got ${raw === null ? 'null' : typeof raw}`);
     }
-    const candidate = raw as {version?: unknown; findings?: unknown};
+    const candidate = raw as {version?: unknown; identity?: unknown; findings?: unknown};
     if (candidate.version !== 1) {
         throw new Error(`baseline file ${path} is malformed: "version" must be 1, got ${JSON.stringify(candidate.version)}`);
+    }
+    if (identityField(candidate.identity) === null) {
+        throw new Error(`baseline file ${path} is malformed: "identity" must be 1 or 2 when present, got ${JSON.stringify(candidate.identity)}`);
     }
     if (!Array.isArray(candidate.findings)) {
         throw new Error(`baseline file ${path} is malformed: "findings" must be an array`);
     }
+    assertFindingKeys(path, candidate.findings);
+    return raw as BaselineFile;
+};
+
+/** Every entry a well-formed key, each identity at most once. */
+const assertFindingKeys = (path: string, findings: readonly unknown[]): void => {
     const seen = new Set<string>();
-    for (const [index, entry] of candidate.findings.entries()) {
+    for (const [index, entry] of findings.entries()) {
         if (!isValidKey(entry)) {
             throw new Error(`baseline file ${path} is malformed: findings[${index}] must be {"file": string, "rule": string, "symbol": string} with non-empty "file"/"rule", got ${JSON.stringify(entry)}`);
         }
@@ -61,7 +86,6 @@ const parseBaselineFile = (path: string): BaselineFile => {
         }
         seen.add(key);
     }
-    return raw as BaselineFile;
 };
 
 /** Reads a baseline file; throws on a malformed one (a broken baseline is a configuration error, never silently treated as "no baseline" — that would make every known finding look new). Returns null only when the path genuinely does not exist yet — the natural first-run state. */
@@ -100,13 +124,15 @@ export const saveBaseline = (path: string, report: AnalysisReport, rootDir: stri
     // `loadBaseline` rejects a repeated identity, so writing one would leave a
     // baseline that can never be read back. Refused (the existing file stays
     // untouched): two findings sharing an identity is a rule defect.
-    const collisions = entries.filter((entry, index) => index > 0 && keyString(entry) === keyString(entries[index - 1] as FindingKey)).map(keyString);
-    if (collisions.length > 0) {
-        throw new Error(
-            `refusing to update baseline ${path}: ${collisions.length} finding(s) share an identity (file, rule, symbol) with another — a rule defect, the baseline could not be read back: ${[...new Set(collisions)].slice(0, 5).join(', ')}`
-        );
+    const duplicates = duplicateKeys(entries);
+    if (duplicates.length > 0) {
+        throw new Error(`refusing to update baseline ${path} (it could not be read back): ${duplicateIdentityText(duplicates)}`);
     }
-    const file: BaselineFile = {version: 1, findings: entries};
+    writeBaselineFile(path, {version: 1, identity: IDENTITY_SCHEME, findings: entries});
+};
+
+/** Writes a baseline file as `saveBaseline` does (also used for a migrated one). */
+export const writeBaselineFile = (path: string, file: BaselineFile): void => {
     mkdirSync(dirname(path), {recursive: true});
     writeFileSync(path, `${JSON.stringify(file, null, 2)}\n`);
 };
@@ -129,6 +155,11 @@ export const saveBaseline = (path: string, report: AnalysisReport, rootDir: stri
  * set so callers/renderers can mark the whole comparison as provisional.
  */
 export const applyBaseline = (report: AnalysisReport, baseline: BaselineFile | null, rootDir: string): AnalysisReport => {
+    if (baseline !== null && baselineScheme(baseline) !== IDENTITY_SCHEME) {
+        // Comparing keys of two schemes would mark known findings new and
+        // report others fixed, all silently — refused instead.
+        throw new Error(schemeMismatchMessage('(given)', baselineScheme(baseline)));
+    }
     const incomplete = report.coverage.status !== 'complete';
     const baselineEntries = baseline?.findings ?? [];
     const baselineKeys = new Set(baselineEntries.map((entry) => keyString(entry)));

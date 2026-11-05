@@ -56,6 +56,7 @@ export const extractValidatorUsageFacts = (sourceFile: SourceFile, build: Build)
             facts.push(build({
                 kind: 'validation.annotatedValidatorUnused',
                 kindOf: 'statement',
+                site: true,
                 symbol: `unused#${unusedIndex}`,
                 range: rangeOfNode(sourceFile, schema.statement),
                 value: {id: schema.rawId},
@@ -75,6 +76,7 @@ export const extractValidatorUsageFacts = (sourceFile: SourceFile, build: Build)
                 facts.push(build({
                     kind: 'validation.rawReuseAfterValidation',
                     kindOf: 'statement',
+                    site: true,
                     symbol: `rawreuse#${reuseIndex}`,
                     range: rangeOfNode(sourceFile, call),
                     value: {id: schema.rawId, sinks: sinks.map((sink) => sink.description)},

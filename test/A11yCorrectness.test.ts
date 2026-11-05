@@ -61,12 +61,12 @@ test('JSX accessible name & focusability: same semantics as HTML (hidden text, e
     const findings = analyzeFixture('jsx-names.tsx');
     assert.deepEqual(
         ids(findings, 'R-A11Y-CONTROL-NAME'),
-        ['button#0', 'button#1', 'button#2'],
+        ['Correctness>button#0', 'Correctness>button#1', 'Correctness>button#2'],
         'hidden-only text, empty aria-labelledby and role=presentation are unnamed; aria-label is fine'
     );
     assert.deepEqual(
         ids(findings, 'R-A11Y-ARIA-HIDDEN-FOCUSABLE'),
-        ['aria-hidden#0'],
+        ['Correctness>aria-hidden#0'],
         'the aria-hidden contentEditable div is focusable'
     );
 });
@@ -84,7 +84,7 @@ test('JSX image: a non-empty aria-label(ledby) is a text alternative, an empty a
     const findings = analyzeFixture('jsx-img.tsx');
     assert.deepEqual(
         ids(findings, 'R-A11Y-IMG-ALT'),
-        ['img#0', 'img#1'],
+        ['Imgs>img#0', 'Imgs>img#1'],
         'the bare img and the empty-aria-label img are flagged; aria-label and non-empty aria-labelledby are fine'
     );
 });

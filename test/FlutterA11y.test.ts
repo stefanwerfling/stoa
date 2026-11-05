@@ -29,7 +29,7 @@ test('R-A11Y-FLUTTER-IMAGE-LABEL flags Image with no semanticLabel, honouring ex
     const findings = analyzePath(join(corpus, 'widget.dart'));
     assert.deepEqual(
         ids(findings, 'R-A11Y-FLUTTER-IMAGE-LABEL'),
-        ['image#0', 'image#1'],
+        ['build>image#0', 'build>image#1'],
         'Image.network with no label and Image(excludeFromSemantics: false); a semanticLabel and excludeFromSemantics: true are fine'
     );
     const first = findings.find((f) => f.rule.id === 'R-A11Y-FLUTTER-IMAGE-LABEL');
@@ -41,14 +41,14 @@ test('R-A11Y-FLUTTER-IMAGE-LABEL flags Image with no semanticLabel, honouring ex
 
 test('R-A11Y-FLUTTER-ICONBUTTON-LABEL flags IconButton with no tooltip', () => {
     const findings = analyzePath(join(corpus, 'widget.dart'));
-    assert.deepEqual(ids(findings, 'R-A11Y-FLUTTER-ICONBUTTON-LABEL'), ['iconButton#0'], 'the IconButton without tooltip; one with tooltip is fine');
+    assert.deepEqual(ids(findings, 'R-A11Y-FLUTTER-ICONBUTTON-LABEL'), ['build>iconButton#0'], 'the IconButton without tooltip; one with tooltip is fine');
 });
 
 test('R-A11Y-FLUTTER-TEXTFIELD-LABEL flags fields with no label, honouring labelText/hintText and unresolved decorations', () => {
     const findings = analyzePath(join(corpus, 'widget.dart'));
     assert.deepEqual(
         ids(findings, 'R-A11Y-FLUTTER-TEXTFIELD-LABEL'),
-        ['textField#0', 'textField#1'],
+        ['build>textField#0', 'build>textField#1'],
         'TextField() with no decoration and TextField(InputDecoration(border: …)); labelText, hintText and a variable decoration are not flagged'
     );
 });
@@ -64,7 +64,7 @@ test('an ancestor Semantics(label: …) names the subtree, so a wrapped Image/Ic
     // three widgets wrapped in Semantics(label: …) are treated as named.
     assert.deepEqual(
         findings.map((f) => `${f.rule.id}:${f.location.symbol}`),
-        ['R-A11Y-FLUTTER-ICONBUTTON-LABEL:iconButton#0']
+        ['R-A11Y-FLUTTER-ICONBUTTON-LABEL:build>iconButton#0']
     );
 });
 

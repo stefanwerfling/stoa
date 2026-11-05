@@ -1,18 +1,18 @@
 {
   "findings": [
-    { "file": "Widgets.tsx", "rule": "R-A11Y-IMG-ALT", "symbol": "img#0" },
-    { "file": "Widgets.tsx", "rule": "R-A11Y-ARIA-INVALID-ROLE", "symbol": "role#0" },
-    { "file": "Widgets.tsx", "rule": "R-A11Y-ARIA-UNKNOWN-ATTR", "symbol": "aria-attr#0" },
-    { "file": "Widgets.tsx", "rule": "R-A11Y-ARIA-INVALID-VALUE", "symbol": "aria-val#0" },
-    { "file": "Widgets.tsx", "rule": "R-A11Y-POSITIVE-TABINDEX", "symbol": "tabindex#0" },
-    { "file": "Widgets.tsx", "rule": "R-A11Y-ARIA-HIDDEN-FOCUSABLE", "symbol": "aria-hidden#0" },
-    { "file": "Widgets.tsx", "rule": "R-A11Y-FRAME-TITLE", "symbol": "frame#0" },
-    { "file": "Names.tsx", "rule": "R-A11Y-CONTROL-NAME", "symbol": "button#0" },
-    { "file": "Names.tsx", "rule": "R-A11Y-CONTROL-NAME", "symbol": "button#1" },
-    { "file": "Names.tsx", "rule": "R-A11Y-LINK-NAME", "symbol": "link#0" },
-    { "file": "Names.tsx", "rule": "R-A11Y-FORM-LABEL", "symbol": "field#0" },
-    { "file": "Names.tsx", "rule": "R-A11Y-FORM-LABEL", "symbol": "field#1" },
-    { "file": "Contrast.tsx", "rule": "R-A11Y-CONTRAST-TEXT", "symbol": "contrast#0" },
-    { "file": "Contrast.tsx", "rule": "R-A11Y-CONTRAST-TEXT", "symbol": "contrast#1" }
+    { "file": "Widgets.tsx", "rule": "R-A11Y-IMG-ALT", "symbol": "Widgets>img#0" },
+    { "file": "Widgets.tsx", "rule": "R-A11Y-ARIA-INVALID-ROLE", "symbol": "Widgets>role#0" },
+    { "file": "Widgets.tsx", "rule": "R-A11Y-ARIA-UNKNOWN-ATTR", "symbol": "Widgets>aria-attr#0" },
+    { "file": "Widgets.tsx", "rule": "R-A11Y-ARIA-INVALID-VALUE", "symbol": "Widgets>aria-val#0" },
+    { "file": "Widgets.tsx", "rule": "R-A11Y-POSITIVE-TABINDEX", "symbol": "Widgets>tabindex#0" },
+    { "file": "Widgets.tsx", "rule": "R-A11Y-ARIA-HIDDEN-FOCUSABLE", "symbol": "Widgets>aria-hidden#0" },
+    { "file": "Widgets.tsx", "rule": "R-A11Y-FRAME-TITLE", "symbol": "Widgets>frame#0" },
+    { "file": "Names.tsx", "rule": "R-A11Y-CONTROL-NAME", "symbol": "Names>button#0" },
+    { "file": "Names.tsx", "rule": "R-A11Y-CONTROL-NAME", "symbol": "Names>button#1" },
+    { "file": "Names.tsx", "rule": "R-A11Y-LINK-NAME", "symbol": "Names>link#0" },
+    { "file": "Names.tsx", "rule": "R-A11Y-FORM-LABEL", "symbol": "Names>field#0" },
+    { "file": "Names.tsx", "rule": "R-A11Y-FORM-LABEL", "symbol": "Names>field#1" },
+    { "file": "Contrast.tsx", "rule": "R-A11Y-CONTRAST-TEXT", "symbol": "Palette>contrast#0" },
+    { "file": "Contrast.tsx", "rule": "R-A11Y-CONTRAST-TEXT", "symbol": "Palette>contrast#1" }
   ]
 }

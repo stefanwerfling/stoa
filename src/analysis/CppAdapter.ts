@@ -3,6 +3,7 @@ import {Language, Parser, type Node} from 'web-tree-sitter';
 import type {Fact} from '../Types.js';
 import {extractFacts} from './cpp/CppExtraction.js';
 import type {FileMeta, FileRef, LanguageAdapter, ParseResult, ProjectContext} from './LanguageAdapter.js';
+import {assignSiteSymbols, schemeOf} from './SiteIdentity.js';
 
 const require = createRequire(import.meta.url);
 
@@ -56,10 +57,10 @@ export class CppAdapter implements LanguageAdapter {
         return {file, ok: true, diagnostics: [], handle: tree.rootNode, release: () => tree.delete()};
     }
 
-    public extractFacts(parsed: ParseResult, _ctx: ProjectContext): Fact[] {
+    public extractFacts(parsed: ParseResult, ctx: ProjectContext): Fact[] {
         if (parsed.handle === undefined) {
             return [];
         }
-        return extractFacts(parsed.handle as Node, parsed.file.content, parsed.file.path, {id: this.id, version: this.version});
+        return assignSiteSymbols(extractFacts(parsed.handle as Node, parsed.file.content, parsed.file.path, {id: this.id, version: this.version, ...schemeOf(ctx)}), ctx.identityScheme);
     }
 }

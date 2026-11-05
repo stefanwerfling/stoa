@@ -2,6 +2,7 @@ import {Project, ts} from 'ts-morph';
 import type {SourceFile} from 'ts-morph';
 import type {Fact} from '../Types.js';
 import type {FileMeta, FileRef, LanguageAdapter, ParseResult, ProjectContext} from './LanguageAdapter.js';
+import {assignSiteSymbols, schemeOf} from './SiteIdentity.js';
 import {extractFacts} from './typescript/TsExtraction.js';
 
 const SUPPORTED_EXTENSIONS: readonly string[] = ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs'] as const;
@@ -64,10 +65,10 @@ export class TypeScriptAdapter implements LanguageAdapter {
         return {file, ok: true, diagnostics: [], handle: sourceFile, release: () => this.project.removeSourceFile(sourceFile)};
     }
 
-    public extractFacts(parsed: ParseResult, _ctx: ProjectContext): Fact[] {
+    public extractFacts(parsed: ParseResult, ctx: ProjectContext): Fact[] {
         if (!parsed.ok || parsed.handle === undefined) {
             return [];
         }
-        return extractFacts(parsed.handle as SourceFile, {id: this.id, version: this.version});
+        return assignSiteSymbols(extractFacts(parsed.handle as SourceFile, {id: this.id, version: this.version, ...schemeOf(ctx)}), ctx.identityScheme);
     }
 }

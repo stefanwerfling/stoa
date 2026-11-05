@@ -1,7 +1,7 @@
 import type {Node} from 'web-tree-sitter';
-import {uniqueSymbols} from '../../FindingIdentity.js';
+import {uniqueSymbols, type IdentityScheme} from '../../FindingIdentity.js';
 import type {Fact, SourceRange, SubjectKind} from '../../Types.js';
-import {factBuilder, type AdapterInfo} from '../FactBuilder.js';
+import {factBuilder, identitySchemeOf, type AdapterInfo} from '../FactBuilder.js';
 import {importPrefixes, parseErrorCount} from './DartCallSite.js';
 import {extractDartDeclarationFacts} from './DartDeclarations.js';
 import {extractWidgetTree} from './FlutterWidgets.js';
@@ -34,6 +34,7 @@ interface MetricState {
 }
 
 export const extractFacts = (root: Node, content: string, filePath: string, info: AdapterInfo): Fact[] => {
+    const scheme = identitySchemeOf(info);
     const facts: Fact[] = [];
     const build = factBuilder(info, filePath);
     const lines = content.split('\n');
@@ -55,7 +56,7 @@ export const extractFacts = (root: Node, content: string, filePath: string, info
         const body = owner.nextNamedSibling;
         return body === null || body.type !== 'function_body' ? [] : [{signature, owner, body}];
     });
-    const symbols = uniqueSymbols(functions.map(({signature}) => qualifiedFunctionName(signature)));
+    const symbols = uniqueSymbols(functions.map(({signature}) => qualifiedFunctionName(signature, scheme)));
     for (const [index, {signature, owner, body}] of functions.entries()) {
         const kindOf: SubjectKind = owner.type === 'method_signature' ? 'method' : 'function';
         const symbol = symbols[index] as string;
@@ -88,9 +89,9 @@ export const extractFacts = (root: Node, content: string, filePath: string, info
         const symbol = `catch#${index}`;
         const range = spanRange(clause, block ?? clause);
 
-        facts.push(build({kind: 'ast.emptyCatch', kindOf: 'catch-clause', symbol, range, value: statements === 0}));
-        facts.push(build({kind: 'ast.catchSwallowsError', kindOf: 'catch-clause', symbol, range, value: !hasThrow && !hasCall && !catchReadsError(clause, block)}));
-        facts.push(build({kind: 'doc.catchHasRationale', kindOf: 'catch-clause', symbol, range, value: block !== null && descendants(block, COMMENT_TYPES).length > 0}));
+        facts.push(build({kind: 'ast.emptyCatch', kindOf: 'catch-clause', site: true, symbol, range, value: statements === 0}));
+        facts.push(build({kind: 'ast.catchSwallowsError', kindOf: 'catch-clause', site: true, symbol, range, value: !hasThrow && !hasCall && !catchReadsError(clause, block)}));
+        facts.push(build({kind: 'doc.catchHasRationale', kindOf: 'catch-clause', site: true, symbol, range, value: block !== null && descendants(block, COMMENT_TYPES).length > 0}));
     });
 
     // Library directives and type declarations (inputs for widget identity).
@@ -178,10 +179,36 @@ const functionName = (signature: Node): string => {
 
 const SCOPE_TYPES: ReadonlySet<string> = new Set(['class_definition', 'mixin_declaration', 'extension_declaration', 'enum_declaration']);
 
-/** The name of a class/mixin/extension/enum, or of the function whose body `node` is; `undefined` for anything else (or an unnamed extension). */
-const scopeName = (node: Node): string | undefined => {
+/** The type an unnamed extension extends, as written (`List<String>`): its children before the body, without type parameters. */
+const extendedType = (extension: Node): string => {
+    const parts: string[] = [];
+    for (const child of namedChildren(extension)) {
+        if (child.type === 'extension_body') {
+            break;
+        }
+        if (child.type !== 'type_parameters' && child.type !== 'comment') {
+            parts.push(child.text);
+        }
+    }
+    return parts.join('');
+};
+
+/**
+ * The name of a class/mixin/extension/enum, or of the function whose body
+ * `node` is; `undefined` for anything else. An unnamed extension is
+ * `(extension on List<String>)` under identity scheme 2 (its methods were
+ * unscoped under scheme 1, so they could share a symbol with a top-level
+ * function).
+ */
+/** A named type's name; an unnamed extension is `(extension on T)` (scheme 2). */
+const typeScopeName = (node: Node, scheme: IdentityScheme): string | undefined => {
+    const name = (node.childForFieldName('name') ?? namedChildren(node).find((child) => child.type === 'identifier'))?.text;
+    return name === undefined && node.type === 'extension_declaration' && scheme !== 1 ? `(extension on ${extendedType(node)})` : name;
+};
+
+const scopeName = (node: Node, scheme: IdentityScheme): string | undefined => {
     if (SCOPE_TYPES.has(node.type)) {
-        return (node.childForFieldName('name') ?? namedChildren(node).find((child) => child.type === 'identifier'))?.text;
+        return typeScopeName(node, scheme);
     }
     if (node.type === 'function_body') {
         const previous = node.previousNamedSibling;
@@ -200,11 +227,11 @@ const scopeName = (node: Node): string | undefined => {
  * `build` in one file no longer share a symbol. Remaining duplicates get
  * `#n` (`uniqueSymbols`).
  */
-const qualifiedFunctionName = (signature: Node): string => {
+const qualifiedFunctionName = (signature: Node, scheme: IdentityScheme): string => {
     const own = functionName(signature);
     const scopes: string[] = [];
     for (let node = signature.parent; node !== null; node = node.parent) {
-        const name = scopeName(node);
+        const name = scopeName(node, scheme);
         if (name !== undefined && name.length > 0) {
             scopes.unshift(name);
         }

@@ -1,6 +1,6 @@
-import {declarationSymbols, uniqueSymbols, type DeclarationBase} from '../../FindingIdentity.js';
+import {declarationSymbols, uniqueSymbols, type DeclarationBase, type IdentityScheme} from '../../FindingIdentity.js';
 import type {Fact, SourceRange, SubjectKind} from '../../Types.js';
-import {factBuilder, type AdapterInfo} from '../FactBuilder.js';
+import {factBuilder, identitySchemeOf, type AdapterInfo} from '../FactBuilder.js';
 import {isDeepImport} from '../ImportPath.js';
 import {destructiveDdl, nullableNoDefault, unguardedDdl} from '../MigrationSql.js';
 
@@ -42,17 +42,18 @@ const RATIONALE_MARKER = 'stoa:allow-complexity';
  * figure is the same documented approximation as the TS adapter.
  */
 export const extractFacts = (program: PhpNode, content: string, filePath: string, info: AdapterInfo): Fact[] => {
+    const scheme = identitySchemeOf(info);
     const facts: Fact[] = [];
     const build = factBuilder(info, filePath);
     const lines = content.split('\n');
 
     facts.push(build({kind: 'file.lineCount', kindOf: 'file', range: fileRange(lines), value: lineCount(content)}));
 
-    const functions = qualifiedFunctions(program).flatMap(({fn, base}) => {
+    const functions = qualifiedFunctions(program, scheme).flatMap(({fn, base}) => {
         const body = fn.body as PhpNode | undefined;
         return body === undefined ? [] : [{fn, body, base}];
     });
-    const symbols = declarationSymbols(functions.map(({base}) => base));
+    const symbols = declarationSymbols(functions.map(({base}) => base), scheme);
     for (const [index, {fn, body}] of functions.entries()) {
         const metrics = computeMetrics(fn, body);
         const symbol = symbols[index] as string;
@@ -76,11 +77,12 @@ export const extractFacts = (program: PhpNode, content: string, filePath: string
         const hasCall = children.length > 0 && exists(body as PhpNode, (node) => node.kind === 'call');
         const symbol = `catch#${index}`;
 
-        facts.push(build({kind: 'ast.emptyCatch', kindOf: 'catch-clause', symbol, range: rangeOf(clause), value: empty}));
+        facts.push(build({kind: 'ast.emptyCatch', kindOf: 'catch-clause', site: true, symbol, range: rangeOf(clause), value: empty}));
         facts.push(
             build({
                 kind: 'ast.catchSwallowsError',
                 kindOf: 'catch-clause',
+                site: true,
                 symbol,
                 range: rangeOf(clause),
                 value: !hasThrow && !hasCall && !catchReadsError(clause)
@@ -90,6 +92,7 @@ export const extractFacts = (program: PhpNode, content: string, filePath: string
             build({
                 kind: 'doc.catchHasRationale',
                 kindOf: 'catch-clause',
+                site: true,
                 symbol,
                 range: rangeOf(clause),
                 value: body !== undefined && exists(body, (node) => node.kind === 'commentline' || node.kind === 'commentblock')
@@ -103,14 +106,14 @@ export const extractFacts = (program: PhpNode, content: string, filePath: string
         for (const item of (group.items as PhpNode[] | undefined) ?? []) {
             const module = String(item.name ?? '');
             const symbol = `import#${importIndex}`;
-            facts.push(build({kind: 'deps.import', kindOf: 'import', symbol, range: rangeOf(group), value: {module, isTypeOnly: false}}));
+            facts.push(build({kind: 'deps.import', kindOf: 'import', site: true, symbol, range: rangeOf(group), value: {module, isTypeOnly: false}}));
 
             const local = aliasName(item) ?? lastSegment(module);
             if (local.length > 0 && !referenced.has(local)) {
-                facts.push(build({kind: 'deps.importUnused', kindOf: 'import', symbol, range: rangeOf(group), value: module}));
+                facts.push(build({kind: 'deps.importUnused', kindOf: 'import', site: true, symbol, range: rangeOf(group), value: module}));
             }
             if (isDeepImport(module, '\\')) {
-                facts.push(build({kind: 'deps.importDeep', kindOf: 'import', symbol, range: rangeOf(group), value: module}));
+                facts.push(build({kind: 'deps.importDeep', kindOf: 'import', site: true, symbol, range: rangeOf(group), value: module}));
             }
             importIndex += 1;
         }
@@ -119,7 +122,8 @@ export const extractFacts = (program: PhpNode, content: string, filePath: string
     // Class-level identities: a class's name, or `(anonymous)` for
     // `new class …` — numbered `(anonymous)#n` when one file holds several.
     const classes = collect(program, (node) => node.kind === 'class');
-    const classSymbols = new Map(uniqueSymbols(classes.map(nodeName)).map((symbol, index) => [classes[index] as PhpNode, symbol]));
+    const namespaces = typeNamespaces(program, scheme);
+    const classSymbols = new Map(uniqueSymbols(classes.map((cls) => qualifiedName(namespaces.get(cls) ?? '', [nodeName(cls)]))).map((symbol, index) => [classes[index] as PhpNode, symbol]));
     const classSymbol = (cls: PhpNode): string => classSymbols.get(cls) ?? nodeName(cls);
 
     for (const cls of collect(program, isDoctrineMigration)) {
@@ -167,19 +171,19 @@ export const extractFacts = (program: PhpNode, content: string, filePath: string
         for (const statement of sqlStatements) {
             const descriptor = unguardedDdl(statement.sql);
             if (descriptor !== null) {
-                facts.push(build({kind: 'migration.unguardedDdl', kindOf: 'statement', symbol: `ddl#${ddlIndex}`, range: rangeOf(statement.node), value: descriptor}));
+                facts.push(build({kind: 'migration.unguardedDdl', kindOf: 'statement', site: true, symbol: `ddl#${ddlIndex}`, range: rangeOf(statement.node), value: descriptor}));
                 ddlIndex += 1;
             }
         }
 
         losses.sort(byPosition);
         losses.forEach((loss, index) => {
-            facts.push(build({kind: 'migration.dataLoss', kindOf: 'statement', symbol: `loss#${index}`, range: rangeOf(loss.node), value: loss.descriptor}));
+            facts.push(build({kind: 'migration.dataLoss', kindOf: 'statement', site: true, symbol: `loss#${index}`, range: rangeOf(loss.node), value: loss.descriptor}));
         });
 
         nullables.sort(byPosition);
         nullables.forEach((nullable, index) => {
-            facts.push(build({kind: 'migration.nullableNoDefault', kindOf: 'statement', symbol: `nullable#${index}`, range: rangeOf(nullable.node), value: nullable.descriptor}));
+            facts.push(build({kind: 'migration.nullableNoDefault', kindOf: 'statement', site: true, symbol: `nullable#${index}`, range: rangeOf(nullable.node), value: nullable.descriptor}));
         });
 
         const descriptor = migrationMissingDown(cls);
@@ -553,6 +557,28 @@ const exists = (root: PhpNode, predicate: (node: PhpNode) => boolean): boolean =
 
 const TYPE_KINDS: ReadonlySet<string> = new Set(['class', 'trait', 'interface', 'enum']);
 
+/** A namespace's name (`App\\Service`); `''` for the global `namespace {}`. */
+const namespaceName = (node: PhpNode): string => (typeof node.name === 'string' ? node.name : '');
+
+/** Scope segments joined by `.`, behind the namespace and a `\\` when there is one. */
+const qualifiedName = (namespace: string, segments: readonly string[]): string => `${namespace.length > 0 ? `${namespace}\\` : ''}${segments.join('.')}`;
+
+/** Every class, trait, interface and enum with the namespace it is declared in (`''` outside one or under scheme 1). */
+const typeNamespaces = (program: PhpNode, scheme: IdentityScheme): Map<PhpNode, string> => {
+    const found = new Map<PhpNode, string>();
+    const walk = (node: PhpNode, namespace: string): void => {
+        const inner = node.kind === 'namespace' && scheme !== 1 ? namespaceName(node) : namespace;
+        if (TYPE_KINDS.has(node.kind)) {
+            found.set(node, namespace);
+        }
+        for (const child of childNodes(node)) {
+            walk(child, inner);
+        }
+    };
+    walk(program, '');
+    return found;
+};
+
 /**
  * Every function-like node in source order (the same order as `collect`)
  * with its identity base: the name qualified by the enclosing class, trait,
@@ -560,43 +586,51 @@ const TYPE_KINDS: ReadonlySet<string> = new Set(['class', 'trait', 'interface', 
  * (`Service.run`, `Service.run.helper`), so two classes' `run` in one file no
  * longer share a symbol. A closure assigned to a variable takes its name
  * (`$handler = function () {}` → `handler`), a closure inside another value
-assigned to a variable lives in that variable's scope; any other closure is
+ * assigned to a variable lives in that variable's scope; any other closure is
  * `<scope>.(anonymous)`, numbered within that scope (`declarationSymbols`) —
- * never by its line. Namespaces are not part of it (one per file in
- * practice).
+ * never by its line. Under identity scheme 2 the namespace leads, PHP-style
+ * (`App\Service.run`), so one file's two namespaces no longer share a
+ * symbol; scheme 1 left it out.
  */
-const qualifiedFunctions = (program: PhpNode): {fn: PhpNode; base: DeclarationBase}[] => {
+const qualifiedFunctions = (program: PhpNode, scheme: IdentityScheme): {fn: PhpNode; base: DeclarationBase}[] => {
     const found: {fn: PhpNode; base: DeclarationBase}[] = [];
     const bound = new Map<PhpNode, string>();
-    const walk = (node: PhpNode, scopes: readonly string[]): void => {
+    const walk = (node: PhpNode, scopes: readonly string[], namespace: string): void => {
         let inner = scopes;
-        if (node.kind === 'assign') {
-            const left = node.left as PhpNode | undefined;
-            const right = node.right as PhpNode | undefined;
-            if (right !== undefined && left?.kind === 'variable' && typeof left.name === 'string') {
-                if (FUNCTION_LIKE.has(right.kind)) {
-                    bound.set(right, left.name);
-                } else {
-                    // `$rows = array_map(function () {…}, …)`: the closure lives in `rows`.
-                    walk(left, scopes);
-                    walk(right, [...scopes, left.name]);
-                    return;
-                }
+        let innerNamespace = namespace;
+        const assignment = variableAssignment(node);
+        if (assignment !== undefined) {
+            if (FUNCTION_LIKE.has(assignment.right.kind)) {
+                bound.set(assignment.right, assignment.name);
+            } else {
+                // `$rows = array_map(function () {…}, …)`: the closure lives in `rows`.
+                walk(assignment.left, scopes, namespace);
+                walk(assignment.right, [...scopes, assignment.name], namespace);
+                return;
             }
         }
         if (FUNCTION_LIKE.has(node.kind)) {
             const own = functionName(node) ?? bound.get(node);
-            found.push({fn: node, base: {base: [...scopes, own ?? '(anonymous)'].join('.'), anonymous: own === undefined}});
+            found.push({fn: node, base: {base: qualifiedName(namespace, [...scopes, own ?? '(anonymous)']), anonymous: own === undefined}});
             inner = own === undefined ? scopes : [...scopes, own];
         } else if (TYPE_KINDS.has(node.kind) && nodeName(node) !== '(anonymous)') {
             inner = [...scopes, nodeName(node)];
+        } else if (node.kind === 'namespace' && scheme !== 1) {
+            innerNamespace = namespaceName(node);
         }
         for (const child of childNodes(node)) {
-            walk(child, inner);
+            walk(child, inner, innerNamespace);
         }
     };
-    walk(program, []);
+    walk(program, [], '');
     return found;
+};
+
+/** `$name = <right>`: the variable, its name and the assigned expression; undefined for any other node. */
+const variableAssignment = (node: PhpNode): {left: PhpNode; name: string; right: PhpNode} | undefined => {
+    const left = node.kind === 'assign' ? (node.left as PhpNode | undefined) : undefined;
+    const right = node.right as PhpNode | undefined;
+    return right !== undefined && left?.kind === 'variable' && typeof left.name === 'string' ? {left, name: left.name, right} : undefined;
 };
 
 /** A function's or method's own name; `undefined` for a closure or arrow function. */

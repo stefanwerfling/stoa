@@ -1,7 +1,7 @@
 import type {Node} from 'web-tree-sitter';
-import {uniqueSymbols} from '../../FindingIdentity.js';
+import {uniqueSymbols, variantBases, type IdentityScheme} from '../../FindingIdentity.js';
 import type {Fact, SourceRange, SubjectKind} from '../../Types.js';
-import {factBuilder, type AdapterInfo} from '../FactBuilder.js';
+import {factBuilder, identitySchemeOf, type AdapterInfo} from '../FactBuilder.js';
 
 /**
  * Extracts the language-neutral fact set from a C or C++ source tree, mirroring
@@ -28,6 +28,7 @@ interface MetricState {
 }
 
 export const extractFacts = (root: Node, content: string, filePath: string, info: AdapterInfo): Fact[] => {
+    const scheme = identitySchemeOf(info);
     const facts: Fact[] = [];
     const build = factBuilder(info, filePath);
     const lines = content.split('\n');
@@ -41,7 +42,8 @@ export const extractFacts = (root: Node, content: string, filePath: string, info
         const declarator = descendants(fn, 'function_declarator')[0];
         return body === null || body.type !== 'compound_statement' || declarator === undefined ? [] : [{fn, body, declarator}];
     });
-    const symbols = uniqueSymbols(functions.map(({fn, declarator}) => qualifiedFunctionName(fn, declarator)));
+    const bases = functions.map(({fn, declarator}) => ({base: qualifiedFunctionName(fn, declarator, scheme), variant: parameterTypes(declarator)}));
+    const symbols = uniqueSymbols(scheme === 1 ? bases.map(({base}) => base) : variantBases(bases));
     for (const [index, {fn, body, declarator}] of functions.entries()) {
         const kindOf: SubjectKind = hasAncestorType(fn, 'field_declaration_list') ? 'method' : 'function';
         const symbol = symbols[index] as string;
@@ -70,7 +72,7 @@ export const extractFacts = (root: Node, content: string, filePath: string, info
             }
             const allocSymbol = `alloc#${allocIndex}`;
             allocIndex += 1;
-            facts.push(build({kind: outcome, kindOf: 'statement', symbol: allocSymbol, range: rangeOf(allocation.declNode), value: true}));
+            facts.push(build({kind: outcome, kindOf: 'statement', site: true, symbol: allocSymbol, range: rangeOf(allocation.declNode), value: true}));
         }
     }
 
@@ -82,9 +84,9 @@ export const extractFacts = (root: Node, content: string, filePath: string, info
         const symbol = `catch#${index}`;
         const range = rangeOf(block ?? clause);
 
-        facts.push(build({kind: 'ast.emptyCatch', kindOf: 'catch-clause', symbol, range, value: statements === 0}));
-        facts.push(build({kind: 'ast.catchSwallowsError', kindOf: 'catch-clause', symbol, range, value: !hasThrow && !hasCall && !catchReadsError(clause, block)}));
-        facts.push(build({kind: 'doc.catchHasRationale', kindOf: 'catch-clause', symbol, range, value: block !== null && descendants(block, 'comment').length > 0}));
+        facts.push(build({kind: 'ast.emptyCatch', kindOf: 'catch-clause', site: true, symbol, range, value: statements === 0}));
+        facts.push(build({kind: 'ast.catchSwallowsError', kindOf: 'catch-clause', site: true, symbol, range, value: !hasThrow && !hasCall && !catchReadsError(clause, block)}));
+        facts.push(build({kind: 'doc.catchHasRationale', kindOf: 'catch-clause', site: true, symbol, range, value: block !== null && descendants(block, 'comment').length > 0}));
     });
 
     return facts;
@@ -165,19 +167,48 @@ const TYPE_TYPES: ReadonlySet<string> = new Set(['class_specifier', 'struct_spec
  * A function's identity base: an in-class definition is qualified by its
  * enclosing named classes (`Buffer::reset`), the way an out-of-class
  * definition already spells itself (`Buffer::reset`), so two classes'
- * `reset` in one file no longer share a symbol. Namespaces are not added;
- * overloads and other remaining duplicates get `#n` (`uniqueSymbols`).
+ * `reset` in one file no longer share a symbol. Under identity scheme 2 the
+ * enclosing namespaces lead (`io::Buffer::reset`, an unnamed one as
+ * `(anonymous)`), for in-class and out-of-class definitions alike; scheme 1
+ * left them out. Overloads are told apart by `parameterTypes`, remaining
+ * duplicates get `#n` (`uniqueSymbols`).
  */
-const qualifiedFunctionName = (fn: Node, declarator: Node): string => {
+const qualifiedFunctionName = (fn: Node, declarator: Node, scheme: IdentityScheme): string => {
     const scopes: string[] = [];
     for (let node = fn.parent; node !== null; node = node.parent) {
-        const name = TYPE_TYPES.has(node.type) ? node.childForFieldName('name')?.text : undefined;
+        const name = TYPE_TYPES.has(node.type) ? node.childForFieldName('name')?.text : node.type === 'namespace_definition' && scheme !== 1 ? (node.childForFieldName('name')?.text ?? '(anonymous)') : undefined;
         if (name !== undefined && name.length > 0) {
             scopes.unshift(name);
         }
     }
     return [...scopes, functionName(declarator)].join('::');
 };
+
+/**
+ * A definition's parameter types, the way C++ itself tells overloads apart:
+ * each parameter without its name and default (`(const char*, int&)`).
+ * Syntactic — typedefs are not resolved, so `size_t` and `unsigned long`
+ * stay two spellings.
+ */
+const parameterTypes = (declarator: Node): string => {
+    const list = declarator.childForFieldName('parameters');
+    const types = list === null ? [] : namedChildren(list).filter((child) => child.type !== 'comment').map(parameterType);
+    return `(${types.join(', ')})`;
+};
+
+const parameterType = (parameter: Node): string => {
+    const type = parameter.childForFieldName('type');
+    if (type === null) {
+        return compact(parameter.text);
+    }
+    const qualifiers = namedChildren(parameter).filter((child) => child.type === 'type_qualifier').map((child) => child.text);
+    const declarator = parameter.childForFieldName('declarator');
+    // The declarator's shape without its name: `*p` → `*`, `&out` → `&`, `items[]` → `[]`.
+    const shape = declarator === null ? '' : declarator.text.replace(/[A-Za-z_]\w*/g, '');
+    return compact(`${[...qualifiers, type.text].join(' ')}${shape}`);
+};
+
+const compact = (text: string): string => text.replace(/\s+/g, ' ').replace(/\s*([*&,<>()[\]])\s*/g, '$1').trim();
 
 const parameterCount = (declarator: Node): number => {
     const list = declarator.childForFieldName('parameters');
