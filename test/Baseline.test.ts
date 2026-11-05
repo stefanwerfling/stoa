@@ -83,7 +83,7 @@ test('a malformed baseline file throws (never silently treated as "no baseline" 
 });
 
 test('applyBaseline: a finding present in the baseline is "known", one absent from it is "new"', () => {
-    const baseline = {version: 1 as const, identity: 2 as const, findings: [{file: 'a.ts', rule: 'R-A', symbol: 'sym#0'}]};
+    const baseline = {version: 1 as const, identity: 3 as const, findings: [{file: 'a.ts', rule: 'R-A', symbol: 'sym#0'}]};
     const report = reportOf([sampleFinding('/root/a.ts', 'R-A', 'sym#0'), sampleFinding('/root/b.ts', 'R-B', 'sym#0')]);
     const result = applyBaseline(report, baseline, '/root');
     assert.equal(result.findings[0]?.baselineStatus, 'known');
@@ -92,7 +92,7 @@ test('applyBaseline: a finding present in the baseline is "known", one absent fr
 });
 
 test('applyBaseline: a baseline entry no longer reproduced by the current run is reported as "fixed", not fabricated as a Finding', () => {
-    const baseline = {version: 1 as const, identity: 2 as const, findings: [{file: 'a.ts', rule: 'R-A', symbol: 'sym#0'}, {file: 'gone.ts', rule: 'R-GONE', symbol: 'sym#0'}]};
+    const baseline = {version: 1 as const, identity: 3 as const, findings: [{file: 'a.ts', rule: 'R-A', symbol: 'sym#0'}, {file: 'gone.ts', rule: 'R-GONE', symbol: 'sym#0'}]};
     const report = reportOf([sampleFinding('/root/a.ts', 'R-A', 'sym#0')]);
     const result = applyBaseline(report, baseline, '/root');
     assert.equal(result.findings.length, 1, 'no extra Finding was invented for the fixed entry');
@@ -108,7 +108,7 @@ test('applyBaseline with no baseline file yet (null): every finding is "new", no
 });
 
 test('onlyNewFindings filters out "known" findings but keeps "new" ones; is a no-op if baselineStatus was never set', () => {
-    const baseline = {version: 1 as const, identity: 2 as const, findings: [{file: 'a.ts', rule: 'R-A', symbol: 'sym#0'}]};
+    const baseline = {version: 1 as const, identity: 3 as const, findings: [{file: 'a.ts', rule: 'R-A', symbol: 'sym#0'}]};
     const report = reportOf([sampleFinding('/root/a.ts', 'R-A', 'sym#0'), sampleFinding('/root/b.ts', 'R-B', 'sym#0')]);
     const stamped = applyBaseline(report, baseline, '/root');
     const filtered = onlyNewFindings(stamped);
@@ -120,7 +120,7 @@ test('onlyNewFindings filters out "known" findings but keeps "new" ones; is a no
 });
 
 test('Markdown reporter: shows a baseline summary line and tags each finding [new]/[known]', () => {
-    const baseline = {version: 1 as const, identity: 2 as const, findings: [{file: 'a.ts', rule: 'R-A', symbol: 'sym#0'}]};
+    const baseline = {version: 1 as const, identity: 3 as const, findings: [{file: 'a.ts', rule: 'R-A', symbol: 'sym#0'}]};
     const report = reportOf([sampleFinding('/root/a.ts', 'R-A', 'sym#0'), sampleFinding('/root/b.ts', 'R-B', 'sym#0')]);
     const stamped = applyBaseline(report, baseline, '/root');
     const markdown = toMarkdown(stamped);
@@ -135,7 +135,7 @@ test('Markdown reporter: no baseline line at all when baseline was never applied
 });
 
 test('SARIF reporter: baselineState is "new"/"unchanged" per finding, absent entirely without a baseline', () => {
-    const baseline = {version: 1 as const, identity: 2 as const, findings: [{file: 'a.ts', rule: 'R-A', symbol: 'sym#0'}]};
+    const baseline = {version: 1 as const, identity: 3 as const, findings: [{file: 'a.ts', rule: 'R-A', symbol: 'sym#0'}]};
     const report = reportOf([sampleFinding('/root/a.ts', 'R-A', 'sym#0'), sampleFinding('/root/b.ts', 'R-B', 'sym#0')]);
     const stamped = applyBaseline(report, baseline, '/root');
     const sarif = JSON.parse(toSarif(stamped, {baseDir: '/root'})) as {runs: Array<{results: Array<{ruleId: string; baselineState?: string}>}>};
@@ -195,7 +195,7 @@ test('loadBaseline rejects a directory path with a clear error instead of an unr
 // (coverage.analysisIncomplete === true, see MemoryGuard.ts).
 
 test('applyBaseline on an incomplete analysis: a missing baseline entry is NEVER reported as fixed', () => {
-    const baseline = {version: 1 as const, identity: 2 as const, findings: [{file: 'a.ts', rule: 'R-A', symbol: 'sym#0'}, {file: 'gone.ts', rule: 'R-GONE', symbol: 'sym#0'}]};
+    const baseline = {version: 1 as const, identity: 3 as const, findings: [{file: 'a.ts', rule: 'R-A', symbol: 'sym#0'}, {file: 'gone.ts', rule: 'R-GONE', symbol: 'sym#0'}]};
     const report = incompleteReportOf([sampleFinding('/root/a.ts', 'R-A', 'sym#0')]);
     const result = applyBaseline(report, baseline, '/root');
     assert.equal(result.baseline?.fixedCount, 0, 'fixedCount must be 0 — the scan never reached enough of the project to prove "gone.ts" is actually gone');
@@ -204,7 +204,7 @@ test('applyBaseline on an incomplete analysis: a missing baseline entry is NEVER
 });
 
 test('applyBaseline on a COMPLETE analysis still correctly reports fixed entries (the incomplete guard does not weaken the normal case)', () => {
-    const baseline = {version: 1 as const, identity: 2 as const, findings: [{file: 'a.ts', rule: 'R-A', symbol: 'sym#0'}, {file: 'gone.ts', rule: 'R-GONE', symbol: 'sym#0'}]};
+    const baseline = {version: 1 as const, identity: 3 as const, findings: [{file: 'a.ts', rule: 'R-A', symbol: 'sym#0'}, {file: 'gone.ts', rule: 'R-GONE', symbol: 'sym#0'}]};
     const report = reportOf([sampleFinding('/root/a.ts', 'R-A', 'sym#0')]);
     const result = applyBaseline(report, baseline, '/root');
     assert.equal(result.baseline?.fixedCount, 1);

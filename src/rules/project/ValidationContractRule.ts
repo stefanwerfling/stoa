@@ -5,6 +5,7 @@ import type {EvidenceGraph} from '../../evidence/EvidenceGraph.js';
 import {localize, type LocalizedText} from '../../i18n/Localized.js';
 import type {KnowledgeBase} from '../../knowledge/KnowledgeBase.js';
 import type {ProjectRule, ProjectRuleInput} from '../ProjectRule.js';
+import {subjectIdentityKind} from '../../FindingIdentity.js';
 
 interface AnnotationValue {
     id: string;
@@ -581,7 +582,7 @@ export class ValidationContractRule implements ProjectRule {
             id: `finding:${ruleId}:${subject.file}:${subject.range.startLine}:${subject.range.startCol}`,
             rule: {id: ruleId, version: this.version},
             ruleSet: input.ruleSetId,
-            location: {file: subject.file, range: subject.range, symbol: subject.symbol ?? '', structure: subject.kindOf},
+            location: {file: subject.file, range: subject.range, symbol: subject.symbol ?? '', ...subjectIdentityKind(subject), structure: subject.kindOf},
             observation: {
                 statement: localize(text.statement, input.lang).replace('{value}', value),
                 evidence: [{fact: fact.kind, value: fact.value, certainty: fact.certainty}]
@@ -607,7 +608,7 @@ export class ValidationContractRule implements ProjectRule {
             id: `finding:${ruleId}:${contractPath}:${contractRuleId}`,
             rule: {id: ruleId, version: this.version},
             ruleSet: input.ruleSetId,
-            location: {file: contractPath, range, symbol: contractRuleId},
+            location: {file: contractPath, range, symbol: contractRuleId, identityKind: 'declaration'},
             observation: {
                 statement: localize(text.statement, input.lang).replace('{value}', contractRuleId),
                 evidence: [{fact: 'validation.contractAnnotation', value: `no resolvable annotation for ${contractRuleId}`, certainty: 'semantic-heuristic'}]

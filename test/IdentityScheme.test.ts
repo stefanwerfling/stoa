@@ -184,9 +184,9 @@ test('baseline files record their scheme; one without it is scheme 1 and is refu
     writeFileSync(path, JSON.stringify({version: 1, findings: [{file: 'a.ts', rule: 'R-ERR-SWALLOWED', symbol: 'catch#0'}]}));
     const legacy = loadBaseline(path);
     assert.ok(legacy !== null && baselineScheme(legacy) === 1);
-    assert.throws(() => applyBaseline(report, legacy, dir), /uses finding identity scheme 1, this stoa uses scheme 2.*--migrate-baseline/);
+    assert.throws(() => applyBaseline(report, legacy, dir), /uses finding identity scheme 1, this stoa uses scheme 3.*--migrate-baseline/);
     writeFileSync(path, JSON.stringify({version: 1, identity: 7, findings: []}));
-    assert.throws(() => loadBaseline(path), /"identity" must be 1 or 2/);
+    assert.throws(() => loadBaseline(path), /"identity" must be 1, 2 or 3/);
 });
 
 test('migrateBaseline pairs each finding with itself across both schemes, drops (and lists) what is no longer reproduced, refuses a partial scan', () => {
@@ -217,15 +217,15 @@ test('CLI: a scheme-1 baseline exits 1 untouched without --migrate-baseline; wit
 
     const refused = cli(dir, ['--baseline', path, '--format', 'json']);
     assert.equal(refused.status, 1);
-    assert.match(refused.stderr, /uses finding identity scheme 1, this stoa uses scheme 2.*--migrate-baseline/);
+    assert.match(refused.stderr, /uses finding identity scheme 1, this stoa uses scheme 3.*--migrate-baseline/);
     assert.equal(readFileSync(path, 'utf8'), legacyText, 'nothing compared, nothing written');
 
     const migrated = cli(dir, ['--baseline', path, '--migrate-baseline', '--format', 'json']);
     assert.equal(migrated.status, 0, migrated.stderr);
-    assert.match(migrated.stderr, /migrated from finding identity scheme 1 to 2: \d+ entries carried over, 1 not reproduced by the current code \(dropped\)/);
+    assert.match(migrated.stderr, /migrated from finding identity scheme 1 to 3: \d+ entries carried over, 1 not reproduced by the current code \(dropped\)/);
     assert.match(migrated.stderr, /dropped: gone\.ts::R-ERR-SWALLOWED::catch#4/);
     const written = JSON.parse(readFileSync(path, 'utf8')) as {identity: number; findings: {symbol: string}[]};
-    assert.equal(written.identity, 2);
+    assert.equal(written.identity, IDENTITY_SCHEME);
     assert.ok(written.findings.some((entry) => entry.symbol === 'load>catch#0') && written.findings.some((entry) => entry.symbol === 'save>catch#0'));
     const report = JSON.parse(migrated.stdout) as {findings: {baselineStatus?: string}[]; baseline: {newCount: number; fixedCount: number}};
     assert.equal(report.baseline.newCount, 0);

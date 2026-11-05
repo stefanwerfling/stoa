@@ -1,4 +1,4 @@
-import {declarationSymbols, uniqueSymbols, type DeclarationBase, type IdentityScheme} from '../../FindingIdentity.js';
+import {declarationIdentities, uniqueIdentities, uniqueSymbols, type DeclarationBase, type IdentityKind, type IdentityScheme} from '../../FindingIdentity.js';
 import type {Fact, SourceRange, SubjectKind} from '../../Types.js';
 import {factBuilder, identitySchemeOf, type AdapterInfo} from '../FactBuilder.js';
 import type {StructImportBinding} from '../StructFacts.js';
@@ -45,20 +45,24 @@ export const extractFacts = (program: PhpNode, content: string, filePath: string
 
     // An abstract or interface method has `body: null` — nothing to measure.
     const functions = qualifiedFunctions(program, scheme).flatMap(({fn, base}) => (isPhpNode(fn.body) ? [{fn, body: fn.body, base}] : []));
-    const symbols = declarationSymbols(functions.map(({base}) => base), scheme);
+    const identities = declarationIdentities(functions.map(({base}) => base), scheme);
     for (const [index, {fn, body}] of functions.entries()) {
+        const identity = identities[index];
+        if (identity === undefined) {
+            continue;
+        }
+        const {symbol, kind: identityKind} = identity;
         const metrics = computeMetrics(fn, body);
-        const symbol = symbols[index] as string;
         const kindOf: SubjectKind = fn.kind === 'method' ? 'method' : 'function';
         const range = rangeOf(fn);
 
-        facts.push(build({kind: 'metric.cyclomaticComplexity', kindOf, symbol, range, value: metrics.cyclomatic}));
-        facts.push(build({kind: 'metric.cognitiveComplexity', kindOf, symbol, range, value: metrics.cognitive}));
-        facts.push(build({kind: 'metric.nestingDepth', kindOf, symbol, range, value: metrics.nestingDepth}));
-        facts.push(build({kind: 'metric.parameterCount', kindOf, symbol, range, value: metrics.parameterCount}));
-        facts.push(build({kind: 'metric.functionLength', kindOf, symbol, range, value: metrics.lineCount}));
-        facts.push(build({kind: 'doc.hasComplexityRationale', kindOf, symbol, range, value: leadingHasMarker(lines, range.startLine)}));
-        facts.push(build({kind: 'ast.usesNondeterminism', kindOf, symbol, range, value: usesNondeterminism(body)}));
+        facts.push(build({kind: 'metric.cyclomaticComplexity', kindOf, symbol, identityKind, range, value: metrics.cyclomatic}));
+        facts.push(build({kind: 'metric.cognitiveComplexity', kindOf, symbol, identityKind, range, value: metrics.cognitive}));
+        facts.push(build({kind: 'metric.nestingDepth', kindOf, symbol, identityKind, range, value: metrics.nestingDepth}));
+        facts.push(build({kind: 'metric.parameterCount', kindOf, symbol, identityKind, range, value: metrics.parameterCount}));
+        facts.push(build({kind: 'metric.functionLength', kindOf, symbol, identityKind, range, value: metrics.lineCount}));
+        facts.push(build({kind: 'doc.hasComplexityRationale', kindOf, symbol, identityKind, range, value: leadingHasMarker(lines, range.startLine)}));
+        facts.push(build({kind: 'ast.usesNondeterminism', kindOf, symbol, identityKind, range, value: usesNondeterminism(body)}));
     }
 
     collect(program, (node) => node.kind === 'catch').forEach((clause, index) => {
@@ -118,8 +122,14 @@ export const extractFacts = (program: PhpNode, content: string, filePath: string
     // `new class …` — numbered `(anonymous)#n` when one file holds several.
     const classes = collect(program, (node) => node.kind === 'class');
     const namespaces = typeNamespaces(program, scheme);
-    const classSymbols = new Map(uniqueSymbols(classes.map((cls) => qualifiedName(namespaces.get(cls) ?? '', [nodeName(cls)]))).map((symbol, index) => [classes[index] as PhpNode, symbol]));
-    const classSymbol = (cls: PhpNode): string => classSymbols.get(cls) ?? nodeName(cls);
+    const classIdentities = new Map(
+        uniqueIdentities(classes.map((cls) => qualifiedName(namespaces.get(cls) ?? '', [nodeName(cls)]))).map((identity, index) => {
+            const cls = classes[index] as PhpNode;
+            return [cls, nodeName(cls) === '(anonymous)' ? {symbol: identity.symbol, kind: 'anonymous' as const} : identity];
+        })
+    );
+    const classSymbol = (cls: PhpNode): string => classIdentities.get(cls)?.symbol ?? nodeName(cls);
+    const classKind = (cls: PhpNode): IdentityKind => classIdentities.get(cls)?.kind ?? 'declaration';
 
     for (const cls of collect(program, isDoctrineMigration)) {
         // Two Doctrine migration styles: raw SQL via $this->addSql('...') and the
@@ -183,7 +193,7 @@ export const extractFacts = (program: PhpNode, content: string, filePath: string
 
         const descriptor = migrationMissingDown(cls);
         if (descriptor !== null) {
-            facts.push(build({kind: 'migration.noDown', kindOf: 'class', symbol: classSymbol(cls), range: rangeOf(cls), value: descriptor}));
+            facts.push(build({kind: 'migration.noDown', kindOf: 'class', symbol: classSymbol(cls), identityKind: classKind(cls), range: rangeOf(cls), value: descriptor}));
         }
     }
 
@@ -208,7 +218,7 @@ export const extractFacts = (program: PhpNode, content: string, filePath: string
                 const eager = attributes.find((attribute) => RELATION_ATTRIBUTES.has(attributeShortName(attribute)) && relationIsEager(attribute));
                 const relation = eager !== undefined ? attributeShortName(eager) : docRelation;
                 if (relation !== null) {
-                    facts.push(build({kind: 'orm.eagerRelation', kindOf: 'statement', symbol: `${classSymbol(cls)}.${nodeName(property)}`, range: rangeOf(eager ?? statement), value: relation}));
+                    facts.push(build({kind: 'orm.eagerRelation', kindOf: 'statement', symbol: `${classSymbol(cls)}.${nodeName(property)}`, identityKind: classKind(cls), range: rangeOf(eager ?? statement), value: relation}));
                 }
             }
         }
@@ -216,7 +226,7 @@ export const extractFacts = (program: PhpNode, content: string, filePath: string
         // A subclass may inherit its key from a base entity/mapped superclass, so
         // only a standalone @Entity without any #[ORM\Id] property is reported.
         if (!isPhpNode(cls.extends) && !hasPrimaryKey) {
-            facts.push(build({kind: 'orm.entityNoPrimaryKey', kindOf: 'class', symbol: classSymbol(cls), range: rangeOf(cls), value: 'entity has no primary key column'}));
+            facts.push(build({kind: 'orm.entityNoPrimaryKey', kindOf: 'class', symbol: classSymbol(cls), identityKind: classKind(cls), range: rangeOf(cls), value: 'entity has no primary key column'}));
         }
     }
 

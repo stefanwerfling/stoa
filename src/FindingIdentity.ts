@@ -12,22 +12,77 @@ import type {Finding} from './Types.js';
  * - 2: sites relative to their enclosing declaration
  *   (`Service.load>catch#0`), imports by module (`import:./db`), namespaces in
  *   PHP (`App\Service.run`) and C++ (`app::Service::run`) symbols, accessors
- *   by kind (`Acc.v:get`), C++ overloads by parameter types (`over(int)`).
+ *   by kind (`Acc.v:get`), C++ overloads by parameter types (`over(int)`);
+ * - 3: what scheme 2 still numbered per file is anchored too — a site
+ *   outside every declaration to its top-level binding
+ *   (`dataSource>synchronize#0`) or, in markup, to the nearest element with
+ *   an `id` (`#login>field#0`), else to the file, explicitly and counted
+ *   among the file-level sites only (`(module)>catch#0`,
+ *   `(document)>img#0`); type-checker diagnostics to their declaration
+ *   (`Service.load>tsc#0`); Flutter lifecycle call sites to their method
+ *   (`State.save>setState#0`); C++ definitions that share name and
+ *   parameters by their preprocessor condition (`load(int)[!HAVE_CUDA]`).
  *
- * Scheme 1 is still producible (`AnalyzeOptions.identityScheme`) only so a
- * baseline written under it can be migrated explicitly (`--migrate-baseline`).
+ * Schemes 1 and 2 are still producible (`AnalyzeOptions.identityScheme`)
+ * only so a baseline written under them can be migrated explicitly
+ * (`--migrate-baseline`).
  */
-export type IdentityScheme = 1 | 2;
+export type IdentityScheme = 1 | 2 | 3;
 
-export const IDENTITY_SCHEME: IdentityScheme = 2;
+export const IDENTITY_SCHEME: IdentityScheme = 3;
 
-/** A file's `identity` field read as a scheme: absent = 1; `null` for any other value than 1 or 2 (malformed). */
+/** Every scheme a file may name, oldest first. */
+export const IDENTITY_SCHEMES: readonly IdentityScheme[] = [1, 2, 3];
+
+/** The valid `identity` values, for an error message (`1, 2 or 3`). */
+export const IDENTITY_SCHEMES_TEXT = `${IDENTITY_SCHEMES.slice(0, -1).join(', ')} or ${IDENTITY_SCHEMES[IDENTITY_SCHEMES.length - 1] ?? ''}`;
+
+/** A file's `identity` field read as a scheme: absent = 1; `null` for any value that names no scheme (malformed). */
 export const identityField = (value: unknown): IdentityScheme | null => {
     if (value === undefined) {
         return 1;
     }
-    return value === 1 || value === 2 ? value : null;
+    return IDENTITY_SCHEMES.find((scheme) => scheme === value) ?? null;
 };
+
+/**
+ * What a finding's symbol is anchored to — set where the symbol is made
+ * (an extractor, the site pass, a project rule), never read back from the
+ * symbol text. Carried as `Finding.location.identityKind` (and on the fact
+ * subject it comes from); not part of the identity (`FindingKey`).
+ * - `declaration`: a named function, method, type or member (`Service.load`),
+ *   or a relation between declarations (`Repo:IRepo`);
+ * - `anonymous`: a function without a name, numbered within its scope
+ *   (`outer.(anonymous)#0`);
+ * - `site`: a place inside a declaration or binding (`Service.load>catch#0`);
+ * - `module`: a module or package (`import:./db`, a dependency cycle, an
+ *   architecture edge);
+ * - `external`: a diagnostic of an external tool (the TypeScript checker),
+ *   anchored like a site;
+ * - `fileOrdinal`: a site with no declaration to anchor it, numbered among
+ *   the file's top-level sites (`(module)>catch#0`) — the weakest identity:
+ *   another top-level site of its kind inserted above it shifts it;
+ * - `ambiguous`: declarations that share name, variant and condition, told
+ *   apart only by their order (`f#0`, `f#1`);
+ * - `file`: the file itself (no symbol).
+ */
+export type IdentityKind = 'declaration' | 'anonymous' | 'site' | 'module' | 'external' | 'fileOrdinal' | 'ambiguous' | 'file';
+
+export const IDENTITY_KINDS: readonly IdentityKind[] = ['declaration', 'anonymous', 'site', 'module', 'external', 'fileOrdinal', 'ambiguous', 'file'];
+
+/** The identity kind of a finding located at a fact's subject: `file` without a symbol, else what the fact says. */
+export const subjectIdentityKind = (subject: {symbol?: string; identityKind?: IdentityKind}): {identityKind?: IdentityKind} => {
+    if (subject.symbol === undefined || subject.symbol === '') {
+        return {identityKind: 'file'};
+    }
+    return subject.identityKind === undefined ? {} : {identityKind: subject.identityKind};
+};
+
+/** A symbol together with the kind of identity it has. */
+export interface SymbolIdentity {
+    symbol: string;
+    kind: IdentityKind;
+}
 
 /**
  * A finding reduced to its stable identity: (project-relative file, rule id,
@@ -106,13 +161,16 @@ export const ordinalSymbols = (bases: readonly string[]): string[] => {
  * one line) gets the `#n` ordinal on every occurrence. Names cannot contain
  * `#`, so a disambiguated symbol never equals another base.
  */
-export const uniqueSymbols = (bases: readonly string[]): string[] => {
+export const uniqueSymbols = (bases: readonly string[]): string[] => uniqueIdentities(bases).map((identity) => identity.symbol);
+
+/** `uniqueSymbols` with each symbol's kind: `declaration`, or `ambiguous` where only the `#n` ordinal tells it apart. */
+export const uniqueIdentities = (bases: readonly string[]): SymbolIdentity[] => {
     const counts = new Map<string, number>();
     for (const base of bases) {
         counts.set(base, (counts.get(base) ?? 0) + 1);
     }
     const ordinals = ordinalSymbols(bases);
-    return bases.map((base, index) => ((counts.get(base) ?? 0) > 1 ? (ordinals[index] as string) : base));
+    return bases.map((base, index) => ((counts.get(base) ?? 0) > 1 ? {symbol: ordinals[index] as string, kind: 'ambiguous'} : {symbol: base, kind: 'declaration'}));
 };
 
 /** One declaration's identity base, in source order: a (qualified) name, or `scope.(anonymous)` for a function with no name (parentheses: never an identifier, so no collision with a function named `anonymous`). */
@@ -148,11 +206,15 @@ export const variantBases = (entries: readonly {base: string; variant?: string}[
  * so an edit outside that scope never shifts it — unlike a line number; the
  * rest goes through `variantBases` (scheme 2) and `uniqueSymbols`.
  */
-export const declarationSymbols = (entries: readonly DeclarationBase[], scheme: IdentityScheme = IDENTITY_SCHEME): string[] => {
+export const declarationSymbols = (entries: readonly DeclarationBase[], scheme: IdentityScheme = IDENTITY_SCHEME): string[] =>
+    declarationIdentities(entries, scheme).map((identity) => identity.symbol);
+
+/** `declarationSymbols` with each symbol's kind: `anonymous` for a function without a name, `ambiguous` where only a `#n` ordinal tells named declarations apart, else `declaration`. */
+export const declarationIdentities = (entries: readonly DeclarationBase[], scheme: IdentityScheme = IDENTITY_SCHEME): SymbolIdentity[] => {
     const anonymous = ordinalSymbols(entries.filter((entry) => entry.anonymous).map((entry) => entry.base));
     const named = scheme === 1 ? entries.map((entry) => entry.base) : variantBases(entries);
     let next = 0;
-    return uniqueSymbols(
+    const identities = uniqueIdentities(
         entries.map((entry, index) => {
             if (!entry.anonymous) {
                 return named[index] as string;
@@ -161,4 +223,5 @@ export const declarationSymbols = (entries: readonly DeclarationBase[], scheme: 
             return anonymous[next - 1] as string;
         })
     );
+    return identities.map((identity, index) => (entries[index]?.anonymous === true ? {symbol: identity.symbol, kind: 'anonymous'} : identity));
 };

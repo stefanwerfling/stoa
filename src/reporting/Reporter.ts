@@ -1,5 +1,6 @@
 import {DEFAULT_LANG, dimensionLabel, labelsFor, type ReportLabels} from '../i18n/Localized.js';
-import type {AnalysisReport, ArchitectureSummary, BaselineSummary} from '../Types.js';
+import {IDENTITY_KINDS} from '../FindingIdentity.js';
+import type {AnalysisReport, ArchitectureSummary, BaselineSummary, Finding} from '../Types.js';
 
 export interface ReportOptions {
     lang?: string;
@@ -16,6 +17,23 @@ const baselineLine = (summary: BaselineSummary, t: ReportLabels): string => {
     const collisions = summary.duplicateIdentities?.length ?? 0;
     const counts = `${summary.newCount} ${t.baselineNew}, ${summary.knownCount} ${t.baselineKnown}, ${summary.fixedCount} ${t.baselineFixed}`;
     return `- ${t.baseline}: ${counts}${collisions > 0 ? `, ${collisions} ${t.baselineCollisions}` : ''}`;
+};
+
+/**
+ * How the findings' identities are anchored (FindingIdentity.ts
+ * `IdentityKind`), in the fixed kind order, kinds that occur only — so a
+ * reader sees at a glance how many rest on a file-level ordinal or on order
+ * alone (`fileOrdinal`, `ambiguous`).
+ */
+const identityLine = (findings: readonly Finding[], t: ReportLabels): string => {
+    const counts = new Map<string, number>();
+    for (const finding of findings) {
+        const kind = finding.location.identityKind ?? '';
+        counts.set(kind, (counts.get(kind) ?? 0) + 1);
+    }
+    const parts = IDENTITY_KINDS.filter((kind) => counts.has(kind)).map((kind) => `${counts.get(kind) ?? 0} ${kind}`);
+    const unknown = counts.get('') ?? 0;
+    return `- ${t.identities}: ${[...parts, ...(unknown > 0 ? [`${unknown} ${t.identitiesUnknown}`] : [])].join(', ')}`;
 };
 
 const architectureLines = (summary: ArchitectureSummary | undefined, t: ReportLabels): string[] => {
@@ -65,6 +83,9 @@ export const toMarkdown = (report: AnalysisReport, options: ReportOptions = {}):
         lines.push(`- ${t.filter}: ${criteria.join(', ')} — ${report.filter.hiddenCount} ${t.filterHidden}`);
     }
     lines.push(...architectureLines(report.architecture, t));
+    if (report.findings.length > 0) {
+        lines.push(identityLine(report.findings, t));
+    }
     lines.push('');
 
     if (report.findings.length === 0) {

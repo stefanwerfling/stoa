@@ -20,6 +20,10 @@
       "properties": {
         "file": { "type": "string", "minLength": 1 },
         "symbol": { "type": "string" },
+        "identityKind": {
+          "enum": ["declaration", "anonymous", "site", "module", "external", "fileOrdinal", "ambiguous", "file"],
+          "description": "What the symbol is anchored to (see docs finding-model, identity kinds). Absent on a fact without a symbol."
+        },
         "kindOf": {
           "enum": ["file", "module", "class", "function", "method", "statement", "import", "catch-clause"]
         },

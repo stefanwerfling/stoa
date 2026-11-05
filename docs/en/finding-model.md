@@ -18,7 +18,8 @@ and the **philosophical interpretation is marked as an interpretation** (guiding
   "location": {
     "file": "src/import/parser.ts",
     "range": { "startLine": 42, "startCol": 5, "endLine": 44, "endCol": 6 },
-    "symbol": "parseRecord",
+    "symbol": "parseRecord>catch#0",       // identity part, see §6 "Identity"
+    "identityKind": "site",                // what the symbol is anchored to (metadata)
     "structure": "catch-clause"            // affected code structure
   },
 
@@ -192,21 +193,25 @@ targets from one place put the target into the symbol (SOLID: `Class:Target`,
 `Class:Contract`, the imported file's path or `package:<name>`), so two
 findings never share one identity. Rules that report several SITES under one
 name number them in source order with the `#n` convention (Flutter lifecycle:
-`Class.field`, `Class.signIn#1`, `Class.initState:Theme.of#0`; Flutter
-layout: `Page.build>Expanded#2`, numbered per file). Functions and methods
+`Class.field`, `Class.signIn>setState#1`, `Class.initState>Theme.of#0` —
+numbered per method and call; Flutter layout: `Page.build>Expanded#2`,
+numbered per file). Functions and methods
 (the subject of the declarative complexity/size/side-effect rules) are named
 by the adapters with every enclosing named scope: `Service.run`,
 `outer.inner`, `api.run` (an object literal bound to `api`) in TS, `A.run`
 for a Dart class/mixin/extension and a PHP class/trait/interface/enum,
-`Buffer::reset` in C++. Namespaces belong to the name (identity scheme 2):
+`Buffer::reset` in C++. Namespaces belong to the name (since identity scheme 2):
 `App\Svc\Repo.find` in PHP (also on class-level symbols such as
 `App\Entity\Order.customer`), `app::io::Buffer::reset` in C++ (an anonymous
 namespace is `(anonymous)`; in-class and out-of-class definitions name the
 same), `A.B.run` for TS `namespace A.B`; an unnamed Dart extension is
 `(extension on T)`. A base that still occurs twice in one file is told apart
 first by what distinguishes the declarations — a TS accessor pair is
-`A.size:get`/`A.size:set`, C++ overloads `f(int)`/`f(double)` — and only
-then by `#n`. A function without a name takes the name it is bound to
+`A.size:get`/`A.size:set`, C++ overloads `f(int)`/`f(double)`, C++
+definitions that share name and parameters in different preprocessor
+branches by their condition, `load(int)[!HAVE_CUDA]`/`load(int)[HAVE_CUDA]`
+(nested branches joined by `&&`, an `#else` as the negated condition, the
+include guard is no condition) — and only then by `#n`. A function without a name takes the name it is bound to
 (`const handler = () => …` → `handler`, an object property, a class field,
 PHP `$handler = function …`); a callback is `<scope>.(anonymous)#n`,
 numbered within its scope (`C.go.(anonymous)#1`, `pair.(anonymous)#0` for a
@@ -218,9 +223,16 @@ numbered per (scope, kind): `Service.load>catch#0`, `Widgets>img#1`,
 `Version20260101.up>loss#0` — a new catch in another function no longer
 renumbers it. An import finding is named by its module (`import:node:fs`,
 `#n` only for the same module imported twice). A site outside every
-function or type (static HTML, Vue/Angular templates, an annotated top-level
-constant) keeps
-the per-file ordinal (`img#3`). A collision is a rule defect: `stoa eval` fails on it,
+function or type is anchored to the innermost named thing around it: a
+top-level binding (`const dataSource = {…}` → `dataSource>synchronize#0`,
+also `export default {…}` → `default>…`, `module.exports = {…}` →
+`module.exports>…`), in markup the nearest element with a static `id`
+(`#login>field#0`; a bound `:id`/`[id]` names nothing). With no anchor at
+all it is named after the file explicitly — `(module)>catch#0` in code,
+`(document)>img#0` in HTML and Vue/Angular templates — and numbered among
+the file-level sites only, so a site added inside any declaration no longer
+renumbers it. Type-checker diagnostics (`--typecheck`) are anchored the same
+way (`Service.load>tsc#0`, `(module)>promise#0`). A collision is a rule defect: `stoa eval` fails on it,
 and `--update-baseline` refuses to write a baseline that repeats an identity
 (`loadBaseline` could not read it back) — exit 1, the existing file
 untouched. `R-ORM-EAGER-RELATION` names a finding `Entity.property`;
@@ -228,11 +240,33 @@ class-level findings name an anonymous class `(anonymous)`, numbered
 `(anonymous)#n` when one PHP file holds several (`new class extends
 AbstractMigration`). No rule is known to produce a colliding identity.
 
-**Identity scheme (version):** the naming rules above are scheme 2
-(`IDENTITY_SCHEME` in `src/FindingIdentity.ts`); scheme 1 is the earlier
-naming (no namespaces, `#n` for overloads and accessor pairs, per-file site
-ordinals). A baseline records its scheme (`"identity": 2`; a file without it
-is scheme 1). A baseline of another scheme is never compared — keys of two
+**Identity kind:** every finding carries `location.identityKind`, set where
+its symbol is made (the extractor, the site pass, the project rule) — never
+read back from the symbol text — and counted in the Markdown header
+(`Finding identities: 18 declaration, 22 site, …`). It is metadata, not part
+of the identity (file, rule, symbol). Facts carry it as
+`subject.identityKind`.
+
+| Kind | Anchored to | Example |
+|---|---|---|
+| `declaration` | a named function, method, type, member, or a relation between declarations | `Service.load`, `Repo:IRepo` |
+| `anonymous` | a function without a name, numbered within its scope | `outer.(anonymous)#0` |
+| `site` | a place inside a declaration, binding or element with an `id` | `Service.load>catch#0`, `#login>field#0` |
+| `module` | a module or package | `import:./db`, a cycle `a.ts,b.ts`, an architecture edge |
+| `external` | a diagnostic of an external tool, anchored like a site | `Service.load>tsc#0` |
+| `fileOrdinal` | nothing but the file — the weakest identity: another file-level site of its kind inserted above shifts it | `(module)>catch#0`, `(document)>img#0` |
+| `ambiguous` | declarations that share name, variant and condition, told apart only by order | `f(int)[X]#1` |
+| `file` | the file itself (no symbol) | `R-WIDE-PUBLIC-SURFACE` |
+
+**Identity scheme (version):** the naming rules above are scheme 3
+(`IDENTITY_SCHEME` in `src/FindingIdentity.ts`). Scheme 2 left a site outside
+every declaration at its per-file ordinal (`synchronize#0`, `img#3`,
+`catch#6`, `tsc#1`), numbered Flutter lifecycle call sites per base
+(`Class.signIn#1`, `Class.initState:Theme.of#0`) and C++ preprocessor twins
+by order (`load(int)#1`); scheme 1 is the naming before that (no
+namespaces, `#n` for overloads and accessor pairs, per-file site ordinals).
+A baseline records its scheme (`"identity": 3`; a file without it is
+scheme 1). A baseline of another scheme is never compared — keys of two
 schemes would mark known findings new and report others fixed, silently —
 the CLI exits 1 and names the way out: `--migrate-baseline` analyzes the same
 code under the baseline's scheme and the current one, pairs each finding with

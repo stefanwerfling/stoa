@@ -43,6 +43,8 @@ export interface ReportLabels {
     baselineKnown: string;
     baselineFixed: string;
     baselineCollisions: string;
+    identities: string;
+    identitiesUnknown: string;
     filter: string;
     filterHidden: string;
     filterMinConfidence: string;
@@ -83,6 +85,8 @@ const LABELS: Record<string, ReportLabels> = {
         baselineKnown: 'known',
         baselineFixed: 'fixed',
         baselineCollisions: 'identity collision(s), status unreliable',
+        identities: 'Finding identities',
+        identitiesUnknown: 'without kind',
         filter: 'Filter',
         filterHidden: 'findings hidden',
         architecture: 'Architecture',
@@ -121,6 +125,8 @@ const LABELS: Record<string, ReportLabels> = {
         baselineKnown: 'bekannt',
         baselineFixed: 'behoben',
         baselineCollisions: 'Identitätskollision(en), Status unzuverlässig',
+        identities: 'Finding-Identitäten',
+        identitiesUnknown: 'ohne Kategorie',
         filter: 'Filter',
         filterHidden: 'Befunde ausgeblendet',
         architecture: 'Architektur',

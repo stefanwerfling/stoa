@@ -1,5 +1,5 @@
 import {readFileSync} from 'node:fs';
-import {IDENTITY_SCHEME, identityField} from '../FindingIdentity.js';
+import {IDENTITY_SCHEME, IDENTITY_SCHEMES_TEXT, identityField} from '../FindingIdentity.js';
 import type {ExpectedFinding} from './EvaluationTypes.js';
 
 /**
@@ -11,7 +11,7 @@ import type {ExpectedFinding} from './EvaluationTypes.js';
  * offending entry index, so a broken manifest is an explicit evaluation error
  * rather than silently-wrong metrics.
  *
- * The manifest names its finding-identity scheme (`"identity": 2`, see
+ * The manifest names its finding-identity scheme (`"identity": 3`, see
  * FindingIdentity.ts); without the field it is scheme 1, as a baseline is. A
  * manifest of another scheme than the running one is refused: its symbols
  * would come out as false positives and false negatives, which reads as a
@@ -33,7 +33,7 @@ export const loadExpected = (path: string): ExpectedFinding[] => {
     const {findings, identity} = parsed as {findings: unknown[]; identity?: unknown};
     const scheme = identityField(identity);
     if (scheme === null) {
-        throw new Error(`corpus manifest ${path}: "identity" must be 1 or 2 when present, got ${JSON.stringify(identity)}`);
+        throw new Error(`corpus manifest ${path}: "identity" must be ${IDENTITY_SCHEMES_TEXT} when present, got ${JSON.stringify(identity)}`);
     }
     const entries = findings.map((entry, index) => validateEntry(entry, index, path));
     if (scheme !== IDENTITY_SCHEME) {

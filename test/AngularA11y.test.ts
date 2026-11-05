@@ -27,14 +27,14 @@ const ids = (findings: Finding[], rule: string): string[] => findings.filter((f)
 
 test('the attribute/contrast a11y rules fire on an Angular *.component.html, honouring [attr.x]/[x]/(x)/*ngX', () => {
     const findings = analyzePath(join(corpus, 'widget.component.html'));
-    assert.deepEqual(ids(findings, 'R-A11Y-IMG-ALT'), ['img#0'], 'only the img with no alt; [alt] and [attr.alt] bind the name, so they are not flagged');
-    assert.deepEqual(ids(findings, 'R-A11Y-ARIA-INVALID-ROLE'), ['role#0'], 'the static typo role; a bound [attr.role] is dynamic and skipped');
-    assert.deepEqual(ids(findings, 'R-A11Y-ARIA-UNKNOWN-ATTR'), ['aria-attr#0']);
-    assert.deepEqual(ids(findings, 'R-A11Y-ARIA-INVALID-VALUE'), ['aria-val#0']);
-    assert.deepEqual(ids(findings, 'R-A11Y-POSITIVE-TABINDEX'), ['tabindex#0']);
-    assert.deepEqual(ids(findings, 'R-A11Y-ARIA-HIDDEN-FOCUSABLE'), ['aria-hidden#0']);
-    assert.deepEqual(ids(findings, 'R-A11Y-FRAME-TITLE'), ['frame#0']);
-    assert.deepEqual(ids(findings, 'R-A11Y-CONTRAST-TEXT'), ['contrast#0'], 'the static low-contrast style; [style.color] is dynamic');
+    assert.deepEqual(ids(findings, 'R-A11Y-IMG-ALT'), ['(document)>img#0'], 'only the img with no alt; [alt] and [attr.alt] bind the name, so they are not flagged');
+    assert.deepEqual(ids(findings, 'R-A11Y-ARIA-INVALID-ROLE'), ['(document)>role#0'], 'the static typo role; a bound [attr.role] is dynamic and skipped');
+    assert.deepEqual(ids(findings, 'R-A11Y-ARIA-UNKNOWN-ATTR'), ['(document)>aria-attr#0']);
+    assert.deepEqual(ids(findings, 'R-A11Y-ARIA-INVALID-VALUE'), ['(document)>aria-val#0']);
+    assert.deepEqual(ids(findings, 'R-A11Y-POSITIVE-TABINDEX'), ['(document)>tabindex#0']);
+    assert.deepEqual(ids(findings, 'R-A11Y-ARIA-HIDDEN-FOCUSABLE'), ['(document)>aria-hidden#0']);
+    assert.deepEqual(ids(findings, 'R-A11Y-FRAME-TITLE'), ['(document)>frame#0']);
+    assert.deepEqual(ids(findings, 'R-A11Y-CONTRAST-TEXT'), ['(document)>contrast#0'], 'the static low-contrast style; [style.color] is dynamic');
 });
 
 test('*.component.html is handled by the Angular adapter, not treated as plain HTML', () => {

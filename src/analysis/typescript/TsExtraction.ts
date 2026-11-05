@@ -1,8 +1,9 @@
 import {Node, SyntaxKind, ts} from 'ts-morph';
 import type {Block, CallExpression, CatchClause, ClassDeclaration, Decorator, ImportDeclaration, MethodDeclaration, ObjectLiteralExpression, PropertyAssignment, PropertyDeclaration, SourceFile, VariableDeclaration} from 'ts-morph';
 import type {Fact, SourceRange, SubjectKind} from '../../Types.js';
-import {declarationSymbols, type DeclarationBase, type IdentityScheme} from '../../FindingIdentity.js';
+import {declarationIdentities, type DeclarationBase, type IdentityScheme} from '../../FindingIdentity.js';
 import {factBuilder, identitySchemeOf, type AdapterInfo} from '../FactBuilder.js';
+import {ANCHOR_FACT, type AnchorValue} from '../SiteIdentity.js';
 import {isDeepImport} from '../ImportPath.js';
 import {extractJsxA11yFacts} from '../jsx/JsxA11y.js';
 import {extractBackendValidationFacts, extractMassAssignmentFacts} from './BackendValidation.js';
@@ -87,20 +88,24 @@ export const extractFacts = (sourceFile: SourceFile, info: AdapterInfo): Fact[] 
         const body = functionBody(fn);
         return body === undefined ? [] : [{fn, body}];
     });
-    const symbols = declarationSymbols(functions.map(({fn}) => functionBase(fn, scheme)), scheme);
+    const identities = declarationIdentities(functions.map(({fn}) => functionBase(fn, scheme)), scheme);
     for (const [index, {fn, body}] of functions.entries()) {
+        const identity = identities[index];
+        if (identity === undefined) {
+            continue;
+        }
+        const {symbol, kind: identityKind} = identity;
         const metrics = measureBody(fn, body);
-        const symbol = symbols[index] as string;
         const kindOf = subjectKindOf(fn);
         const range = rangeOfNode(sourceFile, fn);
 
-        facts.push(build({kind: 'metric.cyclomaticComplexity', kindOf, symbol, range, value: metrics.cyclomatic}));
-        facts.push(build({kind: 'metric.cognitiveComplexity', kindOf, symbol, range, value: metrics.cognitive}));
-        facts.push(build({kind: 'metric.nestingDepth', kindOf, symbol, range, value: metrics.nestingDepth}));
-        facts.push(build({kind: 'metric.parameterCount', kindOf, symbol, range, value: metrics.parameterCount}));
-        facts.push(build({kind: 'metric.functionLength', kindOf, symbol, range, value: metrics.lineCount}));
-        facts.push(build({kind: 'doc.hasComplexityRationale', kindOf, symbol, range, value: hasComplexityRationale(fn)}));
-        facts.push(build({kind: 'ast.usesNondeterminism', kindOf, symbol, range, value: metrics.nondeterministic}));
+        facts.push(build({kind: 'metric.cyclomaticComplexity', kindOf, symbol, identityKind, range, value: metrics.cyclomatic}));
+        facts.push(build({kind: 'metric.cognitiveComplexity', kindOf, symbol, identityKind, range, value: metrics.cognitive}));
+        facts.push(build({kind: 'metric.nestingDepth', kindOf, symbol, identityKind, range, value: metrics.nestingDepth}));
+        facts.push(build({kind: 'metric.parameterCount', kindOf, symbol, identityKind, range, value: metrics.parameterCount}));
+        facts.push(build({kind: 'metric.functionLength', kindOf, symbol, identityKind, range, value: metrics.lineCount}));
+        facts.push(build({kind: 'doc.hasComplexityRationale', kindOf, symbol, identityKind, range, value: hasComplexityRationale(fn)}));
+        facts.push(build({kind: 'ast.usesNondeterminism', kindOf, symbol, identityKind, range, value: metrics.nondeterministic}));
     }
 
     descendantsOfKind(sourceFile, SyntaxKind.CatchClause).forEach((clause, index) => {
@@ -311,8 +316,48 @@ export const extractFacts = (sourceFile: SourceFile, info: AdapterInfo): Fact[] 
     // one-hop cross-function trace, or an explicit unresolved destination).
     facts.push(...extractValidationDataflowFacts(sourceFile, build));
 
+    if (scheme >= 3) {
+        for (const anchor of topLevelAnchors(sourceFile)) {
+            facts.push(build({kind: ANCHOR_FACT, kindOf: 'statement', symbol: anchor.name, range: rangeOfNode(sourceFile, anchor.node), value: {form: 'binding'} satisfies AnchorValue}));
+        }
+    }
+
     return facts;
 };
+
+/**
+ * The top-level bindings of a module that can hold finding sites outside
+ * every function (identity scheme 3, SiteIdentity.ts): each `const`/`let`/
+ * `var` declarator with a plain name (its whole statement when it declares
+ * only one, so a comment marker on the statement is inside), `export default
+ * <expression>` as `default`, and an assignment to a dotted name
+ * (`module.exports = {…}`, `exports.config = {…}`) by that name. A
+ * destructuring pattern names no single binding and anchors nothing.
+ */
+const topLevelAnchors = (sourceFile: SourceFile): {name: string; node: Node}[] => {
+    const anchors: {name: string; node: Node}[] = [];
+    for (const statement of sourceFile.getStatements()) {
+        if (Node.isVariableStatement(statement)) {
+            const declarations = statement.getDeclarations();
+            for (const declaration of declarations) {
+                const name = declaration.getNameNode();
+                if (Node.isIdentifier(name)) {
+                    anchors.push({name: name.getText(), node: declarations.length === 1 ? statement : declaration});
+                }
+            }
+        } else if (Node.isExportAssignment(statement)) {
+            anchors.push({name: statement.isExportEquals() ? 'export=' : 'default', node: statement});
+        } else if (Node.isExpressionStatement(statement)) {
+            const expression = statement.getExpression();
+            if (Node.isBinaryExpression(expression) && expression.getOperatorToken().getKind() === SyntaxKind.EqualsToken && isDottedName(expression.getLeft())) {
+                anchors.push({name: expression.getLeft().getText(), node: statement});
+            }
+        }
+    }
+    return anchors;
+};
+
+const isDottedName = (node: Node): boolean => Node.isIdentifier(node) || (Node.isPropertyAccessExpression(node) && isDottedName(node.getExpression()));
 
 // A TypeORM migration file: a class implementing `MigrationInterface`. Scoping
 // the DDL scan to these files keeps SQL strings elsewhere from being flagged.

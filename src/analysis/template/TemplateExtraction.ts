@@ -1,6 +1,7 @@
 import type {Node} from 'web-tree-sitter';
 import type {Fact, SourceRange} from '../../Types.js';
-import {factBuilder, type AdapterInfo} from '../FactBuilder.js';
+import {factBuilder, identitySchemeOf, type AdapterInfo} from '../FactBuilder.js';
+import {ANCHOR_FACT, type AnchorValue} from '../SiteIdentity.js';
 import {ariaValueIsInvalid, hasRoleTokens, hasValidRole, isPositiveTabindexLiteral, isUnknownAriaName, parseTabindex} from '../AriaVocabulary.js';
 import {contrastViolation, parseStyleDeclarations} from '../Contrast.js';
 
@@ -107,6 +108,17 @@ export const extractTemplateA11yFacts = (root: Node, content: string, filePath: 
             if (lowContrast !== null) {
                 facts.push(build({kind: 'ui.lowContrastText', kindOf: 'statement', site: true, symbol: `contrast#${counters.contrast}`, range, value: lowContrast}));
                 counters.contrast += 1;
+            }
+        }
+    }
+
+    if (identitySchemeOf(info) >= 3) {
+        // A static id only: a bound one (`:id`, `[id]`, `{{…}}`) names nothing stable.
+        for (const element of scopeElements(root)) {
+            const startTag = startTagOf(element);
+            const id = startTag === null ? undefined : readAttributes(startTag, dialect).get('id');
+            if (typeof id === 'string' && id.trim() !== '') {
+                facts.push(build({kind: ANCHOR_FACT, kindOf: 'statement', symbol: `#${id.trim()}`, range: rangeOf(element), value: {form: 'elementId'} satisfies AnchorValue}));
             }
         }
     }

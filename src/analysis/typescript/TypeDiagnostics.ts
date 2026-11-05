@@ -99,6 +99,8 @@ export class TypeDiagnosticsExtractor {
                 build({
                     kind: 'external.tsc',
                     kindOf: 'statement',
+                    site: true,
+                    identityKind: 'external',
                     symbol: `tsc#${index}`,
                     range: rangeOf(sourceFile, diagnostic.getStart(), diagnostic.getLength() ?? 0),
                     value: `[${code}] ${message}`,
@@ -119,6 +121,8 @@ export class TypeDiagnosticsExtractor {
                 build({
                     kind: 'external.floatingPromise',
                     kindOf: 'statement',
+                    site: true,
+                    identityKind: 'external',
                     symbol: `promise#${promiseIndex}`,
                     range: rangeOf(sourceFile, statement.getStart(), statement.getWidth()),
                     value: callee,

@@ -1,5 +1,5 @@
 {
-  "identity": 2,
+  "identity": 3,
   "findings": [
     { "file": "Widgets.tsx", "rule": "R-A11Y-IMG-ALT", "symbol": "Widgets>img#0" },
     { "file": "Widgets.tsx", "rule": "R-A11Y-ARIA-INVALID-ROLE", "symbol": "Widgets>role#0" },

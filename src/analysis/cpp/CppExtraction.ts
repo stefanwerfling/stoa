@@ -1,5 +1,5 @@
 import type {Node} from 'web-tree-sitter';
-import {uniqueSymbols, variantBases, type IdentityScheme} from '../../FindingIdentity.js';
+import {uniqueIdentities, variantBases, type IdentityScheme} from '../../FindingIdentity.js';
 import type {Fact, SourceRange, SubjectKind} from '../../Types.js';
 import {factBuilder, identitySchemeOf, type AdapterInfo} from '../FactBuilder.js';
 
@@ -43,20 +43,27 @@ export const extractFacts = (root: Node, content: string, filePath: string, info
         return body === null || body.type !== 'compound_statement' || declarator === undefined ? [] : [{fn, body, declarator}];
     });
     const bases = functions.map(({fn, declarator}) => ({base: qualifiedFunctionName(fn, declarator, scheme), variant: parameterTypes(declarator)}));
-    const symbols = uniqueSymbols(scheme === 1 ? bases.map(({base}) => base) : variantBases(bases));
+    const named = scheme === 1 ? bases.map(({base}) => base) : variantBases(bases);
+    // Scheme 3: definitions still sharing name and parameters (one per
+    // `#ifdef` branch) are told apart by their preprocessor condition.
+    const identities = uniqueIdentities(scheme >= 3 ? variantBases(named.map((base, index) => ({base, ...conditionVariant(functions[index]?.fn)}))) : named);
     for (const [index, {fn, body, declarator}] of functions.entries()) {
         const kindOf: SubjectKind = hasAncestorType(fn, 'field_declaration_list') ? 'method' : 'function';
-        const symbol = symbols[index] as string;
+        const identity = identities[index];
+        if (identity === undefined) {
+            continue;
+        }
+        const {symbol, kind: identityKind} = identity;
         const range = rangeOf(fn);
         const metrics = computeMetrics(body);
 
-        facts.push(build({kind: 'metric.cyclomaticComplexity', kindOf, symbol, range, value: metrics.cyclomatic}));
-        facts.push(build({kind: 'metric.cognitiveComplexity', kindOf, symbol, range, value: metrics.cognitive}));
-        facts.push(build({kind: 'metric.nestingDepth', kindOf, symbol, range, value: metrics.maxNesting}));
-        facts.push(build({kind: 'metric.parameterCount', kindOf, symbol, range, value: parameterCount(declarator)}));
-        facts.push(build({kind: 'metric.functionLength', kindOf, symbol, range, value: range.endLine - range.startLine + 1}));
-        facts.push(build({kind: 'doc.hasComplexityRationale', kindOf, symbol, range, value: leadingHasMarker(lines, range.startLine)}));
-        facts.push(build({kind: 'ast.usesNondeterminism', kindOf, symbol, range, value: usesNondeterminism(body)}));
+        facts.push(build({kind: 'metric.cyclomaticComplexity', kindOf, symbol, identityKind, range, value: metrics.cyclomatic}));
+        facts.push(build({kind: 'metric.cognitiveComplexity', kindOf, symbol, identityKind, range, value: metrics.cognitive}));
+        facts.push(build({kind: 'metric.nestingDepth', kindOf, symbol, identityKind, range, value: metrics.maxNesting}));
+        facts.push(build({kind: 'metric.parameterCount', kindOf, symbol, identityKind, range, value: parameterCount(declarator)}));
+        facts.push(build({kind: 'metric.functionLength', kindOf, symbol, identityKind, range, value: range.endLine - range.startLine + 1}));
+        facts.push(build({kind: 'doc.hasComplexityRationale', kindOf, symbol, identityKind, range, value: leadingHasMarker(lines, range.startLine)}));
+        facts.push(build({kind: 'ast.usesNondeterminism', kindOf, symbol, identityKind, range, value: usesNondeterminism(body)}));
 
         // Every name ANY declaration in this function declares (not just
         // tracked allocations) — a declarator identifier is a declaration
@@ -146,6 +153,58 @@ const isConditional = (node: Node): boolean => {
  * is `#define NAME` and that is the only top-level node besides comments —
  * the whole file, compiled once per translation unit, never configuration.
  */
+/**
+ * The preprocessor condition a definition is compiled under, as an identity
+ * variant (`[!HAVE_CUDA]`, `[HAVE_L0 && defined(X)]`): every enclosing
+ * `#if`/`#ifdef`/`#elif`/`#else` branch, outermost first, an `#else` as the
+ * negated condition of its `#if`. The include guard is no condition.
+ * Nothing when the definition is unconditional.
+ */
+const conditionVariant = (fn: Node | undefined): {variant?: string} => {
+    const parts: string[] = [];
+    let child = fn;
+    let parent = fn?.parent ?? null;
+    while (child !== undefined && parent !== null) {
+        const part = CONDITIONAL_TYPES.has(parent.type) && !isIncludeGuard(parent) ? branchCondition(parent, child) : undefined;
+        if (part !== undefined) {
+            parts.unshift(part);
+        }
+        child = parent;
+        parent = parent.parent;
+    }
+    return parts.length === 0 ? {} : {variant: `[${parts.join(' && ')}]`};
+};
+
+/** The condition of the branch `child` sits in; nothing for an `#if`'s alternative (its `#else`/`#elif` names it). */
+const branchCondition = (conditional: Node, child: Node): string | undefined => {
+    const alternative = conditional.childForFieldName('alternative');
+    if (alternative !== null && alternative.startIndex === child.startIndex && alternative.type === child.type) {
+        return undefined;
+    }
+    if (conditional.type === 'preproc_else') {
+        const owner = conditional.parent;
+        return owner === null ? undefined : negated(ownCondition(owner));
+    }
+    return ownCondition(conditional);
+};
+
+/** An `#if`/`#elif` condition as written (whitespace collapsed); `#ifdef X` is `X`, `#ifndef X` is `!X`. */
+const ownCondition = (conditional: Node): string => {
+    if (conditional.type === 'preproc_ifdef' || conditional.type === 'preproc_elifdef') {
+        const name = conditional.childForFieldName('name')?.text ?? '';
+        const keyword = conditional.child(0)?.type ?? '';
+        return keyword.endsWith('ndef') ? `!${name}` : name;
+    }
+    return (conditional.childForFieldName('condition')?.text ?? '').replace(/\s+/g, ' ').trim();
+};
+
+const negated = (condition: string): string => {
+    if (/^![A-Za-z_]\w*$/.test(condition)) {
+        return condition.slice(1);
+    }
+    return /^[A-Za-z_]\w*$/.test(condition) ? `!${condition}` : `!(${condition})`;
+};
+
 const isIncludeGuard = (node: Node): boolean => {
     if (node.type !== 'preproc_ifdef' || node.child(0)?.type !== '#ifndef' || node.parent?.type !== 'translation_unit') {
         return false;

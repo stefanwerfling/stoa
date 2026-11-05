@@ -3,7 +3,7 @@ import {Language, Parser, type Node, type Tree} from 'web-tree-sitter';
 import type {Fact} from '../Types.js';
 import {extractFacts} from './html/HtmlExtraction.js';
 import type {FileMeta, FileRef, LanguageAdapter, ParseResult, ProjectContext} from './LanguageAdapter.js';
-import {assignSiteSymbols} from './SiteIdentity.js';
+import {assignSiteSymbols, DOCUMENT_SCOPE, schemeOf} from './SiteIdentity.js';
 
 const require = createRequire(import.meta.url);
 
@@ -72,6 +72,6 @@ export class HtmlAdapter implements LanguageAdapter {
         if (parsed.handle === undefined) {
             return [];
         }
-        return assignSiteSymbols(extractFacts(parsed.handle as Node, parsed.file.content, parsed.file.path, {id: this.id, version: this.version}), ctx.identityScheme);
+        return assignSiteSymbols(extractFacts(parsed.handle as Node, parsed.file.content, parsed.file.path, {id: this.id, version: this.version, ...schemeOf(ctx)}), ctx.identityScheme, DOCUMENT_SCOPE);
     }
 }

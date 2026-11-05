@@ -46,7 +46,7 @@ import {loadArchitectureConfig} from '../src/architecture/ArchitectureConfig.js'
 import {DEFAULT_CONFIG} from '../src/Config.js';
 import {loadValidationContract} from '../src/contracts/ValidationContract.js';
 import {diffFindings, isSemanticallyEqual} from '../src/FindingDiff.js';
-import {IDENTITY_SCHEME, identityField, keyString, type FindingKey, type IdentityScheme} from '../src/FindingIdentity.js';
+import {IDENTITY_SCHEME, IDENTITY_SCHEMES_TEXT, identityField, keyString, type FindingKey, type IdentityScheme} from '../src/FindingIdentity.js';
 import {analyzeAsync} from '../src/Pipeline.js';
 import type {Finding} from '../src/Types.js';
 
@@ -116,7 +116,7 @@ const snapshotScheme = (dir: string): IdentityScheme => {
     }
     const scheme = identityField((JSON.parse(readFileSync(metaPath, 'utf8')) as {identity?: unknown}).identity);
     if (scheme === null) {
-        throw new Error(`${metaPath}: "identity" must be 1 or 2`);
+        throw new Error(`${metaPath}: "identity" must be ${IDENTITY_SCHEMES_TEXT}`);
     }
     return scheme;
 };

@@ -7,6 +7,7 @@ import type {
     Severity
 } from '../Types.js';
 import type {KnowledgeBase} from '../knowledge/KnowledgeBase.js';
+import {IDENTITY_SCHEME, subjectIdentityKind, type IdentityScheme} from '../FindingIdentity.js';
 import {DEFAULT_LANG, localize, type LocalizedText} from '../i18n/Localized.js';
 import {certaintyCap, evalCondition, evalGroup, maxSeverity, weakestCertainty, type FactUnit} from './Evaluation.js';
 import {DependencyCycleRule} from './project/DependencyCycleRule.js';
@@ -40,7 +41,8 @@ export class RuleEngine {
         private readonly knowledgeBase: KnowledgeBase,
         private readonly ruleSet: RuleSet,
         private readonly lang: string = DEFAULT_LANG,
-        private readonly projectRules: ProjectRule[] = [new DependencyCycleRule()]
+        private readonly projectRules: ProjectRule[] = [new DependencyCycleRule()],
+        private readonly identityScheme: IdentityScheme = IDENTITY_SCHEME
     ) {}
 
     /**
@@ -69,6 +71,7 @@ export class RuleEngine {
                 ...(symbolGraph !== undefined ? {symbolGraph} : {}),
                 ...(flutterWidgetGraph !== undefined ? {flutterWidgetGraph} : {}),
                 ...(dartLibraryIndex !== undefined ? {dartLibraryIndex} : {}),
+                identityScheme: this.identityScheme,
                 ruleSetId: this.ruleSet.id,
                 knowledgeBase: this.knowledgeBase,
                 lang: this.lang
@@ -149,6 +152,7 @@ export class RuleEngine {
                 file: subject.file,
                 range: subject.range,
                 symbol: subject.symbol ?? '',
+                ...subjectIdentityKind(subject),
                 structure: subject.kindOf
             },
             observation: {

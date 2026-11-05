@@ -18,7 +18,8 @@ und die **philosophische Deutung ist als Deutung markiert** (Leitprinzipien L2, 
   "location": {
     "file": "src/import/parser.ts",
     "range": { "startLine": 42, "startCol": 5, "endLine": 44, "endCol": 6 },
-    "symbol": "parseRecord",
+    "symbol": "parseRecord>catch#0",       // Teil der Identität, siehe §6 „Identität"
+    "identityKind": "site",                // woran das Symbol verankert ist (Metadaten)
     "structure": "catch-clause"            // betroffene Code-Struktur
   },
 
@@ -192,14 +193,15 @@ von einer Stelle melden, tragen das Ziel ins Symbol ein (SOLID: `Klasse:Ziel`,
 `Klasse:Vertrag`, der Pfad der importierten Datei oder `package:<name>`), sodass
 zwei Befunde nie dieselbe Identität teilen. Regeln, die mehrere STELLEN unter
 einem Namen melden, nummerieren sie in Quelltextreihenfolge nach der
-`#n`-Konvention (Flutter-Lifecycle: `Klasse.feld`, `Klasse.signIn#1`,
-`Klasse.initState:Theme.of#0`; Flutter-Layout: `Page.build>Expanded#2`, je
-Datei nummeriert). Funktionen und Methoden (das Subjekt der deklarativen
+`#n`-Konvention (Flutter-Lifecycle: `Klasse.feld`,
+`Klasse.signIn>setState#1`, `Klasse.initState>Theme.of#0` — je Methode und
+Aufruf nummeriert; Flutter-Layout: `Page.build>Expanded#2`, je Datei
+nummeriert). Funktionen und Methoden (das Subjekt der deklarativen
 Komplexitäts-, Größen- und Seiteneffekt-Regeln) benennen die Adapter mit
 allen umschließenden benannten Bereichen: `Service.run`, `outer.inner`,
 `api.run` (ein an `api` gebundenes Objektliteral) in TS, `A.run` für eine
 Dart-Klasse/-Mixin/-Extension und eine PHP-Klasse/-Trait/-Interface/-Enum,
-`Buffer::reset` in C++. Namespaces gehören zum Namen (Identitätsschema 2):
+`Buffer::reset` in C++. Namespaces gehören zum Namen (seit Identitätsschema 2):
 `App\Svc\Repo.find` in PHP (auch bei Symbolen auf Klassenebene wie
 `App\Entity\Order.customer`), `app::io::Buffer::reset` in C++ (ein anonymer
 Namespace heißt `(anonymous)`; Definitionen innerhalb und außerhalb der
@@ -207,8 +209,12 @@ Klasse heißen gleich), `A.B.run` für TS `namespace A.B`; eine unbenannte
 Dart-Extension heißt `(extension on T)`. Eine Basis, die in einer Datei
 dennoch mehrfach vorkommt, wird zuerst nach dem unterschieden, was die
 Deklarationen unterscheidet — ein TS-Accessor-Paar heißt
-`A.size:get`/`A.size:set`, C++-Überladungen `f(int)`/`f(double)` — und erst
-danach mit `#n`. Eine Funktion ohne Namen
+`A.size:get`/`A.size:set`, C++-Überladungen `f(int)`/`f(double)`,
+C++-Definitionen mit gleichem Namen und gleichen Parametern in verschiedenen
+Präprozessor-Zweigen nach ihrer Bedingung,
+`load(int)[!HAVE_CUDA]`/`load(int)[HAVE_CUDA]` (verschachtelte Zweige mit
+`&&` verbunden, ein `#else` als negierte Bedingung, der Include-Guard ist
+keine Bedingung) — und erst danach mit `#n`. Eine Funktion ohne Namen
 übernimmt den Namen, an den sie gebunden ist (`const handler = () => …` →
 `handler`, eine Objekt-Property, ein Klassenfeld, PHP `$handler = function
 …`); ein Callback heißt `<Bereich>.(anonymous)#n`, nummeriert innerhalb
@@ -222,8 +228,18 @@ innersten umschließenden Funktion oder zum innersten Typ und wird je
 `Version20260101.up>loss#0` — ein neues catch in einer anderen Funktion
 nummeriert sie nicht mehr um. Ein Import-Befund heißt nach seinem Modul
 (`import:node:fs`, `#n` nur für dasselbe Modul, das zweimal importiert wird).
-Eine Stelle außerhalb jeder Funktion und jedes Typs (statisches HTML,
-Vue-/Angular-Templates, eine annotierte Konstante auf oberster Ebene) behält die Ordnungszahl je Datei (`img#3`).
+Eine Stelle außerhalb jeder Funktion und jedes Typs wird am innersten
+benannten Element um sie herum verankert: einer Bindung auf oberster Ebene
+(`const dataSource = {…}` → `dataSource>synchronize#0`, ebenso
+`export default {…}` → `default>…`, `module.exports = {…}` →
+`module.exports>…`), in Markup am nächsten Element mit statischer `id`
+(`#login>field#0`; ein gebundenes `:id`/`[id]` benennt nichts). Ohne jeden
+Anker heißt sie ausdrücklich nach der Datei — `(module)>catch#0` in Code,
+`(document)>img#0` in HTML und Vue-/Angular-Templates — und wird nur unter
+den Stellen auf Dateiebene nummeriert, sodass eine Stelle, die in irgendeiner
+Deklaration hinzukommt, sie nicht mehr umnummeriert. Diagnosen des
+Typprüfers (`--typecheck`) werden genauso verankert (`Service.load>tsc#0`,
+`(module)>promise#0`).
 Eine Kollision ist ein
 Regelfehler: `stoa eval` scheitert daran, und `--update-baseline` verweigert
 eine Baseline, die eine Identität wiederholt (`loadBaseline` könnte sie nicht
@@ -233,11 +249,34 @@ Befund `Entity.property`; Befunde auf Klassenebene benennen eine anonyme Klasse
 enthält (`new class extends AbstractMigration`). Keine Regel erzeugt bekannt
 eine kollidierende Identität.
 
-**Identitätsschema (Version):** die obigen Benennungsregeln sind Schema 2
-(`IDENTITY_SCHEME` in `src/FindingIdentity.ts`); Schema 1 ist die frühere
-Benennung (keine Namespaces, `#n` für Überladungen und Accessor-Paare,
-Ordnungszahlen je Datei für Stellen). Eine Baseline hält ihr Schema fest
-(`"identity": 2`; eine Datei ohne das Feld ist Schema 1). Eine Baseline eines
+**Identitätskategorie:** jeder Befund trägt `location.identityKind`, gesetzt
+dort, wo sein Symbol entsteht (im Extraktor, im Stellen-Durchlauf, in der
+Projektregel) — nie aus dem Symboltext zurückgelesen — und im Markdown-Kopf
+gezählt (`Finding-Identitäten: 18 declaration, 22 site, …`). Sie ist
+Metadatum, kein Teil der Identität (Datei, Regel, Symbol). Facts tragen sie
+als `subject.identityKind`.
+
+| Kategorie | Verankert an | Beispiel |
+|---|---|---|
+| `declaration` | einer benannten Funktion, Methode, einem Typ, Member oder einer Beziehung zwischen Deklarationen | `Service.load`, `Repo:IRepo` |
+| `anonymous` | einer Funktion ohne Namen, nummeriert innerhalb ihres Bereichs | `outer.(anonymous)#0` |
+| `site` | einer Stelle in einer Deklaration, Bindung oder einem Element mit `id` | `Service.load>catch#0`, `#login>field#0` |
+| `module` | einem Modul oder Paket | `import:./db`, ein Zyklus `a.ts,b.ts`, eine Architektur-Kante |
+| `external` | einer Diagnose eines externen Werkzeugs, verankert wie eine Stelle | `Service.load>tsc#0` |
+| `fileOrdinal` | nur der Datei — die schwächste Identität: eine weitere Stelle derselben Art auf Dateiebene darüber verschiebt sie | `(module)>catch#0`, `(document)>img#0` |
+| `ambiguous` | Deklarationen mit gleichem Namen, gleicher Variante und Bedingung, nur nach Reihenfolge unterschieden | `f(int)[X]#1` |
+| `file` | der Datei selbst (kein Symbol) | `R-WIDE-PUBLIC-SURFACE` |
+
+**Identitätsschema (Version):** die obigen Benennungsregeln sind Schema 3
+(`IDENTITY_SCHEME` in `src/FindingIdentity.ts`). Schema 2 ließ eine Stelle
+außerhalb jeder Deklaration bei ihrer Ordnungszahl je Datei
+(`synchronize#0`, `img#3`, `catch#6`, `tsc#1`), nummerierte
+Flutter-Lifecycle-Aufrufstellen je Basis (`Klasse.signIn#1`,
+`Klasse.initState:Theme.of#0`) und C++-Präprozessor-Zwillinge nach
+Reihenfolge (`load(int)#1`); Schema 1 ist die Benennung davor (keine
+Namespaces, `#n` für Überladungen und Accessor-Paare, Ordnungszahlen je
+Datei für Stellen). Eine Baseline hält ihr Schema fest (`"identity": 3`;
+eine Datei ohne das Feld ist Schema 1). Eine Baseline eines
 anderen Schemas wird nie verglichen — Schlüssel zweier Schemata würden
 bekannte Befunde als neu und andere als behoben melden, stillschweigend —,
 die CLI endet mit Exit 1 und nennt den Ausweg: `--migrate-baseline`

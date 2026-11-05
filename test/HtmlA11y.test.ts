@@ -30,7 +30,7 @@ test('R-A11Y-IMG-ALT flags a missing alt, but not alt="" / a real alt / aria-hid
     const findings = analyzePath(join(corpus, 'images.html')).filter((f) => f.rule.id === 'R-A11Y-IMG-ALT');
     assert.deepEqual(
         findings.map((f) => f.location.symbol),
-        ['img#0'],
+        ['(document)>img#0'],
         'only the image with no alt attribute is flagged'
     );
     assert.equal(findings[0]?.interpretation.principles[0]?.id, 'marcus.purpose');
@@ -41,14 +41,14 @@ test('R-A11Y-IMG-ALT flags a missing alt, but not alt="" / a real alt / aria-hid
 
 test('R-A11Y-CONTROL-NAME flags unnamed buttons, not text/aria-label/svg-title/img-alt ones', () => {
     const findings = analyzePath(join(corpus, 'buttons.html'));
-    assert.deepEqual(ids(findings, 'R-A11Y-CONTROL-NAME'), ['button#0', 'button#5'], 'the empty button and the unlabeled icon-only button');
+    assert.deepEqual(ids(findings, 'R-A11Y-CONTROL-NAME'), ['(document)>button#0', '(document)>button#1'], 'the empty button and the unlabeled icon-only button');
 });
 
 test('R-A11Y-FORM-LABEL flags unlabelled fields, not label-for / wrapping-label / aria / hidden / submit', () => {
     const findings = analyzePath(join(corpus, 'forms.html'));
     assert.deepEqual(
         ids(findings, 'R-A11Y-FORM-LABEL'),
-        ['field#0', 'field#4', 'field#6'],
+        ['(document)>field#0', '(document)>field#1', '(document)>field#2'],
         'bare input, bare select and placeholder-only input; a placeholder is not a label'
     );
     const first = findings.find((f) => f.rule.id === 'R-A11Y-FORM-LABEL');
@@ -59,7 +59,7 @@ test('R-A11Y-LINK-NAME flags empty/icon-only links, not text / aria-label / a ba
     const findings = analyzePath(join(corpus, 'links.html'));
     assert.deepEqual(
         ids(findings, 'R-A11Y-LINK-NAME'),
-        ['link#1', 'link#3'],
+        ['(document)>link#0', '(document)>link#1'],
         'the empty link and the unlabeled icon-only link; an <a> without href is not a link'
     );
 });
@@ -68,7 +68,7 @@ test('R-A11Y-ARIA-HIDDEN-FOCUSABLE flags focusable aria-hidden elements, not dec
     const findings = analyzePath(join(corpus, 'aria-hidden.html'));
     assert.deepEqual(
         ids(findings, 'R-A11Y-ARIA-HIDDEN-FOCUSABLE'),
-        ['aria-hidden#0', 'aria-hidden#1', 'aria-hidden#2'],
+        ['(document)>aria-hidden#0', '(document)>aria-hidden#1', '(document)>aria-hidden#2'],
         'a hidden button, a hidden link and a hidden tabindex=0 widget; a decorative img/span and a tabindex=-1 button are fine'
     );
     const first = findings.find((f) => f.rule.id === 'R-A11Y-ARIA-HIDDEN-FOCUSABLE');
@@ -79,7 +79,7 @@ test('R-A11Y-ARIA-INVALID-ROLE flags typos/abstract roles, not valid roles / fir
     const findings = analyzePath(join(corpus, 'roles.html'));
     assert.deepEqual(
         ids(findings, 'R-A11Y-ARIA-INVALID-ROLE'),
-        ['role#0', 'role#1'],
+        ['(document)>role#0', '(document)>role#1'],
         'the typo and the abstract role; a valid role, a first-valid token list, a doc-* role and an empty role are fine'
     );
 });
@@ -88,7 +88,7 @@ test('R-A11Y-ARIA-UNKNOWN-ATTR flags misspelled aria-* names, not valid ones / n
     const findings = analyzePath(join(corpus, 'aria-attrs.html'));
     assert.deepEqual(
         ids(findings, 'R-A11Y-ARIA-UNKNOWN-ATTR'),
-        ['aria-attr#0', 'aria-attr#1', 'aria-attr#2'],
+        ['(document)>aria-attr#0', '(document)>aria-attr#1', '(document)>aria-attr#2'],
         'aria-labeledby, aria-hiden and aria-prezed; valid ARIA attributes and data-aria-*/class are fine'
     );
 });
@@ -97,7 +97,7 @@ test('R-A11Y-ARIA-INVALID-VALUE flags out-of-range enumerated values, not valid 
     const findings = analyzePath(join(corpus, 'aria-values.html'));
     assert.deepEqual(
         ids(findings, 'R-A11Y-ARIA-INVALID-VALUE'),
-        ['aria-val#0', 'aria-val#1', 'aria-val#2', 'aria-val#3'],
+        ['(document)>aria-val#0', '(document)>aria-val#1', '(document)>aria-val#2', '(document)>aria-val#3'],
         'aria-hidden="yes", aria-current="yes", aria-live="rude", aria-relevant with a bad token; valid tokens, undefined, empty, {{...}} and free-form aria-label are fine'
     );
 });
@@ -106,7 +106,7 @@ test('R-A11Y-POSITIVE-TABINDEX flags tabindex > 0, not 0 / negative / non-numeri
     const findings = analyzePath(join(corpus, 'tabindex.html'));
     assert.deepEqual(
         ids(findings, 'R-A11Y-POSITIVE-TABINDEX'),
-        ['tabindex#0', 'tabindex#1'],
+        ['(document)>tabindex#0', '(document)>tabindex#1'],
         'tabindex="1" and tabindex="3"; 0, -1, "abc" and {{n}} are fine'
     );
     const first = findings.find((f) => f.rule.id === 'R-A11Y-POSITIVE-TABINDEX');
@@ -116,7 +116,7 @@ test('R-A11Y-POSITIVE-TABINDEX flags tabindex > 0, not 0 / negative / non-numeri
 
 test('R-A11Y-HTML-LANG flags an <html> with no lang; pages that set lang="en" are fine', () => {
     const flagged = analyzePath(join(corpus, 'lang.html'));
-    assert.deepEqual(ids(flagged, 'R-A11Y-HTML-LANG'), ['html#0'], 'the document root has no lang');
+    assert.deepEqual(ids(flagged, 'R-A11Y-HTML-LANG'), ['(document)>html#0'], 'the document root has no lang');
     const ok = analyzePath(join(corpus, 'clean.html'));
     assert.deepEqual(ids(ok, 'R-A11Y-HTML-LANG'), [], 'a page with <html lang="en"> is not flagged');
 });
@@ -125,7 +125,7 @@ test('R-A11Y-META-VIEWPORT-ZOOM flags user-scalable=no / maximum-scale<2, not sc
     const findings = analyzePath(join(corpus, 'viewport.html'));
     assert.deepEqual(
         ids(findings, 'R-A11Y-META-VIEWPORT-ZOOM'),
-        ['viewport#0', 'viewport#1'],
+        ['(document)>viewport#0', '(document)>viewport#1'],
         'user-scalable=no and maximum-scale=1; maximum-scale=5/2.0, user-scalable=yes and a non-viewport meta are fine'
     );
 });
@@ -134,7 +134,7 @@ test('R-A11Y-ARIA-DANGLING-IDREF flags references to absent ids, not resolvable 
     const findings = analyzePath(join(corpus, 'idref.html'));
     assert.deepEqual(
         ids(findings, 'R-A11Y-ARIA-DANGLING-IDREF'),
-        ['idref#0', 'idref#1', 'idref#2'],
+        ['(document)>idref#0', '(document)>idref#1', '(document)>idref#2'],
         'aria-labelledby="missing", a dangling token in a describedby list, and one dangling token in a labelledby list; resolvable refs and aria-controls are fine'
     );
     assert.equal(findings.find((f) => f.rule.id === 'R-A11Y-ARIA-DANGLING-IDREF')?.severity, 'high');
@@ -144,7 +144,7 @@ test('R-A11Y-DUPLICATE-ID flags every occurrence of a repeated id, not unique on
     const findings = analyzePath(join(corpus, 'dupids.html'));
     assert.deepEqual(
         ids(findings, 'R-A11Y-DUPLICATE-ID'),
-        ['dupid#0', 'dupid#1', 'dupid#2', 'dupid#3'],
+        ['#dup2>dupid#0', '#dup2>dupid#1', '#main>dupid#0', '#main>dupid#1'],
         'both uses of id="main" and both of id="dup2"; a unique id and an element with no id are fine'
     );
 });
@@ -153,7 +153,7 @@ test('R-A11Y-FRAME-TITLE flags unnamed/empty-title frames, not titled / aria-lab
     const findings = analyzePath(join(corpus, 'frames.html'));
     assert.deepEqual(
         ids(findings, 'R-A11Y-FRAME-TITLE'),
-        ['frame#0', 'frame#1'],
+        ['(document)>frame#0', '(document)>frame#1'],
         'the untitled iframe and the empty-title one; a title, an aria-label, an aria-hidden frame and an aria-labelledby frame are fine'
     );
     assert.equal(findings.find((f) => f.rule.id === 'R-A11Y-FRAME-TITLE')?.severity, 'high');
@@ -163,7 +163,7 @@ test('R-A11Y-CONTRAST-TEXT flags inline colour pairs below AA, honouring large t
     const findings = analyzePath(join(corpus, 'contrast.html'));
     assert.deepEqual(
         ids(findings, 'R-A11Y-CONTRAST-TEXT'),
-        ['contrast#0', 'contrast#1', 'contrast#2'],
+        ['(document)>contrast#0', '(document)>contrast#1', '(document)>contrast#2'],
         'grey-on-white (normal), a sub-3:1 large-text pair, and an in-block var() colour; a 4.54:1 pair, a 3:1-ok large pair, a translucent colour, a colour with no background, an unresolved var and black-on-white are all fine'
     );
     assert.equal(findings.find((f) => f.rule.id === 'R-A11Y-CONTRAST-TEXT')?.severity, 'high');

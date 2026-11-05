@@ -71,7 +71,7 @@ Each rule has a test catalog (see [rule-model.md §7](./rule-model.md#7-testbark
   and a malformed/unreadable manifest is an explicit evaluation error, not a
   pass.
 - **Identity scheme of the manifest.** A manifest names the finding-identity
-  scheme its symbols follow (`{"identity": 2, "findings": […]}`, see
+  scheme its symbols follow (`{"identity": 3, "findings": […]}`, see
   [finding-model.md](./finding-model.md)); without the field it is scheme 1,
   as a baseline is. A manifest of another scheme than the running stoa is
   refused (exit 1, nothing evaluated) — its symbols would otherwise show as

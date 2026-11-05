@@ -1,5 +1,5 @@
 import type {Fact, Finding, Severity} from '../../Types.js';
-import {ordinalSymbols} from '../../FindingIdentity.js';
+import {IDENTITY_SCHEME, ordinalSymbols, type IdentityScheme} from '../../FindingIdentity.js';
 import {localize, type LocalizedText} from '../../i18n/Localized.js';
 import type {LifecycleCall, LifecycleCreation, LifecycleRange, StateLifecycleValue} from '../../analysis/dart/FlutterLifecycle.js';
 import {resolvedFrom, type DartNameResolution} from '../../model/DartLibraryIndex.js';
@@ -112,6 +112,8 @@ interface Hit {
     subject: string;
     /** The finding's identity within the State class (field name, or the call site's base — see `callSites`). */
     key: string;
+    /** A call site's method and call (identity scheme 3: `State.save>setState#0`); absent for a field. */
+    site?: {method: string; call: string};
     /** Fact-value summary for the evidence. */
     evidence: string;
 }
@@ -147,11 +149,27 @@ abstract class FlutterLifecycleRule implements ProjectRule {
                 continue;
             }
             const hits = this.hits({fact, value}, resolve).sort((a, b) => a.range.startLine - b.range.startLine || a.range.startCol - b.range.startCol);
-            const keys = hits.map((hit) => hit.key);
-            const symbols = this.callSites ? ordinalSymbols(keys) : keys;
+            const symbols = this.symbolsOf(hits, input.identityScheme ?? IDENTITY_SCHEME);
             hits.forEach((hit, index) => findings.push(this.buildFinding(hit, `${value.className}.${symbols[index] as string}`, input)));
         }
         return findings;
+    }
+
+    /**
+     * The hits' identities within their State class: a field by its name; a
+     * call site numbered in source order — per method and call under scheme 3
+     * (`save>setState#0`, `initState>Theme.of#0`), per base before
+     * (`save#0`, `initState:Theme.of#0`).
+     */
+    private symbolsOf(hits: readonly Hit[], scheme: IdentityScheme): string[] {
+        if (!this.callSites) {
+            return hits.map((hit) => hit.key);
+        }
+        if (scheme < 3) {
+            return ordinalSymbols(hits.map((hit) => hit.key));
+        }
+        const bases = hits.map((hit) => (hit.site === undefined ? hit.key : `${hit.site.method}>${hit.site.call}`));
+        return ordinalSymbols(bases);
     }
 
     private buildFinding(hit: Hit, symbol: string, input: ProjectRuleInput): Finding {
@@ -161,7 +179,7 @@ abstract class FlutterLifecycleRule implements ProjectRule {
             id: `finding:${this.id}:${state.fact.subject.file}:${range.startLine}:${range.startCol}`,
             rule: {id: this.id, version: this.version},
             ruleSet: input.ruleSetId,
-            location: {file: state.fact.subject.file, range, symbol, structure: 'class'},
+            location: {file: state.fact.subject.file, range, symbol, identityKind: this.callSites ? 'site' : 'declaration', structure: 'class'},
             observation: {
                 statement: fill(this.text.statement),
                 evidence: [{fact: 'dart.stateLifecycle', value: hit.evidence, certainty: 'syntactic'}]
@@ -306,6 +324,7 @@ export class FlutterSetStateAfterAwaitRule extends FlutterLifecycleRule {
                     range: call.range,
                     subject: `${state.value.className}.${call.method}`,
                     key: call.method,
+                    site: {method: call.method, call: 'setState'},
                     evidence: `${state.value.className}.${call.method}: await${awaitAt} → setState (line ${call.range.startLine}), ${guard}`
                 };
             });
@@ -351,7 +370,7 @@ export class FlutterInheritedInInitStateRule extends FlutterLifecycleRule {
                     fromSource(resolve(state.fact.subject.file, type, call.prefix), FLUTTER_PACKAGE)
                 );
             })
-            .map((call) => ({state, range: call.range, subject: `${callText(call)}(context)`, key: `initState:${callText(call)}`, evidence: `${state.value.className}.initState: ${callText(call)}(context)`}));
+            .map((call) => ({state, range: call.range, subject: `${callText(call)}(context)`, key: `initState:${callText(call)}`, site: {method: 'initState', call: callText(call)}, evidence: `${state.value.className}.initState: ${callText(call)}(context)`}));
     }
 }
 

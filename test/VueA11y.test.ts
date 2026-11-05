@@ -27,14 +27,14 @@ const ids = (findings: Finding[], rule: string): string[] => findings.filter((f)
 
 test('the attribute/contrast a11y rules fire on a .vue template, honouring v-bind/:/@ and {{…}}', () => {
     const findings = analyzePath(join(corpus, 'Widget.vue'));
-    assert.deepEqual(ids(findings, 'R-A11Y-IMG-ALT'), ['img#0'], 'only the img with no alt; alt="…", :alt and v-bind:alt bind the name');
-    assert.deepEqual(ids(findings, 'R-A11Y-ARIA-INVALID-ROLE'), ['role#0'], 'the typo role; a bound :role is dynamic and skipped');
-    assert.deepEqual(ids(findings, 'R-A11Y-ARIA-UNKNOWN-ATTR'), ['aria-attr#0'], 'the misspelled aria-* name');
-    assert.deepEqual(ids(findings, 'R-A11Y-ARIA-INVALID-VALUE'), ['aria-val#0'], 'the out-of-range enumerated value');
-    assert.deepEqual(ids(findings, 'R-A11Y-POSITIVE-TABINDEX'), ['tabindex#0'], 'the static tabindex="5"');
-    assert.deepEqual(ids(findings, 'R-A11Y-ARIA-HIDDEN-FOCUSABLE'), ['aria-hidden#0'], 'the focusable aria-hidden control');
-    assert.deepEqual(ids(findings, 'R-A11Y-FRAME-TITLE'), ['frame#0'], 'the untitled iframe');
-    assert.deepEqual(ids(findings, 'R-A11Y-CONTRAST-TEXT'), ['contrast#0'], 'the static low-contrast style; :style is dynamic, and <style scoped> is outside <template>');
+    assert.deepEqual(ids(findings, 'R-A11Y-IMG-ALT'), ['(document)>img#0'], 'only the img with no alt; alt="…", :alt and v-bind:alt bind the name');
+    assert.deepEqual(ids(findings, 'R-A11Y-ARIA-INVALID-ROLE'), ['(document)>role#0'], 'the typo role; a bound :role is dynamic and skipped');
+    assert.deepEqual(ids(findings, 'R-A11Y-ARIA-UNKNOWN-ATTR'), ['(document)>aria-attr#0'], 'the misspelled aria-* name');
+    assert.deepEqual(ids(findings, 'R-A11Y-ARIA-INVALID-VALUE'), ['(document)>aria-val#0'], 'the out-of-range enumerated value');
+    assert.deepEqual(ids(findings, 'R-A11Y-POSITIVE-TABINDEX'), ['(document)>tabindex#0'], 'the static tabindex="5"');
+    assert.deepEqual(ids(findings, 'R-A11Y-ARIA-HIDDEN-FOCUSABLE'), ['(document)>aria-hidden#0'], 'the focusable aria-hidden control');
+    assert.deepEqual(ids(findings, 'R-A11Y-FRAME-TITLE'), ['(document)>frame#0'], 'the untitled iframe');
+    assert.deepEqual(ids(findings, 'R-A11Y-CONTRAST-TEXT'), ['(document)>contrast#0'], 'the static low-contrast style; :style is dynamic, and <style scoped> is outside <template>');
 });
 
 test('a React component element and content outside <template> are not analysed', () => {

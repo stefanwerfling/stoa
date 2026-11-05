@@ -154,7 +154,7 @@ export class SolidDipLayerDirectionRule implements ProjectRule {
             id: `finding:${this.id}:${first.file}:${first.range.startLine}:${first.range.startCol}`,
             rule: {id: this.id, version: this.version},
             ruleSet: input.ruleSetId,
-            location: {file: first.file, range: first.range, symbol: classes[0] as string, structure: 'module'},
+            location: {file: first.file, range: first.range, symbol: classes[0] as string, identityKind: 'declaration', structure: 'module'},
             observation: {
                 statement: fill(RULE_TEXT.statement),
                 evidence: [
@@ -356,7 +356,7 @@ export class SolidLspContractCompatibilityRule implements ProjectRule {
             id: `finding:${this.id}:${node.file}:${range.startLine}:${range.startCol}`,
             rule: {id: this.id, version: this.version},
             ruleSet: input.ruleSetId,
-            location: {file: node.file, range, symbol: `${node.name}.${member.name}`, structure: 'function'},
+            location: {file: node.file, range, symbol: `${node.name}.${member.name}`, identityKind: 'declaration', structure: 'function'},
             observation: {
                 statement: fill(LSP_TEXT.statement),
                 evidence: [
@@ -478,7 +478,7 @@ export class SolidIspInterfaceCohesionRule implements ProjectRule {
             rule: {id: this.id, version: this.version},
             ruleSet: input.ruleSetId,
             // one finding per (class, contract): both in the symbol, so the identity (FindingIdentity) is unique
-            location: {file: node.file, range, symbol: `${node.name}:${contract.name}`, structure: 'class'},
+            location: {file: node.file, range, symbol: `${node.name}:${contract.name}`, identityKind: 'declaration', structure: 'class'},
             observation: {
                 statement: fill(ISP_TEXT.statement),
                 evidence: [
@@ -648,7 +648,7 @@ export class SolidDipConcreteDependencyRule implements ProjectRule {
             rule: {id: this.id, version: this.version},
             ruleSet: input.ruleSetId,
             // one finding per (UI class, target): both in the symbol, so the identity (FindingIdentity) is unique
-            location: {file: node.file, range, symbol: `${node.name}:${target.name}`, structure: 'class'},
+            location: {file: node.file, range, symbol: `${node.name}:${target.name}`, identityKind: 'declaration', structure: 'class'},
             observation: {
                 statement: fill(DIP_CONCRETE_TEXT.statement),
                 evidence: [

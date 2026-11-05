@@ -172,19 +172,23 @@ const EXPECTED = [
     {file: 'service.ts', rule: 'R-ERR-SWALLOWED', symbol: 'save>catch#0'}
 ];
 
-test('CLI eval: a manifest without "identity" is scheme 1 and refused with the reason; scheme 2 passes; an invalid value is malformed', () => {
+test('CLI eval: a manifest without "identity" is scheme 1 and refused with the reason; an older scheme too; scheme 3 passes; an invalid value is malformed', () => {
     withProject((dir, project) => {
         const legacy = evalWith(project, dir, {findings: EXPECTED});
         assert.equal(legacy.status, 1);
-        assert.match(legacy.stderr, /uses finding identity scheme 1 \(it has no "identity" field\), this stoa uses scheme 2 .*nothing was evaluated/);
+        assert.match(legacy.stderr, /uses finding identity scheme 1 \(it has no "identity" field\), this stoa uses scheme 3 .*nothing was evaluated/);
         assert.equal(legacy.stdout, '');
         const old = evalWith(project, dir, {identity: 1, findings: EXPECTED});
         assert.equal(old.status, 1);
-        assert.match(old.stderr, /uses finding identity scheme 1, this stoa uses scheme 2/);
-        const invalid = evalWith(project, dir, {identity: 3, findings: EXPECTED});
+        assert.match(old.stderr, /uses finding identity scheme 1, this stoa uses scheme 3/);
+        const previous = evalWith(project, dir, {identity: 2, findings: EXPECTED});
+        assert.equal(previous.status, 1);
+        assert.match(previous.stderr, /uses finding identity scheme 2, this stoa uses scheme 3/);
+        assert.equal(previous.stdout, '');
+        const invalid = evalWith(project, dir, {identity: 4, findings: EXPECTED});
         assert.equal(invalid.status, 1);
-        assert.match(invalid.stderr, /"identity" must be 1 or 2 when present, got 3/);
-        const current = evalWith(project, dir, {identity: 2, findings: EXPECTED});
+        assert.match(invalid.stderr, /"identity" must be 1, 2 or 3 when present, got 4/);
+        const current = evalWith(project, dir, {identity: 3, findings: EXPECTED});
         assert.equal(current.status, 0, current.stderr);
         assert.equal((JSON.parse(current.stdout) as {outcome: string}).outcome, 'passed');
     });
@@ -193,7 +197,7 @@ test('CLI eval: a manifest without "identity" is scheme 1 and refused with the r
 test('CLI eval: a repeated produced identity still fails the evaluation (integrity violation)', () => {
     withProject((dir, project) => {
         const path = join(dir, 'expected.json');
-        writeFileSync(path, JSON.stringify({identity: 2, findings: EXPECTED}));
+        writeFileSync(path, JSON.stringify({identity: 3, findings: EXPECTED}));
         const result = cli(['eval', project, '--expected', path, '--format', 'json'], {STOA_TEST_DUPLICATE_IDENTITY: '1'});
         assert.equal(result.status, 1);
         assert.match(result.stderr, /identity collision/);
@@ -267,7 +271,7 @@ const snapshotOf = (dir: string, project: string, name: string): string => {
 test('snapshot diff: identical → same (exit 0); a shift → moved; a new finding → CHANGED with "+"; a repeated identity → INTEGRITY', () => {
     withProject((dir, project) => {
         const first = snapshotOf(dir, project, 'first');
-        assert.deepEqual(JSON.parse(readFileSync(join(first, 'snapshot.json'), 'utf8')), {identity: 2});
+        assert.deepEqual(JSON.parse(readFileSync(join(first, 'snapshot.json'), 'utf8')), {identity: 3});
         const again = compare(['diff', first, snapshotOf(dir, project, 'again')]);
         assert.equal(again.status, 0);
         assert.match(again.stdout, /^same {6}p\.jsonl$/m);
@@ -284,7 +288,7 @@ test('snapshot diff: identical → same (exit 0); a shift → moved; a new findi
 
         const doubled = join(dir, 'doubled');
         mkdirSync(doubled);
-        writeFileSync(join(doubled, 'snapshot.json'), JSON.stringify({identity: 2}));
+        writeFileSync(join(doubled, 'snapshot.json'), JSON.stringify({identity: 3}));
         const lines = readFileSync(join(first, 'p.jsonl'), 'utf8');
         writeFileSync(join(doubled, 'p.jsonl'), `${lines}${lines.split('\n')[0] ?? ''}\n`);
         const integrity = compare(['diff', first, doubled]);
@@ -306,7 +310,7 @@ test('snapshot diff across identity schemes: said so, paired by position, a chan
         );
         const result = compare(['diff', legacy, current]);
         assert.equal(result.status, 1);
-        assert.match(result.stdout, /identity schemes differ \(before 1, after 2\): findings are paired by position/);
+        assert.match(result.stdout, /identity schemes differ \(before 1, after 3\): findings are paired by position/);
         assert.match(result.stdout, /= service\.ts::R-ERR-SWALLOWED::catch#0 -> service\.ts::R-ERR-SWALLOWED::load>catch#0/);
         assert.match(result.stdout, /= service\.ts::R-ERR-SWALLOWED::catch#1 -> service\.ts::R-ERR-SWALLOWED::save>catch#0/);
         assert.match(result.stdout, /\(same 0, moved 0, changed 0, renamed 2, \+0 -0\)/);

@@ -1,6 +1,6 @@
 {
   "description": "Superset: the real finding plus one that is never produced (false negative, no false positive).",
-  "identity": 2,
+  "identity": 3,
   "findings": [
     { "file": "Swallow.ts", "rule": "R-ERR-SWALLOWED", "symbol": "risky>catch#0" },
     { "file": "Swallow.ts", "rule": "R-ERR-SWALLOWED", "symbol": "catch#1" }

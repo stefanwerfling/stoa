@@ -1,4 +1,4 @@
-import {IDENTITY_SCHEME, uniqueSymbols, type IdentityScheme} from '../FindingIdentity.js';
+import {IDENTITY_SCHEME, uniqueSymbols, type IdentityKind, type IdentityScheme} from '../FindingIdentity.js';
 import type {Fact, SourceRange} from '../Types.js';
 import {factIdOf, isSiteFact} from './FactBuilder.js';
 import type {ProjectContext} from './LanguageAdapter.js';
@@ -20,14 +20,24 @@ export const schemeOf = (context: ProjectContext): {identityScheme?: IdentitySch
  *   alone; a per-file ordinal shifted with every earlier site of its kind;
  * - an import: by its module (`import:./db`), `#n` only when one file
  *   imports the same module twice;
- * - outside every declaration (static HTML, a top-level config object): the
- *   per-file ordinal stays — there is no declaration to anchor it to.
+ * - outside every declaration, scheme 2: the per-file ordinal stays;
+ *   scheme 3: anchored to the innermost `struct.anchor` containing it — a
+ *   top-level binding (`dataSource>synchronize#0`), a markup element with an
+ *   `id` (`#login>field#0`) — else to the file itself, explicitly
+ *   (`(module)>catch#0`, `(document)>img#0`), numbered among the file-level
+ *   sites only, so a site added inside any declaration no longer shifts it.
  *
  * The facts of one site (a catch has three) share its legacy symbol and
  * position and get one new symbol; a renamed fact gets the id it would have
- * been built with (`factIdOf`). Scheme 1 returns the facts unchanged.
+ * been built with (`factIdOf`) and the kind of its anchor
+ * (`subject.identityKind`: `module`, `site`, `fileOrdinal`; a fact built as
+ * `external` stays `external`). Scheme 1 returns the facts unchanged.
+ *
+ * `context` holds the declarations and anchors of the file; it is `facts`
+ * itself for an adapter, and the adapter's facts for sites produced apart
+ * from it (the type checker's diagnostics, Pipeline.ts).
  */
-export const assignSiteSymbols = (facts: Fact[], scheme: IdentityScheme = IDENTITY_SCHEME): Fact[] => {
+export const assignSiteSymbols = (facts: Fact[], scheme: IdentityScheme = IDENTITY_SCHEME, fileScope: FileScope = MODULE_SCOPE, context: readonly Fact[] = facts): Fact[] => {
     if (scheme === 1) {
         return facts;
     }
@@ -35,33 +45,56 @@ export const assignSiteSymbols = (facts: Fact[], scheme: IdentityScheme = IDENTI
     if (groups.length === 0) {
         return facts;
     }
-    const renamed = new Map<string, string>();
-    const scopes = scopesOf(facts);
+    const renamed = new Map<string, {symbol: string; kind: IdentityKind}>();
+    const scopes = scopesOf(context, 'declaration');
+    const anchors = scheme >= 3 ? scopesOf(context, 'anchor') : [];
     const counters = new Map<string, number>();
     const imports = groups.filter((group) => group.kind === 'import');
     const importSymbols = uniqueSymbols(imports.map((group) => `import:${group.module ?? ''}`));
-    imports.forEach((group, index) => renamed.set(group.key, importSymbols[index] as string));
+    imports.forEach((group, index) => renamed.set(group.key, {symbol: importSymbols[index] as string, kind: 'module'}));
     for (const group of groups) {
         if (group.kind === 'import') {
             continue;
         }
-        const scope = innermostScope(scopes, group.range);
-        if (scope === undefined) {
+        const declaration = innermostScope(scopes, group.range);
+        const anchor = declaration ?? innermostScope(anchors, group.range);
+        if (anchor === undefined && scheme < 3) {
             continue;
         }
+        const scope = anchor ?? fileScope;
         const counter = `${scope}\n${group.kind}`;
         const index = counters.get(counter) ?? 0;
         counters.set(counter, index + 1);
-        renamed.set(group.key, `${scope}>${group.kind}#${index}`);
+        renamed.set(group.key, {symbol: `${scope}>${group.kind}#${index}`, kind: anchor === undefined ? 'fileOrdinal' : 'site'});
     }
     return facts.map((fact) => {
-        const symbol = isSiteFact(fact) ? renamed.get(siteKey(fact)) : undefined;
-        if (symbol === undefined) {
+        const identity = isSiteFact(fact) ? renamed.get(siteKey(fact)) : undefined;
+        if (identity === undefined) {
             return fact;
         }
-        return {...fact, id: factIdOf(fact.subject.file, fact.kind, symbol, fact.subject.range.startLine), subject: {...fact.subject, symbol}};
+        const identityKind = fact.subject.identityKind === 'external' ? 'external' : identity.kind;
+        return {...fact, id: factIdOf(fact.subject.file, fact.kind, identity.symbol, fact.subject.range.startLine), subject: {...fact.subject, symbol: identity.symbol, identityKind}};
     });
 };
+
+/** The explicit scope of a site outside every declaration and anchor (scheme 3): code is a module, markup a document. */
+export type FileScope = typeof MODULE_SCOPE | typeof DOCUMENT_SCOPE;
+
+export const MODULE_SCOPE = '(module)';
+
+export const DOCUMENT_SCOPE = '(document)';
+
+/**
+ * The fact kind of an anchor (scheme 3): something with a stable name that is
+ * no declaration but can hold sites — a top-level binding (`const
+ * dataSource = {…}`, `export default {…}`, `module.exports = {…}`), a markup
+ * element with an `id` (symbol `#login`). Value: how it is named.
+ */
+export const ANCHOR_FACT = 'struct.anchor';
+
+export interface AnchorValue {
+    form: 'binding' | 'elementId';
+}
 
 interface SiteGroup {
     key: string;
@@ -108,11 +141,21 @@ const moduleOf = (fact: Fact): string | undefined => {
     return undefined;
 };
 
-/** Every function (its metric facts) and type (`struct.typeDecl`) of the file: the declarations a site can belong to. */
-const scopesOf = (facts: readonly Fact[]): Scope[] =>
-    facts
-        .filter((fact) => (fact.kind === 'metric.cyclomaticComplexity' || fact.kind === 'struct.typeDecl') && fact.subject.symbol !== undefined)
-        .map((fact) => ({symbol: fact.subject.symbol as string, range: fact.subject.range}));
+/**
+ * The declarations a site can belong to — every function (its metric facts)
+ * and type (`struct.typeDecl`) of the file — or its anchors (`struct.anchor`).
+ */
+const scopesOf = (facts: readonly Fact[], what: 'declaration' | 'anchor'): Scope[] => {
+    const scopes: Scope[] = [];
+    for (const fact of facts) {
+        const symbol = fact.subject.symbol;
+        const wanted = what === 'anchor' ? fact.kind === ANCHOR_FACT : fact.kind === 'metric.cyclomaticComplexity' || fact.kind === 'struct.typeDecl';
+        if (wanted && symbol !== undefined) {
+            scopes.push({symbol, range: fact.subject.range});
+        }
+    }
+    return scopes;
+};
 
 const compareStart = (a: SourceRange, b: SourceRange): number => a.startLine - b.startLine || a.startCol - b.startCol;
 

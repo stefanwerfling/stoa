@@ -3,15 +3,17 @@ import {existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync} from 'n
 import {dirname, join, relative} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import type {FileRef} from './analysis/LanguageAdapter.js';
+import {IDENTITY_KINDS} from './FindingIdentity.js';
 import type {Certainty, Fact} from './Types.js';
 
 const CERTAINTIES: ReadonlySet<string> = new Set<Certainty>(['syntactic', 'semantic-heuristic', 'external-tool']);
+const IDENTITY_KIND_SET: ReadonlySet<unknown> = new Set<unknown>(IDENTITY_KINDS);
 
 const isPlainObject = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
 
 const isValidRange = (value: unknown): boolean => isPlainObject(value) && typeof value.startLine === 'number' && typeof value.startCol === 'number' && typeof value.endLine === 'number' && typeof value.endCol === 'number';
 
-const isValidSubject = (value: unknown): boolean => isPlainObject(value) && typeof value.file === 'string' && typeof value.kindOf === 'string' && (value.symbol === undefined || typeof value.symbol === 'string') && isValidRange(value.range);
+const isValidSubject = (value: unknown): boolean => isPlainObject(value) && typeof value.file === 'string' && typeof value.kindOf === 'string' && (value.symbol === undefined || typeof value.symbol === 'string') && (value.identityKind === undefined || IDENTITY_KIND_SET.has(value.identityKind)) && isValidRange(value.range);
 
 const isValidProducer = (value: unknown): boolean => isPlainObject(value) && typeof value.adapter === 'string' && typeof value.version === 'string';
 

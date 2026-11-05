@@ -73,7 +73,7 @@ Jede Regel hat einen Testkatalog (siehe [rule-model.md §7](./rule-model.md#7-te
   Evaluierung scheitern); ein fehlerhaftes/unlesbares Manifest ist ein expliziter
   Evaluierungsfehler, kein Bestehen.
 - **Identitätsschema des Manifests.** Ein Manifest nennt das
-  Finding-Identitätsschema seiner Symbole (`{"identity": 2, "findings": […]}`,
+  Finding-Identitätsschema seiner Symbole (`{"identity": 3, "findings": […]}`,
   siehe [finding-model.md](./finding-model.md)); ohne das Feld ist es Schema 1,
   wie eine Baseline. Ein Manifest eines anderen Schemas als das des laufenden
   stoa wird abgelehnt (Exit 1, nichts bewertet) — seine Symbole erschienen

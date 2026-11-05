@@ -170,7 +170,7 @@ export class SolidDipLayerDeclaredRule implements ProjectRule {
             id: `finding:${this.id}:${violation.file}:${range.startLine}:${range.startCol}:${violation.kind}:${violation.target}`,
             rule: {id: this.id, version: this.version},
             ruleSet: input.ruleSetId,
-            location: {file: violation.file, range, symbol: violation.symbol, structure: 'module'},
+            location: {file: violation.file, range, symbol: violation.symbol, identityKind: 'module', structure: 'module'},
             observation: {
                 statement: fill(isEdge ? TEXT.edgeStatement : TEXT.packageStatement),
                 evidence: [

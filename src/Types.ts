@@ -4,7 +4,7 @@
  * The deterministic core deals in these shapes only; adapters translate
  * language-specific detail into them.
  */
-import type {FindingKey} from './FindingIdentity.js';
+import type {FindingKey, IdentityKind} from './FindingIdentity.js';
 import type {LocalizedText} from './i18n/Localized.js';
 
 export interface SourceRange {
@@ -64,6 +64,8 @@ export type FactValue = number | boolean | string | Record<string, unknown>;
 export interface FactSubject {
     file: string;
     symbol?: string;
+    /** What `symbol` is anchored to (FindingIdentity.ts `IdentityKind`), set where the symbol is made; absent on a fact without a symbol. */
+    identityKind?: IdentityKind;
     kindOf: SubjectKind;
     range: SourceRange;
 }
@@ -159,6 +161,8 @@ export interface FindingLocation {
     file: string;
     range: SourceRange;
     symbol?: string;
+    /** What `symbol` is anchored to (FindingIdentity.ts `IdentityKind`) — metadata, not part of the identity. */
+    identityKind?: IdentityKind;
     structure?: string;
 }
 

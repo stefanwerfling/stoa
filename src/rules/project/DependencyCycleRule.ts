@@ -106,7 +106,7 @@ export class DependencyCycleRule implements ProjectRule {
             id: `finding:${this.id}:${anchor}:1:0`,
             rule: {id: this.id, version: this.version},
             ruleSet: input.ruleSetId,
-            location: {file: anchor, range: {startLine: 1, startCol: 0, endLine: 1, endCol: 0}, symbol: cycleKey, structure: 'module'},
+            location: {file: anchor, range: {startLine: 1, startCol: 0, endLine: 1, endCol: 0}, symbol: cycleKey, identityKind: 'module', structure: 'module'},
             observation: {
                 statement: localize(TEXT.statement, input.lang).replace('{members}', names.join(', ')),
                 evidence: [{fact: 'deps.import', value: cycleKey, certainty: 'syntactic'}]

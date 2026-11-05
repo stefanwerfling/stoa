@@ -1,6 +1,7 @@
 import type {Node} from 'web-tree-sitter';
 import type {Fact, SourceRange} from '../../Types.js';
-import {factBuilder, type AdapterInfo} from '../FactBuilder.js';
+import {factBuilder, identitySchemeOf, type AdapterInfo} from '../FactBuilder.js';
+import {ANCHOR_FACT, type AnchorValue} from '../SiteIdentity.js';
 import {ariaValueIsInvalid, hasRoleTokens, hasValidRole, isPositiveTabindexLiteral, isUnknownAriaName, parseTabindex} from '../AriaVocabulary.js';
 import {contrastViolation, parseStyleDeclarations} from '../Contrast.js';
 
@@ -186,6 +187,16 @@ export const extractFacts = (root: Node, content: string, filePath: string, info
         if (lowContrast !== null) {
             facts.push(build({kind: 'ui.lowContrastText', kindOf: 'statement', site: true, symbol: `contrast#${contrastIndex}`, range: rangeOf(startTag), value: lowContrast}));
             contrastIndex += 1;
+        }
+    }
+
+    if (identitySchemeOf(info) >= 3) {
+        for (const element of descendants(root, 'element')) {
+            const startTag = startTagOf(element);
+            const id = startTag === null ? undefined : attributes(startTag).get('id');
+            if (id !== undefined && id.trim() !== '') {
+                facts.push(build({kind: ANCHOR_FACT, kindOf: 'statement', symbol: `#${id.trim()}`, range: rangeOf(element), value: {form: 'elementId'} satisfies AnchorValue}));
+            }
         }
     }
 

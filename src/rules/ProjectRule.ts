@@ -1,5 +1,6 @@
 import type {Fact, Finding, RuleMaturity} from '../Types.js';
 import type {KnowledgeBase} from '../knowledge/KnowledgeBase.js';
+import type {IdentityScheme} from '../FindingIdentity.js';
 import type {ModuleGraph} from '../model/ModuleGraph.js';
 import type {SymbolGraph} from '../model/SymbolGraph.js';
 import type {FlutterWidgetGraph} from '../model/FlutterWidgetGraph.js';
@@ -65,6 +66,8 @@ export interface ProjectRuleInput {
      * files of `facts` instead.
      */
     analyzedFiles: ReadonlySet<string>;
+    /** The finding-identity scheme of the run (FindingIdentity.ts); the current one when absent. A rule that names sites itself follows it. */
+    identityScheme?: IdentityScheme;
     ruleSetId: string;
     knowledgeBase: KnowledgeBase;
     lang: string;

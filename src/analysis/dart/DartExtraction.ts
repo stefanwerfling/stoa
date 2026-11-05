@@ -1,5 +1,5 @@
 import type {Node} from 'web-tree-sitter';
-import {declarationSymbols, type DeclarationBase, type IdentityScheme} from '../../FindingIdentity.js';
+import {declarationIdentities, type DeclarationBase, type IdentityScheme} from '../../FindingIdentity.js';
 import type {Fact, SourceRange, SubjectKind} from '../../Types.js';
 import {factBuilder, identitySchemeOf, type AdapterInfo} from '../FactBuilder.js';
 import {importPrefixes, parseErrorCount} from './DartCallSite.js';
@@ -51,24 +51,28 @@ export const extractFacts = (root: Node, content: string, filePath: string, info
 
     const prefixes = importPrefixes(root);
     const functions = dartFunctions(root, scheme);
-    const symbols = declarationSymbols(functions.map(({base}) => base), scheme);
+    const identities = declarationIdentities(functions.map(({base}) => base), scheme);
     for (const [index, {signature, owner, body, form}] of functions.entries()) {
         const kindOf: SubjectKind = owner.type === 'method_signature' ? 'method' : 'function';
-        const symbol = symbols[index] as string;
+        const identity = identities[index];
+        if (identity === undefined) {
+            continue;
+        }
+        const {symbol, kind: identityKind} = identity;
         const range = spanRange(owner, body);
         const metrics = computeMetrics(body);
 
-        facts.push(build({kind: 'metric.cyclomaticComplexity', kindOf, symbol, range, value: metrics.cyclomatic}));
-        facts.push(build({kind: 'metric.cognitiveComplexity', kindOf, symbol, range, value: metrics.cognitive}));
-        facts.push(build({kind: 'metric.nestingDepth', kindOf, symbol, range, value: metrics.maxNesting}));
-        facts.push(build({kind: 'metric.parameterCount', kindOf, symbol, range, value: parameterCount(signature)}));
-        facts.push(build({kind: 'metric.functionLength', kindOf, symbol, range, value: range.endLine - range.startLine + 1}));
-        facts.push(build({kind: 'doc.hasComplexityRationale', kindOf, symbol, range, value: leadingHasMarker(lines, range.startLine)}));
+        facts.push(build({kind: 'metric.cyclomaticComplexity', kindOf, symbol, identityKind, range, value: metrics.cyclomatic}));
+        facts.push(build({kind: 'metric.cognitiveComplexity', kindOf, symbol, identityKind, range, value: metrics.cognitive}));
+        facts.push(build({kind: 'metric.nestingDepth', kindOf, symbol, identityKind, range, value: metrics.maxNesting}));
+        facts.push(build({kind: 'metric.parameterCount', kindOf, symbol, identityKind, range, value: parameterCount(signature)}));
+        facts.push(build({kind: 'metric.functionLength', kindOf, symbol, identityKind, range, value: range.endLine - range.startLine + 1}));
+        facts.push(build({kind: 'doc.hasComplexityRationale', kindOf, symbol, identityKind, range, value: leadingHasMarker(lines, range.startLine)}));
         // A closure inside a function is already part of that function's
         // nondeterminism fact (it reads its whole body); only a closure
         // outside every function (a field initializer) has its own.
         if (form !== 'closure' || !hasAncestor(owner, 'function_body')) {
-            facts.push(build({kind: 'ast.usesNondeterminism', kindOf, symbol, range, value: usesNondeterminism(body)}));
+            facts.push(build({kind: 'ast.usesNondeterminism', kindOf, symbol, identityKind, range, value: usesNondeterminism(body)}));
         }
 
         // Flutter widget structure of this body (Phase 1) — one compact fact
@@ -79,7 +83,7 @@ export const extractFacts = (root: Node, content: string, filePath: string, info
         if (form === 'function') {
             const tree = extractWidgetTree(body, prefixes, returnsWidget(signature));
             if (tree !== null) {
-                facts.push(build({kind: 'ui.flutterWidgetTree', kindOf, symbol, range, value: tree}));
+                facts.push(build({kind: 'ui.flutterWidgetTree', kindOf, symbol, identityKind, range, value: tree}));
             }
         }
     }

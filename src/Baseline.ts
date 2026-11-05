@@ -1,6 +1,6 @@
 import {existsSync, mkdirSync, readFileSync, statSync, writeFileSync} from 'node:fs';
 import {dirname} from 'node:path';
-import {duplicateIdentityText, duplicateKeys, findingKey, IDENTITY_SCHEME, identityField, keyString, type FindingKey, type IdentityScheme} from './FindingIdentity.js';
+import {duplicateIdentityText, duplicateKeys, findingKey, IDENTITY_SCHEME, IDENTITY_SCHEMES_TEXT, identityField, keyString, type FindingKey, type IdentityScheme} from './FindingIdentity.js';
 import type {AnalysisReport, Finding} from './Types.js';
 
 /**
@@ -64,7 +64,7 @@ const parseBaselineFile = (path: string): BaselineFile => {
         throw new Error(`baseline file ${path} is malformed: "version" must be 1, got ${JSON.stringify(candidate.version)}`);
     }
     if (identityField(candidate.identity) === null) {
-        throw new Error(`baseline file ${path} is malformed: "identity" must be 1 or 2 when present, got ${JSON.stringify(candidate.identity)}`);
+        throw new Error(`baseline file ${path} is malformed: "identity" must be ${IDENTITY_SCHEMES_TEXT} when present, got ${JSON.stringify(candidate.identity)}`);
     }
     if (!Array.isArray(candidate.findings)) {
         throw new Error(`baseline file ${path} is malformed: "findings" must be an array`);

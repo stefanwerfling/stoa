@@ -87,7 +87,7 @@ export class DeadExportRule implements ProjectRule {
             id: `finding:${this.id}:${subject.file}:${subject.range.startLine}:${name}`,
             rule: {id: this.id, version: this.version},
             ruleSet: input.ruleSetId,
-            location: {file: subject.file, range: subject.range, symbol: name, structure: 'module'},
+            location: {file: subject.file, range: subject.range, symbol: name, identityKind: 'declaration', structure: 'module'},
             observation: {
                 statement: localize(TEXT.statement, input.lang).replace('{name}', name),
                 evidence: [{fact: 'deps.export', value: name, certainty: 'syntactic'}]

@@ -258,7 +258,7 @@ abstract class FlutterLayoutRule implements ProjectRule {
             id: `finding:${this.id}:${child.file}:${child.range.startLine}:${child.range.startCol}`,
             rule: {id: this.id, version: this.version},
             ruleSet: input.ruleSetId,
-            location: {file: child.file, range: child.range, symbol, structure: 'widget'},
+            location: {file: child.file, range: child.range, symbol, identityKind: 'site', structure: 'widget'},
             observation: {
                 statement: fill(this.text.statement),
                 evidence: [{fact: 'ui.flutterWidgetTree', value: `${displayName(parent)}.${slot} > ${displayName(child)}${match.detail === undefined || match.detail === '' ? '' : ` [${match.detail}]`}`, certainty: 'syntactic'}]

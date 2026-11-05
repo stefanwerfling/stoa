@@ -2,7 +2,7 @@ import type {Node} from 'web-tree-sitter';
 import type {Fact} from '../Types.js';
 import {parseHtmlTree} from './HtmlAdapter.js';
 import type {FileMeta, FileRef, LanguageAdapter, ParseResult, ProjectContext} from './LanguageAdapter.js';
-import {assignSiteSymbols} from './SiteIdentity.js';
+import {assignSiteSymbols, DOCUMENT_SCOPE, schemeOf} from './SiteIdentity.js';
 import {extractTemplateA11yFacts, type BindingDialect} from './template/TemplateExtraction.js';
 
 // Vue binding syntax → plain attribute + dynamic flag. v-bind (`:x` / `v-bind:x`)
@@ -57,6 +57,6 @@ export class VueAdapter implements LanguageAdapter {
         if (parsed.handle === undefined) {
             return [];
         }
-        return assignSiteSymbols(extractTemplateA11yFacts(parsed.handle as Node, parsed.file.content, parsed.file.path, {id: this.id, version: this.version}, VUE_DIALECT), ctx.identityScheme);
+        return assignSiteSymbols(extractTemplateA11yFacts(parsed.handle as Node, parsed.file.content, parsed.file.path, {id: this.id, version: this.version, ...schemeOf(ctx)}, VUE_DIALECT), ctx.identityScheme, DOCUMENT_SCOPE);
     }
 }

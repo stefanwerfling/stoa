@@ -2188,6 +2188,116 @@ Produktionscode.
   Fehler, `npm run lint` 0 Probleme, `npm test` 668 / 668, `npm run build` ok;
   kein Golden-Manifest, keine Baseline und keine Abhängigkeit geändert.
 
+## Finding Identity vervollständigt (Quality-Hardening-Spezifikation, Phase 2, 2026-11-05)
+
+Identitätsschema 3 und eine ausdrückliche Identitätskategorie an jedem
+Befund (beides Entscheidungen des Nutzers). Einzelheiten der Benennung in
+`finding-model.md` §6 „Identität".
+
+- **Ein Modell, erweitert:** `src/FindingIdentity.ts` erhält Schema 3,
+  `IdentityKind` und `declarationIdentities`/`uniqueIdentities` (die
+  bestehenden `declarationSymbols`/`uniqueSymbols` leiten sich jetzt davon
+  ab); die Verankerung übernimmt der Stellen-Durchlauf `SiteIdentity.ts`.
+  Kein zweiter Benennungsweg.
+- **Was Schema 3 ändert** (Schema 2 bleibt für `--migrate-baseline`
+  erzeugbar):
+  - eine Stelle außerhalb jeder Deklaration wird an einem neuen Fact
+    `struct.anchor` verankert — einer Bindung auf oberster Ebene in TS/JS
+    (`const`/`let`/`var` mit einfachem Namen, `export default`,
+    `module.exports`/`exports.x =`), einem Element mit statischer `id` in
+    HTML und Vue-/Angular-Templates — sonst nach der Datei benannt
+    (`(module)>…`, `(document)>…`) und nur unter den Stellen auf
+    Dateiebene nummeriert;
+  - `--typecheck`-Diagnosen (`tsc#n`, `promise#n`) laufen durch denselben
+    Stellen-Durchlauf, gegen die Deklarationen der Adapter-Facts derselben
+    Datei (Pipeline.ts), Kategorie `external`;
+  - Flutter-Lifecycle-Aufrufstellen: `Klasse.methode>setState#n`,
+    `Klasse.initState>Theme.of#n` (je Methode und Aufruf) statt
+    `Klasse.methode#n` / `Klasse.initState:Theme.of#n`;
+  - C++-Definitionen mit gleichem Namen und gleichen Parametern: ihre
+    Präprozessor-Bedingung als Variante (`[!MIMIRMIND_HAVE_CUDA]`), `#n` nur,
+    wenn auch die Bedingungen gleich sind (Kategorie `ambiguous`).
+- **Identitätskategorie:** `location.identityKind` (und
+  `subject.identityKind` an Facts), eine von `declaration`, `anonymous`,
+  `site`, `module`, `external`, `fileOrdinal`, `ambiguous`, `file`; gesetzt
+  vom Extraktor (Vorgabe des `FactBuilder`: `declaration` für ein Symbol,
+  `fileOrdinal` für eine noch nicht verankerte Stelle), vom
+  Stellen-Durchlauf und von jeder Projektregel dort, wo sie ihr Symbol
+  bildet. Additiv in `fact.schema.json` und `finding.schema.json`; der
+  FactCache prüft sie. Der Markdown-Kopf zählt die Kategorien. Kein Teil von
+  `FindingKey`.
+- **Dateien und Meldungen:** Baselines, Korpus-Manifeste und Snapshots
+  akzeptieren `"identity": 3`; eine Datei mit Schema 2 wird abgelehnt wie
+  eine mit Schema 1, eine Baseline nur mit `--migrate-baseline`
+  umgewandelt. Der Fehlertext „must be …" nennt die gültigen Schemata aus
+  einer Liste (`IDENTITY_SCHEMES`).
+- **Golden-Manifeste** (alle 16 mechanisch umgeschrieben: jeder Korpus unter
+  Schema 2 und 3 analysiert, Befunde über `Finding.id` gepaart, das Symbol
+  des Manifests durch das neue seines Befunds ersetzt; kein Eintrag
+  hinzugefügt, entfernt oder ungepaart außer in den zwei absichtlich
+  fehlerhaften Evaluator-Fixtures `eval/expected-malformed.json` und
+  `eval/expected-missing.json`):
+
+  | Manifest | Einträge | Symbole geändert | Warum |
+  |---|---|---|---|
+  | `corpus/expected.json` | 44 | 3 | `synchronize#0`/`syncWithMigrations#0` in `export const dataSource = {…}` → `dataSource>…#0` |
+  | `fixtures/validation-dataflow-corpus/expected.json` | 20 | 7 | annotierte Schemata auf oberster Ebene: `annotation#2` → `ageSchema>annotation#0` usw., `unused#0` → `unusedSchema>unused#0` |
+  | `fixtures/html/expected.json` | 37 | 37 | statisches HTML: `(document)>…`, nummeriert unter den gemeldeten Stellen (`button#5` → `(document)>button#1`); `dupids.html` unter ihren ids (`#main>dupid#0`, `#dup2>dupid#0`) |
+  | `fixtures/vue/expected.json`, `fixtures/angular/expected.json` | 8 + 8 | 8 + 8 | Template-Stellen → `(document)>…#0` |
+  | 11 weitere (SOLID ×2, JSX, Flutter, catch-intent, eval-multi, eval ×5) | — | 0 | nur `"identity": 3` |
+
+- **Tests:** `test/IdentityStability.test.ts` (18): eine Stelle vor einer
+  anderen eingefügt (gleiche Deklaration: verschiebt — die dokumentierte
+  Grenze; andere Deklaration oder oberste Ebene: nicht), eine Stelle auf
+  oberster Ebene, die ein catch in einer Funktion nicht mehr verschiebt
+  (Schema 2 tat es), Anker für `const`/`export default`/`module.exports`,
+  eine verschobene und eine neue Methode, ein verschobenes Modul (der
+  Dateiteil ändert sich, das Symbol bleibt), gleichnamige Methoden in zwei
+  Klassen, C++-Präprozessor-Zwillinge (verschachtelt, `#else`,
+  Include-Guard, gleiche Bedingungen → `ambiguous`), anonyme Funktionen,
+  statisches HTML mit und ohne ids, ein Vue-Template mit statischer und
+  gebundener id, Imports und ein darüber eingefügter Re-Export, der
+  Stellen-Durchlauf unabhängig von der Fact-Reihenfolge (Anker
+  eingeschlossen), `tsc`-Diagnosen verankert und `external`, die Kategorie
+  an jedem Korpus-Befund, die Kategorie außerhalb der Identität, Migration
+  2 → 3. Namespaces und C++-Überladungen bleiben durch
+  `IdentityScheme.test.ts` abgedeckt. Bestehende Tests, die alte Symbole
+  nannten, wurden auf die Namen von Schema 3 umgestellt, jede Zusicherung so
+  streng wie zuvor (dieselben Einträge, dieselbe Reihenfolge):
+  HTML/Vue/Angular-a11y-Tests, `A11yCorrectness`, der
+  Flutter-Lifecycle-Identitätstest und die Tests, die eine Datei des
+  aktuellen Schemas schrieben (`"identity": 2` → `3`).
+- **Gemessen an den 9 Vergleichszielen** (`.stoa/compare-jobs-targets.json`,
+  ein Lauf je Schema, `dist/`): jedes Ziel `complete`; je Ziel dieselbe
+  Menge `Finding.id` unter Schema 2 und 3 (zusammen 4.508 Befunde); 0
+  doppelte Identitäten unter beiden. Umbenannt: 3 ORM (Korpus), 6 Flutter
+  (5 Lifecycle-Aufrufstellen, 1 `iconButton#0` → `(module)>iconButton#0`),
+  5 C++ (`#ifdef`-Zwillinge in mimirmind → `[MIMIRMIND_HAVE_L0]`,
+  `[!MIMIRMIND_HAVE_L0]`, `[MIMIRMIND_HAVE_CUDA]`), 6 flyingfish (zwei
+  Felder in `login.html` → `#input_email>field#0`,
+  `#input_password>field#0`; `img#0`, `html#0` → `(document)>…`; zwei
+  NAPI-Loader-`catch#6` → `(module)>catch#5`). Kategorien danach: 0
+  `ambiguous`, 5 `fileOrdinal` — die zwei `catch`-Blöcke auf oberster Ebene
+  der NAPI-Loader, ein Login-`<img>` und ein `<html>` einer 404-Seite ohne
+  id um sie herum, und der Flutter-`IconButton`, dessen `build`-Methode
+  tree-sitter-dart nicht parsen konnte (Dart-3-Record-Pattern +
+  switch-Ausdruck; Grenze des Parsers, keine Identitätsregel). Die Facts
+  wachsen um die Anker: Korpus 479 → 500, stoa `src` 15.039 → 16.110,
+  flyingfish 53.725 → 54.581; Dart, PHP und C/C++ unverändert (keine Anker
+  erzeugt). Die Laufzeit wurde hier nicht gebenchmarkt (je ein Lauf,
+  Schema 2 zuerst) — das misst Phase 4.
+- **Nicht verankert (dokumentierte Grenzen):** PHP- und C/C++-Code auf
+  oberster Ebene und Dart-Variablen auf oberster Ebene erhalten keinen
+  `struct.anchor` (ihre Stellen außerhalb einer Deklaration heißen
+  `(module)>…`); eine Destrukturierung benennt keinen Anker; zwei Stellen
+  einer Art in einer Deklaration werden weiterhin in Quelltextreihenfolge
+  nummeriert (`load>catch#1` verschiebt sich, wenn darüber in derselben
+  Funktion ein catch eingefügt wird); `Finding.id` bleibt positionsbasiert
+  (es ist der Paarungsschlüssel der Migration, keine Identität).
+- **Geprüft:** `npm run typecheck`, `npm run typecheck:test`,
+  `npm run lint` 0 Fehler; `npm test` 686 / 686; `npm run build` ok; keine
+  Abhängigkeit hinzugefügt.
+
 
 ## Baseline-/Diff-Modus (opt-in, `--baseline`)
 
@@ -2711,7 +2821,7 @@ zu liefern.
 `ui.flutterIconButtonNoTooltip`, `ui.flutterTextFieldNoLabel`,
 `validation.backendInputUnvalidated`, `validation.rawRequestMassAssignment`,
 `validation.contractAnnotation`, `validation.annotatedValidatorUnused`,
-`validation.rawReuseAfterValidation`, `validation.dataflowGraph`, sowie (opt-in) `external.tsc` und
+`validation.rawReuseAfterValidation`, `validation.dataflowGraph`, `struct.anchor` (Identitätsschema 3: TS/JS-Bindungen auf oberster Ebene, HTML-/Template-Elemente mit `id`), sowie (opt-in) `external.tsc` und
 `external.floatingPromise`.
 
 ## Qualitätssicherung

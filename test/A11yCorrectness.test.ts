@@ -34,7 +34,7 @@ test('HTML accessible name: aria-hidden text, empty/dangling/empty-target aria-l
     const findings = analyzeFixture('html-names.html');
     assert.deepEqual(
         ids(findings, 'R-A11Y-CONTROL-NAME'),
-        ['button#0', 'button#1', 'button#2', 'button#3', 'button#4'],
+        ['(document)>button#0', '(document)>button#1', '(document)>button#2', '(document)>button#3', '(document)>button#4'],
         'hidden-only text, empty aria-labelledby, dangling target, empty target, and role=presentation are all unnamed; resolvable/chained aria-labelledby, visible text and aria-label are fine'
     );
 });
@@ -43,7 +43,7 @@ test('HTML focusability: a contenteditable editing host is focusable, a malforme
     const findings = analyzeFixture('html-focus.html');
     assert.deepEqual(
         ids(findings, 'R-A11Y-ARIA-HIDDEN-FOCUSABLE'),
-        ['aria-hidden#0'],
+        ['(document)>aria-hidden#0'],
         'only the contenteditable div is focusable+hidden; tabindex="3px" is not a clean integer and contenteditable="false"/a plain span are not focusable'
     );
 });
@@ -52,7 +52,7 @@ test('HTML contrast: low contrast is reported even under aria-hidden / role=pres
     const findings = analyzeFixture('html-contrast-hidden.html');
     assert.deepEqual(
         ids(findings, 'R-A11Y-CONTRAST-TEXT'),
-        ['contrast#0', 'contrast#1'],
+        ['(document)>contrast#0', '(document)>contrast#1'],
         'both the aria-hidden and the role=presentation paragraph are flagged'
     );
 });
@@ -75,7 +75,7 @@ test('HTML image: aria-label / resolving aria-labelledby is a text alternative; 
     const findings = analyzeFixture('html-img.html');
     assert.deepEqual(
         ids(findings, 'R-A11Y-IMG-ALT'),
-        ['img#2', 'img#3', 'img#4'],
+        ['(document)>img#0', '(document)>img#1', '(document)>img#2'],
         'bare img, empty aria-label and dangling aria-labelledby are flagged; a real aria-label and a resolving aria-labelledby are fine'
     );
 });
@@ -91,6 +91,6 @@ test('JSX image: a non-empty aria-label(ledby) is a text alternative, an empty a
 
 test('Vue template: the HTML correctness changes apply consistently (contrast under aria-hidden, empty aria-labelledby frame)', () => {
     const findings = analyzeFixture('vue-hidden.vue');
-    assert.deepEqual(ids(findings, 'R-A11Y-CONTRAST-TEXT'), ['contrast#0'], 'low contrast under aria-hidden is flagged');
-    assert.deepEqual(ids(findings, 'R-A11Y-FRAME-TITLE'), ['frame#0'], 'a frame with an empty aria-labelledby has no name');
+    assert.deepEqual(ids(findings, 'R-A11Y-CONTRAST-TEXT'), ['(document)>contrast#0'], 'low contrast under aria-hidden is flagged');
+    assert.deepEqual(ids(findings, 'R-A11Y-FRAME-TITLE'), ['(document)>frame#0'], 'a frame with an empty aria-labelledby has no name');
 });

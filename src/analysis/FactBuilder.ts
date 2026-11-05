@@ -1,4 +1,4 @@
-import {IDENTITY_SCHEME, type IdentityScheme} from '../FindingIdentity.js';
+import {IDENTITY_SCHEME, type IdentityKind, type IdentityScheme} from '../FindingIdentity.js';
 import type {Certainty, Fact, FactEvidence, FactValue, SourceRange, SubjectKind} from '../Types.js';
 
 export interface AdapterInfo {
@@ -26,6 +26,14 @@ export interface FactSpec {
      * it its identity relative to the enclosing declaration.
      */
     site?: true;
+    /**
+     * What `symbol` is anchored to (FindingIdentity.ts `IdentityKind`). When
+     * absent: `fileOrdinal` for a site (its legacy per-file ordinal, until the
+     * site pass anchors it), `declaration` for any other symbol — so an
+     * extractor names the kind only where it differs (an anonymous function,
+     * an order-only `#n`).
+     */
+    identityKind?: IdentityKind;
 }
 
 /** A fact's id: the same for a fact built here and one whose symbol SiteIdentity.ts re-assigns. */
@@ -47,7 +55,7 @@ export const factBuilder = (info: AdapterInfo, filePath: string) => {
         const subject =
             spec.symbol === undefined
                 ? {file: filePath, kindOf: spec.kindOf, range: spec.range}
-                : {file: filePath, symbol: spec.symbol, kindOf: spec.kindOf, range: spec.range};
+                : {file: filePath, symbol: spec.symbol, identityKind: spec.identityKind ?? (spec.site === true ? 'fileOrdinal' : 'declaration'), kindOf: spec.kindOf, range: spec.range};
         const fact: Fact = {
             id: factIdOf(filePath, spec.kind, spec.symbol, spec.range.startLine),
             kind: spec.kind,

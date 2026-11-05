@@ -2012,6 +2012,102 @@ production code.
   errors, `npm run lint` 0 problems, `npm test` 668 / 668, `npm run build`
   ok; no golden manifest, baseline or dependency changed.
 
+## Finding identity completed (Quality Hardening spec, phase 2, 2026-11-05)
+
+Identity scheme 3 and an explicit identity kind on every finding (both user
+decisions). Details of the naming in `finding-model.md` §6 "Identity".
+
+- **One model, extended:** `src/FindingIdentity.ts` gains scheme 3,
+  `IdentityKind` and `declarationIdentities`/`uniqueIdentities` (the
+  existing `declarationSymbols`/`uniqueSymbols` now derive from them); the
+  site pass `SiteIdentity.ts` does the anchoring. No second naming path.
+- **What scheme 3 changes** (scheme 2 still producible for
+  `--migrate-baseline`):
+  - a site outside every declaration is anchored to a new fact
+    `struct.anchor` — a top-level binding in TS/JS (`const`/`let`/`var`
+    with a plain name, `export default`, `module.exports`/`exports.x =`),
+    an element with a static `id` in HTML and Vue/Angular templates — else
+    named after the file (`(module)>…`, `(document)>…`) and numbered among
+    the file-level sites only;
+  - `--typecheck` diagnostics (`tsc#n`, `promise#n`) go through the same
+    site pass, against the declarations of the adapter's facts for that file
+    (Pipeline.ts), kind `external`;
+  - Flutter lifecycle call sites: `Class.method>setState#n`,
+    `Class.initState>Theme.of#n` (per method and call) instead of
+    `Class.method#n` / `Class.initState:Theme.of#n`;
+  - C++ definitions with equal name and parameters: their preprocessor
+    condition as variant (`[!MIMIRMIND_HAVE_CUDA]`), `#n` only when the
+    conditions are equal too (kind `ambiguous`).
+- **Identity kind:** `location.identityKind` (and `subject.identityKind` on
+  facts), one of `declaration`, `anonymous`, `site`, `module`, `external`,
+  `fileOrdinal`, `ambiguous`, `file`; set by the extractor (the default of
+  `FactBuilder`: `declaration` for a symbol, `fileOrdinal` for a not yet
+  anchored site), by the site pass, and by each project rule where it makes
+  its symbol. Additive in `fact.schema.json` and `finding.schema.json`; the
+  FactCache validates it. The Markdown header counts the kinds. Not part of
+  `FindingKey`.
+- **Files and messages:** baselines, corpus manifests and snapshots accept
+  `"identity": 3`; a scheme-2 file is refused like a scheme-1 one, a
+  baseline converted only with `--migrate-baseline`. The "must be …" error
+  text names the valid schemes from one list (`IDENTITY_SCHEMES`).
+- **Golden manifests** (all 16 rewritten mechanically: each corpus analyzed
+  under scheme 2 and 3, findings paired by `Finding.id`, the manifest's
+  symbol replaced by its finding's new one; no entry added, removed or left
+  unpaired except in the two deliberately broken evaluator fixtures
+  `eval/expected-malformed.json` and `eval/expected-missing.json`):
+
+  | Manifest | Entries | Symbols changed | Why |
+  |---|---|---|---|
+  | `corpus/expected.json` | 44 | 3 | `synchronize#0`/`syncWithMigrations#0` in `export const dataSource = {…}` → `dataSource>…#0` |
+  | `fixtures/validation-dataflow-corpus/expected.json` | 20 | 7 | annotated top-level schemas: `annotation#2` → `ageSchema>annotation#0` etc., `unused#0` → `unusedSchema>unused#0` |
+  | `fixtures/html/expected.json` | 37 | 37 | static HTML: `(document)>…` numbered among the flagged sites (`button#5` → `(document)>button#1`); `dupids.html` under its ids (`#main>dupid#0`, `#dup2>dupid#0`) |
+  | `fixtures/vue/expected.json`, `fixtures/angular/expected.json` | 8 + 8 | 8 + 8 | template sites → `(document)>…#0` |
+  | 11 others (SOLID ×2, JSX, Flutter, catch-intent, eval-multi, eval ×5) | — | 0 | `"identity": 3` only |
+
+- **Tests:** `test/IdentityStability.test.ts` (18): a site inserted before
+  another (same declaration: shifts — the documented limit; another
+  declaration or top level: does not), a top-level site no longer shifted by
+  a catch in a function (scheme 2 did), anchors for `const`/`export
+  default`/`module.exports`, a moved and a new method, a moved module (file
+  part changes, symbol stays), same-named methods in two classes, C++
+  preprocessor twins (nested, `#else`, include guard, equal conditions →
+  `ambiguous`), anonymous functions, static HTML with and without ids, a Vue
+  template with static and bound ids, imports and a re-export added above,
+  the site pass independent of fact order (anchors included), `tsc`
+  diagnostics anchored and `external`, the kind on every corpus finding,
+  the kind outside the identity, migration 2 → 3. Namespaces and C++
+  overloads stay covered by `IdentityScheme.test.ts`. Existing tests that
+  named old symbols were updated to the scheme-3 names, each assertion as
+  strict as before (same entries, same order): HTML/Vue/Angular a11y tests,
+  `A11yCorrectness`, the Flutter lifecycle identity test, and the tests
+  that wrote a current-scheme file (`"identity": 2` → `3`).
+- **Measured on the 9 comparison targets** (`.stoa/compare-jobs-targets.json`,
+  one run per scheme, `dist/`): every target `complete`; per target the same
+  set of `Finding.id` under scheme 2 and 3 (4,508 findings in all); 0
+  duplicate identities under either. Renamed: 3 ORM (corpus), 6 Flutter
+  (5 lifecycle call sites, 1 `iconButton#0` → `(module)>iconButton#0`), 5
+  C++ (`#ifdef` twins in mimirmind → `[MIMIRMIND_HAVE_L0]`,
+  `[!MIMIRMIND_HAVE_L0]`, `[MIMIRMIND_HAVE_CUDA]`), 6 flyingfish (two
+  `login.html` fields → `#input_email>field#0`, `#input_password>field#0`;
+  `img#0`, `html#0` → `(document)>…`; two NAPI loader `catch#6` →
+  `(module)>catch#5`). Kinds after: 0 `ambiguous`, 5 `fileOrdinal` — the
+  two NAPI top-level `catch` blocks, a login `<img>` and a 404 page `<html>`
+  with no id around them, and the Flutter `IconButton` whose `build` method
+  tree-sitter-dart could not parse (Dart 3 record pattern + switch
+  expression; parser limit, not an identity rule). Facts grow by the anchors:
+  corpus 479 → 500, stoa `src` 15,039 → 16,110, flyingfish 53,725 → 54,581;
+  Dart, PHP and C/C++ unchanged (no anchors produced). Run time was not
+  benchmarked here (one run each, scheme 2 first) — phase 4 measures.
+- **Not anchored (documented limits):** PHP and C/C++ top-level code and
+  Dart top-level variables get no `struct.anchor` (their sites outside a
+  declaration are `(module)>…`); a destructuring binding names no anchor;
+  two sites of one kind in one declaration are still numbered in source
+  order (`load>catch#1` shifts when a catch is inserted above it in the same
+  function); `Finding.id` stays position-based (it is the pairing key of the
+  migration, not an identity).
+- **Checked:** `npm run typecheck`, `npm run typecheck:test`, `npm run lint`
+  0 errors; `npm test` 686 / 686; `npm run build` ok; no dependency added.
+
 
 ## Baseline / diff mode (opt-in, `--baseline`)
 
@@ -2487,7 +2583,7 @@ fails fast (exit 1, concrete errors) instead of silently yielding 0 findings.
 `ui.flutterIconButtonNoTooltip`, `ui.flutterTextFieldNoLabel`,
 `validation.backendInputUnvalidated`, `validation.rawRequestMassAssignment`,
 `validation.contractAnnotation`, `validation.annotatedValidatorUnused`,
-`validation.rawReuseAfterValidation`, `validation.dataflowGraph`, plus (opt-in) `external.tsc` and
+`validation.rawReuseAfterValidation`, `validation.dataflowGraph`, `struct.anchor` (identity scheme 3: TS/JS top-level bindings, HTML/template elements with an `id`), plus (opt-in) `external.tsc` and
 `external.floatingPromise`.
 
 ## Quality assurance

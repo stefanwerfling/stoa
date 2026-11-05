@@ -38,6 +38,10 @@
         "file": { "type": "string", "minLength": 1 },
         "range": { "$ref": "fact.schema.json#/$defs/sourceRange" },
         "symbol": { "type": "string" },
+        "identityKind": {
+          "enum": ["declaration", "anonymous", "site", "module", "external", "fileOrdinal", "ambiguous", "file"],
+          "description": "What the symbol is anchored to (see docs finding-model, identity kinds) — metadata, not part of the finding identity (file, rule, symbol)."
+        },
         "structure": { "type": "string" }
       }
     },

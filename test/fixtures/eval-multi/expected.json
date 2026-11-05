@@ -1,6 +1,6 @@
 {
   "description": "One finding per language: an empty catch (TS/PHP/Dart) and a 5-parameter function (C).",
-  "identity": 2,
+  "identity": 3,
   "findings": [
     { "file": "m.ts", "rule": "R-ERR-SWALLOWED", "symbol": "h>catch#0" },
     { "file": "m.php", "rule": "R-ERR-SWALLOWED", "symbol": "h>catch#0" },

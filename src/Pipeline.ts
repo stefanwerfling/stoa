@@ -8,6 +8,7 @@ import {ExtractionPool} from './ExtractionPool.js';
 import {FactCache} from './FactCache.js';
 import {extractFile, type FileOutcome} from './FileExtraction.js';
 import {IDENTITY_SCHEME, type IdentityScheme} from './FindingIdentity.js';
+import {assignSiteSymbols, MODULE_SCOPE} from './analysis/SiteIdentity.js';
 import {collectFiles, readFileContent} from './Ingestion.js';
 import {loadProjectConfig} from './config/ProjectConfig.js';
 import {ModuleResolver} from './analysis/ModuleResolution.js';
@@ -288,7 +289,7 @@ const startRun = (options: AnalyzeOptions): Run => {
     if (options.solid === true) {
         projectRules.push(...solidRules(architectureModel));
     }
-    const ruleEngine = new RuleEngine(knowledgeBase, ruleSet, options.lang ?? 'en', projectRules);
+    const ruleEngine = new RuleEngine(knowledgeBase, ruleSet, options.lang ?? 'en', projectRules, options.identityScheme ?? IDENTITY_SCHEME);
 
     const startedAt = Date.now();
     const elapsedMs = (): number => Date.now() - startedAt;
@@ -474,8 +475,12 @@ class Ingestion {
         // Deliberately NOT cached: tsc diagnostics depend on the file's
         // tsconfig and on every file it imports, so the FactCache's
         // content-of-this-file key cannot tell when they are stale.
+        // Scheme 3 anchors each diagnostic like a site, in the declaration of
+        // this file's own facts it falls in (`Service.load>tsc#0`).
         if (this.typeExtractor !== null && file !== undefined && TS_EXTENSIONS.some((ext) => file.path.endsWith(ext))) {
-            this.facts.push(...this.typeExtractor.extract(file));
+            const diagnostics = this.typeExtractor.extract(file);
+            const scheme = this.options.identityScheme ?? IDENTITY_SCHEME;
+            this.facts.push(...(scheme >= 3 ? assignSiteSymbols(diagnostics, scheme, MODULE_SCOPE, outcome.facts) : diagnostics));
         }
         this.analyzed += 1;
         this.analyzedPaths.add(meta.path);

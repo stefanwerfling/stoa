@@ -226,7 +226,7 @@ export class SolidSrpResponsibilityCohesionRule implements ProjectRule {
             id: `finding:${this.id}:${node.file}:${range.startLine}:${range.startCol}`,
             rule: {id: this.id, version: this.version},
             ruleSet: input.ruleSetId,
-            location: {file: node.file, range, symbol: node.name, structure: 'class'},
+            location: {file: node.file, range, symbol: node.name, identityKind: 'declaration', structure: 'class'},
             observation: {
                 statement: fill(TEXT.statement),
                 evidence: groups.map((group, index) => ({fact: 'struct.typeDecl', value: `group ${index + 1}: ${describe(group)}`, certainty: 'semantic-heuristic' as const}))

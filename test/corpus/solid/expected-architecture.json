@@ -1,6 +1,6 @@
 {
   "description": "SOLID golden corpus (E7) with the declared architecture: `stoa eval test/corpus/solid/project --expected test/corpus/solid/expected-architecture.json --solid --architecture test/corpus/solid/stoa.architecture.json`. The DIP layer rule runs as stage 2 instead of stage 1: forbidden ui → data edge and the banned package; ui → state and ui → model are allowed; lib/contracts and web have no layer.",
-  "identity": 2,
+  "identity": 3,
   "findings": [
     { "file": "lib/ui/direct_page.dart", "rule": "R-SOLID-DIP-LAYER-DIRECTION", "symbol": "package:http" },
     { "file": "lib/ui/api_page.dart", "rule": "R-SOLID-DIP-LAYER-DIRECTION", "symbol": "lib/data/api.dart" },
