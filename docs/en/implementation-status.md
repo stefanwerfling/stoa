@@ -1848,6 +1848,80 @@ No PHP or C/C++ project is among the comparison targets; the PHP/C/C++
 behaviour is covered by tests (`PhpModuleResolution`, `CppIncludes`,
 `FunctionIdentity`).
 
+## Parallel extraction compared: `--jobs` 1/2/4/8 (Finding Identity spec, phase 5, 2026-11-05)
+
+A reproducible comparison of the opt-in parallel extraction (see "Parallel
+extraction") against the sequential run, over nine targets of different
+languages and sizes. No code path changed; the result is the measurement and
+the harness `scripts/compare-jobs.ts`.
+
+- **Harness:** `npx tsx scripts/compare-jobs.ts [--targets <file>] [--jobs
+  1,2,4,8] [--runs N] [--out <dir>] [--cache] [--errors]` (after `npm run
+  build`; it runs `dist/Cli.js analyze --format json`). A preload records
+  the main process's `process.resourceUsage()` at exit — peak RSS
+  (`maxRSS`, worker threads included, they share the process) and user +
+  system CPU time — and the load average is recorded per run. The order of
+  the configurations rotates each round; the table holds the median and the
+  range. Every run is compared with the sequential one: findings byte for
+  byte (paths relative), identities, order, coverage (without `cacheHits`)
+  and exit code. `--cache` runs writer/reader pairs on copies of the targets
+  (each configuration with itself, plus sequential → `--jobs 8` and back);
+  `--errors` runs a generated project with broken, unreadable and non-source
+  files and the test hooks `STOA_TEST_FORCE_INCOMPLETE` (memory guard) and
+  `STOA_TEST_WORKER_EXIT` (dying worker). Results go to `runs.json` (raw)
+  and `result.md` in `--out` (default `.stoa/compare-jobs`), written after
+  each section. Targets as in `compare-findings` (`.stoa/` for private ones).
+- **Measured** (5 runs per configuration, 8-thread laptop under desktop
+  load, load average 4–9 during the runs; median wall time and peak RSS,
+  change against sequential):
+
+  | Target | Files | sequential | `--jobs 2` | `--jobs 4` | `--jobs 8` |
+  |---|---|---|---|---|---|
+  | golden corpus (mixed) | 34 | 0.85 s, 167 MB | +6 %, ×1.9 | +13 %, ×2.8 | +38 %, ×4.6 |
+  | PHP API | 36 | 0.88 s, 204 MB | +8 %, ×1.7 | +15 %, ×2.6 | +43 %, ×4.4 |
+  | Dart app (small) | 52 | 2.40 s, 236 MB | −21 %, ×1.6 | −26 %, ×2.5 | −18 %, ×4.2 |
+  | stoa `src` (TS) | 111 | 1.82 s, 335 MB | −6 %, ×1.8 | −7 %, ×2.4 | +17 %, ×3.7 |
+  | Dart app (medium) | 166 | 3.62 s, 280 MB | −24 %, ×1.5 | −32 %, ×2.1 | −30 %, ×3.5 |
+  | C library (large files) | 171 | 2.91 s, 393 MB | −22 %, ×1.6 | −33 %, ×1.9 | −25 %, ×2.8 |
+  | TS backend | 241 | 1.99 s, 327 MB | −3 %, ×1.7 | −3 %, ×2.3 | +12 %, ×3.5 |
+  | C/C++ project | 530 | 4.34 s, 372 MB | −28 %, ×1.5 | −34 %, ×2.0 | −35 %, ×2.9 |
+  | TS monorepo | 952 | 4.67 s, 701 MB | −17 %, ×1.5 | −18 %, ×2.0 | −10 %, ×2.8 |
+
+  `--jobs 1` is the sequential path (within ±8 %, noise). CPU time grows
+  with the workers (TS monorepo 8.3 s → 16.0 s at `--jobs 4` → 21.2 s at
+  `--jobs 8`, 1.8 → 5.0 cores busy): each worker compiles and warms its own
+  code. Each worker adds ≈ 150–200 MB peak RSS.
+- **Reading:** projects of a few dozen files get slower with workers (their
+  start dominates). Dart and C/C++ gain 25–35 % at `--jobs 4` — their
+  tree-sitter parse is most of the work. TypeScript gains little (backend
+  ≈ 0 %, monorepo ≈ 18 %): ts-morph's per-file work is split, but each
+  worker builds its own ts-morph state. `--jobs 8` is never faster than
+  `--jobs 4` on this machine and often slower. Single measurements under
+  desktop load vary by ±10 %; the pattern is the same in every run.
+- **Results:** in all 225 benchmark runs, 126 cache runs (63 writer/reader pairs) and 13 error runs
+  findings, identities, order, coverage and exit code equal the sequential
+  run.
+- **Fact cache:** every writer/reader pair, also across configurations
+  (sequential writes, `--jobs 8` reads, and back), hits every file (e.g.
+  952 / 952) with identical findings. A warm run is 2–4 × faster than a cold
+  one (TS monorepo 5.0 s → 1.6 s); warm, the workers only cost their start
+  (`--jobs 8` warm 2.0 s vs sequential warm 1.6 s).
+- **Error behaviour:** broken, unreadable and non-source files give exit 2
+  `partial` with 6 analyzed / 2 skipped in every configuration; the memory
+  guard stopping at the first file gives exit 2 `partial` in every
+  configuration; a dying worker gives exit 1 `failed` within 0.75–1.0 s,
+  no hang.
+- **Decision:** parallel extraction stays opt-in, no default is changed.
+  The memory cost (×2–3 at `--jobs 4`, ×3–5 at `--jobs 8`) is relevant,
+  and the gain depends on language and size: none or negative for small and
+  TypeScript projects, 25–35 % for larger Dart and C/C++ projects. Where it
+  pays, `--jobs 4` is the useful setting on 8 threads.
+- **Fixed while measuring (script only):** copying a target for the cache
+  check failed on unreadable directories and on sockets/FIFOs in a project
+  tree; the copy now takes only regular readable files and directories and
+  skips `node_modules`, `.git` and `.stoa`. Results are written per section
+  so an aborted run keeps what it measured.
+
 ## Baseline / diff mode (opt-in, `--baseline`)
 
 Wires up `Finding.baselineStatus` (`'new' | 'known' | 'fixed'`), present in
@@ -2441,6 +2515,13 @@ fails fast (exit 1, concrete errors) instead of silently yielding 0 findings.
   only; your own projects go in `.stoa/compare-targets.json` (ignored by git
   like all of `.stoa/`, together with their architecture configs) and are
   passed with `--targets .stoa/compare-targets.json`. Grammars are loaded as in the CLI.
+
+- **Parallel extraction comparison** (`scripts/compare-jobs.ts`): runs
+  `analyze` sequentially and with `--jobs` 1/2/4/8 (configurable), records
+  wall time, peak RSS, CPU time and load, and compares findings, identities,
+  order, coverage and exit code with the sequential run; `--cache` and
+  `--errors` add the fact-cache and error-behaviour checks (see "Parallel
+  extraction compared"). Targets as above.
 
 ## Deviations from the concept (deliberate, documented)
 

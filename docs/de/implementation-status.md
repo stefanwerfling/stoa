@@ -2012,6 +2012,87 @@ Kein PHP- oder C/C++-Projekt ist unter den Vergleichszielen; das
 PHP-/C/C++-Verhalten ist durch Tests abgedeckt (`PhpModuleResolution`,
 `CppIncludes`, `FunctionIdentity`).
 
+## Parallele Extraktion verglichen: `--jobs` 1/2/4/8 (Finding-Identity-Spezifikation, Phase 5, 2026-11-05)
+
+Ein reproduzierbarer Vergleich der opt-in-Parallelextraktion (siehe
+„Parallele Extraktion“) mit dem sequentiellen Lauf, über neun Ziele
+verschiedener Sprachen und Größen. Kein Codepfad wurde geändert; das Ergebnis
+ist die Messung und das Werkzeug `scripts/compare-jobs.ts`.
+
+- **Werkzeug:** `npx tsx scripts/compare-jobs.ts [--targets <datei>] [--jobs
+  1,2,4,8] [--runs N] [--out <verz>] [--cache] [--errors]` (nach `npm run
+  build`; es startet `dist/Cli.js analyze --format json`). Ein Preload hält
+  beim Beenden `process.resourceUsage()` des Hauptprozesses fest — Peak-RSS
+  (`maxRSS`, Worker-Threads eingeschlossen, sie teilen den Prozess) und
+  User- + System-CPU-Zeit —, die Load Average wird je Lauf mitgeschrieben.
+  Die Reihenfolge der Konfigurationen rotiert je Runde; die Tabelle zeigt
+  Median und Spanne. Jeder Lauf wird mit dem sequentiellen verglichen:
+  Findings Byte für Byte (Pfade relativ), Identitäten, Reihenfolge, Abdeckung
+  (ohne `cacheHits`) und Exit-Code. `--cache` fährt Schreiber/Leser-Paare auf
+  Kopien der Ziele (jede Konfiguration mit sich selbst, dazu sequentiell →
+  `--jobs 8` und zurück); `--errors` fährt ein erzeugtes Projekt mit
+  kaputten, unlesbaren und Nicht-Quelldateien sowie die Test-Hooks
+  `STOA_TEST_FORCE_INCOMPLETE` (Speicherwächter) und `STOA_TEST_WORKER_EXIT`
+  (sterbender Worker). Ergebnisse landen in `runs.json` (roh) und
+  `result.md` in `--out` (Standard `.stoa/compare-jobs`), nach jedem
+  Abschnitt geschrieben. Ziele wie bei `compare-findings` (`.stoa/` für
+  private).
+- **Gemessen** (5 Läufe je Konfiguration, Laptop mit 8 Threads unter
+  Desktop-Last, Load Average 4–9 während der Läufe; Median von Laufzeit und
+  Peak-RSS, Änderung gegenüber sequentiell):
+
+  | Ziel | Dateien | sequentiell | `--jobs 2` | `--jobs 4` | `--jobs 8` |
+  |---|---|---|---|---|---|
+  | Golden-Korpus (gemischt) | 34 | 0,85 s, 167 MB | +6 %, ×1,9 | +13 %, ×2,8 | +38 %, ×4,6 |
+  | PHP-API | 36 | 0,88 s, 204 MB | +8 %, ×1,7 | +15 %, ×2,6 | +43 %, ×4,4 |
+  | Dart-App (klein) | 52 | 2,40 s, 236 MB | −21 %, ×1,6 | −26 %, ×2,5 | −18 %, ×4,2 |
+  | stoa `src` (TS) | 111 | 1,82 s, 335 MB | −6 %, ×1,8 | −7 %, ×2,4 | +17 %, ×3,7 |
+  | Dart-App (mittel) | 166 | 3,62 s, 280 MB | −24 %, ×1,5 | −32 %, ×2,1 | −30 %, ×3,5 |
+  | C-Bibliothek (große Dateien) | 171 | 2,91 s, 393 MB | −22 %, ×1,6 | −33 %, ×1,9 | −25 %, ×2,8 |
+  | TS-Backend | 241 | 1,99 s, 327 MB | −3 %, ×1,7 | −3 %, ×2,3 | +12 %, ×3,5 |
+  | C/C++-Projekt | 530 | 4,34 s, 372 MB | −28 %, ×1,5 | −34 %, ×2,0 | −35 %, ×2,9 |
+  | TS-Monorepo | 952 | 4,67 s, 701 MB | −17 %, ×1,5 | −18 %, ×2,0 | −10 %, ×2,8 |
+
+  `--jobs 1` ist der sequentielle Pfad (innerhalb ±8 %, Rauschen). Die
+  CPU-Zeit wächst mit den Workern (TS-Monorepo 8,3 s → 16,0 s bei `--jobs 4`
+  → 21,2 s bei `--jobs 8`, 1,8 → 5,0 Kerne belegt): jeder Worker kompiliert
+  und wärmt seinen eigenen Code. Jeder Worker bringt ≈ 150–200 MB Peak-RSS
+  dazu.
+- **Lesart:** Projekte mit einigen Dutzend Dateien werden mit Workern
+  langsamer (ihr Start überwiegt). Dart und C/C++ gewinnen 25–35 % bei
+  `--jobs 4` — ihr tree-sitter-Parse ist der Großteil der Arbeit.
+  TypeScript gewinnt wenig (Backend ≈ 0 %, Monorepo ≈ 18 %): die
+  ts-morph-Arbeit je Datei wird verteilt, aber jeder Worker baut seinen
+  eigenen ts-morph-Zustand auf. `--jobs 8` ist auf dieser Maschine nie
+  schneller als `--jobs 4` und oft langsamer. Einzelmessungen unter
+  Desktop-Last schwanken um ±10 %; das Muster ist in jedem Lauf dasselbe.
+- **Ergebnisse:** in allen 225 Benchmark-, 126 Cache- (63 Schreiber/Leser-Paare) und 13 Fehlerläufen
+  sind Findings, Identitäten, Reihenfolge, Abdeckung und Exit-Code gleich dem
+  sequentiellen Lauf.
+- **Fact-Cache:** jedes Schreiber/Leser-Paar, auch über Konfigurationen
+  hinweg (sequentiell schreibt, `--jobs 8` liest, und umgekehrt), trifft
+  jede Datei (z. B. 952 / 952) bei identischen Findings. Ein warmer Lauf ist
+  2–4 × schneller als ein kalter (TS-Monorepo 5,0 s → 1,6 s); warm kosten die
+  Worker nur ihren Start (`--jobs 8` warm 2,0 s gegen sequentiell warm
+  1,6 s).
+- **Fehlerverhalten:** kaputte, unlesbare und Nicht-Quelldateien ergeben in
+  jeder Konfiguration Exit 2 `partial` mit 6 analysiert / 2 übersprungen; der
+  Speicherwächter, der an der ersten Datei stoppt, ergibt in jeder
+  Konfiguration Exit 2 `partial`; ein sterbender Worker ergibt Exit 1
+  `failed` binnen 0,75–1,0 s, kein Hängen.
+- **Entscheidung:** die Parallelextraktion bleibt opt-in, kein Standardwert
+  wird geändert. Der Speicheraufwand (×2–3 bei `--jobs 4`, ×3–5 bei
+  `--jobs 8`) ist relevant, und der Gewinn hängt von Sprache und Größe ab:
+  keiner oder negativ für kleine und TypeScript-Projekte, 25–35 % für
+  größere Dart- und C/C++-Projekte. Wo es sich lohnt, ist `--jobs 4` auf 8
+  Threads die sinnvolle Einstellung.
+- **Beim Messen behoben (nur Skript):** das Kopieren eines Ziels für die
+  Cache-Prüfung scheiterte an unlesbaren Verzeichnissen und an
+  Sockets/FIFOs im Projektbaum; kopiert werden jetzt nur reguläre lesbare
+  Dateien und Verzeichnisse, `node_modules`, `.git` und `.stoa` bleiben
+  außen vor. Ergebnisse werden je Abschnitt geschrieben, damit ein
+  abgebrochener Lauf behält, was er gemessen hat.
+
 ## Baseline-/Diff-Modus (opt-in, `--baseline`)
 
 Verdrahtet `Finding.baselineStatus` (`'new' | 'known' | 'fixed'`), das seit
@@ -2660,6 +2741,14 @@ zu liefern.
   zugehöriger Architektur-Konfigurationen) und werden mit
   `--targets .stoa/compare-targets.json` übergeben. Grammatiken werden wie in der CLI
   geladen.
+
+- **Parallelextraktions-Vergleich** (`scripts/compare-jobs.ts`): fährt
+  `analyze` sequentiell und mit `--jobs` 1/2/4/8 (einstellbar), hält
+  Laufzeit, Peak-RSS, CPU-Zeit und Last fest und vergleicht Findings,
+  Identitäten, Reihenfolge, Abdeckung und Exit-Code mit dem sequentiellen
+  Lauf; `--cache` und `--errors` ergänzen die Fact-Cache- und
+  Fehlerverhaltens-Prüfung (siehe „Parallele Extraktion verglichen“). Ziele
+  wie oben.
 
 ## Abweichungen vom Konzept (bewusst, dokumentiert)
 
