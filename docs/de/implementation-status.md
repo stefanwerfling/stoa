@@ -2554,6 +2554,20 @@ Finding der Golden-Korpora hat sich geändert.
     (Beispiele: `StringInput.tokenize` gemeldet Tiefe 5 / kognitiv 22,
     tatsächlich 3 / 13; lua `getnum_aux` kognitiv 21, tatsächlich 10). Auch
     die gemeldeten Werte der übrigen TP sind zu hoch. Für Dart nicht geprüft.
+    **Inzwischen behoben (2026-11-05):** ein `else if` / `elseif` zählt jetzt
+    in allen vier Metrik-Durchläufen +1 flach und ohne zusätzliche Ebene —
+    Dart hatte denselben Fehler. Erkannt an der Struktur (TS: das
+    `elseStatement` eines `IfStatement`; PHP: das `alternate` eines `if`;
+    C/C++: das `if_statement` einer `else_clause`; Dart: die `alternative`
+    eines `if_statement`); ein `if` in einem `else { … }`-Block bleibt
+    verschachtelt. Die zyklomatischen Werte bleiben gleich. Die 9 oben als FP
+    gelabelten Findings entstehen nicht mehr, alle 21 Metrik-TP weiterhin, und
+    die Werte stimmen mit den Handzählungen überein
+    (`appendSearchParameters` Tiefe 7 → 5, von Hand 5;
+    `applySearchParameters` 4 → 3, von Hand 3). Findings fallen nur weg oder
+    ihre Werte sinken, keines kommt hinzu: ky −1, lua −45, symfony −27,
+    flyingfish Backend −2 / Frontend −5, mwpa −2, swipemeister −1, velyo −1;
+    Golden-Korpora unverändert. Tests: `test/ElseIfMetrics.test.ts`.
   - **R-UNUSED-EXPORT ohne Paket-Einstiegspunkte und Re-Exporte
     (TypeScript):** 54 von 66 FP — 38 Exporte von `index.ts`, dem
     Paket-Einstieg (`package.json` `exports`), und 16 Deklarationen, die über
@@ -3305,7 +3319,7 @@ generischer ESLint-Fact-Adapter;
 Kontext-Facts (`flag.generatedCode`, `hasTests`) für reichhaltigere
 Suppression; LLM-Ausgabe-Evaluierung im Maßstab.
 
-**Offen aus der externen Validierung (2026-11-05, gemessen, nicht behoben — siehe „Externe Validierung"):** else-if als zusätzliche Verschachtelungsebene in den TypeScript-, PHP- und C-Metriken; Paket-Einstiegspunkte und `export … from`-Re-Exporte in R-UNUSED-EXPORT; Verwendungen in PHPDoc, Attributen und Namespace-Aliassen beim PHP-R-DEP-UNUSED; generierter Code (`*.freezed.dart`) nicht ausgeschlossen; Dart-Closures der umgebenden Funktion zugeordnet; PHP-8.4-Syntax (`php-parser` standardmäßig 8.3).
+**Offen aus der externen Validierung (2026-11-05, gemessen, nicht behoben — siehe „Externe Validierung"; die else-if-Verschachtelung ist inzwischen behoben):** Paket-Einstiegspunkte und `export … from`-Re-Exporte in R-UNUSED-EXPORT; Verwendungen in PHPDoc, Attributen und Namespace-Aliassen beim PHP-R-DEP-UNUSED; generierter Code (`*.freezed.dart`) nicht ausgeschlossen; Dart-Closures der umgebenden Funktion zugeordnet; PHP-8.4-Syntax (`php-parser` standardmäßig 8.3).
 
 **Offen aus dem Evaluator-Integritäts-Folgeauftrag (2026-11-04):** in der
 TS-Extraktion das Parsen

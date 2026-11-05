@@ -357,6 +357,24 @@ const computeMetrics = (body: Node): MetricState => {
     return state;
 };
 
+/**
+ * An `else if`: the `if_statement` in the `alternative` field of another one
+ * continues that chain — one flat cognitive increment, no extra nesting level
+ * (SonarSource cognitive complexity), as in the TypeScript adapter.
+ */
+const isElseIf = (child: Node, parent: Node): boolean => child.type === 'if_statement' && parent.type === 'if_statement' && parent.childForFieldName('alternative')?.id === child.id;
+
+/** Whether `child` opens a nesting level: a nesting structure that is not an else-if. */
+const nestsDeeper = (child: Node, parent: Node): boolean => NESTING_TYPES.has(child.type) && !isElseIf(child, parent);
+
+/** The cognitive increment of the structure `child` itself at `nesting`: 1 + nesting when it nests, 1 for an else-if, else 0. */
+const structureIncrement = (child: Node, parent: Node, nesting: number): number => {
+    if (isElseIf(child, parent)) {
+        return 1;
+    }
+    return NESTING_TYPES.has(child.type) ? 1 + nesting : 0;
+};
+
 const visit = (node: Node, nesting: number, state: MetricState): void => {
     for (const child of namedChildren(node)) {
         if (FUNCTION_BOUNDARY.has(child.type)) {
@@ -369,11 +387,8 @@ const visit = (node: Node, nesting: number, state: MetricState): void => {
             state.cyclomatic += 1;
             state.cognitive += 1;
         }
-        const isNesting = NESTING_TYPES.has(child.type);
-        if (isNesting) {
-            state.cognitive += 1 + nesting;
-        }
-        const childNesting = isNesting ? nesting + 1 : nesting;
+        state.cognitive += structureIncrement(child, node, nesting);
+        const childNesting = nestsDeeper(child, node) ? nesting + 1 : nesting;
         if (childNesting > state.maxNesting) {
             state.maxNesting = childNesting;
         }

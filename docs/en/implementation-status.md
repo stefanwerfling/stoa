@@ -2349,6 +2349,19 @@ golden corpora changed.
     cognitive 22, actual 3 / 13; lua `getnum_aux` cognitive 21, actual 10).
     The reported values of the remaining TPs are also too high. Not checked
     for Dart.
+    **Fixed since (2026-11-05):** an `else if` / `elseif` now adds one flat
+    cognitive increment and no nesting level in all four metric walks —
+    Dart had the same defect. Detected by structure (TS: the `elseStatement`
+    of an `IfStatement`; PHP: the `alternate` of an `if`; C/C++: the
+    `if_statement` of an `else_clause`; Dart: the `alternative` of an
+    `if_statement`); an `if` inside an `else { … }` block stays nested.
+    Cyclomatic values are unchanged. The 9 findings labelled FP above are
+    no longer produced, all 21 metric TPs still are, and the values match
+    the hand counts (`appendSearchParameters` depth 7 → 5, hand 5;
+    `applySearchParameters` 4 → 3, hand 3). Findings only drop or their
+    values fall, none is added: ky −1, lua −45, symfony −27, flyingfish
+    backend −2 / frontend −5, mwpa −2, swipemeister −1, velyo −1; golden
+    corpora unchanged. Tests: `test/ElseIfMetrics.test.ts`.
   - **R-UNUSED-EXPORT without package entry points and re-exports
     (TypeScript):** 54 of 66 FP — 38 exports of `index.ts`, the package
     entry (`package.json` `exports`), and 16 declarations re-exported through
@@ -3034,7 +3047,7 @@ exists, see "Baseline / diff mode"); a suppression workflow beyond the
 baseline; a generic ESLint fact adapter; context facts (`flag.generatedCode`, `hasTests`)
 for richer suppression; LLM-output evaluation at scale.
 
-**Open from the external validation (2026-11-05, measured, not fixed — see "External validation"):** else-if counted as an extra nesting level in the TypeScript, PHP and C metrics; package entry points and `export … from` re-exports in R-UNUSED-EXPORT; PHPDoc, attribute and namespace-alias uses in the PHP R-DEP-UNUSED; generated code (`*.freezed.dart`) not excluded; Dart closures attributed to the enclosing function; PHP 8.4 syntax (`php-parser` defaults to 8.3).
+**Open from the external validation (2026-11-05, measured, not fixed — see "External validation"; the else-if nesting is fixed since):** package entry points and `export … from` re-exports in R-UNUSED-EXPORT; PHPDoc, attribute and namespace-alias uses in the PHP R-DEP-UNUSED; generated code (`*.freezed.dart`) not excluded; Dart closures attributed to the enclosing function; PHP 8.4 syntax (`php-parser` defaults to 8.3).
 
 **Open from the evaluator-integrity track (2026-11-04):** in the TS
 extraction, the parse

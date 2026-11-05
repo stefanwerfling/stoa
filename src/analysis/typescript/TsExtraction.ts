@@ -750,11 +750,8 @@ const measureBody = (fn: Node, body: Node): FunctionMetrics & {nondeterministic:
         if (ts.isNewExpression(node) && node.expression.getText(file) === 'Date' && (node.arguments?.length ?? 0) === 0) {
             state.nondeterministic = true;
         }
-        const isNesting = NESTING_KINDS.has(kind);
-        if (isNesting) {
-            state.cognitive += 1 + nesting;
-        }
-        const childNesting = isNesting ? nesting + 1 : nesting;
+        state.cognitive += structureIncrement(node, nesting);
+        const childNesting = nestsDeeper(node) ? nesting + 1 : nesting;
         if (childNesting > state.maxNesting) {
             state.maxNesting = childNesting;
         }
@@ -770,6 +767,25 @@ const measureBody = (fn: Node, body: Node): FunctionMetrics & {nondeterministic:
         lineCount: lineSpanOf(fn.getSourceFile(), fn),
         nondeterministic: state.nondeterministic
     };
+};
+
+/**
+ * An `else if`: the `if` that is the else branch of another `if` continues
+ * that chain — one flat cognitive increment, no extra nesting level
+ * (SonarSource cognitive complexity). An `if` inside an `else { … }` block is
+ * nested as usual.
+ */
+const isElseIf = (node: ts.Node): boolean => ts.isIfStatement(node) && ts.isIfStatement(node.parent) && node.parent.elseStatement === node;
+
+/** Whether `node` opens a nesting level: a nesting structure that is not an else-if. */
+const nestsDeeper = (node: ts.Node): boolean => NESTING_KINDS.has(node.kind as SyntaxKind) && !isElseIf(node);
+
+/** The cognitive increment of the structure `node` itself at `nesting`: 1 + nesting when it nests, 1 for an else-if, else 0. */
+const structureIncrement = (node: ts.Node, nesting: number): number => {
+    if (isElseIf(node)) {
+        return 1;
+    }
+    return NESTING_KINDS.has(node.kind as SyntaxKind) ? 1 + nesting : 0;
 };
 
 const functionBody = (fn: Node): Node | undefined => {
