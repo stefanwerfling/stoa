@@ -1303,7 +1303,8 @@ stoa eval <pfad> --expected <datei> [--format markdown|json] [--solid] [--archit
   um die Zusammenfassung `architecture`; zusammen mit `--solid` schaltet sie die
   DIP-Schichtregel auf Stufe 2 (E6d) um.
 - `--memory-stats` gibt alle 100 Dateien eine Fortschrittszeile auf stderr
-  aus — aktuelle Phase (`analysis`/`evaluation`), verarbeitete/ausgewählte
+  aus — aktuelle Phase (`analysis`, `evaluation` vor den Graphen, `graphs`
+  nach ihrem Aufbau, `evaluation` nach den Regeln), verarbeitete/ausgewählte
   Dateien, bisher extrahierte Facts, Heap genutzt/Limit/gesamt, RSS,
   External Memory, verstrichene Zeit — plus eine abschließende Summenzeile
   (Dateien, Facts, Findings, Evidence-Graph-Nodes/-Edges, Cache-Hits bei
@@ -2370,6 +2371,102 @@ eine Baseline-Migration ist explizit, reproduzierbar und nachvollziehbar.
   `npm run lint` 0 Fehler; `npm test` 697 / 697; `npm run build` ok; keine
   Abhängigkeit hinzugefügt.
 
+## Regelauswertung und Speicher gemessen (Quality-Hardening-Spezifikation, Phase 4, 2026-11-05)
+
+Ziel: große Projekte effizienter analysieren, ohne ein Ergebnis zu ändern.
+Ergebnis: Die Regeln sind nach den Daten klassifiziert, die sie tatsächlich
+lesen, ihre Unabhängigkeit ist belegt, der Speicher je Pipeline-Phase ist
+reproduzierbar messbar — und die Messung rechtfertigt keine Freigabe und
+keinen Umbau, deshalb wurde keiner gemacht. Kein Befund hat sich geändert.
+
+- **Klassifizierung (gemessen, `test/RuleDataNeeds.test.ts`):** Die Eingabe
+  jeder Projektregel wird in einen aufzeichnenden Proxy gehüllt, während die
+  echte Pipeline über Fixtures läuft, die jede Regel über ihre frühen
+  Ausstiege hinausführen; die gelesenen Felder bestimmen die Klasse.
+
+  | Klasse | Regeln | Gelesene Daten |
+  |---|---|---|
+  | Local | die 40 deklarativen Regeln | die Facts eines Subjekts (`groupUnits`: Datei, Symbol, Bereich, Art) |
+  | Module | R-DEP-CYCLE; R-SOLID-DIP-LAYER-DIRECTION (Stufe 1 und die deklarierte Stufe 2) | `moduleGraph` (Stufe 1 zusätzlich `facts`, `dartLibraryIndex` für die Schichtklassifizierung) |
+  | Symbol | R-SOLID-LSP-CONTRACT-COMPATIBILITY, R-SOLID-ISP-INTERFACE-COHESION, R-SOLID-DIP-CONCRETE-DEPENDENCY; die vier Flutter-Lifecycle-Regeln | `symbolGraph`/`typeModel` (SOLID), `dartLibraryIndex` (Lifecycle: dateiübergreifende Namensauflösung), `facts` |
+  | Project | R-UNUSED-EXPORT, R-VALIDATION-CONTRACT; die vier Flutter-Layout-Regeln | alle Importe × alle Exporte (`facts`, `analyzedFiles`); die Evidenz über alle Facts; der projektweite Widget-Graph |
+
+  R-SOLID-SRP (nicht registriert) liest das TypeModel (Symbol). Der Test
+  legt die genauen Felder je Regel fest; liest eine Regel künftig mehr,
+  schlägt er fehl.
+- **Abhängigkeiten zwischen Regeln:** Deklarative Regeln treffen sich nur in
+  der Deduplizierung (ein Befund je Datei, Position, Symbol und Merkmal —
+  immer innerhalb einer Datei); Projektregeln lesen nie Befunde anderer
+  Regeln, und das gemeinsam, bei Bedarf gebaute TypeModel ist dasselbe,
+  gleich welche Regel es baut. Belegt durch den Test: Jede Datei für sich
+  ausgewertet ergibt die deklarativen Befunde der Gesamtmenge (6 Korpora,
+  alle Sprachen); Projektregeln allein, zusammen und in umgekehrter
+  Reihenfolge ergeben dieselben Befunde; keine schreibt in einen (tief
+  eingefrorenen) Fact.
+- **Speicher je Phase** (`scripts/measure-phases.ts`, die 9 Vergleichsziele,
+  gehaltener Heap nach vollständiger Garbage Collection, MB; je ein Lauf):
+
+  | Ziel | Facts | Start | nach Ingestion | nach Graphen | nach Regeln | Ergebnis lebt | freigegeben | RSS nach Ingestion | Peak-RSS |
+  |---|---|---|---|---|---|---|---|---|---|
+  | corpus | 500 | 43,9 | 48,7 | 48,7 | 48,9 | 48,7 | 48,3 | 201 | 201 |
+  | velyo (Dart) | 7.287 | 43,9 | 53,7 | 56,7 | 58,8 | 54,1 | 47,0 | 252 | 254 |
+  | MAPI (PHP) | 1.452 | 43,9 | 47,7 | 47,7 | 47,8 | 47,6 | 46,7 | 230 | 230 |
+  | stoa `src` | 16.308 | 43,9 | 61,4 | 62,4 | 63,9 | 61,9 | 50,4 | 392 | 395 |
+  | swipemeister (Dart) | 16.130 | 43,9 | 60,8 | 66,5 | 71,6 | 61,4 | 47,1 | 265 | 304 |
+  | flyingfish backend | 9.893 | 43,9 | 57,8 | 59,1 | 60,5 | 58,3 | 50,9 | 366 | 367 |
+  | rohc (C) | 8.347 | 43,9 | 53,8 | 54,0 | 55,0 | 54,5 | 46,0 | 298 | 407 |
+  | mimirmind (C/C++) | 25.190 | 43,9 | 68,4 | 69,0 | 70,1 | 69,1 | 46,2 | 340 | 407 |
+  | flyingfish | 54.581 | 43,9 | 90,3 | 95,0 | 100,6 | 92,5 | 53,4 | 647 | 767 |
+
+  Die Facts bestimmen, was ein Lauf hält (flyingfish: ≈ 39 MB für das
+  Ergebnis, ≈ 0,7 KB je Fact); die Graphen kommen mit 0–5,7 MB hinzu, die
+  Regeln mit 0,1–5,6 MB, beides endet mit dem Lauf. Die Spitze entsteht in
+  der Ingestion beim Parsen (flyingfish: RSS 647 MB nach der Ingestion,
+  767 MB Peak, bei ≈ 100 MB lebendem Heap), nicht in der Auswertung. Nach
+  einem Lauf bleiben 2–10 MB für modulweite Caches (Grammatiken, das
+  gemeinsame TypeScript-Lib-Projekt); drei Läufe von stoa `src` in einem
+  Prozess: 61,6 / 61,9 / 62,1 MB — konstant, kein Wachstum je Lauf.
+- **Zeit je Regel** (ad hoc: `evaluate` jeder Regel umhüllt, ms): Die
+  Auswertung macht 1–7 % eines Laufs aus. flyingfish 295 (deklarativ 193,
+  R-UNUSED-EXPORT 40, LSP 35 einschließlich TypeModel-Aufbau); swipemeister
+  233 (DIP-concrete 118 einschließlich TypeModel-Aufbau, deklarativ 50);
+  stoa `src` 100; mimirmind 59.
+- **Geprüfte Optimierungen — keine umgesetzt, jede aus gemessenem Grund:**
+  - *Lokale Regeln direkt nach jeder Datei:* korrekt (oben belegt), aber
+    die deklarative Auswertung dauert 46–193 ms, und die Facts bleiben
+    ohnehin (Projektregeln, `AnalysisResult.facts`, `coverage.factCount`) —
+    kein Speicher und ≤ 4 % Zeit zu gewinnen.
+  - *Fact-Projektionen je Regel:* `requiredFactKinds` ist geprüfte
+    Metadaten, aber die volle Fact-Menge wird ohnehin gehalten — nichts
+    freizugeben.
+  - *Kürzere Lebensdauer von Graphen und temporären Daten:* Graphen und
+    Regeln halten ≤ 11 MB zusätzlich zu den Facts und werden mit der
+    Rückkehr von `analyze` frei; früheres Freigeben kann eine Spitze, die
+    beim Parsen entsteht, nicht senken.
+  - *Inkrementelle Auswertung:* Projektregeln brauchen die vollständige
+    Fact-Menge; der dateiweise Teil (Extraktion) wird bereits gecacht
+    (`--cache`).
+  - *Wiederverwendung berechneter Graphen:* ModuleGraph, Widget-Graph und
+    Dart-Index entstehen einmal je Lauf, der SymbolGraph nur für eine Regel,
+    die ihn braucht, das TypeModel gemeinsam memoisiert. Übrig: Die
+    Dart-Schichtklassifizierung berechnen beide DIP-Regeln (≤ 19 ms auf
+    swipemeister) — zu klein für einen gemeinsamen Cache; R-UNUSED-EXPORT
+    löst relative Importe selbst auf statt über den ModuleGraph — ein
+    Umstieg würde Befunde ändern (Alias- und Paketimporte) und ist deshalb
+    keine Phase-4-Änderung (offener Punkt).
+- **Geändert:** `AnalysisProgress` hat eine Phase `graphs` (nach den
+  Graphen, vor den Regeln; `--memory-stats` gibt sie aus); neu
+  `scripts/measure-phases.ts`; `scripts/CompareTargets.ts` hält die
+  Zielliste, die beide Vergleichsskripte kopiert hatten;
+  `test/RuleDataNeeds.test.ts` (3).
+- **Ergebnisse unverändert:** Build vor und nach Phase 4, 21 Ziele (12
+  Repository-Ziele, 9 Vergleichsziele): Befunde samt Reihenfolge und
+  Identitäten, Abdeckung und Fact-Anzahl byte-identisch. Golden-Korpora
+  unverändert (`npm test`).
+- **Geprüft:** `npm run typecheck`, `npm run typecheck:test`,
+  `npm run lint` 0 Fehler; `npm test` 700 / 700; `npm run build` ok; keine
+  Abhängigkeit hinzugefügt.
+
 
 ## Baseline-/Diff-Modus (opt-in, `--baseline`)
 
@@ -3027,6 +3124,20 @@ zu liefern.
   Lauf; `--cache` und `--errors` ergänzen die Fact-Cache- und
   Fehlerverhaltens-Prüfung (siehe „Parallele Extraktion verglichen“). Ziele
   wie oben.
+- **Speicher je Pipeline-Phase** (`scripts/measure-phases.ts`): jedes Ziel in
+  einem eigenen `node --expose-gc`-Prozess; nach einer vollständigen
+  Garbage Collection misst es Heap, External Memory und RSS beim Start, nach
+  der Ingestion, nach den Graphen, nach den Regeln, mit lebendem und mit
+  freigegebenem Ergebnis, dazu die Phasenzeiten und den Peak-RSS; JSON-Zeilen,
+  eine Markdown-Tabelle, `--out` für die Zeilen. Ziele wie oben
+  (`scripts/CompareTargets.ts`, von allen drei Skripten genutzt).
+- **Externe Validierung** (`scripts/external-validation.ts`): `fetch` holt
+  die Projekte aus `validation/external/` auf ihrem Commit nach
+  `.stoa/external/` und prüft den SHA; `sample` gibt die ungelabelten
+  Findings der deterministischen Stichprobe als Label-Gerüste aus; `report`
+  zählt je Projekt, Regel und Sprache (Precision nur über TP/FP, Recall nur
+  im `fnScope`, veraltete Labels getrennt). Siehe „Externe Validierung" und
+  `validation/external/README.md`.
 
 ## Abweichungen vom Konzept (bewusst, dokumentiert)
 

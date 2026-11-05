@@ -45,24 +45,13 @@ import {spawnSync} from 'node:child_process';
 import {accessSync, chmodSync, closeSync, constants, cpSync, existsSync, mkdirSync, lstatSync, openSync, readFileSync, rmSync, writeFileSync} from 'node:fs';
 import {loadavg} from 'node:os';
 import {dirname, join, resolve, sep} from 'node:path';
-import {fileURLToPath} from 'node:url';
 import {parseArgs} from 'node:util';
 import {findingKey, keyString} from '../src/FindingIdentity.js';
 import type {Finding} from '../src/Types.js';
+import {DEFAULT_TARGETS, PACKAGE_ROOT, readTargets, type Target} from './CompareTargets.js';
 
-const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const CLI = join(PACKAGE_ROOT, 'dist', 'Cli.js');
-const DEFAULT_TARGETS = join(PACKAGE_ROOT, 'scripts', 'compare-targets.json');
 const TIMEOUT_MS = 15 * 60 * 1000;
-
-interface Target {
-    name: string;
-    path: string;
-    solid?: boolean;
-    deadExports?: boolean;
-    architecture?: string;
-    contracts?: string;
-}
 
 /** `null` = no `--jobs` (the sequential default). */
 type Jobs = number | null;
@@ -86,16 +75,6 @@ interface Run {
 }
 
 const label = (jobs: Jobs): string => (jobs === null ? 'sequential' : `--jobs ${jobs}`);
-
-const readTargets = (file: string): Target[] => {
-    const base = dirname(file);
-    return (JSON.parse(readFileSync(file, 'utf8')) as Target[]).map((target) => ({
-        ...target,
-        path: resolve(base, target.path),
-        ...(target.architecture !== undefined ? {architecture: resolve(base, target.architecture)} : {}),
-        ...(target.contracts !== undefined ? {contracts: resolve(base, target.contracts)} : {})
-    }));
-};
 
 const PRELOAD = `import {writeFileSync} from 'node:fs';
 import {isMainThread} from 'node:worker_threads';

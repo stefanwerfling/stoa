@@ -1216,7 +1216,8 @@ stoa eval <path> --expected <file> [--format markdown|json] [--solid] [--archite
   report; together with `--solid` it switches the DIP layer rule to stage 2
   (E6d).
 - `--memory-stats` prints one progress line to stderr every 100 files —
-  current phase (`analysis`/`evaluation`), files processed/selected, facts
+  current phase (`analysis`, `evaluation` before the graphs, `graphs` once
+  they are built, `evaluation` after the rules), files processed/selected, facts
   extracted so far, heap used/limit/total, RSS, external memory, elapsed
   time — plus a final totals line (files, facts, findings, Evidence Graph
   nodes/edges, cache hits if `--cache` was used), and the run's metrics
@@ -2178,6 +2179,93 @@ baseline migration is explicit, reproducible and traceable.
 - **Checked:** `npm run typecheck`, `npm run typecheck:test`, `npm run lint`
   0 errors; `npm test` 697 / 697; `npm run build` ok; no dependency added.
 
+## Rule evaluation and memory measured (Quality Hardening spec, phase 4, 2026-11-05)
+
+Goal: analyze large projects more efficiently without changing a result.
+Outcome: the rules are classified by the data they actually read, their
+independence is proven, memory per pipeline phase is measurable
+reproducibly — and no data release or restructuring is justified by the
+measurement, so none was made. No finding changed.
+
+- **Classification (measured, `test/RuleDataNeeds.test.ts`):** every
+  project rule's input is wrapped in a recording proxy while the real
+  pipeline runs over fixtures that take each rule past its early exits; the
+  fields it reads decide its class.
+
+  | Class | Rules | Data read |
+  |---|---|---|
+  | Local | the 40 declarative rules | one subject's facts (`groupUnits`: file, symbol, range, kind) |
+  | Module | R-DEP-CYCLE; R-SOLID-DIP-LAYER-DIRECTION (stage 1 and the declared-layers stage 2) | `moduleGraph` (stage 1 also `facts`, `dartLibraryIndex` for the layer classification) |
+  | Symbol | R-SOLID-LSP-CONTRACT-COMPATIBILITY, R-SOLID-ISP-INTERFACE-COHESION, R-SOLID-DIP-CONCRETE-DEPENDENCY; the four Flutter lifecycle rules | `symbolGraph`/`typeModel` (SOLID), `dartLibraryIndex` (lifecycle: cross-file name resolution), `facts` |
+  | Project | R-UNUSED-EXPORT, R-VALIDATION-CONTRACT; the four Flutter layout rules | all imports × all exports (`facts`, `analyzedFiles`); the evidence over all facts; the project widget graph |
+
+  R-SOLID-SRP (not registered) reads the TypeModel (symbol). The test pins
+  the exact fields per rule; a rule that starts reading more fails it.
+- **Dependencies between rules:** declarative rules meet only in the
+  de-duplication (one finding per file, position, symbol and feature —
+  always within one file); project rules never read another rule's
+  findings, and the shared lazily built TypeModel is the same whichever
+  rule builds it. Proven by the test: evaluating each file on its own gives
+  the declarative findings of the whole set (6 corpora, all languages);
+  project rules alone, together and in reverse order give the same
+  findings; none writes to a (deep-frozen) fact.
+- **Memory per phase** (`scripts/measure-phases.ts`, the 9 comparison
+  targets, retained heap after a full collection, MB; one run each):
+
+  | Target | Facts | start | after ingestion | after graphs | after rules | result alive | released | RSS after ingestion | peak RSS |
+  |---|---|---|---|---|---|---|---|---|---|
+  | corpus | 500 | 43.9 | 48.7 | 48.7 | 48.9 | 48.7 | 48.3 | 201 | 201 |
+  | velyo (Dart) | 7,287 | 43.9 | 53.7 | 56.7 | 58.8 | 54.1 | 47.0 | 252 | 254 |
+  | MAPI (PHP) | 1,452 | 43.9 | 47.7 | 47.7 | 47.8 | 47.6 | 46.7 | 230 | 230 |
+  | stoa `src` | 16,308 | 43.9 | 61.4 | 62.4 | 63.9 | 61.9 | 50.4 | 392 | 395 |
+  | swipemeister (Dart) | 16,130 | 43.9 | 60.8 | 66.5 | 71.6 | 61.4 | 47.1 | 265 | 304 |
+  | flyingfish backend | 9,893 | 43.9 | 57.8 | 59.1 | 60.5 | 58.3 | 50.9 | 366 | 367 |
+  | rohc (C) | 8,347 | 43.9 | 53.8 | 54.0 | 55.0 | 54.5 | 46.0 | 298 | 407 |
+  | mimirmind (C/C++) | 25,190 | 43.9 | 68.4 | 69.0 | 70.1 | 69.1 | 46.2 | 340 | 407 |
+  | flyingfish | 54,581 | 43.9 | 90.3 | 95.0 | 100.6 | 92.5 | 53.4 | 647 | 767 |
+
+  Facts dominate what the run holds (flyingfish: ≈ 39 MB for the result,
+  ≈ 0.7 KB per fact); the graphs add 0–5.7 MB, the rules 0.1–5.6 MB, both
+  gone with the run. The peak is set during ingestion — parsing (flyingfish:
+  RSS 647 MB after ingestion, 767 MB peak, against ≈ 100 MB of live heap),
+  not in the evaluation. After a run 2–10 MB stay for module-level caches
+  (grammars, the shared TypeScript lib project); three runs of stoa `src`
+  in one process: 61.6 / 61.9 / 62.1 MB — constant, no growth per run.
+- **Time per rule** (ad hoc: each rule's `evaluate` wrapped, ms): the
+  evaluation is 1–7 % of a run. flyingfish 295 (declarative 193,
+  R-UNUSED-EXPORT 40, LSP 35 including the TypeModel build); swipemeister
+  233 (DIP-concrete 118 including the TypeModel build, declarative 50);
+  stoa `src` 100; mimirmind 59.
+- **Optimizations examined — none made, each for a measured reason:**
+  - *Local rules right after each file:* correct (proven above), but
+    the declarative evaluation is 46–193 ms and the facts stay anyway
+    (project rules, `AnalysisResult.facts`, `coverage.factCount`) — no
+    memory and ≤ 4 % time to gain.
+  - *Fact projections per rule:* `requiredFactKinds` is verified metadata,
+    but the full fact set is retained regardless — nothing to release.
+  - *Shorter lifetime of graphs and temporary data:* graphs and rules hold
+    ≤ 11 MB on top of the facts and are released when `analyze` returns;
+    freeing them earlier cannot lower a peak that is set while parsing.
+  - *Incremental evaluation:* project rules need the complete fact set; the
+    per-file part (extraction) is already cached (`--cache`).
+  - *Reusing computed graphs:* ModuleGraph, widget graph and Dart index are
+    built once per run, the SymbolGraph only for a rule that needs it, the
+    TypeModel memoized for all rules. Left: the Dart layer classification
+    is computed by both DIP rules (≤ 19 ms on swipemeister) — too small for
+    a shared cache; R-UNUSED-EXPORT resolves relative imports itself instead
+    of using the ModuleGraph — switching would change findings (alias and
+    package imports), so it is not a phase-4 change (open point).
+- **Changed:** `AnalysisProgress` has a `graphs` phase (after the graphs,
+  before the rules; `--memory-stats` prints it); new
+  `scripts/measure-phases.ts`; `scripts/CompareTargets.ts` holds the target
+  list both comparison scripts had copied; `test/RuleDataNeeds.test.ts` (3).
+- **Results unchanged:** the build before and after phase 4, 21 targets (12
+  repository targets, 9 comparison targets): findings with order and
+  identities, coverage and fact count byte-identical. Golden corpora
+  unchanged (`npm test`).
+- **Checked:** `npm run typecheck`, `npm run typecheck:test`, `npm run lint`
+  0 errors; `npm test` 700 / 700; `npm run build` ok; no dependency added.
+
 
 ## Baseline / diff mode (opt-in, `--baseline`)
 
@@ -2779,6 +2867,20 @@ fails fast (exit 1, concrete errors) instead of silently yielding 0 findings.
   order, coverage and exit code with the sequential run; `--cache` and
   `--errors` add the fact-cache and error-behaviour checks (see "Parallel
   extraction compared"). Targets as above.
+- **Memory per pipeline phase** (`scripts/measure-phases.ts`): every target
+  in a fresh `node --expose-gc` process; after a full collection it samples
+  heap, external memory and RSS at start, after ingestion, after the graphs,
+  after the rules, with the result alive and after it is released, plus the
+  phase timings and the peak RSS; JSON lines, a Markdown table, `--out` for
+  the rows. Targets as above (`scripts/CompareTargets.ts`, shared by all
+  three scripts).
+- **External validation** (`scripts/external-validation.ts`): `fetch`
+  checks the projects of `validation/external/` out at their commit into
+  `.stoa/external/` and verifies the SHA; `sample` prints the unlabeled
+  findings of the deterministic sample as label skeletons; `report` counts
+  per project, rule and language (precision only over TP/FP, recall only in
+  `fnScope`, stale labels apart). See "External validation" and
+  `validation/external/README.md`.
 
 ## Deviations from the concept (deliberate, documented)
 

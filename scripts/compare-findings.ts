@@ -39,44 +39,19 @@
 // architecture config's file name: it appears in the findings' text.
 
 import {existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync} from 'node:fs';
-import {dirname, join, resolve, sep} from 'node:path';
-import {fileURLToPath} from 'node:url';
+import {join, resolve, sep} from 'node:path';
 import {parseArgs} from 'node:util';
-import {loadArchitectureConfig} from '../src/architecture/ArchitectureConfig.js';
-import {DEFAULT_CONFIG} from '../src/Config.js';
-import {loadValidationContract} from '../src/contracts/ValidationContract.js';
 import {diffFindings, isSemanticallyEqual} from '../src/FindingDiff.js';
 import {IDENTITY_SCHEME, IDENTITY_SCHEMES_TEXT, identityField, keyString, type FindingKey, type IdentityScheme} from '../src/FindingIdentity.js';
 import {analyzeAsync} from '../src/Pipeline.js';
 import type {Finding} from '../src/Types.js';
+import {analysisOptionsOf, DEFAULT_TARGETS, readTargets} from './CompareTargets.js';
 
-const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const DEFAULT_TARGETS = join(PACKAGE_ROOT, 'scripts', 'compare-targets.json');
 /** The snapshot's own description: the identity scheme its findings were named under. */
 const SNAPSHOT_META = 'snapshot.json';
 const USAGE = 'Usage:\n'
     + '  npx tsx scripts/compare-findings.ts snapshot <out-dir> [--targets <file>] [--jobs N]\n'
     + '  npx tsx scripts/compare-findings.ts diff <before-dir> <after-dir>\n';
-
-interface Target {
-    name: string;
-    path: string;
-    solid?: boolean;
-    deadExports?: boolean;
-    architecture?: string;
-    contracts?: string;
-}
-
-const readTargets = (file: string): Target[] => {
-    const base = dirname(file);
-    const targets = JSON.parse(readFileSync(file, 'utf8')) as Target[];
-    return targets.map((t) => ({
-        ...t,
-        path: resolve(base, t.path),
-        ...(t.architecture !== undefined ? {architecture: resolve(base, t.architecture)} : {}),
-        ...(t.contracts !== undefined ? {contracts: resolve(base, t.contracts)} : {})
-    }));
-};
 
 /** One finding per line, the target's own path cut from every path in it. */
 const findingLines = (findings: readonly Finding[], rootPath: string): string => {
@@ -88,17 +63,7 @@ const snapshot = async (outDir: string, targetsFile: string, jobs: number): Prom
     mkdirSync(outDir, {recursive: true});
     writeFileSync(join(outDir, SNAPSHOT_META), `${JSON.stringify({identity: IDENTITY_SCHEME}, null, 2)}\n`, 'utf8');
     for (const target of readTargets(targetsFile)) {
-        const result = await analyzeAsync({
-            jobs,
-            rootPath: target.path,
-            knowledgeDir: join(PACKAGE_ROOT, 'knowledge', 'marcus'),
-            ruleSetDir: join(PACKAGE_ROOT, 'rules', 'default'),
-            config: DEFAULT_CONFIG,
-            solid: target.solid === true,
-            deadExports: target.deadExports === true,
-            ...(target.architecture !== undefined ? {architecture: loadArchitectureConfig(target.architecture)} : {}),
-            ...(target.contracts !== undefined ? {validationContract: loadValidationContract(target.contracts)} : {})
-        });
+        const result = await analyzeAsync({...analysisOptionsOf(target), jobs});
         writeFileSync(join(outDir, `${target.name}.jsonl`), findingLines(result.report.findings, target.path), 'utf8');
         process.stdout.write(`${target.name}: ${result.report.findings.length} findings, ${result.report.coverage.status}\n`);
     }

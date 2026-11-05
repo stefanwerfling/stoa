@@ -125,9 +125,16 @@ export interface AnalyzeAsyncOptions extends AnalyzeOptions {
 /** What an adapter is told about the run: the analysis root and the identity scheme. */
 const contextOf = (options: AnalyzeOptions): ProjectContext => ({rootDir: options.rootPath, ...(options.identityScheme !== undefined ? {identityScheme: options.identityScheme} : {})});
 
-/** One `onProgress` snapshot's non-memory half — see AnalyzeOptions.onProgress. */
+/**
+ * One `onProgress` snapshot's non-memory half — see AnalyzeOptions.onProgress.
+ * The phases, in order: `discovery` (files selected), `analysis` (every
+ * `checkEveryFiles` files during ingestion), `evaluation` (ingestion done,
+ * before the graphs), `graphs` (graphs built, before the rules), `evaluation`
+ * again (rules done). A caller that samples memory at each point sees what
+ * every pipeline phase holds (scripts/measure-phases.ts).
+ */
 export interface AnalysisProgress {
-    phase: 'discovery' | 'analysis' | 'evaluation';
+    phase: 'discovery' | 'analysis' | 'evaluation' | 'graphs';
     filesSelected: number;
     filesProcessed: number;
     factsExtracted: number;
@@ -524,6 +531,7 @@ const finishRun = (run: Run, ingestion: Ingestion, options: AnalyzeOptions): Ana
     // rules/project/FlutterLayoutRules.ts) consume it.
     const flutterWidgetGraph = buildFlutterWidgetGraph(facts, dartLibraryIndex);
     clock.add('graphs', clock.sinceStart() - graphsStart);
+    options.onProgress?.(takeMemorySnapshot(), {phase: 'graphs', filesSelected: files.length, filesProcessed: analyzed + skipped, factsExtracted: facts.length, elapsedMs: elapsedMs()});
     // The rules get the same explicit file list as the ModuleGraph's nodes —
     // never a set re-derived from the facts (see ProjectRuleInput.analyzedFiles).
     const findings: Finding[] = clock.time('evaluation', () =>
