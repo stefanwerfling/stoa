@@ -66,9 +66,10 @@ An LLM is an optional, switchable adapter.
 >   uses: file + rule + symbol), `--only-new` filters the report down to the
 >   delta — the CI/pre-commit use case on an existing codebase with a backlog.
 >   Not a git-diff/PR mode (no VCS integration) — a stored-snapshot baseline.
-> - *Planned / not yet validated:* richer context facts, PSR-4 PHP import
->   resolution, C/C++ include facts, Dart edges in the dependency-cycle and
->   dead-export rules (Dart imports are already extracted and used by the module
+>   A baseline records its identity scheme; one from an older scheme is
+>   refused (exit 1) until `--migrate-baseline` rewrites it.
+> - *Planned / not yet validated:* richer context facts, Dart edges in the
+>   dependency-cycle and dead-export rules (Dart imports are already extracted and used by the module
 >   graph and the SOLID layer rule).
 >
 > **Analysis completion integrity:** `coverage.status` (`complete` |
@@ -156,6 +157,7 @@ node dist/Cli.js analyze . --cache              # cache per-file facts under .st
 node dist/Cli.js analyze . --jobs 4             # parse/extract on 4 worker threads (same report, more memory)
 node dist/Cli.js analyze . --baseline .stoa/baseline.json --update-baseline  # accept current findings as the baseline
 node dist/Cli.js analyze . --baseline .stoa/baseline.json --only-new         # CI: report only what's new since then
+node dist/Cli.js analyze . --baseline .stoa/baseline.json --migrate-baseline # rewrite a baseline from an older identity scheme
 node dist/Cli.js analyze . --min-confidence 0.7 --no-experimental            # hide low-confidence / experimental findings (count stays in the report)
 node dist/Cli.js analyze . --solid                                            # opt-in SOLID hints (DIP/LSP/ISP; experimental heuristics)
 node dist/Cli.js analyze . --solid --architecture stoa.architecture.json      # + declared layers (schemas/architecture.schema.json): certain layer violations

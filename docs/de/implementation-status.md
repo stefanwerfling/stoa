@@ -2093,6 +2093,62 @@ ist die Messung und das Werkzeug `scripts/compare-jobs.ts`.
   außen vor. Ergebnisse werden je Abschnitt geschrieben, damit ein
   abgebrochener Lauf behält, was er gemessen hat.
 
+## Abschließende Qualitätssicherung (Finding-Identity-Spezifikation, Phase 6, 2026-11-05)
+
+Jede Prüfung lief auf dem Arbeitsstand der Phasen 1–5 (auf `db60e07`);
+Node 24.21, Laptop mit 8 Threads.
+
+| Prüfung | Kommando | Ergebnis |
+|---|---|---|
+| Typecheck | `npm run typecheck` | 0 Fehler |
+| Typecheck inkl. Tests und Skripte | Optionen der Projekt-`tsconfig.json` (`strict`, `noUncheckedIndexedAccess`) über `src`, jede `test/*.ts` und `scripts/*.ts` | `src`, `scripts` und alle übrigen Testdateien: 0 Fehler. 20 Fehler in 8 älteren Testdateien (`Solid*`, `Schema`, `KnowledgeBase`, `RuleGovernance`), dieselben 20 schon in `db60e07` — nicht hier entstanden, siehe Einschränkungen |
+| ESLint | `npm run lint` | 0 Fehler, 0 Warnungen |
+| Build | `npm run build` | ok |
+| Alle Tests | `npm test` | 668 / 668 bestanden, 0 fehlgeschlagen, 0 übersprungen, 0 abgebrochen |
+| CLI-Tests | `node --import tsx --test` auf `AnalysisStatusCli`, `BaselineCli`, `CliOutput`, `EvalIntegrityCli`, `Sarif` | 34 / 34 |
+| Evaluator | `Evaluation`, `EvaluatorUnit`, `CrossLanguageEval`, `RuleGovernance` | 28 / 28 |
+| SymbolGraph und ModuleGraph | `SymbolGraph`, `SymbolGraphDemand`, `SymbolGraphReexport`, `SymbolResolution`, `ModuleGraph`, `ModuleResolution`, `PhpModuleResolution`, `CppIncludes` | 83 / 83 |
+| TypeModel | `TypeModel`, `StructFacts` | 16 / 16 |
+| Architektur und SOLID | `ArchitectureConfig`, `LayerClassification`, `Solid*` (6 Dateien), `Dependency`, `DependencyTypeOnly`, `DeadExport`, `ProjectRuleCategorization` | 59 / 59 |
+| Golden-Korpora (Tests) | `Rules`, `SolidCorpus`, die A11y-Korpora, `ValidationDataflowCorpus`, `BackendValidation` | 90 / 90 |
+| Baseline und Identität | `Baseline`, `BaselineCli`, `FindingIdentityIntegration`, `IdentityScheme`, `FunctionIdentity`, `DartIdentity` | 84 / 84 |
+| Integration | `Pipeline`, `ParallelExtraction`, `FactCache`, `MemoryGuard`, `MemoryPipelineScaling`, `Ingestion`, `RealWorldReport`, `AnalysisStatus`, `AnalyzedFiles`, `PipelineMetrics` | 72 / 72 |
+| Golden-Korpora (CLI) | `node dist/Cli.js eval <korpus> --expected <manifest>` für das Projekt-, SOLID- (mit und ohne Architektur), HTML-, JSX-, Vue-, Angular-, Flutter-, Catch-Intent- und Validation-Dataflow-Korpus | alle Exit 0, Precision und Recall 100 % (TP 44, 7, 7, 37, 14, 8, 8, 6, 6, 20; FP 0, FN 0) |
+| Golden-Manifeste gegen `db60e07` | je Manifest: Anzahl der Einträge und geänderte Felder | 16 Manifeste, jede Anzahl unverändert; geändert nur `symbol` (die Umbenennungen aus Phase 1, je Datei freigegeben) und das neue `"identity": 2` |
+| Baseline-Integrität | `analyze src --baseline … --update-baseline`, dann `--only-new` sequentiell und mit `--jobs 4`; eine Baseline alten Schemas mit und ohne `--migrate-baseline` | 107 eindeutige Einträge, Schema 2; 0 neu in beiden Läufen; das alte Schema wird mit Exit 1 abgelehnt, die Migration schreibt es auf Schema 2 um und listet verworfene Einträge |
+| Determinismus | `analyze .` dreimal sequentiell und einmal `--jobs 4`; Phase 5 (`scripts/compare-jobs.ts`, 364 Läufe) | Findings in allen vier byte-identisch (404); alle 364 Vergleichsläufe identisch |
+| Abhängigkeiten | `git diff db60e07 -- package.json package-lock.json` | keine Änderung |
+
+Die Testgruppen überschneiden sich (`SolidCorpus` und `BaselineCli` stehen in
+zwei Gruppen); sie laufen getrennt, damit jeder Bereich seine eigene Zahl
+hat. Tests, die unter eigener Bedingung übersprungen werden — als root
+(`chmod 000`), ohne Flutter-SDK oder auf einem Node ohne
+`module.enableCompileCache` — liefen hier alle (0 übersprungen).
+
+**API-Änderungen** (stoa liefert nur die CLI aus, `bin`; kein
+Bibliotheks-Einstiegspunkt). Neues CLI-Flag `--migrate-baseline`; Baseline,
+Korpus-Manifest und Snapshot-Dateien tragen `"identity"`; die
+Baseline-Zusammenfassung im Bericht trägt `duplicateIdentities`;
+ModuleGraph-Kanten kennen `resolution: 'psr4'`, den Ursprung `cpp.include`
+und `conditional`; neue Facts `cpp.include` sowie PHP
+`struct.typeDecl`/`struct.importBindings`. Intern: `extractFile` nimmt den
+`ProjectContext` statt des Wurzelverzeichnisses; `identityScheme` an
+Adaptern und `analyze`-Optionen; das Ingestion-Ergebnis gibt die
+Adapter-Registry nicht mehr heraus. Alles ist in den Abschnitten zu Phase
+1–5 oben und in `finding-model.md` beschrieben; das README wurde in dieser
+Phase nachgezogen (`--migrate-baseline`, PSR-4 und C/C++-Includes nicht mehr
+„geplant“).
+
+**Bekannte Einschränkungen:** die Golden-Korpora sind klein und kuratiert;
+C/C++ hat keinen Golden-Korpus; das PHP- und C/C++-Verhalten aus Phase 4 ist
+durch Tests abgedeckt, nicht durch ein reales Vergleichsziel mit Ground
+Truth; die Zeitangaben stammen von einem Laptop unter Desktop-Last; die
+Testdateien gehören nicht zu `npm run typecheck` (tsx führt sie ohne
+Typprüfung aus), und 8 ältere tragen 20 Typfehler (`AnalysisResult` aus
+`Pipeline.js` statt `Types.js` importiert, implizite `any`-Parameter, die
+Importform von `ajv/dist/2020`), die älter als diese Spezifikation sind und
+unverändert blieben.
+
 ## Baseline-/Diff-Modus (opt-in, `--baseline`)
 
 Verdrahtet `Finding.baselineStatus` (`'new' | 'known' | 'fixed'`), das seit
@@ -2621,7 +2677,7 @@ zu liefern.
 ## Qualitätssicherung
 
 - **node:test-Suite** (`npm test`, `test/*.test.ts`): 668 Tests, 0 fehlgeschlagen,
-  Lauf vom 2026-11-04 (Regeln pos./neg., Extraktion, Schema-Validierung, i18n,
+  0 übersprungen, Lauf vom 2026-11-05 (Regeln pos./neg., Extraktion, Schema-Validierung, i18n,
   Determinismus, SARIF, Eval, Semantik-Groundedness, Datenschutz,
   Finding-Trennung, semantische Modelle, Identitäten, Metriken).
 - **Golden-Korpus** (`test/corpus/project/`, TS+PHP) mit Ground-Truth; Eval
