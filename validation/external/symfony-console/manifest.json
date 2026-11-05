@@ -1,0 +1,10 @@
+{
+    "name": "symfony-console",
+    "language": "PHP",
+    "repository": "https://github.com/symfony/console",
+    "ref": "v8.1.11",
+    "commit": "5a315b092b81f3e920e9daea1a2ae4c66ed298b9",
+    "license": "MIT",
+    "licenseFile": "LICENSE",
+    "analyze": {"solid": true, "exclude": ["Tests/**"]}
+}

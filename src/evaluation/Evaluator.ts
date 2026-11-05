@@ -99,8 +99,9 @@ export const evaluate = (findings: Finding[], expected: ExpectedFinding[], rootD
 };
 
 // Classifies a finding by its file extension so results can be split per
-// language. Mirrors the adapter file-extension routing.
-const languageOf = (file: string): string => {
+// language. Mirrors the adapter file-extension routing. Shared with the
+// external validation (ExternalValidation.ts).
+export const languageOf = (file: string): string => {
     const lower = file.toLowerCase();
     if (/\.(ts|tsx|js|jsx|mjs|cjs)$/.test(lower)) {
         return 'TypeScript/JavaScript';

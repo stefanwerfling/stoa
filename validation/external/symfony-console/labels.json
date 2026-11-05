@@ -1,0 +1,410 @@
+{
+  "identity": 3,
+  "reviewer": "claude-opus-5-5 (model review, not confirmed by a human)",
+  "reviewedAt": "2026-11-05",
+  "sampling": "Deterministic sample: up to 5 findings per rule (scripts/external-validation.ts sample, sha256 rank of the identity), plus all 24 R-DEP-UNUSED and all 4 R-DEP-CYCLE findings, plus every finding in the fnScope files. 2 of 174 files are not analyzed (PHP 8.4 syntax, see the report).",
+  "labels": [
+    {
+      "file": "Application.php",
+      "rule": "R-COMPLEXITY-COGNITIVE",
+      "symbol": "Symfony\\Component\\Console\\Application.find",
+      "verdict": "TP",
+      "reason": "Namespace/abbreviation matching with several nested loops and conditions; well above 15 by inspection."
+    },
+    {
+      "file": "Attribute/Ask.php",
+      "rule": "R-COMPLEXITY-COGNITIVE",
+      "symbol": "Symfony\\Component\\Console\\Attribute\\Ask.tryFrom.(anonymous)#0",
+      "verdict": "TP",
+      "reason": "The closure has a long sequence of type-dependent if branches with nested conditions; well above 15 by inspection."
+    },
+    {
+      "file": "Descriptor/TextDescriptor.php",
+      "rule": "R-COMPLEXITY-COGNITIVE",
+      "symbol": "Symfony\\Component\\Console\\Descriptor\\TextDescriptor.describeApplication",
+      "verdict": "TP",
+      "reason": "Loops over namespaces and commands with nested conditions; well above 15 by inspection (exact 31 not verified)."
+    },
+    {
+      "file": "Helper/Table.php",
+      "rule": "R-COMPLEXITY-COGNITIVE",
+      "symbol": "Symfony\\Component\\Console\\Helper\\Table.buildTableRows",
+      "verdict": "TP",
+      "reason": "Large nested loops over rows and cells with colspan/rowspan handling; far above 15 (exact 110 not verified, probably inflated by elseif chains)."
+    },
+    {
+      "file": "Input/InputDefinition.php",
+      "rule": "R-COMPLEXITY-COGNITIVE",
+      "symbol": "Symfony\\Component\\Console\\Input\\InputDefinition.addOption",
+      "verdict": "TP",
+      "reason": "Hand count 16 (no elseif involved), threshold 15 met."
+    },
+    {
+      "file": "Input/StringInput.php",
+      "rule": "R-COMPLEXITY-COGNITIVE",
+      "symbol": "Symfony\\Component\\Console\\Input\\StringInput.tokenize",
+      "verdict": "FP",
+      "reason": "Hand count (SonarSource rules: elseif +1 flat) is 13 < 15; stoa reports 22 because each of the three elseif branches is weighted as a deeper nested if. stoa's PHP metric treats each elseif as an if nested inside the previous one (PhpExtraction NESTING_KINDS), so every elseif adds a level."
+    },
+    {
+      "file": "Application.php",
+      "rule": "R-DEEP-NESTING",
+      "symbol": "Symfony\\Component\\Console\\Application.doRenderThrowable",
+      "verdict": "TP",
+      "reason": "Depth 4 by stoa's own definition: do > if (verbose) > for > ternary ($function ? ...); no elseif involved."
+    },
+    {
+      "file": "Descriptor/TextDescriptor.php",
+      "rule": "R-DEEP-NESTING",
+      "symbol": "Symfony\\Component\\Console\\Descriptor\\TextDescriptor.calculateTotalWidthForOptions",
+      "verdict": "FP",
+      "reason": "Structural depth 3 (foreach > elseif branch > ternary); reported 4 only through the elseif level. Threshold 4 not met. stoa's PHP metric treats each elseif as an if nested inside the previous one (PhpExtraction NESTING_KINDS), so every elseif adds a level."
+    },
+    {
+      "file": "Formatter/OutputFormatter.php",
+      "rule": "R-DEEP-NESTING",
+      "symbol": "Symfony\\Component\\Console\\Formatter\\OutputFormatter.createStyleFromString",
+      "verdict": "FP",
+      "reason": "Structural depth 3 (foreach > if/elseif branch 'options' > foreach); reported 6 because three elseif branches each add a level. Threshold 4 not met. stoa's PHP metric treats each elseif as an if nested inside the previous one (PhpExtraction NESTING_KINDS), so every elseif adds a level."
+    },
+    {
+      "file": "Helper/FileInputHelper.php",
+      "rule": "R-DEEP-NESTING",
+      "symbol": "Symfony\\Component\\Console\\Helper\\FileInputHelper.readWithPasteDetection",
+      "verdict": "TP",
+      "reason": "Structural depth 4: while > if (!$inPaste) > if (no marker) > if ($hasNewline)."
+    },
+    {
+      "file": "Input/StringInput.php",
+      "rule": "R-DEEP-NESTING",
+      "symbol": "Symfony\\Component\\Console\\Input\\StringInput.tokenize",
+      "verdict": "FP",
+      "reason": "Structural depth 3 (while > if > if); reported 5 because of the elseif chain. Threshold 4 not met. stoa's PHP metric treats each elseif as an if nested inside the previous one (PhpExtraction NESTING_KINDS), so every elseif adds a level."
+    },
+    {
+      "file": "Application.php",
+      "rule": "R-DEP-CYCLE",
+      "symbol": "Application.php,CompleteCommand.php,HelpCommand.php,LazyCommand.php,ListCommand.php,ApplicationDescription.php,JsonDescriptor.php,MarkdownDescriptor.php,ReStructuredTextDescriptor.php,TextDescriptor.php,XmlDescriptor.php,DescriptorHelper.php",
+      "verdict": "TP",
+      "reason": "Every edge of the cycle checked by hand: each file imports (use) and references the next one (Application <-> commands/descriptors via DescriptorHelper; MapInput <-> Interaction; CompletionInput -> InputOption -> CompletionInput; SymfonyQuestionHelper <-> SymfonyStyle). In PHP these are class-level dependencies resolved by the autoloader, not load-order problems."
+    },
+    {
+      "file": "Attribute/MapInput.php",
+      "rule": "R-DEP-CYCLE",
+      "symbol": "MapInput.php,Interaction.php",
+      "verdict": "TP",
+      "reason": "Every edge of the cycle checked by hand: each file imports (use) and references the next one (Application <-> commands/descriptors via DescriptorHelper; MapInput <-> Interaction; CompletionInput -> InputOption -> CompletionInput; SymfonyQuestionHelper <-> SymfonyStyle). In PHP these are class-level dependencies resolved by the autoloader, not load-order problems."
+    },
+    {
+      "file": "Completion/CompletionInput.php",
+      "rule": "R-DEP-CYCLE",
+      "symbol": "CompletionInput.php,CompletionSuggestions.php,InputOption.php",
+      "verdict": "TP",
+      "reason": "Every edge of the cycle checked by hand: each file imports (use) and references the next one (Application <-> commands/descriptors via DescriptorHelper; MapInput <-> Interaction; CompletionInput -> InputOption -> CompletionInput; SymfonyQuestionHelper <-> SymfonyStyle). In PHP these are class-level dependencies resolved by the autoloader, not load-order problems."
+    },
+    {
+      "file": "Helper/SymfonyQuestionHelper.php",
+      "rule": "R-DEP-CYCLE",
+      "symbol": "SymfonyQuestionHelper.php,SymfonyStyle.php",
+      "verdict": "TP",
+      "reason": "Every edge of the cycle checked by hand: each file imports (use) and references the next one (Application <-> commands/descriptors via DescriptorHelper; MapInput <-> Interaction; CompletionInput -> InputOption -> CompletionInput; SymfonyQuestionHelper <-> SymfonyStyle). In PHP these are class-level dependencies resolved by the autoloader, not load-order problems."
+    },
+    {
+      "file": "ArgumentResolver/ArgumentResolver.php",
+      "rule": "R-DEP-UNUSED",
+      "symbol": "import:Symfony\\Component\\Console\\ArgumentResolver\\ValueResolver",
+      "verdict": "FP",
+      "reason": "The import is a namespace alias ('as Resolver') used as a prefix of qualified names (new Resolver\\BuiltinTypeValueResolver() etc.); stoa does not resolve the alias prefix."
+    },
+    {
+      "file": "ArgumentResolver/ArgumentResolver.php",
+      "rule": "R-DEP-UNUSED",
+      "symbol": "import:Symfony\\Component\\Console\\ArgumentResolver\\ValueResolver\\ValueResolverInterface",
+      "verdict": "FP",
+      "reason": "ValueResolverInterface is referenced only in PHPDoc (@param/@return/@throws/@var/@see); such imports are needed by PHPStan/Psalm and IDEs and are treated as used by PHP-CS-Fixer's no_unused_imports."
+    },
+    {
+      "file": "ArgumentResolver/ArgumentResolverInterface.php",
+      "rule": "R-DEP-UNUSED",
+      "symbol": "import:Symfony\\Component\\Console\\ArgumentResolver\\Exception\\ResolverNotFoundException",
+      "verdict": "FP",
+      "reason": "ResolverNotFoundException is referenced only in PHPDoc (@param/@return/@throws/@var/@see); such imports are needed by PHPStan/Psalm and IDEs and are treated as used by PHP-CS-Fixer's no_unused_imports."
+    },
+    {
+      "file": "Attribute/Argument.php",
+      "rule": "R-DEP-UNUSED",
+      "symbol": "import:Symfony\\Component\\Console\\Completion\\CompletionInput",
+      "verdict": "FP",
+      "reason": "CompletionInput is referenced only in PHPDoc (@param/@return/@throws/@var/@see); such imports are needed by PHPStan/Psalm and IDEs and are treated as used by PHP-CS-Fixer's no_unused_imports."
+    },
+    {
+      "file": "Attribute/Argument.php",
+      "rule": "R-DEP-UNUSED",
+      "symbol": "import:Symfony\\Component\\Console\\Completion\\Suggestion",
+      "verdict": "FP",
+      "reason": "Suggestion is referenced only in PHPDoc (@param/@return/@throws/@var/@see); such imports are needed by PHPStan/Psalm and IDEs and are treated as used by PHP-CS-Fixer's no_unused_imports."
+    },
+    {
+      "file": "Attribute/Ask.php",
+      "rule": "R-DEP-UNUSED",
+      "symbol": "import:Symfony\\Component\\Validator\\Constraint",
+      "verdict": "FP",
+      "reason": "Constraint is referenced only in PHPDoc (@param/@return/@throws/@var/@see); such imports are needed by PHPStan/Psalm and IDEs and are treated as used by PHP-CS-Fixer's no_unused_imports."
+    },
+    {
+      "file": "Attribute/Option.php",
+      "rule": "R-DEP-UNUSED",
+      "symbol": "import:Symfony\\Component\\Console\\Completion\\CompletionInput",
+      "verdict": "FP",
+      "reason": "CompletionInput is referenced only in PHPDoc (@param/@return/@throws/@var/@see); such imports are needed by PHPStan/Psalm and IDEs and are treated as used by PHP-CS-Fixer's no_unused_imports."
+    },
+    {
+      "file": "Attribute/Option.php",
+      "rule": "R-DEP-UNUSED",
+      "symbol": "import:Symfony\\Component\\Console\\Completion\\Suggestion",
+      "verdict": "FP",
+      "reason": "Suggestion is referenced only in PHPDoc (@param/@return/@throws/@var/@see); such imports are needed by PHPStan/Psalm and IDEs and are treated as used by PHP-CS-Fixer's no_unused_imports."
+    },
+    {
+      "file": "Attribute/ValueResolver.php",
+      "rule": "R-DEP-UNUSED",
+      "symbol": "import:Symfony\\Component\\Console\\ArgumentResolver\\ValueResolver\\ValueResolverInterface",
+      "verdict": "FP",
+      "reason": "ValueResolverInterface is referenced only in PHPDoc (@param/@return/@throws/@var/@see); such imports are needed by PHPStan/Psalm and IDEs and are treated as used by PHP-CS-Fixer's no_unused_imports."
+    },
+    {
+      "file": "Command/CompleteCommand.php",
+      "rule": "R-DEP-UNUSED",
+      "symbol": "import:Symfony\\Component\\Console\\Attribute\\AsCommand",
+      "verdict": "FP",
+      "reason": "AsCommand is used as a PHP attribute (#[AsCommand(...)]) on the class; stoa's PHP extraction does not count attribute names as uses."
+    },
+    {
+      "file": "Command/CompleteCommand.php",
+      "rule": "R-DEP-UNUSED",
+      "symbol": "import:Symfony\\Component\\Console\\Completion\\Output\\CompletionOutputInterface",
+      "verdict": "FP",
+      "reason": "CompletionOutputInterface is referenced only in PHPDoc (@param/@return/@throws/@var/@see); such imports are needed by PHPStan/Psalm and IDEs and are treated as used by PHP-CS-Fixer's no_unused_imports."
+    },
+    {
+      "file": "Command/DumpCompletionCommand.php",
+      "rule": "R-DEP-UNUSED",
+      "symbol": "import:Symfony\\Component\\Console\\Attribute\\AsCommand",
+      "verdict": "FP",
+      "reason": "AsCommand is used as a PHP attribute (#[AsCommand(...)]) on the class; stoa's PHP extraction does not count attribute names as uses."
+    },
+    {
+      "file": "Command/LazyCommand.php",
+      "rule": "R-DEP-UNUSED",
+      "symbol": "import:Symfony\\Component\\Console\\Completion\\Suggestion",
+      "verdict": "FP",
+      "reason": "Suggestion is referenced only in PHPDoc (@param/@return/@throws/@var/@see); such imports are needed by PHPStan/Psalm and IDEs and are treated as used by PHP-CS-Fixer's no_unused_imports."
+    },
+    {
+      "file": "CommandLoader/CommandLoaderInterface.php",
+      "rule": "R-DEP-UNUSED",
+      "symbol": "import:Symfony\\Component\\Console\\Exception\\CommandNotFoundException",
+      "verdict": "FP",
+      "reason": "CommandNotFoundException is referenced only in PHPDoc (@param/@return/@throws/@var/@see); such imports are needed by PHPStan/Psalm and IDEs and are treated as used by PHP-CS-Fixer's no_unused_imports."
+    },
+    {
+      "file": "ConsoleBundle.php",
+      "rule": "R-DEP-UNUSED",
+      "symbol": "import:Symfony\\Component\\DependencyInjection\\Kernel\\RequiredBundle",
+      "verdict": "FP",
+      "reason": "RequiredBundle is used as a PHP attribute (#[RequiredBundle(...)]) on the class; stoa's PHP extraction does not count attribute names as uses."
+    },
+    {
+      "file": "Input/InputArgument.php",
+      "rule": "R-DEP-UNUSED",
+      "symbol": "import:Symfony\\Component\\Console\\Command\\Command",
+      "verdict": "FP",
+      "reason": "Command is referenced only in PHPDoc (@param/@return/@throws/@var/@see); such imports are needed by PHPStan/Psalm and IDEs and are treated as used by PHP-CS-Fixer's no_unused_imports."
+    },
+    {
+      "file": "Input/InputArgument.php",
+      "rule": "R-DEP-UNUSED",
+      "symbol": "import:Symfony\\Component\\Console\\Completion\\Suggestion",
+      "verdict": "FP",
+      "reason": "Suggestion is referenced only in PHPDoc (@param/@return/@throws/@var/@see); such imports are needed by PHPStan/Psalm and IDEs and are treated as used by PHP-CS-Fixer's no_unused_imports."
+    },
+    {
+      "file": "Input/InputInterface.php",
+      "rule": "R-DEP-UNUSED",
+      "symbol": "import:Symfony\\Component\\Console\\Exception\\InvalidArgumentException",
+      "verdict": "FP",
+      "reason": "InvalidArgumentException is referenced only in PHPDoc (@param/@return/@throws/@var/@see); such imports are needed by PHPStan/Psalm and IDEs and are treated as used by PHP-CS-Fixer's no_unused_imports."
+    },
+    {
+      "file": "Input/InputInterface.php",
+      "rule": "R-DEP-UNUSED",
+      "symbol": "import:Symfony\\Component\\Console\\Exception\\RuntimeException",
+      "verdict": "FP",
+      "reason": "RuntimeException is referenced only in PHPDoc (@param/@return/@throws/@var/@see); such imports are needed by PHPStan/Psalm and IDEs and are treated as used by PHP-CS-Fixer's no_unused_imports."
+    },
+    {
+      "file": "Input/InputOption.php",
+      "rule": "R-DEP-UNUSED",
+      "symbol": "import:Symfony\\Component\\Console\\Command\\Command",
+      "verdict": "FP",
+      "reason": "Command is referenced only in PHPDoc (@param/@return/@throws/@var/@see); such imports are needed by PHPStan/Psalm and IDEs and are treated as used by PHP-CS-Fixer's no_unused_imports."
+    },
+    {
+      "file": "Input/InputOption.php",
+      "rule": "R-DEP-UNUSED",
+      "symbol": "import:Symfony\\Component\\Console\\Completion\\Suggestion",
+      "verdict": "FP",
+      "reason": "Suggestion is referenced only in PHPDoc (@param/@return/@throws/@var/@see); such imports are needed by PHPStan/Psalm and IDEs and are treated as used by PHP-CS-Fixer's no_unused_imports."
+    },
+    {
+      "file": "Messenger/RunCommandMessage.php",
+      "rule": "R-DEP-UNUSED",
+      "symbol": "import:Symfony\\Component\\Console\\Exception\\RunCommandFailedException",
+      "verdict": "FP",
+      "reason": "RunCommandFailedException is referenced only in PHPDoc (@param/@return/@throws/@var/@see); such imports are needed by PHPStan/Psalm and IDEs and are treated as used by PHP-CS-Fixer's no_unused_imports."
+    },
+    {
+      "file": "Question/Question.php",
+      "rule": "R-DEP-UNUSED",
+      "symbol": "import:Symfony\\Component\\Validator\\Constraint",
+      "verdict": "FP",
+      "reason": "Constraint is referenced only in PHPDoc (@param/@return/@throws/@var/@see); such imports are needed by PHPStan/Psalm and IDEs and are treated as used by PHP-CS-Fixer's no_unused_imports."
+    },
+    {
+      "file": "Style/SymfonyStyle.php",
+      "rule": "R-DEP-UNUSED",
+      "symbol": "import:Symfony\\Component\\Console\\Helper\\TreeNode",
+      "verdict": "FP",
+      "reason": "TreeNode is referenced only in PHPDoc (@param/@return/@throws/@var/@see); such imports are needed by PHPStan/Psalm and IDEs and are treated as used by PHP-CS-Fixer's no_unused_imports."
+    },
+    {
+      "file": "ArgumentResolver/ValueResolver/DateTimeValueResolver.php",
+      "rule": "R-ERR-SWALLOWED",
+      "symbol": "Symfony\\Component\\Console\\ArgumentResolver\\ValueResolver\\DateTimeValueResolver.resolveDate>catch#0",
+      "verdict": "FP",
+      "reason": "Sets $date = false; the next statement turns that into an 'Invalid date given' error — handled."
+    },
+    {
+      "file": "Command/CompleteCommand.php",
+      "rule": "R-ERR-SWALLOWED",
+      "symbol": "Symfony\\Component\\Console\\Command\\CompleteCommand.findCommand>catch#0",
+      "verdict": "unclear",
+      "reason": "Empty catch of the narrow CommandNotFoundException with return null after it; the intent (not found -> null) is evident from the type but not documented."
+    },
+    {
+      "file": "Descriptor/ReStructuredTextDescriptor.php",
+      "rule": "R-ERR-SWALLOWED",
+      "symbol": "Symfony\\Component\\Console\\Descriptor\\ReStructuredTextDescriptor.setVisibleNamespaces>catch#0",
+      "verdict": "TP",
+      "reason": "Empty catch (\\Exception) {} around namespace lookup, no comment; any exception is silently dropped."
+    },
+    {
+      "file": "Helper/FileInputHelper.php",
+      "rule": "R-ERR-SWALLOWED",
+      "symbol": "Symfony\\Component\\Console\\Helper\\FileInputHelper.displayThumbnail>catch#0",
+      "verdict": "FP",
+      "reason": "Catches the specific InvalidFileException and returns: the thumbnail is skipped on purpose for an unreadable file — handled by design."
+    },
+    {
+      "file": "Helper/QuestionHelper.php",
+      "rule": "R-ERR-SWALLOWED",
+      "symbol": "Symfony\\Component\\Console\\Helper\\QuestionHelper.validateAttempts>catch#2",
+      "verdict": "FP",
+      "reason": "The catch body is empty, but the exception is bound to $error, which is rethrown after the last attempt (throw $error) and on MissingInputException — not swallowed. The rule does not see the later use of the catch variable."
+    },
+    {
+      "file": "Command/TraceableCommand.php",
+      "rule": "R-FN-TOO-MANY-PARAMS",
+      "symbol": "Symfony\\Component\\Console\\Command\\TraceableCommand.addArgument",
+      "verdict": "FP",
+      "reason": "Count correct, but TraceableCommand is a decorator whose method must keep the signature of Command::addArgument — the same finding is reported again on the override, where it cannot be fixed."
+    },
+    {
+      "file": "Command/TraceableCommand.php",
+      "rule": "R-FN-TOO-MANY-PARAMS",
+      "symbol": "Symfony\\Component\\Console\\Command\\TraceableCommand.addOption",
+      "verdict": "FP",
+      "reason": "Count correct, but TraceableCommand is a decorator whose method must keep the signature of Command::addOption — the same finding is reported again on the override, where it cannot be fixed."
+    },
+    {
+      "file": "Helper/ProcessHelper.php",
+      "rule": "R-FN-TOO-MANY-PARAMS",
+      "symbol": "Symfony\\Component\\Console\\Helper\\ProcessHelper.run",
+      "verdict": "TP",
+      "reason": "5 parameters (output, cmd, error, callback, verbosity)."
+    },
+    {
+      "file": "Helper/ProgressIndicator.php",
+      "rule": "R-FN-TOO-MANY-PARAMS",
+      "symbol": "Symfony\\Component\\Console\\Helper\\ProgressIndicator.__construct",
+      "verdict": "TP",
+      "reason": "5 parameters (2 promoted properties, 3 optional values)."
+    },
+    {
+      "file": "Tester/CommandTester.php",
+      "rule": "R-FN-TOO-MANY-PARAMS",
+      "symbol": "Symfony\\Component\\Console\\Tester\\CommandTester.__construct",
+      "verdict": "TP",
+      "reason": "5 parameters (command plus 4 optional settings)."
+    },
+    {
+      "file": "Helper/ProgressBar.php",
+      "rule": "R-SIDEEFFECT-NONDETERMINISM",
+      "symbol": "Symfony\\Component\\Console\\Helper\\ProgressBar.getEstimated",
+      "verdict": "TP",
+      "reason": "Reads time()."
+    },
+    {
+      "file": "Helper/ProgressBar.php",
+      "rule": "R-SIDEEFFECT-NONDETERMINISM",
+      "symbol": "Symfony\\Component\\Console\\Helper\\ProgressBar.overwrite",
+      "verdict": "TP",
+      "reason": "Reads microtime(true)."
+    },
+    {
+      "file": "Helper/ProgressBar.php",
+      "rule": "R-SIDEEFFECT-NONDETERMINISM",
+      "symbol": "Symfony\\Component\\Console\\Helper\\ProgressBar.start",
+      "verdict": "TP",
+      "reason": "Reads time()."
+    },
+    {
+      "file": "Helper/ProgressIndicator.php",
+      "rule": "R-SIDEEFFECT-NONDETERMINISM",
+      "symbol": "Symfony\\Component\\Console\\Helper\\ProgressIndicator.__construct",
+      "verdict": "TP",
+      "reason": "Reads time()."
+    },
+    {
+      "file": "Helper/ProgressIndicator.php",
+      "rule": "R-SIDEEFFECT-NONDETERMINISM",
+      "symbol": "Symfony\\Component\\Console\\Helper\\ProgressIndicator.getCurrentTimeInMilliseconds",
+      "verdict": "TP",
+      "reason": "Reads microtime(true)."
+    },
+    {
+      "file": "Helper/ProgressIndicator.php",
+      "rule": "R-SIDEEFFECT-NONDETERMINISM",
+      "symbol": "Symfony\\Component\\Console\\Helper\\ProgressIndicator.initPlaceholderFormatters.(anonymous)#2",
+      "verdict": "TP",
+      "reason": "The 'elapsed' formatter reads time()."
+    },
+    {
+      "file": "Helper/ProgressIndicator.php",
+      "rule": "R-SIDEEFFECT-NONDETERMINISM",
+      "symbol": "Symfony\\Component\\Console\\Helper\\ProgressIndicator.start",
+      "verdict": "TP",
+      "reason": "Reads time()."
+    }
+  ],
+  "fnScope": {
+    "files": [
+      "Helper/ProgressIndicator.php",
+      "Input/StringInput.php"
+    ],
+    "rules": [
+      "*"
+    ]
+  },
+  "falseNegatives": []
+}

@@ -1,0 +1,11 @@
+{
+    "name": "ky",
+    "language": "TypeScript",
+    "repository": "https://github.com/sindresorhus/ky",
+    "ref": "v2.2.0",
+    "commit": "3541888878c4d303a8bc2ad61815f4e048f55a5d",
+    "license": "MIT",
+    "licenseFile": "license",
+    "root": "source",
+    "analyze": {"solid": true, "deadExports": true}
+}

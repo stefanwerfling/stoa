@@ -2266,6 +2266,133 @@ measurement, so none was made. No finding changed.
 - **Checked:** `npm run typecheck`, `npm run typecheck:test`, `npm run lint`
   0 errors; `npm test` 700 / 700; `npm run build` ok; no dependency added.
 
+## External validation (Quality Hardening spec, phase 5, 2026-11-05)
+
+Goal: measure stoa on code it was not developed against. Outcome: four
+open-source projects, one per language, pinned to a commit and analyzed
+reproducibly; 176 findings classified by hand, with precision only over
+those and recall only inside files read in full. The review uncovered one
+counting error shared by three extractors, three FP patterns of single
+rules and a PHP parser limit — **measured and documented, nothing fixed**
+(fixes are separate steps that need their own approval). No finding of the
+golden corpora changed.
+
+- **Data and tooling:** `validation/external/<name>/{manifest,labels}.json`,
+  `scripts/external-validation.ts` (`fetch` / `sample` / `report`),
+  `src/evaluation/ExternalValidation.ts` (label checks, deterministic sample,
+  counting), `validation/external/README.md` (categories, criteria, what the
+  numbers mean). Checkouts live in `.stoa/external/` (git-ignored, not
+  linted); no third-party source is copied into the repository. The external
+  corpus is kept apart from the golden corpora and the dogfooding targets and
+  does not become a golden corpus automatically.
+- **Projects:**
+
+  | Project | Language | Version / commit | Licence | Analyzed |
+  |---|---|---|---|---|
+  | ky (sindresorhus/ky) | TypeScript | v2.2.0, `3541888878c4d303a8bc2ad61815f4e048f55a5d` | MIT | `source/`, with SOLID and dead-export rules |
+  | symfony/console | PHP | v8.1.11, `5a315b092b81f3e920e9daea1a2ae4c66ed298b9` | MIT | all except `Tests/`, with SOLID rules |
+  | lua/lua | C | v5.5.1, `7579fc9d7ed90240487251dfb69168f8e64e9294` | MIT | all, with SOLID rules |
+  | flutter/samples `compass_app/app` | Dart/Flutter | `9df2cac15cc3d28a51aace018ad822387d30ac72` | BSD-3-Clause | `lib/` (sparse checkout), with SOLID rules |
+
+- **Review:** a model review (claude-opus-5-5), marked as such in every
+  label file, **not confirmed by a human**. Labeled: the deterministic
+  sample (up to 5 findings per rule, sha256 rank of the identity), plus
+  rules reviewed in full where a pattern showed (ky R-UNUSED-EXPORT 66,
+  symfony R-DEP-UNUSED 24 and R-DEP-CYCLE 4, compass all 14), plus every
+  finding in the 2–3 files per project read in full for recall (`fnScope`,
+  all rules). Criteria: TP = the claim is true and the code is the kind the
+  rule is for, metric thresholds checked by a hand count; FP = the claim is
+  wrong (also a metric that crosses the threshold only through a counting
+  error) or the code is not what the rule is for; unclear = not decidable.
+- **Results** (`scripts/external-validation.ts report`):
+
+  | Project | Language | Status | Files analyzed / skipped | Findings | Reviewed | TP | FP | Unclear | FN | Precision | Recall |
+  |---|---|---|---|---|---|---|---|---|---|---|---|
+  | ky | TypeScript | complete | 31 / 0 | 90 | 86 | 26 | 59 | 1 | 0 | 30.6 % | 100 % (5 TP in scope) |
+  | symfony-console | PHP | partial | 172 / 2 | 175 | 56 | 22 | 33 | 1 | 0 | 40.0 % | 100 % (5 TP in scope) |
+  | lua | C | complete | 68 / 0 | 168 | 20 | 16 | 4 | 0 | 0 | 80.0 % | 100 % (4 TP in scope) |
+  | compass-app | Dart/Flutter | complete | 111 / 0 | 14 | 14 | 3 | 11 | 0 | 0 | 21.4 % | 100 % (3 TP in scope) |
+
+  Per rule (reviewed / TP / FP / unclear):
+
+  | Rule | ky | symfony | lua | compass |
+  |---|---|---|---|---|
+  | R-COMPLEXITY-COGNITIVE | 6 / 6 / 0 / 0 | 6 / 5 / 1 / 0 | 5 / 3 / 2 / 0 | – |
+  | R-DEEP-NESTING | 3 / 2 / 1 / 0 | 5 / 2 / 3 / 0 | 5 / 3 / 2 / 0 | – |
+  | R-FN-TOO-MANY-PARAMS | – | 5 / 3 / 2 / 0 | 6 / 6 / 0 / 0 | 10 / 0 / 10 / 0 |
+  | R-SIDEEFFECT-NONDETERMINISM | 4 / 4 / 0 / 0 | 7 / 7 / 0 / 0 | 4 / 4 / 0 / 0 | 1 / 0 / 1 / 0 |
+  | R-ERR-SWALLOWED | 2 / 1 / 1 / 0 | 5 / 1 / 3 / 1 | – | – |
+  | R-UNUSED-EXPORT | 66 / 12 / 54 / 0 (all) | – | – | – |
+  | R-DEP-UNUSED | – | 24 / 0 / 24 / 0 (all) | – | – |
+  | R-DEP-CYCLE | – | 4 / 4 / 0 / 0 (all) | – | – |
+  | R-WIDE-PUBLIC-SURFACE | 3 / 1 / 1 / 1 | – | – | – |
+  | R-VALIDATION-MISSING-BACKEND | 2 / 0 / 2 / 0 | – | – | – |
+  | R-A11Y-FLUTTER-TEXTFIELD-LABEL | – | – | – | 2 / 2 / 0 / 0 |
+  | R-A11Y-FLUTTER-IMAGE-LABEL | – | – | – | 1 / 1 / 0 / 0 |
+
+  How to read it: precision is over the *reviewed* findings, and the
+  sample is stratified — rules reviewed in full (R-UNUSED-EXPORT,
+  R-DEP-UNUSED) weigh heavily in a project total, so a total is not an
+  estimate for all findings of a project. Recall rests on 10 files
+  (2–3 per project, 17 TPs, 0 misses found) — too narrow to claim a
+  recall for the rules; it only says no miss was found there. Per-rule
+  samples of 5 give no statistically firm precision either.
+- **Findings of the review (documented, not fixed):**
+  - **else-if counted as nesting (TypeScript, PHP, C):** the metric walk
+    treats an `else if` / `elseif` as an `if` nested in the previous one's
+    else, so each further branch of an if/else-if chain adds a nesting level
+    and a growing cognitive increment (`TsExtraction` `NESTING_KINDS`,
+    `PhpExtraction` `NESTING_KINDS`, `CppExtraction` `NESTING_TYPES`). Hand
+    counts by structure (SonarSource: else-if +1 flat, no nesting) put 9 of
+    the 30 reviewed R-DEEP-NESTING / R-COMPLEXITY-COGNITIVE findings below
+    the threshold (examples: `StringInput.tokenize` reported nesting 5 /
+    cognitive 22, actual 3 / 13; lua `getnum_aux` cognitive 21, actual 10).
+    The reported values of the remaining TPs are also too high. Not checked
+    for Dart.
+  - **R-UNUSED-EXPORT without package entry points and re-exports
+    (TypeScript):** 54 of 66 FP — 38 exports of `index.ts`, the package
+    entry (`package.json` `exports`), and 16 declarations re-exported through
+    `export … from` (also chained, `types/retry.ts` → `types/options.ts` →
+    `index.ts`). 12 TP (exported, used only in their own file).
+  - **R-DEP-UNUSED (PHP):** 24 of 24 FP — 20 imports used only in PHPDoc
+    (`@param`, `@return`, `@throws`, `@var`, `@see`; PHPStan/Psalm and IDEs
+    need them, PHP-CS-Fixer's `no_unused_imports` counts them as used), 3
+    used only as attributes (`#[AsCommand(…)]`, `#[RequiredBundle(…)]`), 1
+    namespace alias used as a prefix (`use …\ValueResolver as Resolver;` →
+    `new Resolver\BuiltinTypeValueResolver()`).
+  - **Single FP patterns:** generated code (`*.freezed.dart`, 10 parameter
+    findings, header "GENERATED CODE") is not excluded;
+    R-VALIDATION-MISSING-BACKEND reads `request.body` in an HTTP *client*
+    (outgoing body) as server input (2); R-FN-TOO-MANY-PARAMS reports a
+    decorator's override again although the parent's signature dictates it
+    (2); R-ERR-SWALLOWED misses that the catch variable is rethrown after a
+    retry loop (`QuestionHelper.validateAttempts`) and counts deliberate
+    fallbacks (`return`, `$date = false` followed by an error) as swallowed
+    (3); the Dart extraction attributes `DateTime.now()` inside an `onTap`
+    closure to the enclosing `build` (the TypeScript extraction skips nested
+    functions) (1); R-WIDE-PUBLIC-SURFACE on a package's re-export entry,
+    which is what the rule's own remediation recommends (1).
+  - **Reliable in this sample:** R-SIDEEFFECT-NONDETERMINISM 15 / 16 (the
+    one FP is the Dart attribution), R-DEP-CYCLE 4 / 4 (every edge checked),
+    the Flutter a11y rules 3 / 3, parameter counts always correct.
+  - **PHP 8.4 syntax:** `php-parser` 3.7.0 parses PHP 8.3 by default
+    (`version` 803); `new Foo()->bar()` without parentheses (PHP 8.4) fails in
+    `Command/Command.php:682` and
+    `DependencyInjection/AddConsoleCommandPass.php:107`, so symfony/console
+    runs `partial` (172 / 174 files, both reported as skipped — the run says
+    so instead of passing over it). Possible fix: `parser.version: '8.4'` in
+    `src/analysis/PhpAdapter.ts` (not applied).
+- **Changed:** new `src/evaluation/ExternalValidation.ts`,
+  `scripts/external-validation.ts`, `validation/external/` (README, 4
+  manifests, 4 label files), `test/ExternalValidation.test.ts` (9: precision
+  only over TP/FP, unclear apart, no precision for an unreviewed rule,
+  recall only in scope, scope by rule, unlabeled finding in scope and miss
+  outside scope are errors, stale labels, deterministic sample, label-file
+  checks, corpus integrity: full SHA, licence, model review marked);
+  `languageOf` exported from `Evaluator.ts`; `.stoa/` in the ESLint ignores
+  (third-party checkouts).
+- **Checked:** `npm run typecheck`, `npm run typecheck:test`, `npm run lint`
+  0 errors; `npm test` 709 / 709; `npm run build` ok; no dependency added.
 
 ## Baseline / diff mode (opt-in, `--baseline`)
 
@@ -2906,6 +3033,8 @@ facts for PHP do not); a git-diff/PR mode (the stored-snapshot baseline
 exists, see "Baseline / diff mode"); a suppression workflow beyond the
 baseline; a generic ESLint fact adapter; context facts (`flag.generatedCode`, `hasTests`)
 for richer suppression; LLM-output evaluation at scale.
+
+**Open from the external validation (2026-11-05, measured, not fixed — see "External validation"):** else-if counted as an extra nesting level in the TypeScript, PHP and C metrics; package entry points and `export … from` re-exports in R-UNUSED-EXPORT; PHPDoc, attribute and namespace-alias uses in the PHP R-DEP-UNUSED; generated code (`*.freezed.dart`) not excluded; Dart closures attributed to the enclosing function; PHP 8.4 syntax (`php-parser` defaults to 8.3).
 
 **Open from the evaluator-integrity track (2026-11-04):** in the TS
 extraction, the parse

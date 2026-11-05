@@ -1,0 +1,158 @@
+{
+  "identity": 3,
+  "reviewer": "claude-opus-5-5 (model review, not confirmed by a human)",
+  "reviewedAt": "2026-11-05",
+  "sampling": "Deterministic sample: up to 5 findings per rule (scripts/external-validation.ts sample, sha256 rank of the identity), plus every finding in the fnScope files.",
+  "labels": [
+    {
+      "file": "ldo.c",
+      "rule": "R-COMPLEXITY-COGNITIVE",
+      "symbol": "luaD_growstack",
+      "verdict": "FP",
+      "reason": "Hand count (SonarSource rules) is 11 < 15; stoa reports 15 because the ifs inside the else-if branch are weighted one level deeper. stoa's C metric treats an else-if as an if nested in the previous one's else (CppExtraction NESTING_TYPES), so every else-if adds a level."
+    },
+    {
+      "file": "llex.c",
+      "rule": "R-COMPLEXITY-COGNITIVE",
+      "symbol": "read_long_string",
+      "verdict": "TP",
+      "reason": "Hand count about 19 (for > switch > if per case, ternary, goto), >= 15."
+    },
+    {
+      "file": "lparser.c",
+      "rule": "R-COMPLEXITY-COGNITIVE",
+      "symbol": "searchvar",
+      "verdict": "TP",
+      "reason": "Hand count (SonarSource rules) about 25: for > if/else-if with nested if/else branches three levels deep."
+    },
+    {
+      "file": "lstrlib.c",
+      "rule": "R-COMPLEXITY-COGNITIVE",
+      "symbol": "str_find_aux",
+      "verdict": "TP",
+      "reason": "Hand count about 20 (nested if/else in a do-while inside else, mixed && / ||), >= 15."
+    },
+    {
+      "file": "ltests.c",
+      "rule": "R-COMPLEXITY-COGNITIVE",
+      "symbol": "getnum_aux",
+      "verdict": "FP",
+      "reason": "Hand count (SonarSource rules: else-if +1 flat) is 10 < 15; stoa reports 21 because the 3-branch else-if chain is weighted as ever deeper nesting. stoa's C metric treats an else-if as an if nested in the previous one's else (CppExtraction NESTING_TYPES), so every else-if adds a level."
+    },
+    {
+      "file": "lapi.c",
+      "rule": "R-DEEP-NESTING",
+      "symbol": "index2value",
+      "verdict": "FP",
+      "reason": "Structural depth 3 (if/else-if chain > if > ternary); reported 5 because of the two else-if levels. Threshold 4 not met. stoa's C metric treats an else-if as an if nested in the previous one's else (CppExtraction NESTING_TYPES), so every else-if adds a level."
+    },
+    {
+      "file": "lgc.c",
+      "rule": "R-DEEP-NESTING",
+      "symbol": "remarkupvals",
+      "verdict": "TP",
+      "reason": "Structural depth 4: while > if/else > for > if."
+    },
+    {
+      "file": "lgc.c",
+      "rule": "R-DEEP-NESTING",
+      "symbol": "sweep2old",
+      "verdict": "FP",
+      "reason": "Structural depth 3 (while > if/else > if/else-if); reported 4 only through the else-if level. Threshold 4 not met. stoa's C metric treats an else-if as an if nested in the previous one's else (CppExtraction NESTING_TYPES), so every else-if adds a level."
+    },
+    {
+      "file": "lparser.c",
+      "rule": "R-DEEP-NESTING",
+      "symbol": "check_conflict",
+      "verdict": "TP",
+      "reason": "Structural depth 4: for > if > if > if."
+    },
+    {
+      "file": "lparser.c",
+      "rule": "R-DEEP-NESTING",
+      "symbol": "parlist",
+      "verdict": "TP",
+      "reason": "Structural depth 4: if > do > switch > if."
+    },
+    {
+      "file": "lapi.c",
+      "rule": "R-FN-TOO-MANY-PARAMS",
+      "symbol": "lua_callk",
+      "verdict": "TP",
+      "reason": "5 parameters (public C API, signature fixed by lua.h)."
+    },
+    {
+      "file": "ldo.c",
+      "rule": "R-FN-TOO-MANY-PARAMS",
+      "symbol": "luaD_pretailcall",
+      "verdict": "TP",
+      "reason": "5 parameters."
+    },
+    {
+      "file": "lgc.c",
+      "rule": "R-FN-TOO-MANY-PARAMS",
+      "symbol": "sweepgen",
+      "verdict": "TP",
+      "reason": "6 parameters."
+    },
+    {
+      "file": "loadlib.c",
+      "rule": "R-FN-TOO-MANY-PARAMS",
+      "symbol": "searchpath",
+      "verdict": "TP",
+      "reason": "5 parameters."
+    },
+    {
+      "file": "lstring.c",
+      "rule": "R-FN-TOO-MANY-PARAMS",
+      "symbol": "luaS_newextlstr",
+      "verdict": "TP",
+      "reason": "5 parameters."
+    },
+    {
+      "file": "ltm.c",
+      "rule": "R-FN-TOO-MANY-PARAMS",
+      "symbol": "callbinTM",
+      "verdict": "TP",
+      "reason": "5 parameters."
+    },
+    {
+      "file": "lauxlib.c",
+      "rule": "R-SIDEEFFECT-NONDETERMINISM",
+      "symbol": "luai_makeseed",
+      "verdict": "TP",
+      "reason": "Mixes time(NULL) (and a stack address) into the hash seed."
+    },
+    {
+      "file": "loslib.c",
+      "rule": "R-SIDEEFFECT-NONDETERMINISM",
+      "symbol": "os_clock",
+      "verdict": "TP",
+      "reason": "Calls clock()."
+    },
+    {
+      "file": "loslib.c",
+      "rule": "R-SIDEEFFECT-NONDETERMINISM",
+      "symbol": "os_date",
+      "verdict": "TP",
+      "reason": "Calls time(NULL) as the default argument."
+    },
+    {
+      "file": "loslib.c",
+      "rule": "R-SIDEEFFECT-NONDETERMINISM",
+      "symbol": "os_time",
+      "verdict": "TP",
+      "reason": "Calls time(NULL) when called without arguments."
+    }
+  ],
+  "fnScope": {
+    "files": [
+      "loslib.c",
+      "lstring.c"
+    ],
+    "rules": [
+      "*"
+    ]
+  },
+  "falseNegatives": []
+}

@@ -2467,6 +2467,145 @@ keinen Umbau, deshalb wurde keiner gemacht. Kein Befund hat sich geändert.
   `npm run lint` 0 Fehler; `npm test` 700 / 700; `npm run build` ok; keine
   Abhängigkeit hinzugefügt.
 
+## Externe Validierung (Quality-Hardening-Spec, Phase 5, 2026-11-05)
+
+Ziel: stoa an Code messen, gegen den es nicht entwickelt wurde. Ergebnis:
+vier Open-Source-Projekte, eins je Sprache, auf einen Commit festgelegt und
+reproduzierbar analysiert; 176 Findings von Hand klassifiziert, Precision nur
+über diese, Recall nur innerhalb vollständig gelesener Dateien. Die Prüfung
+deckte einen Zählfehler in drei Extraktoren, drei FP-Muster einzelner Regeln
+und eine Grenze des PHP-Parsers auf — **gemessen und dokumentiert, nichts
+behoben** (Korrekturen sind eigene Schritte mit eigener Freigabe). Kein
+Finding der Golden-Korpora hat sich geändert.
+
+- **Daten und Werkzeuge:** `validation/external/<name>/{manifest,labels}.json`,
+  `scripts/external-validation.ts` (`fetch` / `sample` / `report`),
+  `src/evaluation/ExternalValidation.ts` (Label-Prüfung, deterministische
+  Stichprobe, Zählung), `validation/external/README.md` (Kategorien,
+  Kriterien, Bedeutung der Zahlen). Die Checkouts liegen in
+  `.stoa/external/` (von git ignoriert, nicht gelintet); kein Fremdquelltext
+  wird ins Repository kopiert. Das externe Korpus bleibt von den
+  Golden-Korpora und den Dogfooding-Zielen getrennt und wird nicht
+  automatisch zum Golden-Korpus.
+- **Projekte:**
+
+  | Projekt | Sprache | Version / Commit | Lizenz | Analysiert |
+  |---|---|---|---|---|
+  | ky (sindresorhus/ky) | TypeScript | v2.2.0, `3541888878c4d303a8bc2ad61815f4e048f55a5d` | MIT | `source/`, mit SOLID- und Dead-Export-Regeln |
+  | symfony/console | PHP | v8.1.11, `5a315b092b81f3e920e9daea1a2ae4c66ed298b9` | MIT | alles außer `Tests/`, mit SOLID-Regeln |
+  | lua/lua | C | v5.5.1, `7579fc9d7ed90240487251dfb69168f8e64e9294` | MIT | alles, mit SOLID-Regeln |
+  | flutter/samples `compass_app/app` | Dart/Flutter | `9df2cac15cc3d28a51aace018ad822387d30ac72` | BSD-3-Clause | `lib/` (Sparse-Checkout), mit SOLID-Regeln |
+
+- **Prüfung:** eine Modellprüfung (claude-opus-5-5), in jeder Label-Datei
+  als solche gekennzeichnet, **nicht von einem Menschen bestätigt**.
+  Gelabelt: die deterministische Stichprobe (bis zu 5 Findings je Regel,
+  sha256-Rang der Identität), dazu vollständig geprüfte Regeln, wo sich ein
+  Muster zeigte (ky R-UNUSED-EXPORT 66, symfony R-DEP-UNUSED 24 und
+  R-DEP-CYCLE 4, compass alle 14), dazu jedes Finding in den 2–3 Dateien je
+  Projekt, die für den Recall vollständig gelesen wurden (`fnScope`, alle
+  Regeln). Kriterien: TP = die Aussage stimmt und der Code ist von der Art,
+  für die die Regel gedacht ist, Metrik-Schwellen per Handzählung geprüft;
+  FP = die Aussage ist falsch (auch eine Metrik, die die Schwelle nur durch
+  einen Zählfehler erreicht) oder der Code ist nicht das, wofür die Regel
+  gedacht ist; unclear = nicht entscheidbar.
+- **Ergebnisse** (`scripts/external-validation.ts report`):
+
+  | Projekt | Sprache | Status | Dateien analysiert / übersprungen | Findings | Geprüft | TP | FP | Unklar | FN | Precision | Recall |
+  |---|---|---|---|---|---|---|---|---|---|---|---|
+  | ky | TypeScript | complete | 31 / 0 | 90 | 86 | 26 | 59 | 1 | 0 | 30,6 % | 100 % (5 TP im Scope) |
+  | symfony-console | PHP | partial | 172 / 2 | 175 | 56 | 22 | 33 | 1 | 0 | 40,0 % | 100 % (5 TP im Scope) |
+  | lua | C | complete | 68 / 0 | 168 | 20 | 16 | 4 | 0 | 0 | 80,0 % | 100 % (4 TP im Scope) |
+  | compass-app | Dart/Flutter | complete | 111 / 0 | 14 | 14 | 3 | 11 | 0 | 0 | 21,4 % | 100 % (3 TP im Scope) |
+
+  Je Regel (geprüft / TP / FP / unklar):
+
+  | Regel | ky | symfony | lua | compass |
+  |---|---|---|---|---|
+  | R-COMPLEXITY-COGNITIVE | 6 / 6 / 0 / 0 | 6 / 5 / 1 / 0 | 5 / 3 / 2 / 0 | – |
+  | R-DEEP-NESTING | 3 / 2 / 1 / 0 | 5 / 2 / 3 / 0 | 5 / 3 / 2 / 0 | – |
+  | R-FN-TOO-MANY-PARAMS | – | 5 / 3 / 2 / 0 | 6 / 6 / 0 / 0 | 10 / 0 / 10 / 0 |
+  | R-SIDEEFFECT-NONDETERMINISM | 4 / 4 / 0 / 0 | 7 / 7 / 0 / 0 | 4 / 4 / 0 / 0 | 1 / 0 / 1 / 0 |
+  | R-ERR-SWALLOWED | 2 / 1 / 1 / 0 | 5 / 1 / 3 / 1 | – | – |
+  | R-UNUSED-EXPORT | 66 / 12 / 54 / 0 (alle) | – | – | – |
+  | R-DEP-UNUSED | – | 24 / 0 / 24 / 0 (alle) | – | – |
+  | R-DEP-CYCLE | – | 4 / 4 / 0 / 0 (alle) | – | – |
+  | R-WIDE-PUBLIC-SURFACE | 3 / 1 / 1 / 1 | – | – | – |
+  | R-VALIDATION-MISSING-BACKEND | 2 / 0 / 2 / 0 | – | – | – |
+  | R-A11Y-FLUTTER-TEXTFIELD-LABEL | – | – | – | 2 / 2 / 0 / 0 |
+  | R-A11Y-FLUTTER-IMAGE-LABEL | – | – | – | 1 / 1 / 0 / 0 |
+
+  Lesart: Die Precision gilt für die *geprüften* Findings, und die
+  Stichprobe ist geschichtet — vollständig geprüfte Regeln (R-UNUSED-EXPORT,
+  R-DEP-UNUSED) wiegen in einer Projektsumme schwer, eine Summe ist also
+  keine Schätzung für alle Findings eines Projekts. Der Recall stützt sich
+  auf 10 Dateien (2–3 je Projekt, 17 TP, 0 gefundene Auslassungen) — zu
+  schmal, um einen Recall der Regeln zu behaupten; er sagt nur, dass dort
+  keine Auslassung gefunden wurde. Stichproben von 5 je Regel ergeben auch
+  keine statistisch belastbare Precision.
+- **Befunde der Prüfung (dokumentiert, nicht behoben):**
+  - **else-if als Verschachtelung gezählt (TypeScript, PHP, C):** Die
+    Metrik behandelt ein `else if` / `elseif` als `if`, das im else des
+    vorigen verschachtelt ist; jeder weitere Zweig einer if/else-if-Kette
+    erhöht so die Tiefe und das kognitive Inkrement (`TsExtraction`
+    `NESTING_KINDS`, `PhpExtraction` `NESTING_KINDS`, `CppExtraction`
+    `NESTING_TYPES`). Handzählungen nach Struktur (SonarSource: else-if +1
+    flach, ohne Verschachtelung) bringen 9 der 30 geprüften
+    R-DEEP-NESTING-/R-COMPLEXITY-COGNITIVE-Findings unter die Schwelle
+    (Beispiele: `StringInput.tokenize` gemeldet Tiefe 5 / kognitiv 22,
+    tatsächlich 3 / 13; lua `getnum_aux` kognitiv 21, tatsächlich 10). Auch
+    die gemeldeten Werte der übrigen TP sind zu hoch. Für Dart nicht geprüft.
+  - **R-UNUSED-EXPORT ohne Paket-Einstiegspunkte und Re-Exporte
+    (TypeScript):** 54 von 66 FP — 38 Exporte von `index.ts`, dem
+    Paket-Einstieg (`package.json` `exports`), und 16 Deklarationen, die über
+    `export … from` re-exportiert werden (auch verkettet, `types/retry.ts` →
+    `types/options.ts` → `index.ts`). 12 TP (exportiert, nur in der eigenen
+    Datei verwendet).
+  - **R-DEP-UNUSED (PHP):** 24 von 24 FP — 20 Importe nur in PHPDoc
+    verwendet (`@param`, `@return`, `@throws`, `@var`, `@see`; PHPStan/Psalm
+    und IDEs brauchen sie, PHP-CS-Fixers `no_unused_imports` zählt sie als
+    verwendet), 3 nur als Attribut (`#[AsCommand(…)]`,
+    `#[RequiredBundle(…)]`), 1 Namespace-Alias als Präfix
+    (`use …\ValueResolver as Resolver;` →
+    `new Resolver\BuiltinTypeValueResolver()`).
+  - **Einzelne FP-Muster:** generierter Code (`*.freezed.dart`, 10
+    Parameter-Findings, Kopf „GENERATED CODE") wird nicht ausgeschlossen;
+    R-VALIDATION-MISSING-BACKEND liest `request.body` in einem HTTP-*Client*
+    (ausgehender Body) als Server-Eingabe (2); R-FN-TOO-MANY-PARAMS meldet
+    die Überschreibung eines Decorators erneut, obwohl die Signatur der
+    Elternklasse sie vorgibt (2); R-ERR-SWALLOWED übersieht, dass die
+    catch-Variable nach einer Wiederholungsschleife geworfen wird
+    (`QuestionHelper.validateAttempts`), und zählt bewusste Fallbacks
+    (`return`, `$date = false` mit anschließendem Fehler) als verschluckt
+    (3); die Dart-Extraktion ordnet `DateTime.now()` in einer
+    `onTap`-Closure dem umgebenden `build` zu (die TypeScript-Extraktion
+    überspringt verschachtelte Funktionen) (1); R-WIDE-PUBLIC-SURFACE auf dem
+    Re-Export-Einstieg eines Pakets, den die Remediation der Regel selbst
+    empfiehlt (1).
+  - **In dieser Stichprobe verlässlich:** R-SIDEEFFECT-NONDETERMINISM
+    15 / 16 (der eine FP ist die Dart-Zuordnung), R-DEP-CYCLE 4 / 4 (jede
+    Kante geprüft), die Flutter-a11y-Regeln 3 / 3, Parameterzahlen immer
+    korrekt.
+  - **PHP-8.4-Syntax:** `php-parser` 3.7.0 parst standardmäßig PHP 8.3
+    (`version` 803); `new Foo()->bar()` ohne Klammern (PHP 8.4) scheitert in
+    `Command/Command.php:682` und
+    `DependencyInjection/AddConsoleCommandPass.php:107`, symfony/console läuft
+    deshalb `partial` (172 / 174 Dateien, beide als übersprungen gemeldet —
+    der Lauf sagt es, statt darüber hinwegzugehen). Mögliche Korrektur:
+    `parser.version: '8.4'` in `src/analysis/PhpAdapter.ts` (nicht
+    angewendet).
+- **Geändert:** neu `src/evaluation/ExternalValidation.ts`,
+  `scripts/external-validation.ts`, `validation/external/` (README, 4
+  Manifeste, 4 Label-Dateien), `test/ExternalValidation.test.ts` (9:
+  Precision nur über TP/FP, unclear getrennt, keine Precision für eine
+  ungeprüfte Regel, Recall nur im Scope, Scope je Regel, ungelabeltes
+  Finding im Scope und Auslassung außerhalb sind Fehler, veraltete Labels,
+  deterministische Stichprobe, Prüfung der Label-Datei, Korpus-Integrität:
+  voller SHA, Lizenz, Modellprüfung gekennzeichnet); `languageOf` aus
+  `Evaluator.ts` exportiert; `.stoa/` in den ESLint-Ignores
+  (Fremd-Checkouts).
+- **Geprüft:** `npm run typecheck`, `npm run typecheck:test`, `npm run lint`
+  0 Fehler; `npm test` 709 / 709; `npm run build` ok; keine Abhängigkeit
+  hinzugefügt.
 
 ## Baseline-/Diff-Modus (opt-in, `--baseline`)
 
@@ -3165,6 +3304,8 @@ nicht); ein Git-Diff-/PR-Modus (die Snapshot-Baseline existiert, siehe
 generischer ESLint-Fact-Adapter;
 Kontext-Facts (`flag.generatedCode`, `hasTests`) für reichhaltigere
 Suppression; LLM-Ausgabe-Evaluierung im Maßstab.
+
+**Offen aus der externen Validierung (2026-11-05, gemessen, nicht behoben — siehe „Externe Validierung"):** else-if als zusätzliche Verschachtelungsebene in den TypeScript-, PHP- und C-Metriken; Paket-Einstiegspunkte und `export … from`-Re-Exporte in R-UNUSED-EXPORT; Verwendungen in PHPDoc, Attributen und Namespace-Aliassen beim PHP-R-DEP-UNUSED; generierter Code (`*.freezed.dart`) nicht ausgeschlossen; Dart-Closures der umgebenden Funktion zugeordnet; PHP-8.4-Syntax (`php-parser` standardmäßig 8.3).
 
 **Offen aus dem Evaluator-Integritäts-Folgeauftrag (2026-11-04):** in der
 TS-Extraktion das Parsen

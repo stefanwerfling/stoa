@@ -147,6 +147,7 @@ npm run lint         # eslint (synaipse flat-config style)
 npm run typecheck    # tsc over src/ (production)
 npm run typecheck:test  # tsc over src/, test/ and scripts/ (tsconfig.test.json)
 npx tsx scripts/measure-phases.ts  # retained memory and time per pipeline phase (scripts/compare-targets.json)
+npx tsx scripts/external-validation.ts fetch && npx tsx scripts/external-validation.ts report  # external validation (validation/external/)
 
 # analyze a path (markdown by default)
 npm run analyze -- analyze ./src

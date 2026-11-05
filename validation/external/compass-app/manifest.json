@@ -1,0 +1,11 @@
+{
+    "name": "compass-app",
+    "language": "Dart/Flutter",
+    "repository": "https://github.com/flutter/samples",
+    "commit": "9df2cac15cc3d28a51aace018ad822387d30ac72",
+    "license": "BSD-3-Clause",
+    "licenseFile": "LICENSE",
+    "sparse": ["/LICENSE", "/compass_app/app/lib/", "/compass_app/app/pubspec.yaml"],
+    "root": "compass_app/app",
+    "analyze": {"solid": true}
+}

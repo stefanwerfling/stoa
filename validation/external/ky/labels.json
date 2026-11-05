@@ -1,0 +1,621 @@
+{
+  "identity": 3,
+  "reviewer": "claude-opus-5-5 (model review, not confirmed by a human)",
+  "reviewedAt": "2026-11-05",
+  "sampling": "Deterministic sample: up to 5 findings per rule (scripts/external-validation.ts sample, sha256 rank of the identity), plus all 66 R-UNUSED-EXPORT findings, plus every finding in the fnScope files.",
+  "labels": [
+    {
+      "file": "core/Ky.ts",
+      "rule": "R-COMPLEXITY-COGNITIVE",
+      "symbol": "Ky.#raceWithTotalTimeout",
+      "verdict": "TP",
+      "reason": "Hand count of the function's own structures gives 14 under stoa's counting (15 reported, one increment not located); SonarSource counting (else +1, nested arrow function adds nesting) gives about 17 >= 15. Borderline but met."
+    },
+    {
+      "file": "core/Ky.ts",
+      "rule": "R-COMPLEXITY-COGNITIVE",
+      "symbol": "Ky.#retryFromError",
+      "verdict": "TP",
+      "reason": "Many guards, a for loop over hooks with try/catch and nested ifs inside; well above 15 by hand count."
+    },
+    {
+      "file": "core/Ky.ts",
+      "rule": "R-COMPLEXITY-COGNITIVE",
+      "symbol": "applySearchParameters",
+      "verdict": "TP",
+      "reason": "Hand count (SonarSource style) about 20 >= 15. Note: stoa counts an else-if as one nesting level deeper than its if (TsExtraction NESTING_KINDS + forEachChild), so the reported value is too high."
+    },
+    {
+      "file": "utils/body.ts",
+      "rule": "R-COMPLEXITY-COGNITIVE",
+      "symbol": "getBodySize",
+      "verdict": "TP",
+      "reason": "Hand count: if chain of instanceof checks, a for loop with a nested if, two conditionals and logical operators: about 18 >= 15."
+    },
+    {
+      "file": "utils/merge.ts",
+      "rule": "R-COMPLEXITY-COGNITIVE",
+      "symbol": "appendSearchParameters",
+      "verdict": "TP",
+      "reason": "for over layers containing an if/else-if chain with loops and ifs inside; clearly >= 15. Note: stoa counts an else-if as one nesting level deeper than its if (TsExtraction NESTING_KINDS + forEachChild), so the reported value is too high."
+    },
+    {
+      "file": "utils/merge.ts",
+      "rule": "R-COMPLEXITY-COGNITIVE",
+      "symbol": "deepMergeInternal",
+      "verdict": "TP",
+      "reason": "Long function with loops over sources and a large per-key if/else-if chain; far above 15 (exact value 168 not verified). Note: stoa counts an else-if as one nesting level deeper than its if (TsExtraction NESTING_KINDS + forEachChild), so the reported value is too high."
+    },
+    {
+      "file": "core/Ky.ts",
+      "rule": "R-DEEP-NESTING",
+      "symbol": "applySearchParameters",
+      "verdict": "FP",
+      "reason": "Structural depth is 3 (else-if > for > if/else); reported 4 only because stoa counts the else-if one level deeper than its if. Threshold 4 not met -> metric error."
+    },
+    {
+      "file": "utils/merge.ts",
+      "rule": "R-DEEP-NESTING",
+      "symbol": "appendSearchParameters",
+      "verdict": "TP",
+      "reason": "Structural depth 5 (for > if/else-if branch > for > if/else > if), threshold 4 met; reported 7 is too high because each else-if adds a level."
+    },
+    {
+      "file": "utils/merge.ts",
+      "rule": "R-DEEP-NESTING",
+      "symbol": "deepMergeInternal",
+      "verdict": "TP",
+      "reason": "Loops over sources and keys with nested if branches; structural depth >= 4. Reported 7 likely inflated by else-if chains (value not verified)."
+    },
+    {
+      "file": "core/Ky.ts",
+      "rule": "R-ERR-SWALLOWED",
+      "symbol": "createTextDecoder>catch#0",
+      "verdict": "TP",
+      "reason": "Empty catch {} with a fallback after it and no comment saying why the error is dropped."
+    },
+    {
+      "file": "core/Ky.ts",
+      "rule": "R-ERR-SWALLOWED",
+      "symbol": "readResponseText>catch#0",
+      "verdict": "FP",
+      "reason": "catch returns undefined as a documented fallback (body unreadable -> no text); the error is handled by design."
+    },
+    {
+      "file": "core/Ky.ts",
+      "rule": "R-SIDEEFFECT-NONDETERMINISM",
+      "symbol": "Ky.#calculateDelay",
+      "verdict": "TP",
+      "reason": "Uses Math.random() for retry jitter."
+    },
+    {
+      "file": "core/Ky.ts",
+      "rule": "R-SIDEEFFECT-NONDETERMINISM",
+      "symbol": "getCurrentTime",
+      "verdict": "TP",
+      "reason": "Reads performance.now()/Date.now()."
+    },
+    {
+      "file": "core/retry-timing.ts",
+      "rule": "R-SIDEEFFECT-NONDETERMINISM",
+      "symbol": "calculateRetryTimingDelay",
+      "verdict": "TP",
+      "reason": "Date.now() to turn a reset timestamp into a delay."
+    },
+    {
+      "file": "core/retry-timing.ts",
+      "rule": "R-SIDEEFFECT-NONDETERMINISM",
+      "symbol": "parseDate",
+      "verdict": "TP",
+      "reason": "new Date() without arguments for the RFC 850 century window."
+    },
+    {
+      "file": "index.ts",
+      "rule": "R-UNUSED-EXPORT",
+      "symbol": "AfterResponseHook",
+      "verdict": "FP",
+      "reason": "index.ts is the package entry (package.json \"exports\" -> distribution/index.js); its exports are the public API of the library. The rule has no notion of package entry points."
+    },
+    {
+      "file": "index.ts",
+      "rule": "R-UNUSED-EXPORT",
+      "symbol": "AfterResponseState",
+      "verdict": "FP",
+      "reason": "index.ts is the package entry (package.json \"exports\" -> distribution/index.js); its exports are the public API of the library. The rule has no notion of package entry points."
+    },
+    {
+      "file": "index.ts",
+      "rule": "R-UNUSED-EXPORT",
+      "symbol": "BeforeErrorHook",
+      "verdict": "FP",
+      "reason": "index.ts is the package entry (package.json \"exports\" -> distribution/index.js); its exports are the public API of the library. The rule has no notion of package entry points."
+    },
+    {
+      "file": "index.ts",
+      "rule": "R-UNUSED-EXPORT",
+      "symbol": "BeforeErrorState",
+      "verdict": "FP",
+      "reason": "index.ts is the package entry (package.json \"exports\" -> distribution/index.js); its exports are the public API of the library. The rule has no notion of package entry points."
+    },
+    {
+      "file": "index.ts",
+      "rule": "R-UNUSED-EXPORT",
+      "symbol": "BeforeRequestHook",
+      "verdict": "FP",
+      "reason": "index.ts is the package entry (package.json \"exports\" -> distribution/index.js); its exports are the public API of the library. The rule has no notion of package entry points."
+    },
+    {
+      "file": "index.ts",
+      "rule": "R-UNUSED-EXPORT",
+      "symbol": "BeforeRequestState",
+      "verdict": "FP",
+      "reason": "index.ts is the package entry (package.json \"exports\" -> distribution/index.js); its exports are the public API of the library. The rule has no notion of package entry points."
+    },
+    {
+      "file": "index.ts",
+      "rule": "R-UNUSED-EXPORT",
+      "symbol": "BeforeRetryHook",
+      "verdict": "FP",
+      "reason": "index.ts is the package entry (package.json \"exports\" -> distribution/index.js); its exports are the public API of the library. The rule has no notion of package entry points."
+    },
+    {
+      "file": "index.ts",
+      "rule": "R-UNUSED-EXPORT",
+      "symbol": "BeforeRetryState",
+      "verdict": "FP",
+      "reason": "index.ts is the package entry (package.json \"exports\" -> distribution/index.js); its exports are the public API of the library. The rule has no notion of package entry points."
+    },
+    {
+      "file": "index.ts",
+      "rule": "R-UNUSED-EXPORT",
+      "symbol": "BeforeRetryUpdate",
+      "verdict": "FP",
+      "reason": "index.ts is the package entry (package.json \"exports\" -> distribution/index.js); its exports are the public API of the library. The rule has no notion of package entry points."
+    },
+    {
+      "file": "index.ts",
+      "rule": "R-UNUSED-EXPORT",
+      "symbol": "ForceRetryError",
+      "verdict": "FP",
+      "reason": "index.ts is the package entry (package.json \"exports\" -> distribution/index.js); its exports are the public API of the library. The rule has no notion of package entry points."
+    },
+    {
+      "file": "index.ts",
+      "rule": "R-UNUSED-EXPORT",
+      "symbol": "HTTPError",
+      "verdict": "FP",
+      "reason": "index.ts is the package entry (package.json \"exports\" -> distribution/index.js); its exports are the public API of the library. The rule has no notion of package entry points."
+    },
+    {
+      "file": "index.ts",
+      "rule": "R-UNUSED-EXPORT",
+      "symbol": "Hooks",
+      "verdict": "FP",
+      "reason": "index.ts is the package entry (package.json \"exports\" -> distribution/index.js); its exports are the public API of the library. The rule has no notion of package entry points."
+    },
+    {
+      "file": "index.ts",
+      "rule": "R-UNUSED-EXPORT",
+      "symbol": "InitHook",
+      "verdict": "FP",
+      "reason": "index.ts is the package entry (package.json \"exports\" -> distribution/index.js); its exports are the public API of the library. The rule has no notion of package entry points."
+    },
+    {
+      "file": "index.ts",
+      "rule": "R-UNUSED-EXPORT",
+      "symbol": "Input",
+      "verdict": "FP",
+      "reason": "index.ts is the package entry (package.json \"exports\" -> distribution/index.js); its exports are the public API of the library. The rule has no notion of package entry points."
+    },
+    {
+      "file": "index.ts",
+      "rule": "R-UNUSED-EXPORT",
+      "symbol": "KyError",
+      "verdict": "FP",
+      "reason": "index.ts is the package entry (package.json \"exports\" -> distribution/index.js); its exports are the public API of the library. The rule has no notion of package entry points."
+    },
+    {
+      "file": "index.ts",
+      "rule": "R-UNUSED-EXPORT",
+      "symbol": "KyInstance",
+      "verdict": "FP",
+      "reason": "index.ts is the package entry (package.json \"exports\" -> distribution/index.js); its exports are the public API of the library. The rule has no notion of package entry points."
+    },
+    {
+      "file": "index.ts",
+      "rule": "R-UNUSED-EXPORT",
+      "symbol": "NetworkError",
+      "verdict": "FP",
+      "reason": "index.ts is the package entry (package.json \"exports\" -> distribution/index.js); its exports are the public API of the library. The rule has no notion of package entry points."
+    },
+    {
+      "file": "index.ts",
+      "rule": "R-UNUSED-EXPORT",
+      "symbol": "NormalizedOptions",
+      "verdict": "FP",
+      "reason": "index.ts is the package entry (package.json \"exports\" -> distribution/index.js); its exports are the public API of the library. The rule has no notion of package entry points."
+    },
+    {
+      "file": "index.ts",
+      "rule": "R-UNUSED-EXPORT",
+      "symbol": "Options",
+      "verdict": "FP",
+      "reason": "index.ts is the package entry (package.json \"exports\" -> distribution/index.js); its exports are the public API of the library. The rule has no notion of package entry points."
+    },
+    {
+      "file": "index.ts",
+      "rule": "R-UNUSED-EXPORT",
+      "symbol": "Progress",
+      "verdict": "FP",
+      "reason": "index.ts is the package entry (package.json \"exports\" -> distribution/index.js); its exports are the public API of the library. The rule has no notion of package entry points."
+    },
+    {
+      "file": "index.ts",
+      "rule": "R-UNUSED-EXPORT",
+      "symbol": "ResponsePromise",
+      "verdict": "FP",
+      "reason": "index.ts is the package entry (package.json \"exports\" -> distribution/index.js); its exports are the public API of the library. The rule has no notion of package entry points."
+    },
+    {
+      "file": "index.ts",
+      "rule": "R-UNUSED-EXPORT",
+      "symbol": "ResponseSizeError",
+      "verdict": "FP",
+      "reason": "index.ts is the package entry (package.json \"exports\" -> distribution/index.js); its exports are the public API of the library. The rule has no notion of package entry points."
+    },
+    {
+      "file": "index.ts",
+      "rule": "R-UNUSED-EXPORT",
+      "symbol": "RetryOptions",
+      "verdict": "FP",
+      "reason": "index.ts is the package entry (package.json \"exports\" -> distribution/index.js); its exports are the public API of the library. The rule has no notion of package entry points."
+    },
+    {
+      "file": "index.ts",
+      "rule": "R-UNUSED-EXPORT",
+      "symbol": "SchemaValidationError",
+      "verdict": "FP",
+      "reason": "index.ts is the package entry (package.json \"exports\" -> distribution/index.js); its exports are the public API of the library. The rule has no notion of package entry points."
+    },
+    {
+      "file": "index.ts",
+      "rule": "R-UNUSED-EXPORT",
+      "symbol": "SearchParamsOption",
+      "verdict": "FP",
+      "reason": "index.ts is the package entry (package.json \"exports\" -> distribution/index.js); its exports are the public API of the library. The rule has no notion of package entry points."
+    },
+    {
+      "file": "index.ts",
+      "rule": "R-UNUSED-EXPORT",
+      "symbol": "ShouldRetryState",
+      "verdict": "FP",
+      "reason": "index.ts is the package entry (package.json \"exports\" -> distribution/index.js); its exports are the public API of the library. The rule has no notion of package entry points."
+    },
+    {
+      "file": "index.ts",
+      "rule": "R-UNUSED-EXPORT",
+      "symbol": "StandardSchemaV1",
+      "verdict": "FP",
+      "reason": "index.ts is the package entry (package.json \"exports\" -> distribution/index.js); its exports are the public API of the library. The rule has no notion of package entry points."
+    },
+    {
+      "file": "index.ts",
+      "rule": "R-UNUSED-EXPORT",
+      "symbol": "StandardSchemaV1InferOutput",
+      "verdict": "FP",
+      "reason": "index.ts is the package entry (package.json \"exports\" -> distribution/index.js); its exports are the public API of the library. The rule has no notion of package entry points."
+    },
+    {
+      "file": "index.ts",
+      "rule": "R-UNUSED-EXPORT",
+      "symbol": "StandardSchemaV1Issue",
+      "verdict": "FP",
+      "reason": "index.ts is the package entry (package.json \"exports\" -> distribution/index.js); its exports are the public API of the library. The rule has no notion of package entry points."
+    },
+    {
+      "file": "index.ts",
+      "rule": "R-UNUSED-EXPORT",
+      "symbol": "TimeoutError",
+      "verdict": "FP",
+      "reason": "index.ts is the package entry (package.json \"exports\" -> distribution/index.js); its exports are the public API of the library. The rule has no notion of package entry points."
+    },
+    {
+      "file": "index.ts",
+      "rule": "R-UNUSED-EXPORT",
+      "symbol": "default",
+      "verdict": "FP",
+      "reason": "index.ts is the package entry (package.json \"exports\" -> distribution/index.js); its exports are the public API of the library. The rule has no notion of package entry points."
+    },
+    {
+      "file": "index.ts",
+      "rule": "R-UNUSED-EXPORT",
+      "symbol": "isForceRetryError",
+      "verdict": "FP",
+      "reason": "index.ts is the package entry (package.json \"exports\" -> distribution/index.js); its exports are the public API of the library. The rule has no notion of package entry points."
+    },
+    {
+      "file": "index.ts",
+      "rule": "R-UNUSED-EXPORT",
+      "symbol": "isHTTPError",
+      "verdict": "FP",
+      "reason": "index.ts is the package entry (package.json \"exports\" -> distribution/index.js); its exports are the public API of the library. The rule has no notion of package entry points."
+    },
+    {
+      "file": "index.ts",
+      "rule": "R-UNUSED-EXPORT",
+      "symbol": "isKyError",
+      "verdict": "FP",
+      "reason": "index.ts is the package entry (package.json \"exports\" -> distribution/index.js); its exports are the public API of the library. The rule has no notion of package entry points."
+    },
+    {
+      "file": "index.ts",
+      "rule": "R-UNUSED-EXPORT",
+      "symbol": "isNetworkError",
+      "verdict": "FP",
+      "reason": "index.ts is the package entry (package.json \"exports\" -> distribution/index.js); its exports are the public API of the library. The rule has no notion of package entry points."
+    },
+    {
+      "file": "index.ts",
+      "rule": "R-UNUSED-EXPORT",
+      "symbol": "isResponseSizeError",
+      "verdict": "FP",
+      "reason": "index.ts is the package entry (package.json \"exports\" -> distribution/index.js); its exports are the public API of the library. The rule has no notion of package entry points."
+    },
+    {
+      "file": "index.ts",
+      "rule": "R-UNUSED-EXPORT",
+      "symbol": "isTimeoutError",
+      "verdict": "FP",
+      "reason": "index.ts is the package entry (package.json \"exports\" -> distribution/index.js); its exports are the public API of the library. The rule has no notion of package entry points."
+    },
+    {
+      "file": "index.ts",
+      "rule": "R-UNUSED-EXPORT",
+      "symbol": "replaceOption",
+      "verdict": "FP",
+      "reason": "index.ts is the package entry (package.json \"exports\" -> distribution/index.js); its exports are the public API of the library. The rule has no notion of package entry points."
+    },
+    {
+      "file": "types/common.ts",
+      "rule": "R-UNUSED-EXPORT",
+      "symbol": "Primitive",
+      "verdict": "TP",
+      "reason": "Exported but referenced only inside its own file; not re-exported by index.ts and not imported elsewhere in source/."
+    },
+    {
+      "file": "types/hooks.ts",
+      "rule": "R-UNUSED-EXPORT",
+      "symbol": "AfterResponseHook",
+      "verdict": "FP",
+      "reason": "Re-exported from index.ts (export {...} from / export type {...} from), so it is part of the public API; the rule does not follow re-exports."
+    },
+    {
+      "file": "types/hooks.ts",
+      "rule": "R-UNUSED-EXPORT",
+      "symbol": "AfterResponseState",
+      "verdict": "FP",
+      "reason": "Re-exported from index.ts (export {...} from / export type {...} from), so it is part of the public API; the rule does not follow re-exports."
+    },
+    {
+      "file": "types/hooks.ts",
+      "rule": "R-UNUSED-EXPORT",
+      "symbol": "BeforeErrorHook",
+      "verdict": "FP",
+      "reason": "Re-exported from index.ts (export {...} from / export type {...} from), so it is part of the public API; the rule does not follow re-exports."
+    },
+    {
+      "file": "types/hooks.ts",
+      "rule": "R-UNUSED-EXPORT",
+      "symbol": "BeforeErrorState",
+      "verdict": "FP",
+      "reason": "Re-exported from index.ts (export {...} from / export type {...} from), so it is part of the public API; the rule does not follow re-exports."
+    },
+    {
+      "file": "types/hooks.ts",
+      "rule": "R-UNUSED-EXPORT",
+      "symbol": "BeforeRequestHook",
+      "verdict": "FP",
+      "reason": "Re-exported from index.ts (export {...} from / export type {...} from), so it is part of the public API; the rule does not follow re-exports."
+    },
+    {
+      "file": "types/hooks.ts",
+      "rule": "R-UNUSED-EXPORT",
+      "symbol": "BeforeRequestState",
+      "verdict": "FP",
+      "reason": "Re-exported from index.ts (export {...} from / export type {...} from), so it is part of the public API; the rule does not follow re-exports."
+    },
+    {
+      "file": "types/hooks.ts",
+      "rule": "R-UNUSED-EXPORT",
+      "symbol": "BeforeRetryHook",
+      "verdict": "FP",
+      "reason": "Re-exported from index.ts (export {...} from / export type {...} from), so it is part of the public API; the rule does not follow re-exports."
+    },
+    {
+      "file": "types/hooks.ts",
+      "rule": "R-UNUSED-EXPORT",
+      "symbol": "BeforeRetryState",
+      "verdict": "FP",
+      "reason": "Re-exported from index.ts (export {...} from / export type {...} from), so it is part of the public API; the rule does not follow re-exports."
+    },
+    {
+      "file": "types/hooks.ts",
+      "rule": "R-UNUSED-EXPORT",
+      "symbol": "BeforeRetryUpdate",
+      "verdict": "FP",
+      "reason": "Re-exported from index.ts (export {...} from / export type {...} from), so it is part of the public API; the rule does not follow re-exports."
+    },
+    {
+      "file": "types/hooks.ts",
+      "rule": "R-UNUSED-EXPORT",
+      "symbol": "InitHook",
+      "verdict": "FP",
+      "reason": "Re-exported from index.ts (export {...} from / export type {...} from), so it is part of the public API; the rule does not follow re-exports."
+    },
+    {
+      "file": "types/options.ts",
+      "rule": "R-UNUSED-EXPORT",
+      "symbol": "KyOptions",
+      "verdict": "TP",
+      "reason": "Exported but referenced only inside its own file; not re-exported by index.ts and not imported elsewhere in source/."
+    },
+    {
+      "file": "types/options.ts",
+      "rule": "R-UNUSED-EXPORT",
+      "symbol": "Progress",
+      "verdict": "FP",
+      "reason": "Re-exported from index.ts (export {...} from / export type {...} from), so it is part of the public API; the rule does not follow re-exports."
+    },
+    {
+      "file": "types/options.ts",
+      "rule": "R-UNUSED-EXPORT",
+      "symbol": "RetryOptions",
+      "verdict": "FP",
+      "reason": "Re-export (types/options.ts:555) that index.ts re-exports again; public API."
+    },
+    {
+      "file": "types/options.ts",
+      "rule": "R-UNUSED-EXPORT",
+      "symbol": "ShouldRetryState",
+      "verdict": "FP",
+      "reason": "Re-export (types/options.ts:555) that index.ts re-exports again; public API."
+    },
+    {
+      "file": "types/retry.ts",
+      "rule": "R-UNUSED-EXPORT",
+      "symbol": "ShouldRetryState",
+      "verdict": "FP",
+      "reason": "Re-exported through types/options.ts:555 and index.ts; public API."
+    },
+    {
+      "file": "types/standard-schema.ts",
+      "rule": "R-UNUSED-EXPORT",
+      "symbol": "StandardSchemaV1FailureResult",
+      "verdict": "TP",
+      "reason": "Exported but referenced only inside its own file; not re-exported by index.ts and not imported elsewhere in source/."
+    },
+    {
+      "file": "types/standard-schema.ts",
+      "rule": "R-UNUSED-EXPORT",
+      "symbol": "StandardSchemaV1Options",
+      "verdict": "TP",
+      "reason": "Exported but referenced only inside its own file; not re-exported by index.ts and not imported elsewhere in source/."
+    },
+    {
+      "file": "types/standard-schema.ts",
+      "rule": "R-UNUSED-EXPORT",
+      "symbol": "StandardSchemaV1Result",
+      "verdict": "TP",
+      "reason": "Exported but referenced only inside its own file; not re-exported by index.ts and not imported elsewhere in source/."
+    },
+    {
+      "file": "types/standard-schema.ts",
+      "rule": "R-UNUSED-EXPORT",
+      "symbol": "StandardSchemaV1SuccessResult",
+      "verdict": "TP",
+      "reason": "Exported but referenced only inside its own file; not re-exported by index.ts and not imported elsewhere in source/."
+    },
+    {
+      "file": "types/standard-schema.ts",
+      "rule": "R-UNUSED-EXPORT",
+      "symbol": "StandardSchemaV1Types",
+      "verdict": "TP",
+      "reason": "Exported but referenced only inside its own file; not re-exported by index.ts and not imported elsewhere in source/."
+    },
+    {
+      "file": "utils/body.ts",
+      "rule": "R-UNUSED-EXPORT",
+      "symbol": "getBodySize",
+      "verdict": "TP",
+      "reason": "Exported but referenced only inside its own file; not re-exported by index.ts and not imported elsewhere in source/."
+    },
+    {
+      "file": "utils/delay.ts",
+      "rule": "R-UNUSED-EXPORT",
+      "symbol": "DelayOptions",
+      "verdict": "TP",
+      "reason": "Exported but referenced only inside its own file; not re-exported by index.ts and not imported elsewhere in source/."
+    },
+    {
+      "file": "utils/merge.ts",
+      "rule": "R-UNUSED-EXPORT",
+      "symbol": "cloneShallow",
+      "verdict": "TP",
+      "reason": "Exported but referenced only inside its own file; not re-exported by index.ts and not imported elsewhere in source/."
+    },
+    {
+      "file": "utils/merge.ts",
+      "rule": "R-UNUSED-EXPORT",
+      "symbol": "deepMerge",
+      "verdict": "TP",
+      "reason": "Exported but referenced only inside its own file; not re-exported by index.ts and not imported elsewhere in source/."
+    },
+    {
+      "file": "utils/merge.ts",
+      "rule": "R-UNUSED-EXPORT",
+      "symbol": "replaceOption",
+      "verdict": "FP",
+      "reason": "Re-exported from index.ts (export {...} from / export type {...} from), so it is part of the public API; the rule does not follow re-exports."
+    },
+    {
+      "file": "utils/timeout.ts",
+      "rule": "R-UNUSED-EXPORT",
+      "symbol": "TimeoutOptions",
+      "verdict": "TP",
+      "reason": "Exported but referenced only inside its own file; not re-exported by index.ts and not imported elsewhere in source/."
+    },
+    {
+      "file": "utils/type-guards.ts",
+      "rule": "R-UNUSED-EXPORT",
+      "symbol": "isKyError",
+      "verdict": "FP",
+      "reason": "Re-exported from index.ts (export {...} from / export type {...} from), so it is part of the public API; the rule does not follow re-exports."
+    },
+    {
+      "file": "core/Ky.ts",
+      "rule": "R-VALIDATION-MISSING-BACKEND",
+      "symbol": "Ky.#wrapRequestWithUploadProgress>handler#0",
+      "verdict": "FP",
+      "reason": "ky is an HTTP client: request.body here is the outgoing body the library itself sends, not client input received by a server handler."
+    },
+    {
+      "file": "utils/body.ts",
+      "rule": "R-VALIDATION-MISSING-BACKEND",
+      "symbol": "streamRequest>handler#0",
+      "verdict": "FP",
+      "reason": "ky is an HTTP client: request.body here is the outgoing body the library itself sends, not client input received by a server handler."
+    },
+    {
+      "file": "core/constants.ts",
+      "rule": "R-WIDE-PUBLIC-SURFACE",
+      "symbol": "",
+      "verdict": "TP",
+      "reason": "18 exports counted correctly; the module mixes feature detection, request methods, response types, the retry marker class and option-key registries — more than one purpose."
+    },
+    {
+      "file": "index.ts",
+      "rule": "R-WIDE-PUBLIC-SURFACE",
+      "symbol": "",
+      "verdict": "FP",
+      "reason": "40 exports counted correctly, but index.ts is the package's narrow re-export entry that the rule's own remediation recommends (it deliberately leaves out NonError)."
+    },
+    {
+      "file": "types/options.ts",
+      "rule": "R-WIDE-PUBLIC-SURFACE",
+      "symbol": "",
+      "verdict": "unclear",
+      "reason": "15 exports counted correctly (13 declarations + 2 re-exports); all are option types of one concern, so whether this is a too-wide surface is a judgment call."
+    }
+  ],
+  "fnScope": {
+    "files": [
+      "core/retry-timing.ts",
+      "utils/body.ts",
+      "utils/delay.ts"
+    ],
+    "rules": [
+      "*"
+    ]
+  },
+  "falseNegatives": []
+}

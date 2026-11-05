@@ -1,0 +1,10 @@
+{
+    "name": "lua",
+    "language": "C",
+    "repository": "https://github.com/lua/lua",
+    "ref": "v5.5.1",
+    "commit": "7579fc9d7ed90240487251dfb69168f8e64e9294",
+    "license": "MIT",
+    "licenseFile": "lua.h",
+    "analyze": {"solid": true}
+}
