@@ -10,7 +10,7 @@ import type {DartPackageMap} from './DartPackages.js';
  * which of the three umbrella libraries export it (`w` widgets.dart,
  * `m` material.dart, `c` cupertino.dart).
  *
- * Derived from the Flutter SDK 3.29.2 sources (export directives incl.
+ * Derived from the Flutter SDK 3.47.9 sources (export directives incl.
  * show/hide, followed transitively, plus class/mixin/enum declarations), not
  * from stoa's own parser — tree-sitter-dart 1.0.0 cannot parse most SDK files
  * (Dart 3 syntax). test/DartLibraryIndex.test.ts re-checks the entries against
@@ -22,7 +22,7 @@ import type {DartPackageMap} from './DartPackages.js';
  * (opaque) — never guessed. `Timer` and `StreamSubscription` (Phase C) from
  * `dart:async` are the Dart SDK entries; Flutter does not re-export dart:async.
  */
-export const FLUTTER_SDK_VERSION = '3.29.2';
+export const FLUTTER_SDK_VERSION = '3.47.9';
 
 const UMBRELLA: Readonly<Record<string, string>> = {
     'package:flutter/widgets.dart': 'w',
@@ -68,7 +68,7 @@ export const FLUTTER_CATALOG: Readonly<Record<string, readonly [string, string]>
     IconButton: ['src/material/icon_button.dart', 'm'],
     IconTheme: ['src/widgets/icon_theme.dart', 'wmc'],
     Image: ['src/widgets/image.dart', 'wmc'],
-    IndexedStack: ['src/widgets/basic.dart', 'wmc'],
+    IndexedStack: ['src/widgets/indexed_stack.dart', 'wmc'],
     InputDecoration: ['src/material/input_decorator.dart', 'm'],
     IntrinsicHeight: ['src/widgets/basic.dart', 'wmc'],
     IntrinsicWidth: ['src/widgets/basic.dart', 'wmc'],

@@ -230,8 +230,10 @@ genannten lokalen Projekten; keine ist eine allgemeine Genauigkeitsaussage.
   `package:my_app/…` eine Projektdatei; kein Pub-Cache, kein Netz);
   `src/analysis/dart/FlutterCatalog.ts` ist das statische Flutter-Wissen (72 Namen →
   deklarierende Bibliothek und welche von widgets/material/cupertino sie
-  exportieren, abgeleitet aus Flutter-SDK 3.29.2 und per Test gegen ein lokales SDK
-  geprüft) — ein Name außerhalb des Katalogs bleibt `unknown`, `TextField` aus
+  exportieren, abgeleitet aus Flutter-SDK 3.29.2, am 2026-11-05 auf 3.47.9
+  angehoben — nur `IndexedStack` ist umgezogen, nach
+  `src/widgets/indexed_stack.dart`, Funde unverändert — und per Test gegen ein
+  lokales SDK geprüft) — ein Name außerhalb des Katalogs bleibt `unknown`, `TextField` aus
   widgets.dart ist `absent`. Entscheidung: getrennt vom SymbolGraph (dessen
   ES-Modul-Modell passt nicht zu Dart-Bibliotheken, `show`/`hide`, `part`), und das
   Flutter-Wissen bleibt aus dem generischen Resolver heraus. Graph-Knoten tragen es
@@ -351,7 +353,7 @@ genannten lokalen Projekten; keine ist eine allgemeine Genauigkeitsaussage.
   `extends`/`with`/`on` (nicht `implements`), am stärksten abgeleitet zuerst —
   eigene Member verdecken, das letzte Mixin gewinnt, keine Konstruktoren oder
   statischen Member — zyklensicher; katalogisierte Framework-Member
-  (`FLUTTER_FRAMEWORK_MEMBERS`, SDK 3.29.2: `State`, `StatelessWidget`,
+  (`FLUTTER_FRAMEWORK_MEMBERS`, SDK 3.47.9: `State`, `StatelessWidget`,
   `StatefulWidget`, die Ticker-/Keep-Alive-Mixins, `CustomPainter`);
   `hierarchyComplete` nur, wenn jede Basis ein Projekt- oder katalogisierter
   Framework-Typ ist. Dart löst über den DartLibraryIndex auf (Präfixe, Barrels,

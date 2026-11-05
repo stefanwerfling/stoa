@@ -216,7 +216,9 @@ the named local projects; none is a general accuracy claim.
   `lib/` (so `package:my_app/…` is a project file; no pub cache, no network);
   `src/analysis/dart/FlutterCatalog.ts` is the static Flutter knowledge (72 names →
   declaring library and which of widgets/material/cupertino export them, derived
-  from Flutter SDK 3.29.2 and re-checked against a local SDK by a test) — a name
+  from Flutter SDK 3.29.2, raised to 3.47.9 on 2026-11-05 — only `IndexedStack`
+  moved, to `src/widgets/indexed_stack.dart`, findings unchanged — and
+  re-checked against a local SDK by a test) — a name
   outside the catalog stays `unknown`, `TextField` from widgets.dart is `absent`.
   Decision: separate from the SymbolGraph (its ES-module model does not fit Dart
   libraries, `show`/`hide`, `part`), and Flutter knowledge kept out of the generic
@@ -327,7 +329,7 @@ the named local projects; none is a general accuracy claim.
   opaque candidates listed); inherited members through `extends`/`with`/`on`
   (not `implements`), most-derived first — own members hide, the last mixin
   wins, no constructors or statics — cycle-safe; catalogued framework members
-  (`FLUTTER_FRAMEWORK_MEMBERS`, SDK 3.29.2: `State`, `StatelessWidget`,
+  (`FLUTTER_FRAMEWORK_MEMBERS`, SDK 3.47.9: `State`, `StatelessWidget`,
   `StatefulWidget`, the ticker/keep-alive mixins, `CustomPainter`);
   `hierarchyComplete` only when every base is a project or catalogued framework
   type. Dart resolves through the DartLibraryIndex (prefixes, barrels, parts);
