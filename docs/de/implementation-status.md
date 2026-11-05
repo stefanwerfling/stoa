@@ -1794,6 +1794,56 @@ Symbolteil in allen vier Sprachen stabil und eindeutig und versioniert ihn.
   `migrateBaseline`, CLI Ablehnung/Migration/Aufruffehler); die bestehenden
   Identitätstests sind auf die neuen Namen umgestellt.
 
+## Finding-Identität in Evaluator, Baseline, Snapshot und Deduplizierung (Finding-Identity-Spezifikation, Phase 2, 2026-11-04)
+
+Eine Identitätsdefinition — `findingKey`/`keyString` in
+`src/FindingIdentity.ts` — dient jetzt jedem Verbraucher; was vorher abwich:
+
+- **Deduplizierung** (`RuleEngine`): der deklarative Schlüssel enthält jetzt
+  das Symbol (`file:line:col:symbol:feature`), zwei Subjekte an einer Position
+  werden also nie zusammengeführt; Findings von Projektregeln werden gar nicht
+  mehr zusammengeführt (Schlüssel war `Finding.id`, eine Position — zwei
+  verschiedene Identitäten an einer Position wären still verschmolzen, und
+  eine wiederholte Identität wäre dem Evaluator verborgen geblieben). Vor der
+  Änderung gemessen über die Repository-Ziele, die 10 eigenen Projekte und die
+  Fixtures JSX, HTML, Angular, catch-intent und eval-multi: die
+  Deduplizierung hat nichts zusammengeführt — keine Ausgabe ändert sich. Das dokumentierte Konzept (ein Problem, das mehrere
+  deklarative Regeln sehen = ein Finding, stabil gewinnt) bleibt.
+- **Evaluator:** ein Korpus-Manifest hält sein Identitätsschema fest
+  (`"identity": 2`, fehlt = 1, siehe `src/evaluation/Corpus.ts`); ein anderes
+  Schema wird mit Begründung abgelehnt (Exit 1, nichts bewertet). Alle
+  Manifeste im Repository tragen `"identity": 2` (nur Metadaten, kein Eintrag
+  geändert).
+- **Baseline:** Kollisionen findet und formuliert das gemeinsame
+  `duplicateKeys`/`duplicateIdentityText` (auch in `saveBaseline` und der
+  Migration). Ein Vergleich, dessen aktueller Lauf eine Identität wiederholt,
+  listet sie in `baseline.duplicateIdentities`, warnt auf stderr und ergänzt
+  die Markdown-Baseline-Zeile um „N Identitätskollision(en), Status
+  unzuverlässig“; die Kopien werden nicht zusammengeführt. `--update-baseline`
+  lehnt einen solchen Lauf wie bisher ab.
+- **Snapshot und Snapshot-Diff:** `scripts/compare-findings.ts` hat keinen
+  eigenen Schlüssel mehr (Regel, Datei, Symbol, Aussage); es paart über die
+  Identität mittels `src/FindingDiff.ts` (`diffFindings`) und unterscheidet eine Verschiebung (`moved`: nur
+  `id`/`location.range` weichen ab) von einer Änderung (`changed`, mit den
+  abweichenden Feldern). Ein Snapshot hält sein Schema in `snapshot.json`
+  fest; zwei Schemata werden über `Finding.id` gepaart, mit einem zweiten
+  Durchgang über die Identität für Findings, die sich verschoben und ihren
+  Namen behalten haben.
+- **Grenzen:** eine Position in einem Evidenzwert zählt als Inhalt (ein
+  verschobenes Finding mit solchem Wert liest sich als `changed`, nie als
+  unverändert); welche Regel eine deklarative Zusammenführung behält, ist die
+  erste in Regelsatz-Reihenfolge (keine zwei mitgelieferten Regeln teilen ein
+  Merkmal, heute tritt das also nicht auf).
+- **Tests:** `test/FindingIdentityIntegration.test.ts` (Deduplizierung,
+  `duplicateKeys`, `FindingDiff` mit beiden Paarungen und über die echten
+  Prozesse: Manifest-Schemata und Identitätskollision in `stoa eval`,
+  Verschiebung/neue Stelle/Umbenennung sowie wiederholte Identität auf
+  stderr/JSON/Markdown mit ablehnendem `--update-baseline` in `stoa analyze
+  --baseline`, `same`/`moved`/`CHANGED`/`INTEGRITY` und Diff über Schemata
+  im Snapshot-Skript); E1a in `test/RuleGovernance.test.ts` prüft jetzt, dass
+  Projekt-Findings getrennt bleiben und stabil bei einer deklarativen
+  Zusammenführung gewinnt.
+
 ## Baseline-/Diff-Modus (opt-in, `--baseline`)
 
 Verdrahtet `Finding.baselineStatus` (`'new' | 'known' | 'fixed'`), das seit
@@ -2321,7 +2371,7 @@ zu liefern.
 
 ## Qualitätssicherung
 
-- **node:test-Suite** (`npm test`, `test/*.test.ts`): 635 Tests, 0 fehlgeschlagen,
+- **node:test-Suite** (`npm test`, `test/*.test.ts`): 648 Tests, 0 fehlgeschlagen,
   Lauf vom 2026-11-04 (Regeln pos./neg., Extraktion, Schema-Validierung, i18n,
   Determinismus, SARIF, Eval, Semantik-Groundedness, Datenschutz,
   Finding-Trennung, semantische Modelle, Identitäten, Metriken).
@@ -2428,10 +2478,14 @@ zu liefern.
 - **Findings-Vergleich** (`scripts/compare-findings.ts`): die Prüfung hinter
   jedem „Berichte byte-identisch“ dieses Dokuments. `snapshot <dir>` schreibt
   die Findings jedes Ziels als JSON-Zeilen (Berichtsreihenfolge, Pfade relativ
-  zum Ziel), `diff <vorher> <nachher>` vergleicht zwei Verzeichnisse je Datei
-  und, wo eine abweicht, je Finding-Schlüssel (Regel, Datei, Symbol, Aussage)
-  — das trennt echte Änderungen von verschobenen Positionen; Exit 1 bei jeder
-  Abweichung. `--jobs N` prüft die parallele Extraktion gegen den
+  zum Ziel) und `snapshot.json` mit dem Identitätsschema, `diff <vorher>
+  <nachher>` vergleicht zwei Verzeichnisse je Datei und paart, wo eine
+  abweicht, die Findings über ihre Identität (`src/FindingDiff.ts`, der
+  Schlüssel von Evaluator und Baseline) und meldet je Ziel `same`, `order`,
+  `moved` (nur Positionen), `CHANGED` (`+` hinzu, `-` entfallen, `~`
+  geänderter Inhalt mit den Feldern) oder `INTEGRITY` (eine Identität doppelt);
+  Snapshots zweier Schemata werden über die Position gepaart, eine geänderte
+  Identität steht als `=` da. Exit 1 bei jeder Abweichung. `--jobs N` prüft die parallele Extraktion gegen den
   sequentiellen Lauf. Die Standardziele (`scripts/compare-targets.json`)
   umfassen nur dieses Repository; eigene Projekte kommen in
   `.stoa/compare-targets.json` (von git ignoriert wie ganz `.stoa/`, samt

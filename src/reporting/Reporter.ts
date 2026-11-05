@@ -1,5 +1,5 @@
 import {DEFAULT_LANG, dimensionLabel, labelsFor, type ReportLabels} from '../i18n/Localized.js';
-import type {AnalysisReport, ArchitectureSummary} from '../Types.js';
+import type {AnalysisReport, ArchitectureSummary, BaselineSummary} from '../Types.js';
 
 export interface ReportOptions {
     lang?: string;
@@ -11,6 +11,13 @@ export const toJson = (report: AnalysisReport): string => {
 };
 
 /** The architecture summary (E5b): one line with the layer sizes, one per configuration warning; nothing without a config. */
+/** The baseline summary line; an identity collision is named, since it makes the new/known status unreliable. */
+const baselineLine = (summary: BaselineSummary, t: ReportLabels): string => {
+    const collisions = summary.duplicateIdentities?.length ?? 0;
+    const counts = `${summary.newCount} ${t.baselineNew}, ${summary.knownCount} ${t.baselineKnown}, ${summary.fixedCount} ${t.baselineFixed}`;
+    return `- ${t.baseline}: ${counts}${collisions > 0 ? `, ${collisions} ${t.baselineCollisions}` : ''}`;
+};
+
 const architectureLines = (summary: ArchitectureSummary | undefined, t: ReportLabels): string[] => {
     if (summary === undefined) {
         return [];
@@ -47,7 +54,7 @@ export const toMarkdown = (report: AnalysisReport, options: ReportOptions = {}):
         lines.push(`- ${t.status}: ${report.error}`);
     }
     if (report.baseline !== undefined) {
-        lines.push(`- ${t.baseline}: ${report.baseline.newCount} ${t.baselineNew}, ${report.baseline.knownCount} ${t.baselineKnown}, ${report.baseline.fixedCount} ${t.baselineFixed}`);
+        lines.push(baselineLine(report.baseline, t));
     }
     if (report.filter !== undefined) {
         const criteria = [

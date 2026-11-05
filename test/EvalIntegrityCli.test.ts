@@ -46,7 +46,7 @@ const producedKeys = (env: NodeJS.ProcessEnv = {}): Key[] => {
 
 const manifest = (name: string, findings: Key[]): string => {
     const path = join(work, name);
-    writeFileSync(path, JSON.stringify({findings}, null, 2));
+    writeFileSync(path, JSON.stringify({identity: 2, findings}, null, 2));
     return path;
 };
 

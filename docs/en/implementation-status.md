@@ -1648,6 +1648,52 @@ unambiguous across all four languages and versions it.
   sequential, baseline scheme guard, `migrateBaseline`, CLI refuse/migrate/
   usage error); the existing identity tests are updated to the new names.
 
+## Finding identity in evaluator, baseline, snapshot and de-duplication (Finding Identity spec, phase 2, 2026-11-04)
+
+One identity definition — `findingKey`/`keyString` in
+`src/FindingIdentity.ts` — now serves every consumer; what was different
+before:
+
+- **De-duplication** (`RuleEngine`): the declarative key gains the symbol
+  (`file:line:col:symbol:feature`), so two subjects at one position are never
+  merged; project-rule findings are no longer merged at all (they were keyed
+  by `Finding.id`, a position — two different identities at one position
+  would have collapsed silently, and a repeated identity would have been
+  hidden from the evaluator). Measured before the change over the repository
+  targets, the 10 own projects and the JSX, HTML, Angular, catch-intent and
+  eval-multi fixtures: the de-duplication
+  merged nothing — no output changes. The documented concept (one problem
+  seen by several declarative rules = one finding, stable wins) stays.
+- **Evaluator:** a corpus manifest records its identity scheme
+  (`"identity": 2`, absent = 1, see `src/evaluation/Corpus.ts`); another
+  scheme is refused with the reason (exit 1, nothing evaluated). All manifests
+  in the repository carry `"identity": 2` (metadata only, no entry changed).
+- **Baseline:** collisions are found and worded by the shared
+  `duplicateKeys`/`duplicateIdentityText` (also in `saveBaseline` and the
+  migration). A comparison whose current run repeats an identity lists it in
+  `baseline.duplicateIdentities`, warns on stderr and appends "N identity
+  collision(s), status unreliable" to the Markdown baseline line; the copies
+  are not merged. `--update-baseline` refuses such a run as before.
+- **Snapshot and snapshot diff:** `scripts/compare-findings.ts` no longer has
+  its own key (rule, file, symbol, statement); it pairs by identity through
+  `src/FindingDiff.ts` (`diffFindings`) and
+  tells a shift (`moved`: only `id`/`location.range` differ) from a change
+  (`changed`, with the differing fields). A snapshot records its scheme in
+  `snapshot.json`; two schemes are paired by `Finding.id`, with a second
+  pass by identity for findings that moved and kept their name.
+- **Limits:** a position inside an evidence value counts as content (a
+  shifted finding with such a value reads `changed`, never unchanged); the
+  winner of a declarative merge is the first rule in rule-set order (no two
+  shipped rules share a feature, so it does not occur today).
+- **Tests:** `test/FindingIdentityIntegration.test.ts` (de-duplication,
+  `duplicateKeys`, `FindingDiff` both pairings, and through the real
+  processes: `stoa eval` manifest schemes and identity collision, `stoa
+  analyze --baseline` shift/new site/rename and a repeated identity on
+  stderr/JSON/Markdown with `--update-baseline` refusing, the snapshot
+  script's `same`/`moved`/`CHANGED`/`INTEGRITY` and cross-scheme diff);
+  `test/RuleGovernance.test.ts` E1a now checks that project findings stay
+  apart and that stable wins in a declarative merge.
+
 ## Baseline / diff mode (opt-in, `--baseline`)
 
 Wires up `Finding.baselineStatus` (`'new' | 'known' | 'fixed'`), present in
@@ -2127,7 +2173,7 @@ fails fast (exit 1, concrete errors) instead of silently yielding 0 findings.
 
 ## Quality assurance
 
-- **node:test suite** (`npm test`, `test/*.test.ts`): 635 tests, 0 failed,
+- **node:test suite** (`npm test`, `test/*.test.ts`): 648 tests, 0 failed,
   as of the 2026-11-04 run (rules pos./neg., extraction, schema validation,
   i18n, determinism, SARIF, evaluation, semantic groundedness, privacy,
   finding-model separation, semantic models, identities, metrics).
@@ -2228,9 +2274,14 @@ fails fast (exit 1, concrete errors) instead of silently yielding 0 findings.
 - **Findings comparison** (`scripts/compare-findings.ts`): the check behind
   every "reports byte-identical" in this document. `snapshot <dir>` writes
   each target's findings as JSON lines (report order, paths relative to the
-  target); `diff <before> <after>` compares two directories file by file and,
-  where one differs, by finding key (rule, file, symbol, statement) — which
-  separates real changes from shifted positions; exit 1 on any difference.
+  target) plus `snapshot.json` with the identity scheme; `diff <before>
+  <after>` compares two directories file by file and, where one differs,
+  pairs the findings by identity (`src/FindingDiff.ts`, the evaluator's and
+  the baseline's key) and reports per target `same`, `order`, `moved`
+  (positions only), `CHANGED` (`+` added, `-` removed, `~` changed content
+  with the fields) or `INTEGRITY` (an identity held twice); snapshots of two
+  schemes are paired by position and a changed identity is listed as `=`.
+  Exit 1 on any difference.
   `--jobs N` checks parallel extraction against the sequential run. The
   default targets (`scripts/compare-targets.json`) cover this repository
   only; your own projects go in `.stoa/compare-targets.json` (ignored by git

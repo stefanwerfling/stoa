@@ -64,14 +64,32 @@ test('E1b: a project rule\'s confidence is capped by its certainty basis, like d
     );
 });
 
-test('E1a: an experimental project rule marks every finding; a stable one does not; stable wins when merged', () => {
+test('E1a: an experimental project rule marks every finding; a stable one does not; project findings are never merged', () => {
     const experimental = engineWith([ruleOf([findingOf('a', 'syntactic', 0.8)], 'experimental')]).evaluate([]);
     assert.equal(experimental[0]?.ruleMaturity, 'experimental');
     const stable = engineWith([ruleOf([findingOf('a', 'syntactic', 0.8)])]).evaluate([]);
     assert.equal(stable[0]?.ruleMaturity, undefined);
-    const merged = engineWith([ruleOf([findingOf('a', 'syntactic', 0.8)], 'experimental'), ruleOf([findingOf('a', 'syntactic', 0.8)])]).evaluate([]);
-    assert.equal(merged.length, 1);
-    assert.equal(merged[0]?.ruleMaturity, undefined);
+    // Finding identity spec, phase 2: two project findings with one id stay
+    // two, each with its own maturity — a repeated identity reaches the
+    // evaluator and the baseline as a rule defect instead of vanishing.
+    const both = engineWith([ruleOf([findingOf('a', 'syntactic', 0.8)], 'experimental'), ruleOf([findingOf('a', 'syntactic', 0.8)])]).evaluate([]);
+    assert.deepEqual(both.map((finding) => finding.ruleMaturity ?? 'stable').sort(), ['experimental', 'stable']);
+});
+
+test('E1a: stable wins when several declarative rules report one problem (same location, symbol and feature)', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'stoa-twin-'));
+    try {
+        cpSync(ruleSetDir, dir, {recursive: true});
+        const rule = JSON.parse(readFileSync(join(dir, 'R-ERR-SWALLOWED.json'), 'utf8')) as Record<string, unknown>;
+        writeFileSync(join(dir, 'R-ERR-SWALLOWED-TWIN.json'), JSON.stringify({...rule, id: 'R-ERR-SWALLOWED-TWIN', maturity: 'experimental'}));
+        const findings = analyze({rootPath: sample, knowledgeDir, ruleSetDir: dir, config: DEFAULT_CONFIG}).report.findings;
+        // One finding (the first rule in rule-set order keeps its identity), stable.
+        assert.equal(findings.length, 1);
+        assert.ok(findings[0]?.rule.id.startsWith('R-ERR-SWALLOWED'));
+        assert.equal(findings[0]?.ruleMaturity, undefined);
+    } finally {
+        rmSync(dir, {recursive: true, force: true});
+    }
 });
 
 test('E1a: a declarative rule with "maturity": "experimental" marks its findings; the schema accepts only stable/experimental', () => {

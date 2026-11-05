@@ -1,4 +1,5 @@
 {
+  "identity": 2,
   "findings": [
     { "file": "widget.component.html", "rule": "R-A11Y-IMG-ALT", "symbol": "img#0" },
     { "file": "widget.component.html", "rule": "R-A11Y-ARIA-INVALID-ROLE", "symbol": "role#0" },

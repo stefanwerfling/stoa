@@ -63,14 +63,25 @@ Jede Regel hat einen Testkatalog (siehe [rule-model.md §7](./rule-model.md#7-te
   einer Datei, Zeilen verschieben sich bei Änderungen). Precision/Recall werden
   über die Menge eindeutiger Schlüssel berechnet; doppelte erzeugte Findings
   werden berichtet (`duplicates`), nicht still verworfen — und lassen die
-  Evaluierung scheitern: Die Engine führt ein an derselben Stelle doppelt
-  gemeldetes Finding bereits zusammen, zwei verbleibende Findings mit einer
-  Identität sind also zwei verschiedene, die die Identität nicht unterscheidet
-  (ein Regelfehler, der auch eine Baseline unlesbar machen würde). Doppelte
-  **erwartete** Einträge im
+  Evaluierung scheitern: Die Engine führt nur ein von mehreren deklarativen
+  Regeln gemeldetes Problem zusammen (gleiche Stelle, gleiches Symbol, gleiches
+  Merkmal) und Findings von Projektregeln nie, zwei verbleibende Findings mit
+  einer Identität sind also zwei verschiedene, die die Identität nicht
+  unterscheidet (ein Regelfehler, der auch eine Baseline unlesbar machen
+  würde). Doppelte **erwartete** Einträge im
   Manifest sind ein Korpus-Integritätsfehler (werden berichtet und lassen die
   Evaluierung scheitern); ein fehlerhaftes/unlesbares Manifest ist ein expliziter
   Evaluierungsfehler, kein Bestehen.
+- **Identitätsschema des Manifests.** Ein Manifest nennt das
+  Finding-Identitätsschema seiner Symbole (`{"identity": 2, "findings": […]}`,
+  siehe [finding-model.md](./finding-model.md)); ohne das Feld ist es Schema 1,
+  wie eine Baseline. Ein Manifest eines anderen Schemas als das des laufenden
+  stoa wird abgelehnt (Exit 1, nichts bewertet) — seine Symbole erschienen
+  sonst als False Positives und Negatives und läsen sich wie eine
+  Regelregression. Es wird nicht automatisch umgewandelt (ein erwartetes
+  Finding, das die Engine verfehlt, hat nichts, womit es gepaart werden
+  könnte); die erwarteten Findings werden unter dem aktuellen Schema neu
+  bestätigt.
 - **Kennzahl-Definition.** Über eindeutige Schlüssel: TP = erzeugt ∩ erwartet,
   FP = erzeugt \ erwartet, FN = erwartet \ erzeugt;
   `precision = TP / (TP + FP)`, `recall = TP / (TP + FN)`. Undefinierte Fälle

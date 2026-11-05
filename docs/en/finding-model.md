@@ -137,8 +137,13 @@ flowchart LR
     FIND --> SCORE[counts ONCE per dimension]
 ```
 
-- **Dedup key:** `(file, normalizedRange, problemKind)`. Several rules on
-  the same key ⇒ one finding with a **list** of principle interpretations.
+- **Dedup key:** `(file, normalizedRange, symbol, problemKind)`. Several
+  declarative rules on the same key ⇒ one finding with a **list** of principle
+  interpretations (the first rule in rule-set order keeps its identity; stable
+  wins over experimental). Two subjects at one position with different
+  symbols are two findings. Project-rule findings are never merged: two of
+  them with one identity are a rule defect, reported by the evaluator and the
+  baseline, not hidden.
 - **Scoring counts once** per dimension – no multiple weighting just because a
   problem is visible from several perspectives (assignment §8).
 - If a problem affects several dimensions, it takes effect **once** in each (deliberately,
@@ -234,7 +239,10 @@ code under the baseline's scheme and the current one, pairs each finding with
 itself by position (`Finding.id`, equal in both runs) and rewrites the
 baseline in place; entries no current finding reproduces are dropped and
 listed. It refuses a partial analysis and an identity collision. There is no
-silent migration.
+silent migration. Corpus manifests (`expected.json`) and findings snapshots
+(`scripts/compare-findings.ts`) record the scheme the same way (absent = 1): a
+manifest of another scheme is refused by `stoa eval`; two snapshots of
+different schemes are compared by position, each changed identity listed.
 
 ## 7. Limits
 

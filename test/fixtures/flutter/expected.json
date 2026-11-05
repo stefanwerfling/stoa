@@ -1,4 +1,5 @@
 {
+  "identity": 2,
   "findings": [
     { "file": "widget.dart", "rule": "R-A11Y-FLUTTER-IMAGE-LABEL", "symbol": "build>image#0" },
     { "file": "widget.dart", "rule": "R-A11Y-FLUTTER-IMAGE-LABEL", "symbol": "build>image#1" },

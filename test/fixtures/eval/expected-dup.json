@@ -1,5 +1,6 @@
 {
   "description": "The same expected identity listed twice — a corpus-integrity error.",
+  "identity": 2,
   "findings": [
     { "file": "Swallow.ts", "rule": "R-ERR-SWALLOWED", "symbol": "risky>catch#0" },
     { "file": "Swallow.ts", "rule": "R-ERR-SWALLOWED", "symbol": "risky>catch#0" }

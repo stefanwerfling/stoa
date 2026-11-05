@@ -60,6 +60,7 @@ export class RuleEngine {
     ): Finding[] {
         const units = groupUnits(facts);
         const keyed: KeyedFinding[] = [];
+        const projectFindings: Finding[] = [];
 
         for (const rule of this.ruleSet.all()) {
             for (const unit of units) {
@@ -82,14 +83,19 @@ export class RuleEngine {
                 knowledgeBase: this.knowledgeBase,
                 lang: this.lang
             });
+            // Not merged: a project rule reports each target once by
+            // construction, and two of its findings with one id (a position)
+            // may still be different identities — merging would drop one
+            // silently. A repeated identity reaches the evaluator and the
+            // baseline as what it is, a rule defect.
             for (const finding of findings) {
-                keyed.push({dedupKey: finding.id, finding: governProjectFinding(finding, projectRule)});
+                projectFindings.push(governProjectFinding(finding, projectRule));
             }
         }
 
-        const deduped = dedupe(keyed);
-        deduped.sort(compareFindings);
-        return deduped;
+        const all = [...dedupe(keyed), ...projectFindings];
+        all.sort(compareFindings);
+        return all;
     }
 
     public principleCount(): number {
@@ -157,7 +163,10 @@ export class RuleEngine {
             finding.ruleMaturity = 'experimental';
         }
 
-        const dedupKey = `${subject.file}:${subject.range.startLine}:${subject.range.startCol}:${rule.feature}`;
+        // One problem (location, symbol, feature) seen by several rules is one
+        // finding (finding-model §4). The symbol is part of it: two subjects
+        // at one position are different findings, never merged.
+        const dedupKey = `${subject.file}:${subject.range.startLine}:${subject.range.startCol}:${subject.symbol ?? ''}:${rule.feature}`;
         return {dedupKey, finding};
     }
 
@@ -246,8 +255,8 @@ const governProjectFinding = (finding: Finding, rule: ProjectRule): Finding => {
 };
 
 /**
- * Merges findings that describe the same technical problem (same subject and
- * feature) so it is counted once, unioning their principle interpretations and
+ * Merges declarative findings that describe the same technical problem (same
+ * location, symbol and feature, reported by several rules) so it is counted once, unioning their principle interpretations and
  * dimensions and keeping the highest severity and confidence.
  */
 const dedupe = (keyed: KeyedFinding[]): Finding[] => {

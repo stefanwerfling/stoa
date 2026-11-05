@@ -1,5 +1,6 @@
 {
   "description": "R-ERR-SWALLOWED regression corpus (SwipeMeister false positives): a catch that documents the ignore with a comment, or reads its error binding (assignment, return, argument), is not swallowed. Only the undocumented catches that never read the error remain.",
+  "identity": 2,
   "findings": [
     { "file": "CatchIntent.ts", "rule": "R-ERR-SWALLOWED", "symbol": "swallowed>catch#0" },
     { "file": "CatchIntent.ts", "rule": "R-ERR-SWALLOWED", "symbol": "overwritten>catch#0" },

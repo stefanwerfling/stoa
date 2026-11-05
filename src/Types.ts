@@ -317,6 +317,12 @@ export interface BaselineSummary {
      * otherwise.
      */
     incomplete?: boolean;
+    /**
+     * Present only when the current run produced an identity more than once
+     * (a rule defect, see FindingIdentity.ts `duplicateKeys`): its copies
+     * cannot be told apart, so their `new`/`known` status is unreliable.
+     */
+    duplicateIdentities?: FindingKey[];
 }
 
 /**

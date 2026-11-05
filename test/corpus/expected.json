@@ -1,5 +1,6 @@
 {
   "description": "Ground truth for the golden corpus. Each entry is a finding that SHOULD be produced; any produced finding not listed here counts as a false positive.",
+  "identity": 2,
   "findings": [
     { "file": "ErrorHandling.ts", "rule": "R-ERR-SWALLOWED", "symbol": "emptyCatch>catch#0" },
     { "file": "ErrorHandling.ts", "rule": "R-ERR-SWALLOWED", "symbol": "swallowCatch>catch#0" },

@@ -137,8 +137,13 @@ flowchart LR
     FIND --> SCORE[zählt EINMAL pro Dimension]
 ```
 
-- **Dedup-Schlüssel:** `(file, normalizedRange, problemKind)`. Mehrere Regeln auf
-  denselben Schlüssel ⇒ ein Finding mit **Liste** von Prinzip-Deutungen.
+- **Dedup-Schlüssel:** `(file, normalizedRange, symbol, problemKind)`. Mehrere
+  deklarative Regeln auf denselben Schlüssel ⇒ ein Finding mit **Liste** von
+  Prinzip-Deutungen (die erste Regel in Regelsatz-Reihenfolge behält ihre
+  Identität; stabil gewinnt gegen experimentell). Zwei Subjekte an einer
+  Position mit verschiedenen Symbolen sind zwei Findings. Findings von
+  Projektregeln werden nie zusammengeführt: zwei davon mit einer Identität sind
+  ein Regelfehler, den Evaluator und Baseline berichten, nicht verbergen.
 - **Scoring zählt einmal** pro Dimension – kein Mehrfachgewicht nur, weil ein
   Problem unter mehreren Perspektiven sichtbar ist (Auftrag §8).
 - Betrifft ein Problem mehrere Dimensionen, wirkt es in jeder **einmal** (bewusst,
@@ -241,7 +246,11 @@ paart jeden Befund über seine Position mit sich selbst (`Finding.id`, in
 beiden Läufen gleich) und schreibt die Baseline an Ort und Stelle neu;
 Einträge, die kein aktueller Befund reproduziert, entfallen und werden
 aufgelistet. Eine unvollständige Analyse und eine Identitätskollision lehnt
-sie ab. Eine stille Migration gibt es nicht.
+sie ab. Eine stille Migration gibt es nicht. Korpus-Manifeste
+(`expected.json`) und Findings-Snapshots (`scripts/compare-findings.ts`)
+halten das Schema genauso fest (fehlt = 1): ein Manifest eines anderen
+Schemas lehnt `stoa eval` ab; zwei Snapshots verschiedener Schemata werden
+über die Position verglichen, jede geänderte Identität wird aufgelistet.
 
 ## 7. Grenzen
 

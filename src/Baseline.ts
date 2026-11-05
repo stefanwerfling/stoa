@@ -153,6 +153,11 @@ export const writeBaselineFile = (path: string, file: BaselineFile): void => {
  * still stamped (a finding that WAS produced either matches the baseline
  * or it doesn't — that part is not in doubt), but `baseline.incomplete` is
  * set so callers/renderers can mark the whole comparison as provisional.
+ *
+ * An identity the current run produces more than once (a rule defect) is
+ * listed in `baseline.duplicateIdentities`: its copies cannot be told apart,
+ * so if the baseline holds it every copy reads `known` although one may be
+ * new. Nothing is merged; the caller reports it (Cli.ts).
  */
 export const applyBaseline = (report: AnalysisReport, baseline: BaselineFile | null, rootDir: string): AnalysisReport => {
     if (baseline !== null && baselineScheme(baseline) !== IDENTITY_SCHEME) {
@@ -167,8 +172,10 @@ export const applyBaseline = (report: AnalysisReport, baseline: BaselineFile | n
     let newCount = 0;
     let knownCount = 0;
 
-    const stamped = report.findings.map((finding) => {
-        const key = keyString(findingKey(rootDir, finding));
+    const keys = report.findings.map((finding) => findingKey(rootDir, finding));
+    const duplicates = duplicateKeys(keys);
+    const stamped = report.findings.map((finding, index) => {
+        const key = keyString(keys[index] as FindingKey);
         currentKeys.add(key);
         const isKnown = baselineKeys.has(key);
         if (isKnown) {
@@ -184,7 +191,14 @@ export const applyBaseline = (report: AnalysisReport, baseline: BaselineFile | n
     return {
         ...report,
         findings: stamped,
-        baseline: {newCount, knownCount, fixedCount: fixed.length, fixed, ...(incomplete ? {incomplete: true} : {})}
+        baseline: {
+            newCount,
+            knownCount,
+            fixedCount: fixed.length,
+            fixed,
+            ...(incomplete ? {incomplete: true} : {}),
+            ...(duplicates.length > 0 ? {duplicateIdentities: duplicates} : {})
+        }
     };
 };
 

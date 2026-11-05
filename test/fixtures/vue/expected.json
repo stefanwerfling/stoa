@@ -1,4 +1,5 @@
 {
+  "identity": 2,
   "findings": [
     { "file": "Widget.vue", "rule": "R-A11Y-IMG-ALT", "symbol": "img#0" },
     { "file": "Widget.vue", "rule": "R-A11Y-ARIA-INVALID-ROLE", "symbol": "role#0" },

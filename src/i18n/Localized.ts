@@ -42,6 +42,7 @@ export interface ReportLabels {
     baselineNew: string;
     baselineKnown: string;
     baselineFixed: string;
+    baselineCollisions: string;
     filter: string;
     filterHidden: string;
     filterMinConfidence: string;
@@ -81,6 +82,7 @@ const LABELS: Record<string, ReportLabels> = {
         baselineNew: 'new',
         baselineKnown: 'known',
         baselineFixed: 'fixed',
+        baselineCollisions: 'identity collision(s), status unreliable',
         filter: 'Filter',
         filterHidden: 'findings hidden',
         architecture: 'Architecture',
@@ -118,6 +120,7 @@ const LABELS: Record<string, ReportLabels> = {
         baselineNew: 'neu',
         baselineKnown: 'bekannt',
         baselineFixed: 'behoben',
+        baselineCollisions: 'Identitätskollision(en), Status unzuverlässig',
         filter: 'Filter',
         filterHidden: 'Befunde ausgeblendet',
         architecture: 'Architektur',

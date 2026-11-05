@@ -5,7 +5,7 @@ import {parseArgs} from 'node:util';
 import {applyBaseline, baselineScheme, IncompleteAnalysisError, loadBaseline, onlyNewFindings, saveBaseline, schemeMismatchMessage, writeBaselineFile, type BaselineFile} from './Baseline.js';
 import {migrateBaseline, needsMigration} from './BaselineMigration.js';
 import {applyFindingFilter, parseFindingFilter} from './FindingFilter.js';
-import {IDENTITY_SCHEME, keyString} from './FindingIdentity.js';
+import {duplicateIdentityText, IDENTITY_SCHEME, keyString} from './FindingIdentity.js';
 import {loadConfig} from './Config.js';
 import {loadValidationContract} from './contracts/ValidationContract.js';
 import {loadArchitectureConfig, type ArchitectureConfig} from './architecture/ArchitectureConfig.js';
@@ -254,6 +254,10 @@ const warnAboutComparison = (report: AnalysisReport): void => {
         // Same visibility as the partial-analysis warning — a provisional
         // baseline comparison must never read like a complete one.
         process.stderr.write('[stoa] WARNING: the analysis was incomplete — baseline new/known status is provisional, and nothing is reported as fixed (a file the scan never reached was never actually re-checked).\n');
+    }
+    const duplicates = report.baseline?.duplicateIdentities ?? [];
+    if (duplicates.length > 0) {
+        process.stderr.write(`[stoa] WARNING: identity collision — ${duplicateIdentityText(duplicates)}. Their new/known status is unreliable (see baseline.duplicateIdentities); --update-baseline refuses such a run.\n`);
     }
 };
 

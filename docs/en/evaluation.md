@@ -62,13 +62,23 @@ Each rule has a test catalog (see [rule-model.md §7](./rule-model.md#7-testbark
   excluded (the symbol disambiguates within a file, lines shift under edits).
   Precision/recall are computed over the set of distinct keys; duplicate
   produced findings are reported (`duplicates`), not silently dropped — and
-  fail the evaluation: the engine already merges a finding reported twice at
-  the same site, so two findings left with one identity are two different
-  findings the identity cannot tell apart (a rule defect that would also make
-  a baseline unreadable). Duplicate **expected**
+  fail the evaluation: the engine merges only one problem reported by several
+  declarative rules (same location, symbol and feature) and never merges
+  project-rule findings, so two findings left with one identity are two
+  different findings the identity cannot tell apart (a rule defect that would
+  also make a baseline unreadable). Duplicate **expected**
   entries in the manifest are a corpus-integrity error (reported and failing),
   and a malformed/unreadable manifest is an explicit evaluation error, not a
   pass.
+- **Identity scheme of the manifest.** A manifest names the finding-identity
+  scheme its symbols follow (`{"identity": 2, "findings": […]}`, see
+  [finding-model.md](./finding-model.md)); without the field it is scheme 1,
+  as a baseline is. A manifest of another scheme than the running stoa is
+  refused (exit 1, nothing evaluated) — its symbols would otherwise show as
+  false positives and negatives and read as a rule regression. It is not
+  converted automatically (an expected finding the engine misses has nothing
+  to be paired with); the expected findings are re-approved under the
+  current scheme.
 - **Metric definitions.** Over distinct keys: TP = produced ∩ expected,
   FP = produced \ expected, FN = expected \ produced;
   `precision = TP / (TP + FP)`, `recall = TP / (TP + FN)`. Undefined cases
