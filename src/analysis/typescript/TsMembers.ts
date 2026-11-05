@@ -6,6 +6,7 @@ import {
     compactMember,
     sortedRefs,
     sortedUnique,
+    UNSUPPORTED_MESSAGE,
     type StructBody,
     type StructImportBinding,
     type StructImportBindingsValue,
@@ -46,7 +47,6 @@ type Build = (spec: FactSpec) => Fact;
  */
 
 const UNSUPPORTED_ERROR_TYPES: ReadonlySet<string> = new Set(['NotImplementedError', 'NotSupportedError', 'UnsupportedOperationError']);
-const UNSUPPORTED_MESSAGE = /not\s+(yet\s+)?(implemented|supported)|unsupported|unimplemented/i;
 
 export const extractTsMemberFacts = (sourceFile: SourceFile, build: Build): Fact[] => {
     const facts: Fact[] = [];

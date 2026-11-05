@@ -1,4 +1,5 @@
-import {dirname, isAbsolute, resolve} from 'node:path';
+import {existsSync} from 'node:fs';
+import {dirname, isAbsolute, join, resolve} from 'node:path';
 import type {ProjectConfig} from '../config/ProjectConfig.js';
 
 /**
@@ -10,7 +11,19 @@ import type {ProjectConfig} from '../config/ProjectConfig.js';
  * `unresolved` is never a guess — it is the explicit, honest outcome when no
  * configured mechanism maps the specifier to an analyzed file.
  */
-export type ResolutionMethod = 'relative' | 'alias' | 'exports' | 'imports' | 'unresolved';
+export type ResolutionMethod = 'relative' | 'alias' | 'exports' | 'imports' | 'psr4' | 'unresolved';
+
+/**
+ * A PHP class name looked up through the project's PSR-4 mappings
+ * (`ModuleResolver.resolvePhpClass`): the analyzed file Composer would load,
+ * or why there is none — `external` only when a composer.json exists and the
+ * name lies outside every project prefix; `undefined` when unknown (no
+ * composer.json: nothing says where the name lives).
+ */
+interface PhpClassLookup {
+    target: string | null;
+    external: boolean | undefined;
+}
 
 export interface ResolvedImport {
     /** Absolute path of an analyzed file, or null when `resolution` is `unresolved`. */
@@ -209,6 +222,43 @@ export class ModuleResolver {
             return false;
         }
         return this.config.baseUrl === undefined || !underBaseUrl(this.config.baseUrl, specifier, analyzedFiles);
+    }
+
+    /**
+     * Where Composer's PSR-4 autoloader would load the class `name` (fully
+     * qualified, a leading `\\` ignored) from: prefixes longest first, each
+     * prefix's directories in declared order, the first existing file wins —
+     * Composer's own order. Resolved only when that first existing file is
+     * an analyzed one; an earlier candidate that exists on disk but was not
+     * analyzed (excluded, generated) makes the name unresolved rather than
+     * letting a later candidate win, which Composer would never load.
+     *
+     * Not resolved: names under a project prefix without such a file
+     * (`external: false`), names outside every prefix (`external: true`,
+     * a dependency's namespace), and everything without a composer.json
+     * (`external: undefined`).
+     */
+    public resolvePhpClass(name: string, analyzedFiles: ReadonlySet<string>): PhpClassLookup {
+        const mappings = this.config.psr4;
+        if (mappings === undefined) {
+            return {target: null, external: undefined};
+        }
+        const className = name.startsWith('\\') ? name.slice(1) : name;
+        const matching = mappings.filter((mapping) => className.startsWith(mapping.prefix) && className.length > mapping.prefix.length);
+        for (const mapping of matching) {
+            const relative = `${className.slice(mapping.prefix.length).split('\\').join('/')}.php`;
+            for (const dir of mapping.dirs) {
+                const candidate = join(dir, relative);
+                if (analyzedFiles.has(candidate)) {
+                    return {target: candidate, external: false};
+                }
+                if (existsSync(candidate)) {
+                    return {target: null, external: false};
+                }
+            }
+        }
+        // The fallback prefix `''` matches every name: with it, nothing is provably outside the project.
+        return {target: null, external: matching.length === 0};
     }
 
     // tsconfig `paths` + `baseUrl`. All matches (across every paths entry and

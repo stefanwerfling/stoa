@@ -7,8 +7,8 @@ import {ts} from 'ts-morph';
  * once, up front, from the analysis root (see ModuleResolution.ts). This is
  * Phase 0 of the "Config-Aware Module Resolution" work: deliberately narrow,
  * deterministic, and fail-safe. It reads ONLY `tsconfig.json` (with its
- * `extends` chain, resolved by TypeScript's own config parser) and the root
- * `package.json` — it never walks `node_modules`, never touches the network,
+ * `extends` chain, resolved by TypeScript's own config parser), the root
+ * `package.json` and the root `composer.json` (PSR-4 only) — it never walks `node_modules`, never touches the network,
  * and never guesses. Any read/parse error degrades to an empty config (no
  * alias/exports resolution), never an exception: a broken or absent config
  * must weaken resolution to "relative-only", not abort the analysis.
@@ -34,6 +34,20 @@ export interface ProjectConfig {
     exports?: unknown;
     /** Raw `package.json` `imports` field (`#`-prefixed subpath imports), consulted conservatively — see ModuleResolution.ts. */
     imports?: unknown;
+    /**
+     * Root `composer.json` PSR-4 mappings (`autoload` and `autoload-dev`),
+     * in Composer's lookup order: longest namespace prefix first, each with
+     * its directories (absolute) in declared order. Absent = no composer.json
+     * (or none readable): PHP names then resolve to nothing and are never
+     * classified as external — see `ModuleResolver.resolvePhpClass`.
+     */
+    psr4?: Psr4Mapping[];
+}
+
+/** One PSR-4 namespace prefix (`App\\`, `''` for the fallback) and the directories it maps to. */
+interface Psr4Mapping {
+    prefix: string;
+    dirs: string[];
 }
 
 interface PackageJsonShape {
@@ -132,6 +146,45 @@ const readPackageJson = (configDir: string): {packageName?: string; exports?: un
     }
 };
 
+const psr4Section = (section: unknown): [string, string[]][] => {
+    const map = (section as {'psr-4'?: unknown} | null)?.['psr-4'];
+    if (typeof map !== 'object' || map === null || Array.isArray(map)) {
+        return [];
+    }
+    return Object.entries(map as Record<string, unknown>).map(([prefix, dirs]): [string, string[]] => [
+        prefix,
+        (Array.isArray(dirs) ? dirs : [dirs]).filter((dir): dir is string => typeof dir === 'string')
+    ]);
+};
+
+/**
+ * Reads the PSR-4 mappings of `<configDir>/composer.json` (root package only;
+ * `vendor/` and its installed packages are never read). `autoload` and
+ * `autoload-dev` are merged per prefix (directories of `autoload` first, as
+ * Composer's generated map does). Sorted longest prefix first, ties by
+ * prefix — the order Composer's ClassLoader tries them in. `undefined` when
+ * there is no readable composer.json.
+ */
+const readComposerPsr4 = (configDir: string): Psr4Mapping[] | undefined => {
+    const composerPath = join(configDir, 'composer.json');
+    if (!existsSync(composerPath)) {
+        return undefined;
+    }
+    try {
+        const parsed = JSON.parse(readFileSync(composerPath, 'utf8')) as {autoload?: unknown; 'autoload-dev'?: unknown};
+        const byPrefix = new Map<string, string[]>();
+        for (const [prefix, dirs] of [...psr4Section(parsed.autoload), ...psr4Section(parsed['autoload-dev'])]) {
+            byPrefix.set(prefix, [...(byPrefix.get(prefix) ?? []), ...dirs.map((dir) => join(configDir, dir))]);
+        }
+        return [...byPrefix]
+            .map(([prefix, dirs]) => ({prefix, dirs}))
+            .sort((a, b) => b.prefix.length - a.prefix.length || (a.prefix < b.prefix ? -1 : a.prefix > b.prefix ? 1 : 0));
+    } catch {
+        // Unreadable composer.json: PHP names stay unknown (no mappings), the analysis goes on.
+        return undefined;
+    }
+};
+
 /**
  * Loads the project configuration from the analysis root. Deterministic
  * (depends only on the on-disk config files, no clock/network/random) and
@@ -143,6 +196,7 @@ export const loadProjectConfig = (rootPath: string): ProjectConfig => {
     const configDir = dirOf(rootPath);
     const tsconfig = readTsConfig(configDir);
     const pkg = readPackageJson(configDir);
+    const psr4 = readComposerPsr4(configDir);
     return {
         configDir,
         ...(tsconfig.baseUrl !== undefined ? {baseUrl: tsconfig.baseUrl} : {}),
@@ -150,7 +204,8 @@ export const loadProjectConfig = (rootPath: string): ProjectConfig => {
         ...(tsconfig.paths !== undefined ? {paths: tsconfig.paths} : {}),
         ...(pkg.packageName !== undefined ? {packageName: pkg.packageName} : {}),
         ...(pkg.exports !== undefined ? {exports: pkg.exports} : {}),
-        ...(pkg.imports !== undefined ? {imports: pkg.imports} : {})
+        ...(pkg.imports !== undefined ? {imports: pkg.imports} : {}),
+        ...(psr4 !== undefined ? {psr4} : {})
     };
 };
 

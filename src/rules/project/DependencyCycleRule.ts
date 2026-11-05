@@ -19,8 +19,8 @@ const TEXT = {
         de: 'Eine zusätzliche Abstraktion bringt Indirektion; sie muss ihren Nutzen rechtfertigen.'
     } as LocalizedText,
     missingContext: {
-        en: 'Dynamic imports / DI and non-relative (e.g. PHP namespace) imports are not resolved.',
-        de: 'Dynamische Importe / DI und nicht-relative Importe (z. B. PHP-Namespaces) werden nicht aufgelöst.'
+        en: 'Not resolved: dynamic imports / DI, PHP names without a `use` (same namespace, fully qualified) or without a composer.json PSR-4 mapping, and C/C++ includes found only via include paths (-I) or inside preprocessor conditionals.',
+        de: 'Nicht aufgelöst: dynamische Importe / DI, PHP-Namen ohne `use` (gleicher Namespace, voll qualifiziert) oder ohne PSR-4-Mapping in der composer.json sowie C/C++-Includes, die nur über Include-Pfade (-I) oder in Präprozessor-Bedingungen gefunden werden.'
     } as LocalizedText,
     rationale: {
         en: 'A cyclic dependency binds modules so that none can change or be understood alone (marcus.cooperation).',
@@ -35,15 +35,17 @@ interface ImportValue {
 
 /**
  * Detects import cycles across files and reports one finding per strongly
- * connected component (so an N-module cycle is counted once, not N times). It
- * resolves only relative specifiers to files in the analyzed set; bare and
- * namespace imports (e.g. PHP `use`) are treated as external and skipped, as are
- * type-only imports (erased at compile time, so no runtime cycle). Maps to
- * marcus.cooperation: a cycle serves neither the whole nor the part.
+ * connected component (so an N-module cycle is counted once, not N times).
+ * With the pipeline's ModuleGraph it reads `cycleAdjacency`: relative TS/JS
+ * imports, PHP `use` resolved through PSR-4 and unconditional C/C++ quoted
+ * includes (1.1.0, identity spec phase 4); type-only imports are skipped
+ * (erased at compile time, so no runtime cycle). Without a ModuleGraph (a
+ * focused unit test) it resolves relative `deps.import` specifiers only.
+ * Maps to marcus.cooperation: a cycle serves neither the whole nor the part.
  */
 export class DependencyCycleRule implements ProjectRule {
     public readonly id = 'R-DEP-CYCLE';
-    public readonly version = '1.0.0';
+    public readonly version = '1.1.0';
     public readonly requiredFactKinds = ['deps.import'];
 
     public evaluate(input: ProjectRuleInput): Finding[] {

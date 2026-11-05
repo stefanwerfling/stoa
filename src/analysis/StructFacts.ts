@@ -1,6 +1,6 @@
 /**
- * Neutral class-model facts (Flutter quality track E3), shared by the Dart and
- * TypeScript adapters: ONE `struct.typeDecl` fact per type declaration, with
+ * Neutral class-model facts (Flutter quality track E3), shared by the Dart,
+ * TypeScript and (identity spec, phase 4) PHP adapters: ONE `struct.typeDecl` fact per type declaration, with
  * its members embedded as a compact table (user decision: one fact per member
  * grew the fact set by 34–43 %; the embedded table by 4–6 %). File-local,
  * cacheable, no judgement — no rule reads them yet; the TypeModel (E4) and the
@@ -96,7 +96,7 @@ export interface StructTypeDeclValue {
 }
 
 /**
- * One local name bound by an import (TS, E4): `struct.importBindings` lists
+ * One local name bound by an import (TS, E4; PHP `use`, phase 4): `struct.importBindings` lists
  * them per file that declares a class or interface, so the TypeModel can map
  * a written name (`B`, `ns.Base`, a default import) to its module and the
  * name that module exports — `deps.importName` carries no local alias.
@@ -115,7 +115,18 @@ export interface StructImportBindingsValue {
     v: 1;
     /** Sorted by local name. */
     bindings: StructImportBinding[];
+    /**
+     * PHP only (identity spec, phase 4): the file's namespace (`''` = the
+     * global one) that a name without a matching `use` is relative to;
+     * `null` when the file declares several namespaces. A PHP binding is a
+     * class `use`: `local` = its alias, `module` = `importedName` = the
+     * fully qualified name, `kind: 'named'`.
+     */
+    namespace?: string | null;
 }
+
+/** A thrown error's message that says the member is not implemented or not supported (`throws-unsupported`; TS and PHP). */
+export const UNSUPPORTED_MESSAGE = /not\s+(yet\s+)?(implemented|supported)|unsupported|unimplemented/i;
 
 const compareText = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
 

@@ -1,18 +1,12 @@
 import {declarationSymbols, uniqueSymbols, type DeclarationBase, type IdentityScheme} from '../../FindingIdentity.js';
 import type {Fact, SourceRange, SubjectKind} from '../../Types.js';
 import {factBuilder, identitySchemeOf, type AdapterInfo} from '../FactBuilder.js';
+import type {StructImportBinding} from '../StructFacts.js';
 import {isDeepImport} from '../ImportPath.js';
 import {destructiveDdl, nullableNoDefault, unguardedDdl} from '../MigrationSql.js';
+import {childNodes, collect, isPhpNode, rangeOf, type PhpNode} from './PhpAst.js';
+import {extractPhpMemberFacts} from './PhpMembers.js';
 
-/**
- * Minimal structural view of a glayzzle php-parser node. We keep this local and
- * permissive rather than depending on the parser's full AST typings.
- */
-export interface PhpNode {
-    kind: string;
-    loc?: {start: {line: number; column: number}; end: {line: number; column: number}};
-    [key: string]: unknown;
-}
 
 interface FunctionMetrics {
     cyclomatic: number;
@@ -49,10 +43,8 @@ export const extractFacts = (program: PhpNode, content: string, filePath: string
 
     facts.push(build({kind: 'file.lineCount', kindOf: 'file', range: fileRange(lines), value: lineCount(content)}));
 
-    const functions = qualifiedFunctions(program, scheme).flatMap(({fn, base}) => {
-        const body = fn.body as PhpNode | undefined;
-        return body === undefined ? [] : [{fn, body, base}];
-    });
+    // An abstract or interface method has `body: null` — nothing to measure.
+    const functions = qualifiedFunctions(program, scheme).flatMap(({fn, base}) => (isPhpNode(fn.body) ? [{fn, body: fn.body, base}] : []));
     const symbols = declarationSymbols(functions.map(({base}) => base), scheme);
     for (const [index, {fn, body}] of functions.entries()) {
         const metrics = computeMetrics(fn, body);
@@ -101,12 +93,15 @@ export const extractFacts = (program: PhpNode, content: string, filePath: string
     });
 
     const referenced = referencedShortNames(program);
+    const classBindings: StructImportBinding[] = [];
     let importIndex = 0;
     for (const group of collect(program, (node) => node.kind === 'usegroup')) {
         for (const item of (group.items as PhpNode[] | undefined) ?? []) {
-            const module = String(item.name ?? '');
+            // A group use (`use App\{A, B}`) names its items relative to the group prefix.
+            const module = qualifiedUseName(group, item);
+            classBindings.push(...classBinding(group, item, module));
             const symbol = `import#${importIndex}`;
-            facts.push(build({kind: 'deps.import', kindOf: 'import', site: true, symbol, range: rangeOf(group), value: {module, isTypeOnly: false}}));
+            facts.push(build({kind: 'deps.import', kindOf: 'import', site: true, symbol, range: rangeOf(group), value: {module, isTypeOnly: false, useKind: useKindOf(group, item)}}));
 
             const local = aliasName(item) ?? lastSegment(module);
             if (local.length > 0 && !referenced.has(local)) {
@@ -225,7 +220,23 @@ export const extractFacts = (program: PhpNode, content: string, filePath: string
         }
     }
 
+    // Class model (identity spec, phase 4) — scheme 2 only: the type
+    // identities it is keyed by are namespace-qualified from scheme 2 on.
+    if (scheme !== 1) {
+        facts.push(...classModelFacts(program, namespaces, classBindings, build));
+    }
+
     return facts;
+};
+
+/** The file's `struct.typeDecl` / `struct.importBindings` facts (PhpMembers.ts): its named types under their identities. */
+const classModelFacts = (program: PhpNode, namespaces: ReadonlyMap<PhpNode, string>, classBindings: StructImportBinding[], build: ReturnType<typeof factBuilder>): Fact[] => {
+    const types = collect(program, (node) => TYPE_KINDS.has(node.kind) && node.isAnonymous !== true && nodeName(node) !== '(anonymous)');
+    const typeSymbols = uniqueSymbols(types.map((node) => qualifiedName(namespaces.get(node) ?? '', [nodeName(node)])));
+    const declared = collect(program, (node) => node.kind === 'namespace');
+    const namespace = declared.length === 0 ? '' : declared.length === 1 ? namespaceName(declared[0] as PhpNode) : null;
+    const bindings = classBindings.sort((a, b) => (a.local < b.local ? -1 : a.local > b.local ? 1 : 0) || (a.module < b.module ? -1 : a.module > b.module ? 1 : 0));
+    return extractPhpMemberFacts(types.map((node, index) => ({node, symbol: typeSymbols[index] as string})), bindings, namespace, build);
 };
 
 const RELATION_ATTRIBUTES: ReadonlySet<string> = new Set(['OneToOne', 'OneToMany', 'ManyToOne', 'ManyToMany']);
@@ -439,6 +450,29 @@ const referencedShortNames = (program: PhpNode): Set<string> => {
     return names;
 };
 
+/** A class `use` as an import binding (local alias → fully qualified name); none for `use function` / `use const`. */
+const classBinding = (group: PhpNode, item: PhpNode, module: string): StructImportBinding[] => {
+    if (useKindOf(group, item) !== 'class') {
+        return [];
+    }
+    const fqn = module.replace(/^\\/u, '');
+    return [{local: aliasName(item) ?? lastSegment(fqn), module: fqn, importedName: fqn, kind: 'named'}];
+};
+
+/** What a PHP `use` imports: a class-like name (class, interface, trait, enum, namespace), a function or a constant. */
+type PhpUseKind = 'class' | 'function' | 'const';
+
+const useKindOf = (group: PhpNode, item: PhpNode): PhpUseKind => {
+    const kind = item.type ?? group.type;
+    return kind === 'function' || kind === 'const' ? kind : 'class';
+};
+
+const qualifiedUseName = (group: PhpNode, item: PhpNode): string => {
+    const name = String(item.name ?? '');
+    const prefix = typeof group.name === 'string' && group.name.length > 0 ? group.name : null;
+    return prefix === null ? name : `${prefix.replace(/\\+$/u, '')}\\${name}`;
+};
+
 const aliasName = (item: PhpNode): string | null => {
     const alias = item.alias;
     if (typeof alias === 'string') {
@@ -498,43 +532,6 @@ const visit = (node: PhpNode, nesting: number, state: MetricState): void => {
 
         visit(child, childNesting, state);
     }
-};
-
-const isPhpNode = (value: unknown): value is PhpNode => {
-    return typeof value === 'object' && value !== null && typeof (value as PhpNode).kind === 'string';
-};
-
-const childNodes = (node: PhpNode): PhpNode[] => {
-    const children: PhpNode[] = [];
-    for (const [key, value] of Object.entries(node)) {
-        if (key === 'loc') {
-            continue;
-        }
-        if (isPhpNode(value)) {
-            children.push(value);
-        } else if (Array.isArray(value)) {
-            for (const entry of value) {
-                if (isPhpNode(entry)) {
-                    children.push(entry);
-                }
-            }
-        }
-    }
-    return children;
-};
-
-const collect = (root: PhpNode, predicate: (node: PhpNode) => boolean): PhpNode[] => {
-    const found: PhpNode[] = [];
-    const walk = (node: PhpNode): void => {
-        if (predicate(node)) {
-            found.push(node);
-        }
-        for (const child of childNodes(node)) {
-            walk(child);
-        }
-    };
-    walk(root);
-    return found;
 };
 
 // A catch whose bound `$e` is READ in the block (`$last = $e`, passed,
@@ -643,14 +640,6 @@ const functionName = (fn: PhpNode): string | undefined => {
         return name.name;
     }
     return undefined;
-};
-
-const rangeOf = (node: PhpNode): SourceRange => {
-    const loc = node.loc;
-    if (loc === undefined) {
-        return {startLine: 1, startCol: 0, endLine: 1, endCol: 0};
-    }
-    return {startLine: loc.start.line, startCol: loc.start.column, endLine: loc.end.line, endCol: loc.end.column};
 };
 
 const fileRange = (lines: string[]): SourceRange => {

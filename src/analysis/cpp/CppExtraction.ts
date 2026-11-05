@@ -89,7 +89,72 @@ export const extractFacts = (root: Node, content: string, filePath: string, info
         facts.push(build({kind: 'doc.catchHasRationale', kindOf: 'catch-clause', site: true, symbol, range, value: block !== null && descendants(block, 'comment').length > 0}));
     });
 
+    descendants(root, 'preproc_include').forEach((include, index) => {
+        const value = includeOf(include);
+        if (value !== null) {
+            facts.push(build({kind: 'cpp.include', kindOf: 'import', site: true, symbol: `import#${index}`, range: rangeOf(include), value: {...value}}));
+        }
+    });
+
     return facts;
+};
+
+/**
+ * An `#include` as written (identity spec, phase 4):
+ * - `form`: `quoted` (`"x.h"`), `system` (`<x>`) or `macro` (`#include NAME`
+ *   — the header is the macro's expansion, unknown here; `module` is the
+ *   macro text);
+ * - `conditional`: inside a preprocessor conditional (`#if`/`#ifdef`/
+ *   `#elif`/`#else`) other than the file's include guard — whether it is
+ *   compiled depends on the configuration.
+ */
+export interface CppIncludeValue {
+    module: string;
+    form: 'quoted' | 'system' | 'macro';
+    conditional: boolean;
+}
+
+const includeOf = (include: Node): CppIncludeValue | null => {
+    const path = include.childForFieldName('path');
+    if (path === null) {
+        return null;
+    }
+    const conditional = isConditional(include);
+    if (path.type === 'string_literal') {
+        const content = namedChildren(path).find((child) => child.type === 'string_content');
+        return {module: content?.text ?? '', form: 'quoted', conditional};
+    }
+    if (path.type === 'system_lib_string') {
+        return {module: path.text.slice(1, -1), form: 'system', conditional};
+    }
+    return {module: path.text, form: 'macro', conditional};
+};
+
+const CONDITIONAL_TYPES: ReadonlySet<string> = new Set(['preproc_if', 'preproc_ifdef', 'preproc_elif', 'preproc_elifdef', 'preproc_else']);
+
+const isConditional = (node: Node): boolean => {
+    for (let current = node.parent; current !== null; current = current.parent) {
+        if (CONDITIONAL_TYPES.has(current.type) && !isIncludeGuard(current)) {
+            return true;
+        }
+    }
+    return false;
+};
+
+/**
+ * The classic include guard: a top-level `#ifndef NAME` whose first statement
+ * is `#define NAME` and that is the only top-level node besides comments —
+ * the whole file, compiled once per translation unit, never configuration.
+ */
+const isIncludeGuard = (node: Node): boolean => {
+    if (node.type !== 'preproc_ifdef' || node.child(0)?.type !== '#ifndef' || node.parent?.type !== 'translation_unit') {
+        return false;
+    }
+    const name = node.childForFieldName('name')?.text;
+    const [, first] = namedChildren(node);
+    const defined = first?.type === 'preproc_def' ? first.childForFieldName('name')?.text : undefined;
+    const siblings = namedChildren(node.parent).filter((sibling) => sibling.type !== 'comment');
+    return name !== undefined && name === defined && siblings.length === 1;
 };
 
 // A catch whose bound exception is READ in the body (`last = e;`, passed,

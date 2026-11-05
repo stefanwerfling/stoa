@@ -2,7 +2,8 @@ import {Engine} from 'php-parser';
 import type {Fact} from '../Types.js';
 import type {FileMeta, FileRef, LanguageAdapter, ParseResult, ProjectContext} from './LanguageAdapter.js';
 import {assignSiteSymbols, schemeOf} from './SiteIdentity.js';
-import {extractFacts, type PhpNode} from './php/PhpExtraction.js';
+import type {PhpNode} from './php/PhpAst.js';
+import {extractFacts} from './php/PhpExtraction.js';
 
 /**
  * PHP adapter. It parses with the pure-JavaScript glayzzle php-parser (no PHP

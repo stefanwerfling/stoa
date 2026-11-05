@@ -120,6 +120,12 @@ export class TypeModel {
     private readonly declarations = new Map<string, Declaration>();
     private readonly keysByName = new Map<string, string[]>();
     private readonly bindingsByFile = new Map<string, Map<string, StructImportBinding>>();
+    /** PHP: each file's namespace (`null` = several) and its class `use`s by lower-cased alias. */
+    private readonly phpScopes = new Map<string, {namespace: string | null; uses: Map<string, string>}>();
+    /** PHP: declarations by lower-cased fully qualified name (PHP class names are case-insensitive). */
+    private readonly phpKeysByName = new Map<string, string[]>();
+    /** PHP: `file\nFQN` of every class `use` the ModuleGraph classified as external (PSR-4). */
+    private readonly phpExternals = new Set<string>();
     private readonly symbolEdges = new Map<string, SymbolEdge>();
     private readonly dartIndex: DartLibraryIndex;
     private readonly symbolGraph: SymbolGraph;
@@ -141,12 +147,28 @@ export class TypeModel {
                 this.bindingsByFile.set(fact.subject.file, new Map(value.bindings.map((binding) => [binding.local, binding])));
             }
         }
+        this.indexPhp(facts, moduleGraph);
         const nodes = [...this.declarations.entries()].sort(([a], [b]) => compareText(a, b)).map(([key, declaration]) => this.nodeOf(key, declaration));
         this.byKey = new Map(nodes.map((node) => [node.key, node]));
         for (const node of nodes) {
             this.fillHierarchy(node);
         }
         this.types = nodes;
+    }
+
+    /** The PHP lookups (`phpScopes`, `phpKeysByName`, `phpExternals`) — PHP files only. */
+    private indexPhp(facts: readonly Fact[], moduleGraph: ModuleGraph): void {
+        for (const fact of facts.filter((candidate) => candidate.kind === 'struct.importBindings' && isPhp(candidate.subject.file))) {
+            const value = fact.value as unknown as StructImportBindingsValue;
+            this.phpScopes.set(fact.subject.file, {namespace: value.namespace ?? null, uses: new Map(value.bindings.map((binding) => [binding.local.toLowerCase(), binding.module]))});
+        }
+        for (const [key, declaration] of [...this.declarations].filter(([, candidate]) => isPhp(candidate.fact.subject.file))) {
+            const name = (declaration.fact.subject.symbol as string).toLowerCase();
+            this.phpKeysByName.set(name, [...(this.phpKeysByName.get(name) ?? []), key]);
+        }
+        for (const entry of moduleGraph.unresolved.filter((candidate) => candidate.external === true && isPhp(candidate.from))) {
+            this.phpExternals.add(`${entry.from}\n${entry.specifier.replace(/^\\/u, '').toLowerCase()}`);
+        }
     }
 
     /** The type declared as `name` in `file`, if any. */
@@ -160,7 +182,10 @@ export class TypeModel {
 
     /** Resolves a type name as written in `file`. */
     public resolveRef(file: string, ref: StructTypeRef): TypeResolution {
-        return file.endsWith('.dart') ? this.resolveDart(file, ref) : this.resolveTs(file, ref);
+        if (file.endsWith('.dart')) {
+            return this.resolveDart(file, ref);
+        }
+        return isPhp(file) ? this.resolvePhp(file, ref) : this.resolveTs(file, ref);
     }
 
     private nodeOf(key: string, {fact, value}: Declaration): TypeNode {
@@ -219,6 +244,47 @@ export class TypeModel {
             return edge.status === 'external' ? {status: 'external', target: null, origin: binding.module, candidates: []} : UNRESOLVED;
         }
         return this.declarationOf(this.symbolGraph.resolveExport(module, ref.name), binding.module);
+    }
+
+    /**
+     * PHP (identity spec, phase 4): the written name → its fully qualified
+     * name by PHP's rules (`\\X` as is; a first segment matching a class
+     * `use` alias replaced by the imported name; anything else relative to
+     * the file's namespace) → the project declaration with that identity.
+     * Several declarations: `ambiguous`; none: `external` when the name came
+     * through a `use` the ModuleGraph's PSR-4 lookup placed outside the
+     * project, else `unresolved` (built-in classes such as `\\Exception`,
+     * names under a project prefix without a file, no composer.json).
+     */
+    private resolvePhp(file: string, ref: StructTypeRef): TypeResolution {
+        const fqn = this.phpQualifiedName(file, ref);
+        if (fqn === null) {
+            return UNRESOLVED;
+        }
+        const keys = this.phpKeysByName.get(fqn.toLowerCase()) ?? [];
+        if (keys.length === 1) {
+            return {status: 'project', target: keys[0] as string, origin: null, candidates: []};
+        }
+        if (keys.length > 1) {
+            return {status: 'ambiguous', target: null, origin: null, candidates: [...keys].sort(compareText)};
+        }
+        return this.phpExternals.has(`${file}\n${fqn.toLowerCase()}`) ? {status: 'external', target: null, origin: fqn, candidates: []} : UNRESOLVED;
+    }
+
+    private phpQualifiedName(file: string, ref: StructTypeRef): string | null {
+        const written = ref.prefix === null ? ref.name : ref.prefix === '\\' ? `\\${ref.name}` : `${ref.prefix}\\${ref.name}`;
+        if (written.startsWith('\\')) {
+            return written.slice(1);
+        }
+        const scope = this.phpScopes.get(file);
+        const [first = '', ...rest] = written.split('\\');
+        const used = first.toLowerCase() === 'namespace' ? undefined : scope?.uses.get(first.toLowerCase());
+        if (used !== undefined) {
+            return [used, ...rest].join('\\');
+        }
+        // `namespace\\X` is explicitly relative to the current namespace; any other name implicitly.
+        const relative = first.toLowerCase() === 'namespace' && rest.length > 0 ? rest : [first, ...rest];
+        return scope === undefined || scope.namespace === null ? null : [...(scope.namespace === '' ? [] : [scope.namespace]), ...relative].join('\\');
     }
 
     // The module a binding stands for as a whole, or null.
@@ -305,6 +371,8 @@ export class TypeModel {
         node.hierarchyComplete = complete && !node.hasParseError;
     }
 }
+
+const isPhp = (file: string): boolean => file.endsWith('.php');
 
 const isInheritable = (member: StructMember): boolean => member.memberKind !== 'constructor' && !member.isStatic;
 const memberKey = (member: StructMember): string => (member.memberKind === 'setter' ? `${member.name}=` : member.name);

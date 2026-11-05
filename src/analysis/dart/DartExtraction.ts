@@ -1,5 +1,5 @@
 import type {Node} from 'web-tree-sitter';
-import {uniqueSymbols, type IdentityScheme} from '../../FindingIdentity.js';
+import {declarationSymbols, type DeclarationBase, type IdentityScheme} from '../../FindingIdentity.js';
 import type {Fact, SourceRange, SubjectKind} from '../../Types.js';
 import {factBuilder, identitySchemeOf, type AdapterInfo} from '../FactBuilder.js';
 import {importPrefixes, parseErrorCount} from './DartCallSite.js';
@@ -50,14 +50,9 @@ export const extractFacts = (root: Node, content: string, filePath: string, info
     }
 
     const prefixes = importPrefixes(root);
-    const functions = descendants(root, 'function_signature').flatMap((signature) => {
-        const parent = signature.parent;
-        const owner = parent !== null && parent.type === 'method_signature' ? parent : signature;
-        const body = owner.nextNamedSibling;
-        return body === null || body.type !== 'function_body' ? [] : [{signature, owner, body}];
-    });
-    const symbols = uniqueSymbols(functions.map(({signature}) => qualifiedFunctionName(signature, scheme)));
-    for (const [index, {signature, owner, body}] of functions.entries()) {
+    const functions = dartFunctions(root, scheme);
+    const symbols = declarationSymbols(functions.map(({base}) => base), scheme);
+    for (const [index, {signature, owner, body, form}] of functions.entries()) {
         const kindOf: SubjectKind = owner.type === 'method_signature' ? 'method' : 'function';
         const symbol = symbols[index] as string;
         const range = spanRange(owner, body);
@@ -69,14 +64,23 @@ export const extractFacts = (root: Node, content: string, filePath: string, info
         facts.push(build({kind: 'metric.parameterCount', kindOf, symbol, range, value: parameterCount(signature)}));
         facts.push(build({kind: 'metric.functionLength', kindOf, symbol, range, value: range.endLine - range.startLine + 1}));
         facts.push(build({kind: 'doc.hasComplexityRationale', kindOf, symbol, range, value: leadingHasMarker(lines, range.startLine)}));
-        facts.push(build({kind: 'ast.usesNondeterminism', kindOf, symbol, range, value: usesNondeterminism(body)}));
+        // A closure inside a function is already part of that function's
+        // nondeterminism fact (it reads its whole body); only a closure
+        // outside every function (a field initializer) has its own.
+        if (form !== 'closure' || !hasAncestor(owner, 'function_body')) {
+            facts.push(build({kind: 'ast.usesNondeterminism', kindOf, symbol, range, value: usesNondeterminism(body)}));
+        }
 
         // Flutter widget structure of this body (Phase 1) — one compact fact
         // per function that builds widgets; the FlutterWidgetGraph is rebuilt
-        // from these facts after extraction (and on a FactCache hit).
-        const tree = extractWidgetTree(body, prefixes, returnsWidget(signature));
-        if (tree !== null) {
-            facts.push(build({kind: 'ui.flutterWidgetTree', kindOf, symbol, range, value: tree}));
+        // from these facts after extraction (and on a FactCache hit). Named
+        // functions only: a closure's widgets (a `builder:`) are part of the
+        // tree of the function it is written in.
+        if (form === 'function') {
+            const tree = extractWidgetTree(body, prefixes, returnsWidget(signature));
+            if (tree !== null) {
+                facts.push(build({kind: 'ui.flutterWidgetTree', kindOf, symbol, range, value: tree}));
+            }
         }
     }
 
@@ -211,32 +215,131 @@ const scopeName = (node: Node, scheme: IdentityScheme): string | undefined => {
         return typeScopeName(node, scheme);
     }
     if (node.type === 'function_body') {
-        const previous = node.previousNamedSibling;
-        const signature = previous?.type === 'method_signature' ? namedChildren(previous).find((child) => child.type === 'function_signature') : previous;
-        if (signature !== undefined && signature !== null && signature.type === 'function_signature') {
-            const name = functionName(signature);
-            return name === '(anonymous)' ? undefined : name;
-        }
+        return bodyScopeName(node, scheme);
+    }
+    // A closure bound to a variable or field names the closures inside it (scheme 2).
+    if (node.type === 'function_expression' && scheme !== 1) {
+        return closureBinding(node) ?? undefined;
     }
     return undefined;
+};
+
+/** The name of the function or accessor (scheme 2; scheme 1 knew no accessor functions) whose body `body` is. */
+const bodyScopeName = (body: Node, scheme: IdentityScheme): string | undefined => {
+    const previous = body.previousNamedSibling;
+    const signature = previous?.type === 'method_signature' ? namedChildren(previous).find((child) => child.type === 'function_signature' || ACCESSOR_TYPES.has(child.type)) : previous;
+    if (signature === undefined || signature === null || !(signature.type === 'function_signature' || (scheme !== 1 && ACCESSOR_TYPES.has(signature.type)))) {
+        return undefined;
+    }
+    const name = functionName(signature);
+    return name === '(anonymous)' ? undefined : name;
 };
 
 /**
  * A function's identity base: its name qualified by every enclosing named
  * type and function (`LoginState.build`, `outer.inner`), so two classes'
  * `build` in one file no longer share a symbol. Remaining duplicates get
- * `#n` (`uniqueSymbols`).
+ * `#n` (`declarationSymbols`).
  */
-const qualifiedFunctionName = (signature: Node, scheme: IdentityScheme): string => {
-    const own = functionName(signature);
+const qualifiedFunctionName = (signature: Node, scheme: IdentityScheme): string => [...enclosingScopes(signature, scheme), functionName(signature)].join('.');
+
+/** The names of every named type and function enclosing `node`, outermost first. */
+const enclosingScopes = (node: Node, scheme: IdentityScheme): string[] => {
     const scopes: string[] = [];
-    for (let node = signature.parent; node !== null; node = node.parent) {
-        const name = scopeName(node, scheme);
+    for (let current = node.parent; current !== null; current = current.parent) {
+        const name = scopeName(current, scheme);
         if (name !== undefined && name.length > 0) {
             scopes.unshift(name);
         }
     }
-    return [...scopes, own].join('.');
+    return scopes;
+};
+
+/**
+ * One measured Dart function (identity spec, phase 4):
+ * - `function`: a named function, method, constructor or local function
+ *   (`function_signature`);
+ * - `accessor`: a getter or setter — `X.v`, told apart as `X.v:get` /
+ *   `X.v:set` when both exist (scheme 2, as TypeScript's accessors);
+ * - `closure`: a function expression — named by the variable or field it
+ *   initializes (`A.m.f`), else `<scope>.(anonymous)#n`, numbered within
+ *   its scope, as in TypeScript and PHP.
+ * `signature` carries the parameter list (the function expression itself
+ * for a closure); `owner` is where the declaration starts.
+ */
+interface DartFunction {
+    signature: Node;
+    owner: Node;
+    body: Node;
+    form: 'function' | 'accessor' | 'closure';
+    base: DeclarationBase;
+}
+
+const ACCESSOR_TYPES: ReadonlySet<string> = new Set(['getter_signature', 'setter_signature']);
+
+/** Every measured function of the file, in source order (`DartFunction`). */
+const dartFunctions = (root: Node, scheme: IdentityScheme): DartFunction[] => {
+    const found: DartFunction[] = [];
+    const walk = (node: Node): void => {
+        const entry = dartFunctionAt(node, scheme);
+        // Scheme 1 reproduces the legacy identities, which knew named functions only.
+        if (entry !== null && (scheme !== 1 || entry.form === 'function')) {
+            found.push(entry);
+        }
+        for (const child of namedChildren(node)) {
+            walk(child);
+        }
+    };
+    walk(root);
+    return found;
+};
+
+const dartFunctionAt = (node: Node, scheme: IdentityScheme): DartFunction | null => {
+    if (node.type === 'function_expression') {
+        const body = namedChildren(node).find((child) => child.type === 'function_expression_body' || child.type === 'function_body');
+        // Inside a region tree-sitter had to recover (Dart 3 records, patterns,
+        // switch expressions — see `file.parseErrors`), a "function expression"
+        // is often a misread record or pattern: not measured.
+        if (body === undefined || node.hasError || hasAncestor(node, 'ERROR')) {
+            return null;
+        }
+        const binding = closureBinding(node);
+        const scope = enclosingScopes(node, scheme);
+        return {signature: node, owner: node, body, form: 'closure', base: {base: [...scope, binding ?? '(anonymous)'].join('.'), anonymous: binding === null}};
+    }
+    if (node.type !== 'function_signature' && !ACCESSOR_TYPES.has(node.type)) {
+        return null;
+    }
+    const parent = node.parent;
+    const owner = parent !== null && parent.type === 'method_signature' ? parent : node;
+    const body = owner.nextNamedSibling;
+    if (body === null || body.type !== 'function_body') {
+        return null;
+    }
+    const base = qualifiedFunctionName(node, scheme);
+    if (node.type === 'function_signature') {
+        return {signature: node, owner, body, form: 'function', base: {base, anonymous: false}};
+    }
+    return {signature: node, owner, body, form: 'accessor', base: {base, anonymous: false, variant: node.type === 'getter_signature' ? ':get' : ':set'}};
+};
+
+/** The variable or field a function expression initializes (`final f = () {}`, `static final s = …`), or `null`. */
+const closureBinding = (expression: Node): string | null => {
+    const parent = expression.parent;
+    if (parent === null || !['initialized_variable_definition', 'initialized_identifier', 'static_final_declaration'].includes(parent.type)) {
+        return null;
+    }
+    const name = namedChildren(parent).filter((child) => child.type === 'identifier' && child.endIndex <= expression.startIndex).pop();
+    return name?.text ?? null;
+};
+
+const hasAncestor = (node: Node, type: string): boolean => {
+    for (let current = node.parent; current !== null; current = current.parent) {
+        if (current.type === type) {
+            return true;
+        }
+    }
+    return false;
 };
 
 const parameterCount = (signature: Node): number => {

@@ -87,8 +87,9 @@ const compareText = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 
 const firstOf = (evidence: readonly ImportEvidence[]): ImportEvidence =>
     [...evidence].sort((a, b) => a.range.startLine - b.range.startLine || a.range.startCol - b.range.startCol || compareText(a.factId, b.factId))[0] as ImportEvidence;
 
-// The directive a ModuleGraph entry stands for: Dart `import`/`export`, TS `export` (a re-export) or `import`.
-const directiveOf = (entry: {origin?: string; dartDirective?: string}): string => entry.dartDirective ?? (entry.origin === 'deps.reexport' ? 'export' : 'import');
+// The directive a ModuleGraph entry stands for: Dart `import`/`export`, TS `export` (a re-export) or `import`, PHP `use` (a PSR-4 edge), C/C++ `#include`.
+const directiveOf = (entry: {origin?: string; dartDirective?: string; resolution?: string}): string =>
+    entry.dartDirective ?? (entry.origin === 'deps.reexport' ? 'export' : entry.origin === 'cpp.include' ? '#include' : entry.resolution === 'psr4' ? 'use' : 'import');
 
 // Forbidden edges, one violation per (importing file, imported file) — every site of every edge between them.
 const edgeViolations = (graph: ModuleGraph, model: ArchitectureModel): Violation[] => {
@@ -120,7 +121,9 @@ const edgeViolations = (graph: ModuleGraph, model: ArchitectureModel): Violation
 const packageViolations = (graph: ModuleGraph, model: ArchitectureModel): Violation[] => {
     const byKey = new Map<string, Violation>();
     // `external === false`: a TS project reference that did not resolve — not a package.
-    for (const entry of graph.unresolved.filter((candidate) => candidate.external !== false)) {
+    // A C/C++ include counts only when it is known to be external (a standard
+    // header): an unknown header path names no package.
+    for (const entry of graph.unresolved.filter((candidate) => (candidate.origin === 'cpp.include' ? candidate.external === true : candidate.external !== false))) {
         const name = packageNameOf(entry.specifier);
         const layer = model.layerOf(entry.from);
         if (name === null || layer === null || !model.isPackageForbidden(entry.from, name)) {

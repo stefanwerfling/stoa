@@ -121,6 +121,67 @@ test('Dart: methods by class, mixin and extension; a local function by its funct
     assert.deepEqual(symbolsOf('a.dart', source), ['A.run', 'M.run', 'E.run', 'outer', 'outer.inner']);
 });
 
+test('Dart (identity spec, phase 4): accessors as X.v:get / X.v:set when both exist; a closure takes its variable or field, or is <scope>.(anonymous)#n', () => {
+    const source = [
+        'class A {',
+        '  int _v = 0;',
+        '  int get v => _v;',
+        '  set v(int x) { if (x > 0) { _v = x; } }',
+        '  static set s(int y) => print(y);',
+        '  final cb = () => 3;',
+        '  void m() {',
+        '    final f = (int a) { final g = () => 2; return a; };',
+        '    list.forEach((e) { print(e); });',
+        '    int local(int q) { return q; }',
+        '    run(() => 1);',
+        '  }',
+        '}',
+        'set top(int z) {}',
+        'int get topGet => 1;',
+        'final h = (x) => x;',
+        ''
+    ].join('\n');
+    assert.deepEqual(symbolsOf('d.dart', source), [
+        'A.v:get',
+        'A.v:set',
+        'A.s',
+        'A.cb',
+        'A.m',
+        'A.m.f',
+        'A.m.f.g',
+        'A.m.(anonymous)#0',
+        'A.m.local',
+        'A.m.(anonymous)#1',
+        'top',
+        'topGet',
+        'h'
+    ]);
+});
+
+test('Dart: a closure is measured on its own and stays out of the enclosing function, which measures as before', () => {
+    const dir = mkdtempSync(join(work, 'case-'));
+    writeFileSync(join(dir, 'm.dart'), ['void m(bool a) {', '  if (a) { print(1); }', '  run((x) { if (x) { if (x > 1) { print(x); } } });', '}', ''].join('\n'));
+    const {facts} = analyze({rootPath: dir, knowledgeDir, ruleSetDir, config: DEFAULT_CONFIG});
+    const metric = (symbol: string, kind: string): unknown => facts.find((fact) => fact.subject.symbol === symbol && fact.kind === kind)?.value;
+    assert.deepEqual([metric('m', 'metric.cyclomaticComplexity'), metric('m', 'metric.nestingDepth')], [2, 1], 'the closure body is not part of m');
+    assert.deepEqual([metric('m.(anonymous)#0', 'metric.cyclomaticComplexity'), metric('m.(anonymous)#0', 'metric.nestingDepth'), metric('m.(anonymous)#0', 'metric.parameterCount')], [3, 2, 1]);
+    // Nondeterminism is read over m's whole body, closures included: the closure has no fact of its own.
+    assert.equal(metric('m.(anonymous)#0', 'ast.usesNondeterminism'), undefined);
+});
+
+test('Dart: no closure is read out of a region tree-sitter had to recover (a Dart 3 record and switch expression misparsed)', () => {
+    const source = ['class S {', '  ({int face, int edge}) get palette => switch (state) {', '        T.a => (face: 1, edge: 2),', '        _ => (face: 3, edge: 4),', '      };', '  void ok() { run(() => 1); }', '}', ''].join('\n');
+    // The misparse also loses the class scope (`ok`, not `S.ok`) — as before; only the record no longer reads as a closure.
+    assert.deepEqual(symbolsOf('r.dart', source), ['ok', 'ok.(anonymous)#0']);
+});
+
+test('Dart: identity scheme 1 measures named functions only, as before accessors and closures were measured', () => {
+    const dir = mkdtempSync(join(work, 'case-'));
+    writeFileSync(join(dir, 's.dart'), ['class A {', '  int get v => 1;', '  void m() { run(() => 1); }', '}', ''].join('\n'));
+    const {facts} = analyze({rootPath: dir, knowledgeDir, ruleSetDir, config: DEFAULT_CONFIG, identityScheme: 1});
+    assert.deepEqual(facts.filter((fact) => fact.kind === 'metric.functionLength').map((fact) => fact.subject.symbol), ['A.m']);
+});
+
 test('PHP: methods by class and trait; a closure takes its variable, or is <scope>.(anonymous)#n', () => {
     const source = [
         '<?php',

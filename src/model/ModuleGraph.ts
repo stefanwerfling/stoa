@@ -1,7 +1,10 @@
+import {dirname, isAbsolute, resolve as resolvePath} from 'node:path';
 import type {Fact, SourceRange} from '../Types.js';
 import type {ModuleResolver, ResolutionMethod} from '../analysis/ModuleResolution.js';
 import type {DartDirectiveValue} from '../analysis/dart/DartDeclarations.js';
 import type {DartLibraryIndex} from './DartLibraryIndex.js';
+import type {CppIncludeValue} from '../analysis/cpp/CppExtraction.js';
+import {isStandardHeader} from '../analysis/cpp/StandardHeaders.js';
 
 /**
  * A reusable, project-wide module dependency graph (Phase 0 of the
@@ -29,6 +32,12 @@ import type {DartLibraryIndex} from './DartLibraryIndex.js';
  * `origin: 'dart.importSpec'` (absent = `deps.import`, so every pre-E2 entry is
  * byte-identical) and are NOT part of `cycleAdjacency`: circular imports are
  * legal and common in Dart, and reporting them is a separate decision.
+ *
+ * Identity spec, phase 4: a PHP `use` (a `deps.import` fact carrying
+ * `useKind`) resolves through the root composer.json's PSR-4 mappings
+ * (`ModuleResolver.resolvePhpClass`) to an edge with `resolution: 'psr4'`,
+ * part of `cycleAdjacency` — as a TS `import` is, whether the name is used
+ * at run time or only in types (PHP has no `import type` to tell them apart).
  */
 
 /**
@@ -37,7 +46,7 @@ import type {DartLibraryIndex} from './DartLibraryIndex.js';
  * (`export … from`) — a module dependency of the barrel, carried for the
  * SymbolGraph's re-export chains; rules that predate it skip these entries.
  */
-export type ModuleEdgeOrigin = 'deps.import' | 'dart.importSpec' | 'deps.reexport';
+export type ModuleEdgeOrigin = 'deps.import' | 'dart.importSpec' | 'deps.reexport' | 'cpp.include';
 
 /** How a Dart directive was resolved: a relative URI, or a `package:` URI of the project's own packages. */
 export type DartResolutionMethod = 'relative' | 'package';
@@ -57,12 +66,14 @@ export interface ModuleEdge {
     specifier: string;
     /** From the `deps.import` fact: a type-only import (erased at compile time, no runtime dependency). */
     isTypeOnly: boolean;
-    /** How `specifier` was resolved to `to` -- always a resolved method here (never `unresolved`). `package` only for Dart edges. */
+    /** How `specifier` was resolved to `to` -- always a resolved method here (never `unresolved`). `package` only for Dart edges, `psr4` only for PHP `use` edges. */
     resolution: Exclude<ResolutionMethod, 'unresolved'> | 'package';
     /** Set only for Dart edges (`dart.importSpec`); absent = `deps.import`. */
     origin?: ModuleEdgeOrigin;
     /** Dart edges only: the directive that created the edge. */
     dartDirective?: 'import' | 'export';
+    /** C/C++ edges only (`cpp.include`): the include sits in a preprocessor conditional — compiled only in some configurations. */
+    conditional?: boolean;
     /** ALL source sites of this one relationship (one per contributing `deps.import` fact), deduplicated by factId and sorted deterministically — so a finding can cite every place the edge occurs, never just the first. */
     evidence: ImportEvidence[];
 }
@@ -78,10 +89,13 @@ export interface UnresolvedImport {
     /** Dart only: the directive kind. */
     dartDirective?: 'import' | 'export';
     /**
-     * TS entries only (`deps.import` / `deps.reexport`): the specifier names a
+     * TS entries (`deps.import` / `deps.reexport`): the specifier names a
      * package outside the project (`ModuleResolver.isExternal`) — as opposed
      * to a project reference that failed to resolve (relative, `#`, a tsconfig
      * `paths` match without an analyzed target).
+     * PHP `use` entries: the name lies outside every PSR-4 prefix of the
+     * project's composer.json (`true`) or under one (`false`); absent when
+     * there is no composer.json — unknown, neither project nor package.
      */
     external?: boolean;
 }
@@ -115,7 +129,9 @@ const compareUnresolved = (a: UnresolvedImport, b: UnresolvedImport): number =>
     a.from.localeCompare(b.from) ||
     a.specifier.localeCompare(b.specifier) ||
     (a.dartDirective ?? '').localeCompare(b.dartDirective ?? '') ||
-    (a.origin ?? '').localeCompare(b.origin ?? '');
+    (a.origin ?? '').localeCompare(b.origin ?? '') ||
+    // A PHP class and a function `use` of one name: two entries, ordered by their first site.
+    (a.evidence[0]?.factId ?? '').localeCompare(b.evidence[0]?.factId ?? '');
 
 // Deterministic order for the evidence sites of one edge/unresolved import:
 // by factId, then by source position — independent of the order facts arrived.
@@ -147,6 +163,14 @@ export const buildModuleGraph = (facts: readonly Fact[], analyzedFiles: Readonly
     for (const fact of facts) {
         if (fact.kind === 'dart.importSpec' && dartIndex !== undefined) {
             addDartDirective(fact, analyzedFiles, dartIndex, edgeByKey, unresolvedByKey);
+            continue;
+        }
+        if (fact.kind === 'deps.import' && (fact.value as unknown as Partial<PhpUseValue>).useKind !== undefined) {
+            addPhpUse(fact, {analyzedFiles, resolver, edgeByKey, unresolvedByKey});
+            continue;
+        }
+        if (fact.kind === 'cpp.include') {
+            addCppInclude(fact, {analyzedFiles, resolver, edgeByKey, unresolvedByKey});
             continue;
         }
         if (fact.kind === 'deps.import' || fact.kind === 'deps.reexport') {
@@ -211,6 +235,76 @@ const addTsDependency = (fact: Fact, {analyzedFiles, resolver, edgeByKey, unreso
     }
 };
 
+/** A PHP `use` (a `deps.import` fact of the PHP adapter): the imported name and what kind of name it is. */
+interface PhpUseValue {
+    module: string;
+    useKind: 'class' | 'function' | 'const';
+}
+
+// One PHP `use` → an edge (PSR-4, `resolution: 'psr4'`) or an unresolved
+// import. Only class-like names are looked up: Composer's PSR-4 autoloader
+// loads classes, never functions or constants, so those stay unresolved —
+// classified by namespace like a class (`resolvePhpClass` with no target).
+// `external` is set only when known (see `PhpClassLookup`).
+const addPhpUse = (fact: Fact, {analyzedFiles, resolver, edgeByKey, unresolvedByKey}: TsDependencySink): void => {
+    const value = fact.value as unknown as PhpUseValue;
+    const from = fact.subject.file;
+    const specifier = value.module;
+    const evidence: ImportEvidence = {factId: fact.id, range: fact.subject.range};
+    const lookup = resolver.resolvePhpClass(specifier, analyzedFiles);
+    const target = value.useKind === 'class' ? lookup.target : null;
+    if (target === null) {
+        const key = `php ${from} ${specifier} ${value.useKind}`;
+        const existing = unresolvedByKey.get(key);
+        if (existing === undefined) {
+            unresolvedByKey.set(key, {from, specifier, isTypeOnly: false, evidence: [evidence], ...(lookup.external !== undefined ? {external: lookup.external} : {})});
+        } else {
+            addEvidence(existing.evidence, evidence);
+        }
+        return;
+    }
+    const key = `php ${from} ${target} ${specifier}`;
+    const existing = edgeByKey.get(key);
+    if (existing === undefined) {
+        edgeByKey.set(key, {from, to: target, specifier, isTypeOnly: false, resolution: 'psr4', evidence: [evidence]});
+    } else {
+        addEvidence(existing.evidence, evidence);
+    }
+};
+
+// One C/C++ `#include` → an edge or an unresolved import. Only a quoted
+// include resolves, and only to the file next to the including one — the
+// first place every compiler searches for `"x.h"`; the include paths (`-I`)
+// after it are not known without the build, so a quoted include not found
+// there stays unresolved (`external` unknown). A `<…>` include is external
+// when it names a standard library header, otherwise unknown; an include of
+// a macro (`#include NAME`) is never resolved.
+const addCppInclude = (fact: Fact, {analyzedFiles, edgeByKey, unresolvedByKey}: TsDependencySink): void => {
+    const value = fact.value as unknown as CppIncludeValue;
+    const from = fact.subject.file;
+    const specifier = value.module;
+    const evidence: ImportEvidence = {factId: fact.id, range: fact.subject.range};
+    const candidate = value.form === 'quoted' && !isAbsolute(specifier) ? resolvePath(dirname(from), specifier) : null;
+    if (candidate === null || !analyzedFiles.has(candidate)) {
+        const key = `cpp ${from} ${specifier} ${value.form}`;
+        const existing = unresolvedByKey.get(key);
+        if (existing === undefined) {
+            const external = value.form === 'system' && isStandardHeader(specifier) ? {external: true} : {};
+            unresolvedByKey.set(key, {from, specifier, isTypeOnly: false, evidence: [evidence], origin: 'cpp.include', ...external});
+        } else {
+            addEvidence(existing.evidence, evidence);
+        }
+        return;
+    }
+    const key = `cpp ${from} ${candidate} ${specifier} ${value.conditional}`;
+    const existing = edgeByKey.get(key);
+    if (existing === undefined) {
+        edgeByKey.set(key, {from, to: candidate, specifier, isTypeOnly: false, resolution: 'relative', origin: 'cpp.include', conditional: value.conditional, evidence: [evidence]});
+    } else {
+        addEvidence(existing.evidence, evidence);
+    }
+};
+
 // One Dart `import`/`export` directive → an edge or an unresolved import.
 const addDartDirective = (
     fact: Fact,
@@ -257,6 +351,13 @@ const addDartDirective = (
  * type-only skipped, self-import ignored), so cycle findings are byte-identical.
  * Dart edges (E2, `origin: 'dart.importSpec'`) are excluded: Dart cycles are
  * not reported (see the module comment).
+ *
+ * Identity spec, phase 4: C/C++ include edges (`origin: 'cpp.include'`) are
+ * included unless conditional — a header that includes, directly or through
+ * others, the file including it is a cycle in what the compiler reads,
+ * whatever the include guards make of it. A conditional include exists only
+ * in some configurations and is left out. PHP `use` edges (`psr4`) are
+ * included (see the module comment).
  */
 export const cycleAdjacency = (graph: ModuleGraph): Map<string, Set<string>> => {
     const adjacency = new Map<string, Set<string>>();
@@ -264,7 +365,9 @@ export const cycleAdjacency = (graph: ModuleGraph): Map<string, Set<string>> => 
         adjacency.set(node, new Set<string>());
     }
     for (const edge of graph.edges) {
-        if (edge.origin !== undefined || edge.resolution !== 'relative' || edge.isTypeOnly || edge.from === edge.to) {
+        const cppInclude = edge.origin === 'cpp.include' && edge.conditional !== true;
+        const resolved = edge.resolution === 'relative' || (edge.resolution === 'psr4' && edge.origin === undefined);
+        if ((edge.origin !== undefined && !cppInclude) || !resolved || edge.isTypeOnly || edge.from === edge.to) {
             continue;
         }
         adjacency.get(edge.from)?.add(edge.to);

@@ -170,8 +170,10 @@ class ModuleTargets {
 
     public constructor(moduleGraph: ModuleGraph) {
         for (const edge of moduleGraph.edges) {
-            // Dart edges (E2) belong to Dart's library model, not to the ES-module model.
-            if (edge.origin === 'dart.importSpec') {
+            // Dart edges (E2) belong to Dart's library model, PHP `use` edges
+            // (PSR-4) to PHP's class names, C/C++ includes to the
+            // preprocessor — none to the ES-module model.
+            if (edge.origin === 'dart.importSpec' || edge.origin === 'cpp.include' || edge.resolution === 'psr4') {
                 continue;
             }
             const key = ModuleTargets.key(edge.from, edge.specifier, edge.origin);

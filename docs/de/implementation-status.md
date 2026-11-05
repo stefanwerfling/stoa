@@ -52,11 +52,11 @@ SOLID-Regeln (`R-SOLID-DIP-LAYER-DIRECTION`, `-LSP-CONTRACT-COMPATIBILITY`,
 markierte Validation-Dataflow-Kanten, `R-SOLID-DIP-LAYER-DIRECTION`
 (semantisch-heuristisch, Konfidenz 0.5), namensbasierte Persistenz-Erkennung.
 
-**Nicht implementiert:** C/C++-Include-/Abhängigkeits-Facts; Dart-Kanten in
+**Nicht implementiert:** C/C++-Include-Pfade (`-I`); Dart-Kanten in
 `R-DEP-CYCLE`/`R-UNUSED-EXPORT` (Dart-Importe werden als `dart.importSpec`
 extrahiert und von ModuleGraph und DIP-Schichtregel genutzt, die beiden
-Abhängigkeitsregeln lesen aber nur TS-/PHP-Kanten); PSR-4-Auflösung für PHP;
-ein Git-Diff-/PR-Modus; gerenderte (Browser-)Barrierefreiheitsprüfungen;
+Abhängigkeitsregeln lesen aber nur TS-/PHP-/C/C++-Kanten); `R-UNUSED-EXPORT`
+für PHP; ein Git-Diff-/PR-Modus; gerenderte (Browser-)Barrierefreiheitsprüfungen;
 API-Request-/DTO-Facts für eine durchgehende FE/BE-Kette; Validierung an
 unabhängigen externen Korpora.
 
@@ -1904,6 +1904,114 @@ Streuung von Lauf zu Lauf hinaus — ihn bestimmt die Extraktion.
   vor einem GC hängt davon ab, wann die junge Generation zuletzt
   eingesammelt wurde).
 
+## Semantische Lücken geschlossen: PHP-PSR-4, C/C++-Includes, Dart-Accessoren und -Closures, PHP-Typen (Finding-Identity-Spezifikation, Phase 4, 2026-11-05)
+
+Die vier aus dem Phase-0-Inventar gewählten Lücken. Jede Beziehung behält
+einen ausdrücklichen Zustand — aufgelöst, unaufgelöst, mehrdeutig, extern
+oder unbekannt (`external` fehlt) —, und nichts ohne Beleg wird als
+aufgelöst ausgegeben. Ein Resolver pro Sprache, kein zweiter: der des
+ModuleGraph (über `ModuleResolver`); das TypeModel liest dessen Ergebnisse.
+
+- **PHP-`use` über composer.json PSR-4.** `ProjectConfig.psr4` liest
+  `autoload`/`autoload-dev` `psr-4` der Wurzel-composer.json (nie `vendor/`).
+  `ModuleResolver.resolvePhpClass` folgt Composers Reihenfolge: längstes
+  Präfix zuerst, Verzeichnisse wie deklariert, die erste existierende Datei
+  gewinnt — aufgelöst nur, wenn diese Datei analysiert wurde; ein früherer
+  Kandidat, der auf der Platte liegt, aber nicht analysiert wurde, lässt den
+  Namen unaufgelöst, statt einen späteren gewinnen zu lassen. ModuleGraph:
+  ein PHP-`use` (ein `deps.import`, das jetzt `useKind` trägt) wird zur
+  Kante mit `resolution: 'psr4'` oder zum unaufgelösten Eintrag mit
+  `external: true` (außerhalb aller Präfixe, composer.json vorhanden),
+  `false` (unter einem Präfix ohne Datei; ebenso jedes `use function` /
+  `use const` — PSR-4 lädt nur Klassen) oder ohne `external` (keine
+  composer.json: unbekannt). Vorher lief jedes PHP-`use` durch den
+  TypeScript-Resolver und galt als extern.
+  - Ein Gruppen-`use App\{A, B}` benennt seine Einträge jetzt mit dem
+    Gruppenpräfix (vorher `A`, `B`) — die Werte von
+    `deps.importDeep`/`deps.importUnused` für Gruppen-`use` ändern sich
+    entsprechend.
+  - `R-DEP-CYCLE` zählt PSR-4-Kanten wie ein TS-`import` (nur `import type`
+    wird übersprungen; PHP hat kein type-only-`use`) — die dokumentierte
+    Absicht „PSR-4-Auflösung, damit R-DEP-CYCLE PHP abdeckt“.
+- **C/C++-`#include`-Facts.** `cpp.include {module, form, conditional}`:
+  `form` = `quoted` / `system` / `macro` (`#include NAME`, Header
+  unbekannt); `conditional` = innerhalb von `#if`/`#ifdef`/`#elif`/`#else`
+  außer dem Include-Guard (ein `#ifndef X` + `#define X` auf oberster Ebene,
+  das die ganze Datei umfasst). ModuleGraph: ein Include in
+  Anführungszeichen wird zur Datei neben der einbindenden aufgelöst
+  (`relative`, Herkunft `cpp.include`) — die erste Stelle, die jeder
+  Compiler durchsucht; sonst unaufgelöst mit unbekanntem `external`
+  (Include-Pfade `-I` sind ohne den Build nicht bekannt). `<x>` eines
+  ISO-C/C++-Standard-Headers (`StandardHeaders.ts`) ist extern; jedes andere
+  `<x>` und jedes Makro-Include bleibt unbekannt. `R-DEP-CYCLE` 1.1.0 zählt
+  unbedingte Include-Kanten (Aussage unverändert; `missingContext` nennt die
+  neuen Grenzen). Die Architekturregel beurteilt Include-Kanten nach Schicht
+  und ein `<x>` nur dann als Paket, wenn es ein Standard-Header ist.
+- **Dart-Accessoren und -Closures gemessen.** Getter und Setter (`X.v:get` /
+  `X.v:set`, wenn beide existieren — wie TypeScripts Accessoren) und
+  Funktionsausdrücke — benannt nach der Variable oder dem Feld, das sie
+  initialisieren (`A.m.f`), sonst `<scope>.(anonymous)#n`. Ihre Rümpfe waren
+  schon aus den Metriken der umschließenden Funktion ausgenommen, keine
+  bestehende Metrik ändert sich; sie waren schlicht ungemessen. Eine Closure
+  in einer Funktion bekommt kein eigenes Nondeterminismus-Fact (das der
+  Funktion deckt ihren ganzen Rumpf, wie bisher) und kein
+  Widget-Baum-Fact (Teil des umschließenden Baums). Ein Funktionsausdruck in
+  einem von tree-sitter wiederhergestellten Bereich (`file.parseErrors` —
+  Dart-3-Records, Patterns, Switch-Ausdrücke) wird nicht gemessen: oft ist
+  er ein falsch gelesener Record (eine „Closure mit 18 Parametern“ in velyo
+  war einer). Schema 1 misst wie bisher nur benannte Funktionen. Stellen in
+  einer Closure (catch, Barrierefreiheit) gehören jetzt zu ihr — wie in
+  TypeScript.
+- **PHP-Typen im TypeModel.** PHP liefert `struct.typeDecl` (Schema 2,
+  `src/analysis/php/PhpMembers.ts` auf den gemeinsamen AST-Helfern in
+  `PhpAst.ts`) für benannte Klassen, Interfaces, Traits und Enums unter ihrer Identität
+  (`App\Service\UserService`): ein Trait ist ein `mixin`, sein `use` in einer
+  Klasse ein `with`-Supertyp; Member mit Rumpfform (`throws-unsupported`
+  nach der Regel des TypeScript-Adapters), `#[\Override]`, promotete
+  Konstruktorparameter und Rumpfreferenzen. `struct.importBindings` trägt
+  die Klassen-`use`s und den Namespace der Datei (`null`, wenn die Datei
+  mehrere deklariert). Das TypeModel löst einen PHP-Namen nach PHPs Regeln
+  (`\X`; erstes Segment = ein `use`-Alias; `namespace\X`; sonst relativ zum
+  Namespace) zur Deklaration mit dieser Identität auf, ohne Rücksicht auf
+  Groß-/Kleinschreibung; mehrere → mehrdeutig; keine → extern nur, wenn der
+  Name über ein `use` kam, das der ModuleGraph außerhalb des Projekts
+  verortet, sonst unaufgelöst (`\Exception`, …). Damit beurteilen die LSP-
+  und ISP-Regeln PHP; `R-SOLID-DIP-CONCRETE-DEPENDENCY` bleibt Dart-only
+  (seine UI-Klassifikation ist es).
+- **Nebenbei behobener Fehler:** eine abstrakte oder Interface-Methode
+  (`body: null`) ließ die PHP-Extraktion werfen — auf HEAD beendete eine
+  einzige solche Datei die ganze Analyse als `failed` ohne analysierte
+  Datei. Solche Methoden werden jetzt übersprungen (es gibt nichts zu
+  messen).
+- **Dynamische und unbekannte Konstrukte (Inventar).** Ausdrücklich
+  unbekannt, nie aufgelöst: C/C++-Makro-Includes, Includes in
+  Anführungszeichen, die nicht neben der einbindenden Datei liegen,
+  Nicht-Standard-`<x>`-Header, bedingte Includes (Kante markiert, außerhalb
+  der Zyklen-Sicht); PHP-Namen ohne composer.json; PHP-Namen in einer Datei
+  mit mehreren Namespaces. Gar nicht modelliert (kein Fact, also keine
+  Aussage): PHP `new $class`, `$x::m()`, `require $path`,
+  classmap-/`files`-Autoloading, PHP-Referenzen ohne `use` im ModuleGraph
+  (das TypeModel löst sie auf), Dart-Funktionsausdrücke in
+  wiederhergestellten Bereichen.
+
+Gemessen (Findings-Snapshots vorher → nachher,
+`scripts/compare-findings.ts`; `--jobs 1` und `--jobs 4` identisch; alle
+Golden-Korpora unverändert und bestanden):
+
+| Ziel | Änderung | Grund |
+|---|---|---|
+| Korpus, flyingfish Backend/Frontend | `R-DEP-CYCLE` geändert (Version 1.1.0, `missingContext`) | Regelsemantik erweitert |
+| swipemeister | + `R-SIDEEFFECT-NONDETERMINISM` `_WinnerFrameState._remaining` | ein Getter mit `DateTime.now()`, vorher ungemessen |
+| swipemeister | `R-A11Y-FLUTTER-IMAGE-LABEL` `_CardBackground.build>image#1` → `_CardBackground.build.(anonymous)#1>image#0` | das Bild steht in einer Closure, jetzt ein Scope |
+| velyo | + `R-DEEP-NESTING` `ContentPack.allWords` | ein Getter, Tiefe 4 |
+| velyo | + `R-COMPLEXITY-COGNITIVE`, `R-DEEP-NESTING` `_PathMap.build.(anonymous)#4` | eine 220-zeilige `LayoutBuilder`-Closure, kognitiv 39 |
+| velyo | `R-A11Y-FLUTTER-IMAGE-LABEL` `_GeoQuizState.build>image#0` → `…build.(anonymous)#1>image#0` | wie oben |
+| stoa (selbst) | `childNodes`-Findings mit der Funktion nach `PhpAst.ts` gewandert; `StructFacts` 17 → 18 Exporte (`UNSUPPORTED_MESSAGE`, jetzt von TS und PHP geteilt) | Umbau |
+
+Kein PHP- oder C/C++-Projekt ist unter den Vergleichszielen; das
+PHP-/C/C++-Verhalten ist durch Tests abgedeckt (`PhpModuleResolution`,
+`CppIncludes`, `FunctionIdentity`).
+
 ## Baseline-/Diff-Modus (opt-in, `--baseline`)
 
 Verdrahtet `Finding.baselineStatus` (`'new' | 'known' | 'fixed'`), das seit
@@ -2038,7 +2146,7 @@ Protokolleinträge oben:
 
 | Regel | Prinzip | Dimension | Hinweis |
 |-------|---------|-----------|---------|
-| R-DEP-CYCLE | marcus.cooperation | Abhängigkeiten | Tarjan-SCC über relative Importe; type-only-Importe übersprungen |
+| R-DEP-CYCLE | marcus.cooperation | Abhängigkeiten | Tarjan-SCC über relative Importe, PHP-`use` über PSR-4 und unbedingte C/C++-Includes in Anführungszeichen (1.1.0); type-only-Importe übersprungen |
 | R-UNUSED-EXPORT | marcus.cooperation | Abhängigkeiten | opt-in `--dead-exports`; nur bei Ganzprojekt-Scans sinnvoll |
 | R-SOLID-DIP-LAYER-DIRECTION | marcus.cooperation, marcus.control | Abhängigkeiten | opt-in `--solid`; **experimentell**, semantic-heuristic 0,5, low; Dart: eine UI-Bibliothek (aufgelöste Flutter-Widget-/State-Basis) importiert ein Datenzugriffs-Paket oder ein Datenzugriffs-Modul des Projekts (Stufe 1, Bibliotheksebene) |
 | R-VALIDATION-CONTRACT-INVALID-ID | marcus.purpose | Robustheit | opt-in `--contracts <datei>`; `stoa:validation`-Annotation entspricht nicht dem Trace-ID-Format |
@@ -2431,7 +2539,7 @@ zu liefern.
 
 ## Qualitätssicherung
 
-- **node:test-Suite** (`npm test`, `test/*.test.ts`): 650 Tests, 0 fehlgeschlagen,
+- **node:test-Suite** (`npm test`, `test/*.test.ts`): 668 Tests, 0 fehlgeschlagen,
   Lauf vom 2026-11-04 (Regeln pos./neg., Extraktion, Schema-Validierung, i18n,
   Determinismus, SARIF, Eval, Semantik-Groundedness, Datenschutz,
   Finding-Trennung, semantische Modelle, Identitäten, Metriken).
@@ -2568,12 +2676,15 @@ zu liefern.
 
 ## Noch offen
 
-C/C++-Include-/Abhängigkeits-Facts; Dart-Kanten in R-DEP-CYCLE/R-UNUSED-EXPORT
-(Dart-Importe liegen als `dart.importSpec` im ModuleGraph, die beiden Regeln
-lesen aber nur TS-/PHP-Kanten); ein Git-Diff-/PR-Modus (die
-Snapshot-Baseline existiert, siehe „Baseline-/Diff-Modus"); ein
-Suppression-Workflow über die Baseline hinaus; PSR-4-Auflösung, damit
-R-DEP-CYCLE/R-UNUSED-EXPORT auch PHP abdecken; generischer ESLint-Fact-Adapter;
+C/C++-Include-Pfade (`-I`, `compile_commands.json`) — ein Include in
+Anführungszeichen wird nur neben der einbindenden Datei aufgelöst;
+Dart-Kanten in R-DEP-CYCLE/R-UNUSED-EXPORT (Dart-Importe liegen als
+`dart.importSpec` im ModuleGraph, die beiden Regeln lesen aber nur
+TS-/PHP-/C/C++-Kanten); R-UNUSED-EXPORT für PHP (PSR-4-Auflösung gibt es
+seit Phase 4 der Identity-Spezifikation, Export-/Importnamen-Facts für PHP
+nicht); ein Git-Diff-/PR-Modus (die Snapshot-Baseline existiert, siehe
+„Baseline-/Diff-Modus"); ein Suppression-Workflow über die Baseline hinaus;
+generischer ESLint-Fact-Adapter;
 Kontext-Facts (`flag.generatedCode`, `hasTests`) für reichhaltigere
 Suppression; LLM-Ausgabe-Evaluierung im Maßstab.
 
