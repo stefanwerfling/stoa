@@ -23,13 +23,13 @@ const sampleFinding = (file: string, ruleId: string, symbol: string): Finding =>
 });
 
 const reportOf = (findings: Finding[]): AnalysisReport => ({
-    versions: {engine: '0.1.0', ruleSet: 'default@1', knowledgeBase: 'marcus@1', adapters: {}},
+    versions: {engine: '0.1.0', ruleSet: 'default@1', knowledgeBase: 'marcus@1', adapters: {}, identity: 3},
     coverage: {status: 'complete', filesSelected: 1, filesAnalyzed: 1, filesSkipped: 0, filesCancelled: 0, excludedByReason: {}, excludedSample: [], factCount: 0},
     findings
 });
 
 const incompleteReportOf = (findings: Finding[]): AnalysisReport => ({
-    versions: {engine: '0.1.0', ruleSet: 'default@1', knowledgeBase: 'marcus@1', adapters: {}},
+    versions: {engine: '0.1.0', ruleSet: 'default@1', knowledgeBase: 'marcus@1', adapters: {}, identity: 3},
     coverage: {
         status: 'partial',
         filesSelected: 10,

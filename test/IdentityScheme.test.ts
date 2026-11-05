@@ -195,9 +195,11 @@ test('migrateBaseline pairs each finding with itself across both schemes, drops 
     const current = analyzeDir(dir).report;
     const old = {version: 1 as const, findings: [...legacy.findings.map((finding) => findingKey(dir, finding)), {file: 'gone.ts', rule: 'R-ERR-SWALLOWED', symbol: 'catch#0'}]};
     const migration = migrateBaseline(old, legacy, current, dir);
+    assert.ok(migration.baseline !== null);
     assert.equal(migration.baseline.identity, IDENTITY_SCHEME);
     assert.deepEqual(migration.baseline.findings.map(keyString), current.findings.map((finding) => keyString(findingKey(dir, finding))).sort());
-    assert.deepEqual(migration.unmatched.map(keyString), ['gone.ts::R-ERR-SWALLOWED::catch#0']);
+    const dropped = migration.entries.filter((item) => item.outcome !== 'matched').map((item) => `${keyString(item.entry)} ${item.outcome} ${item.reason ?? ''}`);
+    assert.deepEqual(dropped, ['gone.ts::R-ERR-SWALLOWED::catch#0 notReproducible noLegacyFinding']);
     const partial: AnalysisReport = {...legacy, coverage: {...legacy.coverage, status: 'partial'}};
     assert.throws(() => migrateBaseline(old, partial, current, dir), IncompleteAnalysisError);
 });

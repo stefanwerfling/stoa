@@ -120,16 +120,25 @@ export const findingKey = (rootDir: string, finding: Finding): FindingKey => ({
  * them apart, so none merges them; each reports them.
  */
 export const duplicateKeys = (keys: readonly FindingKey[]): FindingKey[] => {
+    const repeated = new Map(splitRepeated(keys).repeated.map((key): [string, FindingKey] => [keyString(key), key]));
+    return [...repeated.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([, key]) => key);
+};
+
+/**
+ * `keys` split into the first occurrence of each identity and every further
+ * copy, both in input order — the per-copy view of what `duplicateKeys`
+ * names once (the evaluator lists each surplus copy).
+ */
+export const splitRepeated = (keys: readonly FindingKey[]): {unique: FindingKey[]; repeated: FindingKey[]} => {
     const seen = new Set<string>();
-    const repeated = new Map<string, FindingKey>();
+    const unique: FindingKey[] = [];
+    const repeated: FindingKey[] = [];
     for (const key of keys) {
         const asString = keyString(key);
-        if (seen.has(asString)) {
-            repeated.set(asString, key);
-        }
+        (seen.has(asString) ? repeated : unique).push(key);
         seen.add(asString);
     }
-    return [...repeated.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([, key]) => key);
+    return {unique, repeated};
 };
 
 /** The one wording for `duplicateKeys` output: how many identities, which (the first five). */

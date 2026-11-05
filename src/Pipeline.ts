@@ -552,7 +552,8 @@ const finishRun = (run: Run, ingestion: Ingestion, options: AnalyzeOptions): Ana
         engine: ENGINE_VERSION,
         ruleSet: options.config.ruleSet,
         knowledgeBase: options.config.knowledgeBase,
-        adapters: adapterVersions
+        adapters: adapterVersions,
+        identity: options.identityScheme ?? IDENTITY_SCHEME
     };
 
     const report: AnalysisReport = {

@@ -1,4 +1,4 @@
-import {findingKey as producedKey, keyString, toForwardSlashes, type FindingKey} from '../FindingIdentity.js';
+import {findingKey as producedKey, keyString, splitRepeated, toForwardSlashes, type FindingKey} from '../FindingIdentity.js';
 import type {Finding} from '../Types.js';
 import type {
     EvaluationAnalysis,
@@ -37,36 +37,12 @@ const ratio = (hit: number, other: number): number => {
 export const evaluate = (findings: Finding[], expected: ExpectedFinding[], rootDir: string): EvaluationResult => {
     // Expected identities must themselves be unique; a repeated manifest entry
     // is a corpus-integrity error (it would otherwise collapse into the set and
-    // hide a mistake). Reported explicitly, not silently de-duplicated.
-    const expectedSeen = new Set<string>();
-    const uniqueExpected: FindingKey[] = [];
-    const duplicateExpected: FindingKey[] = [];
-    for (const item of expected) {
-        const key = expectedKey(item);
-        const asString = keyString(key);
-        if (expectedSeen.has(asString)) {
-            duplicateExpected.push(key);
-            continue;
-        }
-        expectedSeen.add(asString);
-        uniqueExpected.push(key);
-    }
-    const expectedKeys = expectedSeen;
-
-    const seen = new Set<string>();
-    const uniqueProduced: FindingKey[] = [];
-    const duplicates: FindingKey[] = [];
-    for (const finding of findings) {
-        const key = producedKey(rootDir, finding);
-        const asString = keyString(key);
-        if (seen.has(asString)) {
-            duplicates.push(key);
-            continue;
-        }
-        seen.add(asString);
-        uniqueProduced.push(key);
-    }
-    const producedKeys = seen;
+    // hide a mistake). Reported explicitly, not silently de-duplicated — and
+    // the same for a produced identity (FindingIdentity.ts `splitRepeated`).
+    const {unique: uniqueExpected, repeated: duplicateExpected} = splitRepeated(expected.map(expectedKey));
+    const {unique: uniqueProduced, repeated: duplicates} = splitRepeated(findings.map((finding) => producedKey(rootDir, finding)));
+    const expectedKeys = new Set(uniqueExpected.map(keyString));
+    const producedKeys = new Set(uniqueProduced.map(keyString));
 
     const rules = new Set<string>([...uniqueExpected.map((item) => item.rule), ...uniqueProduced.map((item) => item.rule)]);
     const perRule: RuleMetrics[] = [];

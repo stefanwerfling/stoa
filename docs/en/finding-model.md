@@ -169,7 +169,9 @@ flowchart LR
 | **SARIF** | Integration into CI / code hosting (GitHub Code Scanning etc.) |
 
 All formats stamp engine, rule-set, KB and adapter versions as well as the
-analysis coverage.
+analysis coverage; JSON also stamps the finding-identity scheme
+(`versions.identity`), so two reports of different schemes are not mistaken
+for a wave of renamed findings.
 
 **Output filters** (`--min-confidence <0..1>`, `--certainty <list>`,
 `--no-experimental`) act on the rendered report only, after any baseline
@@ -271,9 +273,29 @@ schemes would mark known findings new and report others fixed, silently —
 the CLI exits 1 and names the way out: `--migrate-baseline` analyzes the same
 code under the baseline's scheme and the current one, pairs each finding with
 itself by position (`Finding.id`, equal in both runs) and rewrites the
-baseline in place; entries no current finding reproduces are dropped and
-listed. It refuses a partial analysis and an identity collision. There is no
-silent migration. Corpus manifests (`expected.json`) and findings snapshots
+baseline in place. There is no silent migration, and no entry is assigned
+by guesswork — each one gets exactly one outcome:
+
+| Outcome | Reason | Meaning | Effect |
+|---|---|---|---|
+| `matched` | — | one legacy finding has the identity, one finding in each run sits at its position | carried over under its current identity (`renamed` if it changed) |
+| `notReproducible` | `noLegacyFinding` | no finding has the identity under the old scheme (fixed since, or changed) | dropped |
+| `notReproducible` | `noCurrentFinding` | its finding has no counterpart at the same position under the current scheme | dropped |
+| `ambiguous` | `legacyIdentityShared` | the old scheme gives the identity to more than one finding | dropped; its finding reads as `new` |
+| `ambiguous` | `positionShared` | more than one finding sits at the paired position (in either run) | dropped; its finding reads as `new` |
+| `duplicate` | `targetIdentityShared` | the identity it would take is produced more than once (a rule defect) | nothing written, exit 1 |
+
+The result depends only on the baseline and the two runs (the same code
+state migrates to the same file). It is reported on stderr (counts per
+outcome, the dropped entries with their reason), in the JSON report as
+`baseline.migration` (`{from, to, matched, notReproducible, ambiguous,
+duplicate, renamed: [{from, to}], dropped: [{outcome, reason, entry}]}`)
+and in Markdown as a line under the baseline line. `--migrate-baseline` on a
+baseline that is already current, or does not exist yet, says there is
+nothing to migrate and changes nothing. A partial analysis is refused.
+Without a baseline, `stoa analyze` still names an identity collision on
+stderr (exit code unchanged); with one it is in
+`baseline.duplicateIdentities`. Corpus manifests (`expected.json`) and findings snapshots
 (`scripts/compare-findings.ts`) record the scheme the same way (absent = 1): a
 manifest of another scheme is refused by `stoa eval`; two snapshots of
 different schemes are compared by position, each changed identity listed.

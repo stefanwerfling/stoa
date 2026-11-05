@@ -1330,7 +1330,9 @@ stoa eval <pfad> --expected <datei> [--format markdown|json] [--solid] [--archit
   älteren Finding-Identitätsschema geschriebene Baseline vor dem Vergleich an
   Ort und Stelle um (siehe "Finding-Identitätsschema 2" unten). Ohne den
   Schalter ist eine solche Baseline ein Fehler (Exit 1) und wird nie
-  verglichen.
+  verglichen. Jeder Eintrag wird klassifiziert (`matched`,
+  `notReproducible`, `ambiguous`, `duplicate`, mit Grund) — stderr, JSON
+  `baseline.migration`, Markdown; siehe docs/de/finding-model.md.
 - `--min-confidence <0..1>` / `--certainty <liste>` (wiederholbar oder
   kommagetrennt: `syntactic`, `semantic-heuristic`, `external-tool`) /
   `--no-experimental` — Ausgabefilter, angewendet nach dem Baseline-Schritt; der
@@ -2296,6 +2298,76 @@ Befund (beides Entscheidungen des Nutzers). Einzelheiten der Benennung in
   (es ist der Paarungsschlüssel der Migration, keine Identität).
 - **Geprüft:** `npm run typecheck`, `npm run typecheck:test`,
   `npm run lint` 0 Fehler; `npm test` 686 / 686; `npm run build` ok; keine
+  Abhängigkeit hinzugefügt.
+
+## Baseline und Evaluator konsolidiert (Quality-Hardening-Spezifikation, Phase 3, 2026-11-05)
+
+Ziel: Alle Komponenten verwenden dieselbe Finding-Identity-Semantik, und
+eine Baseline-Migration ist explizit, reproduzierbar und nachvollziehbar.
+
+- **Eine Identitätslogik:** Baseline, Migration, Snapshot-Diff
+  (`src/FindingDiff.ts`), Evaluator und CLI schlüsseln über `findingKey` /
+  `keyString` und benennen eine mehrfache Identität mit `duplicateKeys` /
+  `duplicateIdentityText` (`src/FindingIdentity.ts`). Die zwei
+  handgeschriebenen "seen"-Schleifen des Evaluators ersetzt das gemeinsame
+  `splitRepeated` (auf dem jetzt auch `duplicateKeys` aufbaut); seine
+  Listen bleiben wie sie waren (jede überzählige Kopie).
+- **Migration klassifiziert** (`src/BaselineMigration.ts`): Jeder Eintrag
+  bekommt ein Ergebnis — `matched`, `notReproducible` (`noLegacyFinding`,
+  `noCurrentFinding`), `ambiguous` (`legacyIdentityShared`,
+  `positionShared`), `duplicate` (`targetIdentityShared`). Vorher fielen die
+  ersten drei Fehlerfälle in eine Liste `unmatched`, eine geteilte
+  Alt-Identität wurde kommentarlos verworfen, und eine nur im Alt-Lauf
+  geteilte Position wurde gar nicht geprüft. `duplicate` schreibt weiterhin
+  nichts (Exit 1), nennt jetzt aber den Eintrag. Einträge werden in
+  Schlüsselreihenfolge verarbeitet; das Ergebnis hängt nicht von der
+  Reihenfolge der Einträge oder Befunde ab (getestet).
+- **Nachvollziehbare Ausgabe:** stderr nennt die Anzahl je Ergebnis und
+  jeden entfallenen Eintrag mit Grund (die Zeile beginnt weiter mit dem alten Wortlaut);
+  `AnalysisReport.baseline.migration` enthält die Anzahlen, die umbenannten
+  Einträge (`from` → `to`) und die entfallenen mit Ergebnis und Grund;
+  Markdown ergänzt eine Zeile unter der Baseline-Zeile (de/en) und listet
+  bis zu 20 entfallene Einträge.
+- **Keine stille Schemaumstellung:** Der JSON-Bericht stempelt das
+  Identitätsschema (`versions.identity`, additiv); `--migrate-baseline` auf
+  einer schon aktuellen oder noch nicht vorhandenen Baseline meldet "nichts
+  zu migrieren" und schreibt nichts.
+- **Duplikate auch ohne Baseline erkannt:** `stoa analyze` nennt eine
+  Identitätskollision auch ohne `--baseline` auf stderr (vorher prüften nur
+  `eval`, `--baseline` und `--update-baseline`); der Exit-Code bleibt.
+- **CLI-Vertrag:** kein Schalter hinzugefügt oder entfernt; Exit-Codes
+  unverändert (0 vollständig, 1 Fehler, 2 partiell); der alte stderr-Text
+  ist bis "(dropped)" Präfix des neuen; die Berichtsänderungen sind additiv
+  (`versions.identity`, `baseline.migration`).
+- **Gemessen** (dist-Build, die 9 Vergleichsziele, eine Baseline aller
+  Befunde unter Schema 1 und unter Schema 2, auf demselben Code migriert):
+  alle 18 Migrationen zu 100 % `matched` — 0 notReproducible, 0 ambiguous,
+  0 duplicate; umbenannt bei Schema 2 → 3: Korpus 3, swipemeister 6,
+  mimirmind 5, flyingfish 6, übrige 0; bei 1 → 3: Korpus 31, velyo 17,
+  MAPI 13, stoa `src` 4, swipemeister 31, flyingfish backend 130, rohc 0,
+  mimirmind 750, flyingfish 190. Schema 1 erzeugt auf zwei Dart-Zielen
+  weniger Befunde (velyo 49 statt 52, swipemeister 94 statt 95): Befunde,
+  die dort eine Identität teilten, wurden zusammengelegt
+  (`ContentPack.allWords` tiefe Verschachtelung, zwei Closures
+  `_PathMap.build.(anonymous)#4`, `_WinnerFrameState._remaining`). Nach
+  der Migration einer Schema-1-Baseline erscheinen sie als `new` — korrekt,
+  denn die alte Baseline hielt sie nie getrennt.
+- **Tests:** `test/BaselineMigration.test.ts` (11): jedes Ergebnis und jeder
+  Grund, keine Zuordnung bei geteilter Identität oder Position (in einem der
+  Läufe), Duplikat verhindert das Schreiben, Reihenfolge-Unabhängigkeit,
+  `migrationSummary` (renamed, dropped), Markdown de/en, CLI-JSON
+  `versions.identity` und `baseline.migration`, stderr-Gründe, ein zweites
+  `--migrate-baseline` schreibt nichts, Duplikat endet mit Exit 1 und
+  unberührter Datei, Kollisionswarnung ohne Baseline, fehlende
+  Baseline-Datei. Zwei bestehende Migrationstests lesen die neue
+  Ergebnisform (gleiche Zusicherungen: übernommene Schlüssel, der eine
+  entfallene Eintrag — jetzt mit Ergebnis und Grund).
+- **Nicht geändert:** Korpus-Manifeste werden weiterhin nicht automatisch
+  umgewandelt (ein erwarteter Befund, den die Engine verfehlt, hat kein
+  Gegenstück; die Freigabe bleibt manuell); ein neueres Schema als das
+  laufende gilt weiterhin als "malformed" (Exit 1).
+- **Geprüft:** `npm run typecheck`, `npm run typecheck:test`,
+  `npm run lint` 0 Fehler; `npm test` 697 / 697; `npm run build` ok; keine
   Abhängigkeit hinzugefügt.
 
 

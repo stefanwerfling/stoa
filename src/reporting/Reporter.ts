@@ -19,6 +19,30 @@ const baselineLine = (summary: BaselineSummary, t: ReportLabels): string => {
     return `- ${t.baseline}: ${counts}${collisions > 0 ? `, ${collisions} ${t.baselineCollisions}` : ''}`;
 };
 
+/** How many dropped migration entries the Markdown report lists; the JSON report has all. */
+const MIGRATION_LIST_LIMIT = 20;
+
+/** A baseline migration of this run: one line of counts per outcome, then the entries not carried over. */
+const migrationLines = (summary: BaselineSummary, t: ReportLabels): string[] => {
+    const migration = summary.migration;
+    if (migration === undefined) {
+        return [];
+    }
+    const label = {notReproducible: t.migrationNotReproducible, ambiguous: t.migrationAmbiguous, duplicate: t.migrationDuplicate};
+    const counts = [
+        `${migration.matched} ${t.migrationMatched} (${migration.renamed.length} ${t.migrationRenamed})`,
+        `${migration.notReproducible} ${label.notReproducible}`,
+        `${migration.ambiguous} ${label.ambiguous}`,
+        `${migration.duplicate} ${label.duplicate}`
+    ];
+    const more = migration.dropped.length - MIGRATION_LIST_LIMIT;
+    return [
+        `  - ${t.migrated} ${migration.from} → ${migration.to}: ${counts.join(', ')}`,
+        ...migration.dropped.slice(0, MIGRATION_LIST_LIMIT).map((item) => `    - ${label[item.outcome]} (${item.reason}): ${item.entry.file} ${item.entry.rule} ${item.entry.symbol}`),
+        ...(more > 0 ? [`    - … ${more} ${t.migrationMore}`] : [])
+    ];
+};
+
 /**
  * How the findings' identities are anchored (FindingIdentity.ts
  * `IdentityKind`), in the fixed kind order, kinds that occur only — so a
@@ -72,7 +96,7 @@ export const toMarkdown = (report: AnalysisReport, options: ReportOptions = {}):
         lines.push(`- ${t.status}: ${report.error}`);
     }
     if (report.baseline !== undefined) {
-        lines.push(baselineLine(report.baseline, t));
+        lines.push(baselineLine(report.baseline, t), ...migrationLines(report.baseline, t));
     }
     if (report.filter !== undefined) {
         const criteria = [

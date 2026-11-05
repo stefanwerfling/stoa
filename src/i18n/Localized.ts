@@ -43,6 +43,13 @@ export interface ReportLabels {
     baselineKnown: string;
     baselineFixed: string;
     baselineCollisions: string;
+    migrated: string;
+    migrationMatched: string;
+    migrationRenamed: string;
+    migrationNotReproducible: string;
+    migrationAmbiguous: string;
+    migrationDuplicate: string;
+    migrationMore: string;
     identities: string;
     identitiesUnknown: string;
     filter: string;
@@ -85,6 +92,13 @@ const LABELS: Record<string, ReportLabels> = {
         baselineKnown: 'known',
         baselineFixed: 'fixed',
         baselineCollisions: 'identity collision(s), status unreliable',
+        migrated: 'migrated from finding identity scheme',
+        migrationMatched: 'carried over',
+        migrationRenamed: 'renamed',
+        migrationNotReproducible: 'not reproducible',
+        migrationAmbiguous: 'ambiguous',
+        migrationDuplicate: 'duplicate',
+        migrationMore: 'more (see baseline.migration in the JSON report)',
         identities: 'Finding identities',
         identitiesUnknown: 'without kind',
         filter: 'Filter',
@@ -125,6 +139,13 @@ const LABELS: Record<string, ReportLabels> = {
         baselineKnown: 'bekannt',
         baselineFixed: 'behoben',
         baselineCollisions: 'Identitätskollision(en), Status unzuverlässig',
+        migrated: 'migriert von Finding-Identitätsschema',
+        migrationMatched: 'übernommen',
+        migrationRenamed: 'umbenannt',
+        migrationNotReproducible: 'nicht reproduzierbar',
+        migrationAmbiguous: 'mehrdeutig',
+        migrationDuplicate: 'doppelt',
+        migrationMore: 'weitere (siehe baseline.migration im JSON-Bericht)',
         identities: 'Finding-Identitäten',
         identitiesUnknown: 'ohne Kategorie',
         filter: 'Filter',

@@ -3,9 +3,9 @@ import {dirname, join, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {parseArgs} from 'node:util';
 import {applyBaseline, baselineScheme, IncompleteAnalysisError, loadBaseline, onlyNewFindings, saveBaseline, schemeMismatchMessage, writeBaselineFile, type BaselineFile} from './Baseline.js';
-import {migrateBaseline, needsMigration} from './BaselineMigration.js';
+import {duplicateMigrationText, migrateBaseline, migrationSummary, needsMigration} from './BaselineMigration.js';
 import {applyFindingFilter, parseFindingFilter} from './FindingFilter.js';
-import {duplicateIdentityText, IDENTITY_SCHEME, keyString} from './FindingIdentity.js';
+import {duplicateIdentityText, duplicateKeys, findingKey, IDENTITY_SCHEME, keyString} from './FindingIdentity.js';
 import {loadConfig} from './Config.js';
 import {loadValidationContract} from './contracts/ValidationContract.js';
 import {loadArchitectureConfig, type ArchitectureConfig} from './architecture/ArchitectureConfig.js';
@@ -20,7 +20,7 @@ import {toSarif} from './reporting/SarifReporter.js';
 import {createSemanticAdapter} from './semantic/SemanticAdapters.js';
 import {augmentWithSemantics} from './semantic/SemanticRunner.js';
 import {ENGINE_VERSION} from './Version.js';
-import type {AnalysisReport, AnalysisResult, Fact} from './Types.js';
+import type {AnalysisReport, AnalysisResult, BaselineMigrationSummary, Fact, MigrationReason} from './Types.js';
 
 // Exit codes for `stoa analyze` (see docs implementation-status — "Analysis
 // Completion Integrity"): 0 only for a genuinely complete scan, 1 for a
@@ -40,7 +40,7 @@ const EXIT_INCOMPLETE = 2;
  * trace on stderr with nothing on stdout.
  */
 const buildFailedReport = (message: string): AnalysisReport => ({
-    versions: {engine: ENGINE_VERSION, ruleSet: '', knowledgeBase: '', adapters: {}},
+    versions: {engine: ENGINE_VERSION, ruleSet: '', knowledgeBase: '', adapters: {}, identity: IDENTITY_SCHEME},
     coverage: {
         status: 'failed',
         filesSelected: 0,
@@ -221,27 +221,56 @@ const jobsOf = (values: CliValues): number | null => {
     return jobs;
 };
 
+/** How a dropped migration entry is explained on stderr. */
+const MIGRATION_REASON_TEXT: Record<MigrationReason, string> = {
+    noLegacyFinding: 'not reproducible — no finding has this identity under the old scheme',
+    noCurrentFinding: 'not reproducible — its finding has no counterpart at the same position under the current scheme',
+    legacyIdentityShared: 'ambiguous — the old scheme gives this identity to more than one finding',
+    positionShared: 'ambiguous — more than one finding sits at its position',
+    targetIdentityShared: 'duplicate — its current identity is produced more than once'
+};
+
+/** The migration on stderr: counts per outcome, then every entry not carried over (the first 20) with its reason. */
+const reportMigration = (path: string, summary: BaselineMigrationSummary): void => {
+    const carried = `${summary.matched} entr${summary.matched === 1 ? 'y' : 'ies'} carried over`;
+    process.stderr.write(
+        `[stoa] baseline ${path} migrated from finding identity scheme ${summary.from} to ${summary.to}: ${carried}, ${summary.notReproducible} not reproduced by the current code (dropped), ` +
+            `${summary.ambiguous} ambiguous (dropped), ${summary.duplicate} duplicate; ${summary.renamed.length} renamed.\n`
+    );
+    for (const item of summary.dropped.slice(0, 20)) {
+        process.stderr.write(`[stoa]   dropped: ${keyString(item.entry)} (${MIGRATION_REASON_TEXT[item.reason]})\n`);
+    }
+    if (summary.dropped.length > 20) {
+        process.stderr.write(`[stoa]   … and ${summary.dropped.length - 20} more (see baseline.migration in the JSON report)\n`);
+    }
+};
+
 /**
  * `--migrate-baseline`: analyzes the same code once more under the
  * baseline's identity scheme, converts the baseline (BaselineMigration.ts),
- * writes it in place and says what happened — entries carried over, and every
- * entry no current finding reproduces (dropped, listed). Returns the
- * converted baseline, or null after an error (reported).
+ * writes it in place and says what happened — every entry classified
+ * (matched, notReproducible, ambiguous, duplicate), the dropped ones listed
+ * with the reason. Returns the converted baseline and its summary, or null
+ * after an error (reported; the file is left untouched).
  */
-const migrateBaselineFile = async (path: string, baseline: BaselineFile, options: AnalyzeAsyncOptions, current: AnalysisReport): Promise<BaselineFile | null> => {
-    const scheme = baselineScheme(baseline);
+const migrateBaselineFile = async (
+    path: string,
+    baseline: BaselineFile,
+    options: AnalyzeAsyncOptions,
+    current: AnalysisReport
+): Promise<{baseline: BaselineFile; summary: BaselineMigrationSummary} | null> => {
     try {
-        const legacy = await analyzeAsync({...options, jobs: 1, identityScheme: scheme});
+        const legacy = await analyzeAsync({...options, jobs: 1, identityScheme: baselineScheme(baseline)});
         const migration = migrateBaseline(baseline, legacy.report, current, options.rootPath);
+        const summary = migrationSummary(migration);
+        if (migration.baseline === null) {
+            reportMigration(path, summary);
+            process.stderr.write(`${duplicateMigrationText(migration)}; nothing was compared or written.\n`);
+            return null;
+        }
         writeBaselineFile(path, migration.baseline);
-        process.stderr.write(`[stoa] baseline ${path} migrated from finding identity scheme ${scheme} to ${IDENTITY_SCHEME}: ${migration.migrated} entr${migration.migrated === 1 ? 'y' : 'ies'} carried over, ${migration.unmatched.length} not reproduced by the current code (dropped).\n`);
-        for (const entry of migration.unmatched.slice(0, 20)) {
-            process.stderr.write(`[stoa]   dropped: ${keyString(entry)}\n`);
-        }
-        if (migration.unmatched.length > 20) {
-            process.stderr.write(`[stoa]   … and ${migration.unmatched.length - 20} more\n`);
-        }
-        return migration.baseline;
+        reportMigration(path, summary);
+        return {baseline: migration.baseline, summary};
     } catch (error) {
         process.stderr.write(`${(error as Error).message}\n`);
         return null;
@@ -258,6 +287,14 @@ const warnAboutComparison = (report: AnalysisReport): void => {
     const duplicates = report.baseline?.duplicateIdentities ?? [];
     if (duplicates.length > 0) {
         process.stderr.write(`[stoa] WARNING: identity collision — ${duplicateIdentityText(duplicates)}. Their new/known status is unreliable (see baseline.duplicateIdentities); --update-baseline refuses such a run.\n`);
+    }
+};
+
+/** An identity the run produced more than once (a rule defect), on stderr — the exit code stays as it is. */
+const warnAboutCollisions = (report: AnalysisReport, rootPath: string): void => {
+    const duplicates = duplicateKeys(report.findings.map((finding) => findingKey(rootPath, finding)));
+    if (duplicates.length > 0) {
+        process.stderr.write(`[stoa] WARNING: identity collision — ${duplicateIdentityText(duplicates)}. A baseline cannot tell these findings apart; --update-baseline refuses such a run, eval fails it.\n`);
     }
 };
 
@@ -280,17 +317,27 @@ const compareWithBaseline = async (values: CliValues, baselineFile: string, resu
         process.stderr.write(`${(error as Error).message}\n`);
         return EXIT_ERROR;
     }
+    let migration: BaselineMigrationSummary | undefined;
     if (baseline !== null && needsMigration(baseline)) {
         if (values['migrate-baseline'] !== true) {
             process.stderr.write(`${schemeMismatchMessage(baselinePath, baselineScheme(baseline))}\n`);
             return EXIT_ERROR;
         }
-        baseline = await migrateBaselineFile(baselinePath, baseline, analysisOptions, result.report);
-        if (baseline === null) {
+        const migrated = await migrateBaselineFile(baselinePath, baseline, analysisOptions, result.report);
+        if (migrated === null) {
             return EXIT_ERROR;
         }
+        baseline = migrated.baseline;
+        migration = migrated.summary;
+    } else if (values['migrate-baseline'] === true) {
+        // Asked for, but nothing to convert — said, so a run that changed
+        // nothing does not read like one that migrated.
+        process.stderr.write(`[stoa] baseline ${baselinePath} ${baseline === null ? 'does not exist yet' : `already uses finding identity scheme ${IDENTITY_SCHEME}`} — nothing to migrate.\n`);
     }
     let report = applyBaseline(result.report, baseline, rootPath);
+    if (migration !== undefined && report.baseline !== undefined) {
+        report = {...report, baseline: {...report.baseline, migration}};
+    }
     warnAboutComparison(report);
     if (values['update-baseline'] === true) {
         // Reflects the CURRENT run (pre-filter) — updating the baseline
@@ -433,7 +480,12 @@ const runAnalyze = async (values: CliValues, target: string): Promise<number> =>
         process.stderr.write(`[stoa] WARNING: analysis is only partial${abortNote} — this report covers only the files actually reached, not the full selection (see coverage.excludedByReason/excludedSample).\n`);
     }
 
-    if (values.baseline !== undefined) {
+    if (values.baseline === undefined) {
+        // With a baseline, the comparison names a collision (see
+        // `warnAboutComparison`); without one it would go unseen until the
+        // next `--update-baseline` refuses the run.
+        warnAboutCollisions(result.report, rootPath);
+    } else {
         const compared = await compareWithBaseline(values, values.baseline, result, analysisOptions);
         if (typeof compared === 'number') {
             return compared;

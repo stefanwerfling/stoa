@@ -4,7 +4,7 @@
  * The deterministic core deals in these shapes only; adapters translate
  * language-specific detail into them.
  */
-import type {FindingKey, IdentityKind} from './FindingIdentity.js';
+import type {FindingKey, IdentityKind, IdentityScheme} from './FindingIdentity.js';
 import type {LocalizedText} from './i18n/Localized.js';
 
 export interface SourceRange {
@@ -227,6 +227,8 @@ export interface VersionStamp {
     ruleSet: string;
     knowledgeBase: string;
     adapters: Record<string, string>;
+    /** The finding-identity scheme the symbols follow (FindingIdentity.ts) — a consumer comparing two reports sees a scheme change instead of a wave of renamed findings. */
+    identity: IdentityScheme;
 }
 
 /**
@@ -327,6 +329,37 @@ export interface BaselineSummary {
      * cannot be told apart, so their `new`/`known` status is unreliable.
      */
     duplicateIdentities?: FindingKey[];
+    /** Present only when `--migrate-baseline` converted the baseline in this run (see BaselineMigration.ts). */
+    migration?: BaselineMigrationSummary;
+}
+
+/**
+ * What a baseline migration did with an entry (BaselineMigration.ts):
+ * carried over (`matched`), not produced any more (`notReproducible`), not
+ * assignable to one finding (`ambiguous`), or taking an identity another
+ * finding has too (`duplicate`).
+ */
+export type MigrationOutcome = 'matched' | 'notReproducible' | 'ambiguous' | 'duplicate';
+
+/**
+ * Why an entry was not carried over: `noLegacyFinding`/`noCurrentFinding`
+ * (notReproducible), `legacyIdentityShared`/`positionShared` (ambiguous),
+ * `targetIdentityShared` (duplicate).
+ */
+export type MigrationReason = 'noLegacyFinding' | 'noCurrentFinding' | 'legacyIdentityShared' | 'positionShared' | 'targetIdentityShared';
+
+/** A baseline migration in the report: counts per outcome, renamed entries, and every entry not carried over with its reason. */
+export interface BaselineMigrationSummary {
+    from: IdentityScheme;
+    to: IdentityScheme;
+    matched: number;
+    notReproducible: number;
+    ambiguous: number;
+    duplicate: number;
+    /** Matched entries whose identity changed: old → new. */
+    renamed: {from: FindingKey; to: FindingKey}[];
+    /** Entries not carried over. */
+    dropped: {outcome: Exclude<MigrationOutcome, 'matched'>; reason: MigrationReason; entry: FindingKey; current?: FindingKey}[];
 }
 
 /**

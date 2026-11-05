@@ -267,8 +267,9 @@ test('migrating a scheme-2 baseline to scheme 3 pairs each finding with itself: 
     const old = {version: 1 as const, identity: 2 as const, findings: legacy.findings.map((finding) => findingKey(dir, finding))};
     assert.ok(old.findings.some((key) => key.symbol === 'synchronize#0') && old.findings.some((key) => key.symbol === 'catch#0'));
     const migration = migrateBaseline(old, legacy, current, dir);
+    assert.ok(migration.baseline !== null);
     assert.equal(migration.baseline.identity, 3);
-    assert.deepEqual(migration.unmatched, []);
+    assert.deepEqual(migration.entries.filter((item) => item.outcome !== 'matched'), []);
     const symbols = migration.baseline.findings.map((key) => key.symbol);
     assert.ok(symbols.includes('dataSource>synchronize#0') && symbols.includes('(module)>catch#0') && symbols.includes('load>catch#0'), symbols.join(', '));
     assert.deepEqual(migration.baseline.findings.map(keyString), current.findings.map((finding) => keyString(findingKey(dir, finding))).sort());

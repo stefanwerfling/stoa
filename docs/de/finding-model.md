@@ -169,7 +169,9 @@ flowchart LR
 | **SARIF** | Integration in CI / Code-Hosting (GitHub Code Scanning etc.) |
 
 Alle Formate stempeln Engine-, Regelsatz-, KB- und Adapterversionen sowie die
-Analyse-Abdeckung.
+Analyse-Abdeckung; JSON stempelt zusätzlich das Finding-Identitätsschema
+(`versions.identity`), damit zwei Berichte verschiedener Schemata nicht als
+Welle umbenannter Befunde gelesen werden.
 
 **Ausgabefilter** (`--min-confidence <0..1>`, `--certainty <liste>`,
 `--no-experimental`) wirken nur auf den gerenderten Bericht, nach einem etwaigen
@@ -282,10 +284,30 @@ bekannte Befunde als neu und andere als behoben melden, stillschweigend —,
 die CLI endet mit Exit 1 und nennt den Ausweg: `--migrate-baseline`
 analysiert denselben Code unter dem Schema der Baseline und dem aktuellen,
 paart jeden Befund über seine Position mit sich selbst (`Finding.id`, in
-beiden Läufen gleich) und schreibt die Baseline an Ort und Stelle neu;
-Einträge, die kein aktueller Befund reproduziert, entfallen und werden
-aufgelistet. Eine unvollständige Analyse und eine Identitätskollision lehnt
-sie ab. Eine stille Migration gibt es nicht. Korpus-Manifeste
+beiden Läufen gleich) und schreibt die Baseline an Ort und Stelle neu. Eine
+stille Migration gibt es nicht, und kein Eintrag wird geraten zugeordnet —
+jeder bekommt genau ein Ergebnis:
+
+| Ergebnis | Grund | Bedeutung | Wirkung |
+|---|---|---|---|
+| `matched` | — | genau ein Befund des alten Schemas hat die Identität, in jedem Lauf sitzt genau ein Befund an seiner Position | übernommen unter der aktuellen Identität (`renamed`, wenn sie sich geändert hat) |
+| `notReproducible` | `noLegacyFinding` | kein Befund hat die Identität unter dem alten Schema (inzwischen behoben oder verändert) | entfällt |
+| `notReproducible` | `noCurrentFinding` | sein Befund hat unter dem aktuellen Schema kein Gegenstück an derselben Position | entfällt |
+| `ambiguous` | `legacyIdentityShared` | das alte Schema gibt die Identität mehr als einem Befund | entfällt; sein Befund erscheint als `new` |
+| `ambiguous` | `positionShared` | an der gepaarten Position sitzt mehr als ein Befund (in einem der Läufe) | entfällt; sein Befund erscheint als `new` |
+| `duplicate` | `targetIdentityShared` | die Identität, die er bekäme, wird mehrfach erzeugt (ein Regeldefekt) | nichts geschrieben, Exit 1 |
+
+Das Ergebnis hängt nur von der Baseline und den beiden Läufen ab (derselbe
+Codestand migriert zur selben Datei). Es steht auf stderr (Anzahl je
+Ergebnis, die entfallenen Einträge mit Grund), im JSON-Bericht als
+`baseline.migration` (`{from, to, matched, notReproducible, ambiguous,
+duplicate, renamed: [{from, to}], dropped: [{outcome, reason, entry}]}`)
+und in Markdown als Zeile unter der Baseline-Zeile. `--migrate-baseline` auf
+einer Baseline, die schon aktuell ist oder noch nicht existiert, meldet,
+dass nichts zu migrieren ist, und ändert nichts. Eine unvollständige Analyse
+wird abgelehnt. Ohne Baseline nennt `stoa analyze` eine Identitätskollision
+trotzdem auf stderr (Exit-Code unverändert); mit Baseline steht sie in
+`baseline.duplicateIdentities`. Korpus-Manifeste
 (`expected.json`) und Findings-Snapshots (`scripts/compare-findings.ts`)
 halten das Schema genauso fest (fehlt = 1): ein Manifest eines anderen
 Schemas lehnt `stoa eval` ab; zwei Snapshots verschiedener Schemata werden

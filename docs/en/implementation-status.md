@@ -1239,7 +1239,9 @@ stoa eval <path> --expected <file> [--format markdown|json] [--solid] [--archite
 - `--migrate-baseline` (needs `--baseline`) — converts a baseline written
   under an older finding-identity scheme in place before comparing (see
   "Finding identity scheme 2" below). Without it such a baseline is an
-  error (exit 1), never compared.
+  error (exit 1), never compared. Every entry is classified (`matched`,
+  `notReproducible`, `ambiguous`, `duplicate`, with the reason) — stderr,
+  JSON `baseline.migration`, Markdown; see docs/en/finding-model.md.
 - `--min-confidence <0..1>` / `--certainty <list>` (repeatable or
   comma-separated: `syntactic`, `semantic-heuristic`, `external-tool`) /
   `--no-experimental` — output filters, applied after the baseline step; the
@@ -2107,6 +2109,74 @@ decisions). Details of the naming in `finding-model.md` §6 "Identity".
   migration, not an identity).
 - **Checked:** `npm run typecheck`, `npm run typecheck:test`, `npm run lint`
   0 errors; `npm test` 686 / 686; `npm run build` ok; no dependency added.
+
+## Baseline and evaluator consolidated (Quality Hardening spec, phase 3, 2026-11-05)
+
+Goal: every component uses the same finding-identity semantics, and a
+baseline migration is explicit, reproducible and traceable.
+
+- **One identity logic:** baseline, migration, snapshot diff
+  (`src/FindingDiff.ts`), evaluator and the CLI all key on `findingKey` /
+  `keyString` and name a repeated identity with `duplicateKeys` /
+  `duplicateIdentityText` (`src/FindingIdentity.ts`). The evaluator's two
+  hand-written "seen" loops are replaced by the shared `splitRepeated`
+  (which `duplicateKeys` now builds on); its lists stay as they were (every
+  surplus copy).
+- **Migration classified** (`src/BaselineMigration.ts`): each entry gets one
+  outcome — `matched`, `notReproducible` (`noLegacyFinding`,
+  `noCurrentFinding`), `ambiguous` (`legacyIdentityShared`,
+  `positionShared`), `duplicate` (`targetIdentityShared`). Before, the first
+  three failure cases fell into one `unmatched` list, a shared legacy
+  identity was discarded without a word, and a position shared only in the
+  legacy run was not checked at all. `duplicate` still writes nothing
+  (exit 1), but now names the entry. Entries are processed in key order, so
+  the result is independent of entry and finding order (tested).
+- **Traceable output:** stderr gives the counts per outcome and every
+  dropped entry with its reason (the line still opens with the old wording);
+  `AnalysisReport.baseline.migration` carries the counts, the renamed
+  entries (`from` → `to`) and the dropped entries with outcome and reason;
+  Markdown adds a line under the baseline line (en/de) and lists up to 20
+  dropped entries.
+- **No silent scheme change:** the JSON report stamps the identity scheme
+  (`versions.identity`, additive); `--migrate-baseline` on a baseline that
+  is already current or does not exist yet says "nothing to migrate" and
+  writes nothing.
+- **Duplicates detected without a baseline too:** `stoa analyze` names an
+  identity collision on stderr even without `--baseline` (before, only
+  `eval`, `--baseline` and `--update-baseline` checked); the exit code is
+  unchanged.
+- **CLI contract:** no flag added or removed; exit codes unchanged (0
+  complete, 1 error, 2 partial); the old stderr text is a prefix of the new
+  one up to "(dropped)"; the report changes are additive (`versions.identity`,
+  `baseline.migration`).
+- **Measured** (dist build, the 9 comparison targets, a baseline of every
+  finding under scheme 1 and under scheme 2, migrated on the same code):
+  all 18 migrations `matched` 100 % — 0 notReproducible, 0 ambiguous, 0
+  duplicate; renamed under scheme 2 → 3: corpus 3, swipemeister 6,
+  mimirmind 5, flyingfish 6, others 0; under 1 → 3: corpus 31, velyo 17,
+  MAPI 13, stoa `src` 4, swipemeister 31, flyingfish backend 130, rohc 0,
+  mimirmind 750, flyingfish 190. Scheme 1 produces fewer findings on two
+  Dart targets (velyo 49 instead of 52, swipemeister 94 instead of 95):
+  findings that shared one identity there were merged (`ContentPack.allWords`
+  deep nesting, two closures `_PathMap.build.(anonymous)#4`,
+  `_WinnerFrameState._remaining`). After migrating a scheme-1 baseline they
+  read as `new` — correct, since the old baseline never held them
+  separately.
+- **Tests:** `test/BaselineMigration.test.ts` (11): every outcome and
+  reason, no assignment for a shared identity or position (in either run),
+  duplicate blocks writing, order independence, `migrationSummary`
+  (renamed, dropped), Markdown en/de, CLI JSON `versions.identity` and
+  `baseline.migration`, stderr reasons, a second `--migrate-baseline` writes
+  nothing, duplicate exits 1 with the file untouched, collision warning
+  without a baseline, missing baseline file. Two existing migration tests
+  read the new result shape (same assertions: carried-over keys, the one
+  dropped entry — now with outcome and reason).
+- **Not changed:** corpus manifests still have no automatic conversion (an
+  expected finding the engine misses has nothing to pair with; re-approval
+  stays manual); a newer scheme than the running one is still "malformed"
+  (exit 1).
+- **Checked:** `npm run typecheck`, `npm run typecheck:test`, `npm run lint`
+  0 errors; `npm test` 697 / 697; `npm run build` ok; no dependency added.
 
 
 ## Baseline / diff mode (opt-in, `--baseline`)

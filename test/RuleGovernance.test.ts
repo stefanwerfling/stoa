@@ -122,7 +122,7 @@ test('E1a: without any experimental rule the default output carries no maturity 
 });
 
 const reportOf = (findings: Finding[]): AnalysisReport => ({
-    versions: {engine: 'e', ruleSet: 'r', knowledgeBase: 'k', adapters: {}},
+    versions: {engine: 'e', ruleSet: 'r', knowledgeBase: 'k', adapters: {}, identity: 3},
     coverage: {status: 'complete', filesSelected: 1, filesAnalyzed: 1, filesSkipped: 0, filesCancelled: 0, excludedByReason: {}, excludedSample: [], factCount: 1},
     findings
 });
