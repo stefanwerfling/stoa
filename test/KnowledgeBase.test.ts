@@ -40,7 +40,7 @@ test('valid principle data loads', () => {
 });
 
 test('a missing required field is rejected with file context', () => {
-    const principle = {...basePrinciple(), relatedPrinciples: []};
+    const principle: Record<string, unknown> = {...basePrinciple(), relatedPrinciples: []};
     delete principle.name;
     assert.throws(
         () => KnowledgeBase.loadFromDirectory(writeKnowledge({broken: principle}), 'test'),

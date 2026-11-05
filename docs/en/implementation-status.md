@@ -1975,6 +1975,43 @@ come from one laptop under desktop load; the test files are not part of
 carry 20 type errors (`AnalysisResult` imported from `Pipeline.js` instead
 of `Types.js`, implicit `any` parameters, the `ajv/dist/2020` import shape)
 that predate this spec and were left unchanged.
+Resolved since by the quality-hardening spec, phase 1 — see the next
+section.
+
+## Test typecheck (Quality Hardening spec, phase 1, 2026-11-05)
+
+Test and script code is now type-checked with the same strictness as the
+production code.
+
+- **Configuration:** `tsconfig.test.json` extends `tsconfig.json` (same
+  `strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, …) and
+  covers `src/**`, `test/**` and `scripts/**`, with `noEmit`. Excluded are
+  only `test/fixtures` and `test/corpus`: they are analysis *input* — code
+  deliberately written to trigger or avoid findings, in several languages —
+  not code that runs. `tsc --listFilesOnly` confirms none of them is pulled
+  in through an import. The production configuration is unchanged; `npm run
+  build` still emits `src/` only.
+- **Command:** `npm run typecheck:test` (`tsc -p tsconfig.test.json`), next
+  to `npm run typecheck` (production, unchanged). The QA sequence is
+  `typecheck`, `typecheck:test`, `lint`, `test`, `build`.
+- **The 20 errors fixed (8 test files, no assertion changed):**
+  - 5 `Solid*` tests imported `type AnalysisResult` from `src/Pipeline.js`,
+    which uses but does not export it; it now comes from `src/Types.js`, where
+    it is declared. The 10 implicit-`any` parameters were follow-on errors and
+    are gone with it.
+  - `Schema` and `RuleGovernance` used the default import of
+    `ajv/dist/2020.js`, which under NodeNext is the CommonJS module object,
+    not the class; they now use the named export `{Ajv2020}` (same class at
+    runtime).
+  - `KnowledgeBase` deleted `name` from an object whose inferred type has no
+    such property; the object is now annotated `Record<string, unknown>`, the
+    type `basePrinciple()` already returns.
+- **Not used:** no `any`, no type assertion, no `@ts-expect-error`/`@ts-ignore`,
+  no ESLint exception; nothing suppressed.
+- **Checked:** `npm run typecheck` 0 errors, `npm run typecheck:test` 0
+  errors, `npm run lint` 0 problems, `npm test` 668 / 668, `npm run build`
+  ok; no golden manifest, baseline or dependency changed.
+
 
 ## Baseline / diff mode (opt-in, `--baseline`)
 

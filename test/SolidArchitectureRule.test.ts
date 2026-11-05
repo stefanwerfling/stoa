@@ -5,7 +5,8 @@ import {fileURLToPath} from 'node:url';
 import {loadArchitectureConfig, type ArchitectureConfig} from '../src/architecture/ArchitectureConfig.js';
 import {initDart} from '../src/analysis/DartAdapter.js';
 import {DEFAULT_CONFIG} from '../src/Config.js';
-import {analyze, type AnalysisResult} from '../src/Pipeline.js';
+import {analyze} from '../src/Pipeline.js';
+import type {AnalysisResult} from '../src/Types.js';
 import type {Finding} from '../src/Types.js';
 
 // Flutter quality track E6d: R-SOLID-DIP-LAYER-DIRECTION stage 2 against the

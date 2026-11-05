@@ -2150,6 +2150,44 @@ Typprüfung aus), und 8 ältere tragen 20 Typfehler (`AnalysisResult` aus
 `Pipeline.js` statt `Types.js` importiert, implizite `any`-Parameter, die
 Importform von `ajv/dist/2020`), die älter als diese Spezifikation sind und
 unverändert blieben.
+Inzwischen behoben durch die Quality-Hardening-Spezifikation, Phase 1 — siehe
+den nächsten Abschnitt.
+
+## Test-Typecheck (Quality-Hardening-Spezifikation, Phase 1, 2026-11-05)
+
+Test- und Skriptcode wird jetzt mit derselben Strenge typgeprüft wie der
+Produktionscode.
+
+- **Konfiguration:** `tsconfig.test.json` erweitert `tsconfig.json` (dasselbe
+  `strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, …) und
+  umfasst `src/**`, `test/**` und `scripts/**`, mit `noEmit`. Ausgenommen sind
+  nur `test/fixtures` und `test/corpus`: sie sind *Eingabe* der Analyse — Code,
+  der absichtlich Findings auslöst oder vermeidet, in mehreren Sprachen —, kein
+  ausgeführter Code. `tsc --listFilesOnly` bestätigt, dass keine davon über
+  einen Import hineingezogen wird. Die Produktionskonfiguration ist unverändert;
+  `npm run build` erzeugt weiterhin nur `src/`.
+- **Kommando:** `npm run typecheck:test` (`tsc -p tsconfig.test.json`), neben
+  `npm run typecheck` (Produktion, unverändert). Der QA-Ablauf ist
+  `typecheck`, `typecheck:test`, `lint`, `test`, `build`.
+- **Die 20 Fehler behoben (8 Testdateien, keine Testaussage geändert):**
+  - 5 `Solid*`-Tests importierten `type AnalysisResult` aus `src/Pipeline.js`,
+    das den Typ verwendet, aber nicht exportiert; er kommt jetzt aus
+    `src/Types.js`, wo er deklariert ist. Die 10 impliziten `any`-Parameter
+    waren Folgefehler und sind damit weg.
+  - `Schema` und `RuleGovernance` nutzten den Default-Import von
+    `ajv/dist/2020.js`, der unter NodeNext das CommonJS-Modulobjekt ist, nicht
+    die Klasse; sie nutzen jetzt den benannten Export `{Ajv2020}` (zur Laufzeit
+    dieselbe Klasse).
+  - `KnowledgeBase` löschte `name` aus einem Objekt, dessen abgeleiteter Typ
+    diese Eigenschaft nicht hat; das Objekt ist jetzt als
+    `Record<string, unknown>` annotiert, den Typ, den `basePrinciple()` schon
+    liefert.
+- **Nicht verwendet:** kein `any`, keine Typzusicherung, kein
+  `@ts-expect-error`/`@ts-ignore`, keine ESLint-Ausnahme; nichts unterdrückt.
+- **Geprüft:** `npm run typecheck` 0 Fehler, `npm run typecheck:test` 0
+  Fehler, `npm run lint` 0 Probleme, `npm test` 668 / 668, `npm run build` ok;
+  kein Golden-Manifest, keine Baseline und keine Abhängigkeit geändert.
+
 
 ## Baseline-/Diff-Modus (opt-in, `--baseline`)
 

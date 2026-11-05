@@ -144,6 +144,8 @@ npm install
 npm run build        # compile src/ to dist/
 npm test             # unit + schema tests (node:test)
 npm run lint         # eslint (synaipse flat-config style)
+npm run typecheck    # tsc over src/ (production)
+npm run typecheck:test  # tsc over src/, test/ and scripts/ (tsconfig.test.json)
 
 # analyze a path (markdown by default)
 npm run analyze -- analyze ./src

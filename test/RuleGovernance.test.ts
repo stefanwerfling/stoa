@@ -5,7 +5,7 @@ import {tmpdir} from 'node:os';
 import {dirname, join} from 'node:path';
 import {after, test} from 'node:test';
 import {fileURLToPath} from 'node:url';
-import Ajv2020 from 'ajv/dist/2020.js';
+import {Ajv2020} from 'ajv/dist/2020.js';
 import {DEFAULT_CONFIG} from '../src/Config.js';
 import {applyFindingFilter, parseFindingFilter} from '../src/FindingFilter.js';
 import {KnowledgeBase} from '../src/knowledge/KnowledgeBase.js';
