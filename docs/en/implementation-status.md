@@ -2399,6 +2399,21 @@ golden corpora changed.
     used only as attributes (`#[AsCommand(…)]`, `#[RequiredBundle(…)]`), 1
     namespace alias used as a prefix (`use …\ValueResolver as Resolver;` →
     `new Resolver\BuiltinTypeValueResolver()`).
+    **Fixed since (2026-11-06, R-DEP-UNUSED 1.1.0):** the PHP extraction
+    (`src/analysis/php/PhpReferences.ts`) counts as a use of an import's
+    local name: an unqualified code name; the first segment of a qualified
+    one (`Resolver\Builtin` uses the alias `Resolver`; a fully qualified
+    `\A\Foo` or `namespace\Foo` uses no import — before, the last segment
+    of every name counted); attribute names (`#[AsCommand]`, `#[ORM\Entity]`);
+    in doc comments (`/** … */`, also single-line) the names in tag lines
+    (`@param list<Foo> $x`, `@throws FooException`, `@var Foo[]`), inline
+    `{@see}`/`{@link}`, and Doctrine annotation tags (`@ORM\Column`). Prose
+    outside tags and plain comments do not count; names compare
+    case-sensitively. symfony/console: 146 → 0 findings — the 24 labelled
+    FP and 122 in `Tests/` (all attribute uses: PHPUnit `#[DataProvider]`,
+    console `#[AsCommand]`, `#[Argument]`, …); no other target changes
+    beyond the rule version and texts. Tests:
+    `test/PhpUnusedImport.test.ts`.
   - **Single FP patterns:** generated code (`*.freezed.dart`, 10 parameter
     findings, header "GENERATED CODE") is not excluded;
     R-VALIDATION-MISSING-BACKEND reads `request.body` in an HTTP *client*
@@ -3073,7 +3088,7 @@ exists, see "Baseline / diff mode"); a suppression workflow beyond the
 baseline; a generic ESLint fact adapter; context facts (`flag.generatedCode`, `hasTests`)
 for richer suppression; LLM-output evaluation at scale.
 
-**Open from the external validation (2026-11-05, measured, not fixed — see "External validation"; the else-if nesting and R-UNUSED-EXPORT are fixed since):** PHPDoc, attribute and namespace-alias uses in the PHP R-DEP-UNUSED; generated code (`*.freezed.dart`) not excluded; Dart closures attributed to the enclosing function; PHP 8.4 syntax (`php-parser` defaults to 8.3).
+**Open from the external validation (2026-11-05, measured, not fixed — see "External validation"; the else-if nesting, R-UNUSED-EXPORT and the PHP R-DEP-UNUSED are fixed since):** generated code (`*.freezed.dart`) not excluded; Dart closures attributed to the enclosing function; PHP 8.4 syntax (`php-parser` defaults to 8.3).
 
 **Open from the evaluator-integrity track (2026-11-04):** in the TS
 extraction, the parse

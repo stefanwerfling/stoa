@@ -6,6 +6,7 @@ import {isDeepImport} from '../ImportPath.js';
 import {destructiveDdl, nullableNoDefault, unguardedDdl} from '../MigrationSql.js';
 import {childNodes, collect, isPhpNode, rangeOf, type PhpNode} from './PhpAst.js';
 import {extractPhpMemberFacts} from './PhpMembers.js';
+import {referencedLocalNames} from './PhpReferences.js';
 
 
 interface FunctionMetrics {
@@ -96,7 +97,7 @@ export const extractFacts = (program: PhpNode, content: string, filePath: string
         );
     });
 
-    const referenced = referencedShortNames(program);
+    const referenced = referencedLocalNames(program);
     const classBindings: StructImportBinding[] = [];
     let importIndex = 0;
     for (const group of collect(program, (node) => node.kind === 'usegroup')) {
@@ -448,16 +449,6 @@ const usesNondeterminism = (body: PhpNode): boolean => {
     };
     walk(body);
     return found;
-};
-
-const referencedShortNames = (program: PhpNode): Set<string> => {
-    const names = new Set<string>();
-    for (const node of collect(program, (candidate) => candidate.kind === 'name')) {
-        if (typeof node.name === 'string') {
-            names.add(lastSegment(node.name));
-        }
-    }
-    return names;
 };
 
 /** A class `use` as an import binding (local alias → fully qualified name); none for `use function` / `use const`. */

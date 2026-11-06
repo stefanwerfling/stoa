@@ -1,6 +1,6 @@
 {
   "id": "R-DEP-UNUSED",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "title": "Unused import",
   "feature": "deps.importUnused",
   "appliesTo": ["import"],
@@ -26,14 +26,14 @@
       "de": "Den ungenutzten Import entfernen."
     },
     "drawbacks": {
-      "en": "Imports with side effects or used only by tooling/types may be intentional.",
-      "de": "Importe mit Seiteneffekten oder nur von Tooling/Typen genutzt können beabsichtigt sein."
+      "en": "Imports with side effects may be intentional. In PHP, a use in PHPDoc tags, attributes or as a namespace-alias prefix counts as a use; a mention in prose does not.",
+      "de": "Importe mit Seiteneffekten können beabsichtigt sein. In PHP zählt eine Verwendung in PHPDoc-Tags, Attributen oder als Namespace-Alias-Präfix als Verwendung, eine Erwähnung im Fließtext nicht."
     }
   },
   "missingContext": [
     {
-      "en": "Reference detection is name-based; dynamic or side-effect-only imports may be misjudged.",
-      "de": "Die Referenzerkennung ist namensbasiert; dynamische oder reine Seiteneffekt-Importe können fehlbeurteilt werden."
+      "en": "Reference detection is name-based; dynamic or side-effect-only imports may be misjudged. PHP names compare case-sensitively, and PHPDoc is read only in tag lines and inline {@see}/{@link}.",
+      "de": "Die Referenzerkennung ist namensbasiert; dynamische oder reine Seiteneffekt-Importe können fehlbeurteilt werden. PHP-Namen werden mit Groß-/Kleinschreibung verglichen, PHPDoc nur in Tag-Zeilen und Inline-{@see}/{@link} gelesen."
     }
   ],
   "tests": "test/Rules.test.ts"

@@ -2610,6 +2610,23 @@ Finding der Golden-Korpora hat sich geändert.
     `#[RequiredBundle(…)]`), 1 Namespace-Alias als Präfix
     (`use …\ValueResolver as Resolver;` →
     `new Resolver\BuiltinTypeValueResolver()`).
+    **Inzwischen behoben (2026-11-06, R-DEP-UNUSED 1.1.0):** Die
+    PHP-Extraktion (`src/analysis/php/PhpReferences.ts`) zählt als
+    Verwendung des lokalen Namens eines Imports: einen unqualifizierten
+    Namen im Code; das erste Segment eines qualifizierten
+    (`Resolver\Builtin` verwendet den Alias `Resolver`; ein voll
+    qualifiziertes `\A\Foo` oder `namespace\Foo` verwendet keinen Import —
+    vorher zählte das letzte Segment jedes Namens); Attributnamen
+    (`#[AsCommand]`, `#[ORM\Entity]`); in Doc-Kommentaren (`/** … */`, auch
+    einzeilig) die Namen in Tag-Zeilen (`@param list<Foo> $x`,
+    `@throws FooException`, `@var Foo[]`), Inline-`{@see}`/`{@link}` und
+    Doctrine-Annotation-Tags (`@ORM\Column`). Fließtext außerhalb von Tags
+    und normale Kommentare zählen nicht; Namen werden mit Groß-/Kleinschreibung
+    verglichen. symfony/console: 146 → 0 Findings — die 24 gelabelten FP
+    und 122 in `Tests/` (alles Attribut-Verwendungen: PHPUnit
+    `#[DataProvider]`, Console `#[AsCommand]`, `#[Argument]`, …); auf den
+    übrigen Zielen ändern sich nur Regelversion und Texte. Tests:
+    `test/PhpUnusedImport.test.ts`.
   - **Einzelne FP-Muster:** generierter Code (`*.freezed.dart`, 10
     Parameter-Findings, Kopf „GENERATED CODE") wird nicht ausgeschlossen;
     R-VALIDATION-MISSING-BACKEND liest `request.body` in einem HTTP-*Client*
@@ -3348,7 +3365,7 @@ generischer ESLint-Fact-Adapter;
 Kontext-Facts (`flag.generatedCode`, `hasTests`) für reichhaltigere
 Suppression; LLM-Ausgabe-Evaluierung im Maßstab.
 
-**Offen aus der externen Validierung (2026-11-05, gemessen, nicht behoben — siehe „Externe Validierung"; else-if-Verschachtelung und R-UNUSED-EXPORT sind inzwischen behoben):** Verwendungen in PHPDoc, Attributen und Namespace-Aliassen beim PHP-R-DEP-UNUSED; generierter Code (`*.freezed.dart`) nicht ausgeschlossen; Dart-Closures der umgebenden Funktion zugeordnet; PHP-8.4-Syntax (`php-parser` standardmäßig 8.3).
+**Offen aus der externen Validierung (2026-11-05, gemessen, nicht behoben — siehe „Externe Validierung"; else-if-Verschachtelung, R-UNUSED-EXPORT und das PHP-R-DEP-UNUSED sind inzwischen behoben):** generierter Code (`*.freezed.dart`) nicht ausgeschlossen; Dart-Closures der umgebenden Funktion zugeordnet; PHP-8.4-Syntax (`php-parser` standardmäßig 8.3).
 
 **Offen aus dem Evaluator-Integritäts-Folgeauftrag (2026-11-04):** in der
 TS-Extraktion das Parsen

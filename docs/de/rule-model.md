@@ -152,7 +152,7 @@ Deklarative Regeln (`rules/default/*.json`, Default aktiv):
 | `R-WIDE-PUBLIC-SURFACE` | `metric.exportCount` | `marcus.purpose` | Verantwortungsgrenzen | syntaktisch (nur TS/JS) |
 | `R-ERR-SWALLOWED` | `ast.catchSwallowsError` (unterdrückt durch `doc.catchHasRationale`) | `marcus.obstacle` | Fehlerbehandlung | syntaktisch |
 | `R-SIDEEFFECT-NONDETERMINISM` | `ast.usesNondeterminism` | `marcus.control` | Seiteneffekt-Kontrolle | heuristisch |
-| `R-DEP-UNUSED` | `deps.importUnused` | `marcus.cooperation` | Abhängigkeiten | syntaktisch |
+| `R-DEP-UNUSED` | `deps.importUnused` | `marcus.cooperation` | Abhängigkeiten | syntaktisch (1.1.0: PHP zählt PHPDoc-Tags, Attribute und Namespace-Alias-Präfixe als Verwendung) |
 | `R-DEEP-IMPORT` | `deps.importDeep` | `marcus.cooperation` | Abhängigkeiten | syntaktisch |
 | `R-TYPE-UNSOUND` | `external.tsc` | `marcus.judgment` | Belegbarkeit, Robustheit | external-tool, opt-in `--typecheck` |
 | `R-FLOATING-PROMISE` | `external.floatingPromise` | `marcus.obstacle` | Fehlerbehandlung, Robustheit | external-tool, opt-in `--typecheck` |
