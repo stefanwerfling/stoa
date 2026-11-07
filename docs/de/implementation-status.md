@@ -2641,6 +2641,16 @@ Finding der Golden-Korpora hat sich geändert.
     überspringt verschachtelte Funktionen) (1); R-WIDE-PUBLIC-SURFACE auf dem
     Re-Export-Einstieg eines Pakets, den die Remediation der Regel selbst
     empfiehlt (1).
+    **Generierter Code inzwischen behoben (2026-11-06):** Das
+    Standard-`exclude` (`src/Config.ts`) enthält jetzt auch
+    `**/*.freezed.dart` und `**/*.g.dart`, die build_runner-Ausgaben (freezed,
+    json_serializable); sie werden wie jeder Config-Ausschluss behandelt
+    (`excluded_by_config`, in der Coverage gezählt, Status bleibt
+    `complete`). Eine Config oder `--exclude` mit eigener Liste ersetzt die
+    Standardwerte, wie bisher. compass_app: −10 Findings, genau die 10
+    gelabelten FP; kein anderes Ziel ändert sich (die lokalen
+    Flutter-Projekte haben keine generierten Dateien). Tests:
+    `test/Ingestion.test.ts`.
   - **In dieser Stichprobe verlässlich:** R-SIDEEFFECT-NONDETERMINISM
     15 / 16 (der eine FP ist die Dart-Zuordnung), R-DEP-CYCLE 4 / 4 (jede
     Kante geprüft), die Flutter-a11y-Regeln 3 / 3, Parameterzahlen immer
@@ -3365,7 +3375,7 @@ generischer ESLint-Fact-Adapter;
 Kontext-Facts (`flag.generatedCode`, `hasTests`) für reichhaltigere
 Suppression; LLM-Ausgabe-Evaluierung im Maßstab.
 
-**Offen aus der externen Validierung (2026-11-05, gemessen, nicht behoben — siehe „Externe Validierung"; else-if-Verschachtelung, R-UNUSED-EXPORT und das PHP-R-DEP-UNUSED sind inzwischen behoben):** generierter Code (`*.freezed.dart`) nicht ausgeschlossen; Dart-Closures der umgebenden Funktion zugeordnet; PHP-8.4-Syntax (`php-parser` standardmäßig 8.3).
+**Offen aus der externen Validierung (2026-11-05, gemessen, nicht behoben — siehe „Externe Validierung"; else-if-Verschachtelung, R-UNUSED-EXPORT, das PHP-R-DEP-UNUSED und generierter Code sind inzwischen behoben):** Dart-Closures der umgebenden Funktion zugeordnet; PHP-8.4-Syntax (`php-parser` standardmäßig 8.3).
 
 **Offen aus dem Evaluator-Integritäts-Folgeauftrag (2026-11-04):** in der
 TS-Extraktion das Parsen

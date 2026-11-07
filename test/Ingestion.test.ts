@@ -4,6 +4,7 @@ import {tmpdir} from 'node:os';
 import {basename, dirname, join} from 'node:path';
 import {test} from 'node:test';
 import {fileURLToPath} from 'node:url';
+import {DEFAULT_CONFIG} from '../src/Config.js';
 import {collectFiles, readFileContent} from '../src/Ingestion.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -20,6 +21,22 @@ test('include globs select by pattern; .md is not matched (but .d.ts matches *.t
 
 test('exclude globs drop matching files (d.ts and a directory)', () => {
     assert.deepEqual(names(['**/*.ts', '**/*.php'], ['**/*.d.ts', 'legacy/**']), ['keep.php', 'keep.ts']);
+});
+
+test('the default config excludes build_runner output (*.freezed.dart, *.g.dart) and reports it', () => {
+    const tmp = mkdtempSync(join(tmpdir(), 'stoa-ingestion-generated-'));
+    try {
+        mkdirSync(join(tmp, 'lib', 'model'), {recursive: true});
+        for (const file of ['user.dart', 'user.freezed.dart', 'user.g.dart', 'goal.dart']) {
+            writeFileSync(join(tmp, 'lib', 'model', file), '// x\n');
+        }
+        const excluded: string[] = [];
+        const files = collectFiles(tmp, {include: DEFAULT_CONFIG.include, exclude: DEFAULT_CONFIG.exclude, onExcluded: (file) => excluded.push(`${basename(file.path)}:${file.reason}`)});
+        assert.deepEqual(files.map((file) => basename(file.path)), ['goal.dart', 'user.dart']);
+        assert.deepEqual(excluded.sort(), ['user.freezed.dart:excluded_by_config', 'user.g.dart:excluded_by_config']);
+    } finally {
+        rmSync(tmp, {recursive: true, force: true});
+    }
 });
 
 test('a single-file root is returned as-is, bypassing the globs', () => {

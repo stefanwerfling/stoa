@@ -2426,6 +2426,14 @@ golden corpora changed.
     closure to the enclosing `build` (the TypeScript extraction skips nested
     functions) (1); R-WIDE-PUBLIC-SURFACE on a package's re-export entry,
     which is what the rule's own remediation recommends (1).
+    **Generated code fixed since (2026-11-06):** the default `exclude`
+    (`src/Config.ts`) now also holds `**/*.freezed.dart` and `**/*.g.dart`,
+    the build_runner outputs (freezed, json_serializable); they are excluded
+    like any config exclude (`excluded_by_config`, counted in the coverage,
+    status stays `complete`). A config or `--exclude` that sets its own
+    list replaces the defaults, as before. compass_app: −10 findings,
+    exactly the 10 labelled FP; no other target changes (the local Flutter
+    projects have no generated files). Tests: `test/Ingestion.test.ts`.
   - **Reliable in this sample:** R-SIDEEFFECT-NONDETERMINISM 15 / 16 (the
     one FP is the Dart attribution), R-DEP-CYCLE 4 / 4 (every edge checked),
     the Flutter a11y rules 3 / 3, parameter counts always correct.
@@ -3088,7 +3096,7 @@ exists, see "Baseline / diff mode"); a suppression workflow beyond the
 baseline; a generic ESLint fact adapter; context facts (`flag.generatedCode`, `hasTests`)
 for richer suppression; LLM-output evaluation at scale.
 
-**Open from the external validation (2026-11-05, measured, not fixed — see "External validation"; the else-if nesting, R-UNUSED-EXPORT and the PHP R-DEP-UNUSED are fixed since):** generated code (`*.freezed.dart`) not excluded; Dart closures attributed to the enclosing function; PHP 8.4 syntax (`php-parser` defaults to 8.3).
+**Open from the external validation (2026-11-05, measured, not fixed — see "External validation"; the else-if nesting, R-UNUSED-EXPORT, the PHP R-DEP-UNUSED and generated code are fixed since):** Dart closures attributed to the enclosing function; PHP 8.4 syntax (`php-parser` defaults to 8.3).
 
 **Open from the evaluator-integrity track (2026-11-04):** in the TS
 extraction, the parse
