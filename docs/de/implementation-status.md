@@ -1959,9 +1959,10 @@ ModuleGraph (über `ModuleResolver`); das TypeModel liest dessen Ergebnisse.
   initialisieren (`A.m.f`), sonst `<scope>.(anonymous)#n`. Ihre Rümpfe waren
   schon aus den Metriken der umschließenden Funktion ausgenommen, keine
   bestehende Metrik ändert sich; sie waren schlicht ungemessen. Eine Closure
-  in einer Funktion bekommt kein eigenes Nondeterminismus-Fact (das der
-  Funktion deckt ihren ganzen Rumpf, wie bisher) und kein
-  Widget-Baum-Fact (Teil des umschließenden Baums). Ein Funktionsausdruck in
+  in einer Funktion bekommt kein Widget-Baum-Fact (Teil des umschließenden
+  Baums). (Ihr Nondeterminismus wurde zunächst mit dem ganzen Rumpf der
+  umschließenden Funktion gelesen; seit 2026-11-07 ist er ein eigenes Fact,
+  siehe „Externe Validierung“.) Ein Funktionsausdruck in
   einem von tree-sitter wiederhergestellten Bereich (`file.parseErrors` —
   Dart-3-Records, Patterns, Switch-Ausdrücke) wird nicht gemessen: oft ist
   er ein falsch gelesener Record (eine „Closure mit 18 Parametern“ in velyo
@@ -2651,6 +2652,22 @@ Finding der Golden-Korpora hat sich geändert.
     gelabelten FP; kein anderes Ziel ändert sich (die lokalen
     Flutter-Projekte haben keine generierten Dateien). Tests:
     `test/Ingestion.test.ts`.
+    **Dart-Closure-Zuordnung inzwischen behoben (2026-11-07):** Jede
+    gemessene Dart-Funktion, Closures eingeschlossen, hat ihr eigenes
+    `ast.usesNondeterminism`-Fact, und ein Uhr- oder Zufallsaufruf in einer
+    verschachtelten, eigens gemessenen Funktion zählt nur für diese — wie
+    in TypeScript (`src/analysis/dart/DartExtraction.ts`,
+    `inNestedFunction`). Unter Identitätsschema 1, das nur benannte
+    Funktionen misst, bleibt eine Closure wie bisher Teil ihrer Funktion.
+    R-SIDEEFFECT-NONDETERMINISM wandert von der Funktion zur Closure:
+    compass `SearchFormDate.build` → `SearchFormDate.build.(anonymous)#0`
+    (der gelabelte FP), mwpa 3, mwpa-Architekturziel 5 (davon 2 in Tests),
+    swipemeister 1 ebenso; eine Funktion, die die Uhr selbst und in einer
+    Closure liest, hat jetzt zwei Findings (swipemeister
+    `_WinnerDialogState._startRoll` und seine `setState`-Closure, +1). Ein
+    Baseline-Eintrag auf der Funktion ist nicht mehr reproduzierbar
+    (`notReproducible`); das Finding der Closure ist neu. Tests:
+    `test/FunctionIdentity.test.ts`.
   - **In dieser Stichprobe verlässlich:** R-SIDEEFFECT-NONDETERMINISM
     15 / 16 (der eine FP ist die Dart-Zuordnung), R-DEP-CYCLE 4 / 4 (jede
     Kante geprüft), die Flutter-a11y-Regeln 3 / 3, Parameterzahlen immer
@@ -3384,7 +3401,7 @@ generischer ESLint-Fact-Adapter;
 Kontext-Facts (`flag.generatedCode`, `hasTests`) für reichhaltigere
 Suppression; LLM-Ausgabe-Evaluierung im Maßstab.
 
-**Offen aus der externen Validierung (2026-11-05, gemessen, nicht behoben — siehe „Externe Validierung"; else-if-Verschachtelung, R-UNUSED-EXPORT, das PHP-R-DEP-UNUSED, generierter Code und PHP-8.4-Syntax sind inzwischen behoben):** Dart-Closures der umgebenden Funktion zugeordnet.
+**Aus der externen Validierung (2026-11-05, siehe „Externe Validierung"):** Alle zur Behebung gelisteten Defekte sind inzwischen behoben — else-if-Verschachtelung, R-UNUSED-EXPORT, das PHP-R-DEP-UNUSED, generierter Code, PHP-8.4-Syntax und die Dart-Closure-Zuordnung (2026-11-06/07). Die dort genannten einzelnen FP-Muster anderer Regeln bleiben offen.
 
 **Offen aus dem Evaluator-Integritäts-Folgeauftrag (2026-11-04):** in der
 TS-Extraktion das Parsen

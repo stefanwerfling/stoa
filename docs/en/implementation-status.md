@@ -1801,8 +1801,9 @@ One resolver per language, no second one: the ModuleGraph's (via
   (`A.m.f`), else `<scope>.(anonymous)#n`. Their bodies were already left
   out of the enclosing function's metrics, so no existing metric changes;
   they were simply unmeasured. A closure inside a function gets no
-  nondeterminism fact of its own (the function's covers its whole body, as
-  before) and no widget-tree fact (part of the enclosing tree). A function
+  widget-tree fact (part of the enclosing tree). (Its nondeterminism was at
+  first read with the enclosing function's whole body; since 2026-11-07 it
+  is its own fact, see "External validation".) A function
   expression inside a region tree-sitter had to recover (`file.parseErrors`
   — Dart 3 records, patterns, switch expressions) is not measured: it is
   often a misread record (an "18-parameter closure" in velyo was one).
@@ -2434,6 +2435,21 @@ golden corpora changed.
     list replaces the defaults, as before. compass_app: −10 findings,
     exactly the 10 labelled FP; no other target changes (the local Flutter
     projects have no generated files). Tests: `test/Ingestion.test.ts`.
+    **Dart closure attribution fixed since (2026-11-07):** every measured
+    Dart function, closures included, has its own `ast.usesNondeterminism`
+    fact, and a clock or RNG call inside a nested, separately measured
+    function counts for that one only — as in TypeScript
+    (`src/analysis/dart/DartExtraction.ts`, `inNestedFunction`). Under
+    identity scheme 1, which measures named functions only, a closure stays
+    part of its function, as before. R-SIDEEFFECT-NONDETERMINISM moves from
+    the function to the closure: compass `SearchFormDate.build` →
+    `SearchFormDate.build.(anonymous)#0` (the labelled FP), mwpa 3, mwpa
+    arch target 5 (incl. 2 in tests), swipemeister 1 likewise; a function
+    that calls the clock itself and in a closure now has two findings
+    (swipemeister `_WinnerDialogState._startRoll` and its `setState`
+    closure, +1). A baseline entry on the function no longer reproduces
+    (`notReproducible`); the closure's finding is new. Tests:
+    `test/FunctionIdentity.test.ts`.
   - **Reliable in this sample:** R-SIDEEFFECT-NONDETERMINISM 15 / 16 (the
     one FP is the Dart attribution), R-DEP-CYCLE 4 / 4 (every edge checked),
     the Flutter a11y rules 3 / 3, parameter counts always correct.
@@ -3106,7 +3122,7 @@ exists, see "Baseline / diff mode"); a suppression workflow beyond the
 baseline; a generic ESLint fact adapter; context facts (`flag.generatedCode`, `hasTests`)
 for richer suppression; LLM-output evaluation at scale.
 
-**Open from the external validation (2026-11-05, measured, not fixed — see "External validation"; the else-if nesting, R-UNUSED-EXPORT, the PHP R-DEP-UNUSED, generated code and PHP 8.4 syntax are fixed since):** Dart closures attributed to the enclosing function.
+**From the external validation (2026-11-05, see "External validation"):** all defects listed for fixing are fixed since — the else-if nesting, R-UNUSED-EXPORT, the PHP R-DEP-UNUSED, generated code, PHP 8.4 syntax and the Dart closure attribution (2026-11-06/07). The single FP patterns of other rules listed there remain open.
 
 **Open from the evaluator-integrity track (2026-11-04):** in the TS
 extraction, the parse

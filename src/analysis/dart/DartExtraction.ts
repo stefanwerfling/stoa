@@ -52,6 +52,9 @@ export const extractFacts = (root: Node, content: string, filePath: string, info
     const prefixes = importPrefixes(root);
     const functions = dartFunctions(root, scheme);
     const identities = declarationIdentities(functions.map(({base}) => base), scheme);
+    // Every measured function is its own unit: a closure's calls belong to
+    // the closure, not to the function it is written in (as in TypeScript).
+    const measuredBodies = new Set(functions.map(({body}) => body.id));
     for (const [index, {signature, owner, body, form}] of functions.entries()) {
         const kindOf: SubjectKind = owner.type === 'method_signature' ? 'method' : 'function';
         const identity = identities[index];
@@ -68,12 +71,7 @@ export const extractFacts = (root: Node, content: string, filePath: string, info
         facts.push(build({kind: 'metric.parameterCount', kindOf, symbol, identityKind, range, value: parameterCount(signature)}));
         facts.push(build({kind: 'metric.functionLength', kindOf, symbol, identityKind, range, value: range.endLine - range.startLine + 1}));
         facts.push(build({kind: 'doc.hasComplexityRationale', kindOf, symbol, identityKind, range, value: leadingHasMarker(lines, range.startLine)}));
-        // A closure inside a function is already part of that function's
-        // nondeterminism fact (it reads its whole body); only a closure
-        // outside every function (a field initializer) has its own.
-        if (form !== 'closure' || !hasAncestor(owner, 'function_body')) {
-            facts.push(build({kind: 'ast.usesNondeterminism', kindOf, symbol, identityKind, range, value: usesNondeterminism(body)}));
-        }
+        facts.push(build({kind: 'ast.usesNondeterminism', kindOf, symbol, identityKind, range, value: usesNondeterminism(body, measuredBodies)}));
 
         // Flutter widget structure of this body (Phase 1) — one compact fact
         // per function that builds widgets; the FlutterWidgetGraph is rebuilt
@@ -337,6 +335,21 @@ const closureBinding = (expression: Node): string | null => {
     return name?.text ?? null;
 };
 
+/**
+ * Whether `node` lies in a function nested inside `body` that is measured on
+ * its own (`measuredBodies`). A function expression that is not measured (in a
+ * recovered parse region, or every closure under identity scheme 1) stays part
+ * of the enclosing function.
+ */
+const inNestedFunction = (node: Node, body: Node, measuredBodies: ReadonlySet<number>): boolean => {
+    for (let current = node.parent; current !== null && current.id !== body.id; current = current.parent) {
+        if (measuredBodies.has(current.id)) {
+            return true;
+        }
+    }
+    return false;
+};
+
 const hasAncestor = (node: Node, type: string): boolean => {
     for (let current = node.parent; current !== null; current = current.parent) {
         if (current.type === type) {
@@ -405,9 +418,10 @@ const visit = (node: Node, nesting: number, state: MetricState): void => {
 // such call chain and is not flagged. Known limitation: a call through an
 // import prefix (e.g. math.Random()) or through a variable already typed Random
 // (rng.nextInt()) is not resolved — conservative (false negative, not positive).
-const usesNondeterminism = (body: Node): boolean => {
+// Calls inside a nested, separately measured function count for that one only.
+const usesNondeterminism = (body: Node, measuredBodies: ReadonlySet<number>): boolean => {
     return descendants(body, 'selector').some((selector) => {
-        if (!isCallSelector(selector)) {
+        if (!isCallSelector(selector) || inNestedFunction(selector, body, measuredBodies)) {
             return false;
         }
         const parent = selector.parent;

@@ -165,8 +165,38 @@ test('Dart: a closure is measured on its own and stays out of the enclosing func
     const metric = (symbol: string, kind: string): unknown => facts.find((fact) => fact.subject.symbol === symbol && fact.kind === kind)?.value;
     assert.deepEqual([metric('m', 'metric.cyclomaticComplexity'), metric('m', 'metric.nestingDepth')], [2, 1], 'the closure body is not part of m');
     assert.deepEqual([metric('m.(anonymous)#0', 'metric.cyclomaticComplexity'), metric('m.(anonymous)#0', 'metric.nestingDepth'), metric('m.(anonymous)#0', 'metric.parameterCount')], [3, 2, 1]);
-    // Nondeterminism is read over m's whole body, closures included: the closure has no fact of its own.
-    assert.equal(metric('m.(anonymous)#0', 'ast.usesNondeterminism'), undefined);
+    assert.deepEqual([metric('m', 'ast.usesNondeterminism'), metric('m.(anonymous)#0', 'ast.usesNondeterminism')], [false, false]);
+});
+
+test('Dart: a clock or RNG call inside a closure belongs to the closure, not to the enclosing function', () => {
+    const dir = mkdtempSync(join(work, 'case-'));
+    const source = [
+        'class W {',
+        '  Widget build(BuildContext context) {',
+        '    return Tap(onTap: () { pick(DateTime.now()); }, child: Text("x"));',
+        '  }',
+        '  void outer() { run(() { run(() => Random().nextInt(3)); }); }',
+        '  int direct() => DateTime.now().day;',
+        '}',
+        ''
+    ].join('\n');
+    writeFileSync(join(dir, 'w.dart'), source);
+    const nondeterministic = (scheme?: 1): Record<string, unknown> =>
+        Object.fromEntries(
+            analyze({rootPath: dir, knowledgeDir, ruleSetDir, config: DEFAULT_CONFIG, ...(scheme === undefined ? {} : {identityScheme: scheme})})
+                .facts.filter((fact) => fact.kind === 'ast.usesNondeterminism')
+                .map((fact) => [fact.subject.symbol, fact.value])
+        );
+    assert.deepEqual(nondeterministic(), {
+        'W.build': false,
+        'W.build.(anonymous)#0': true,
+        'W.outer': false,
+        'W.outer.(anonymous)#0': false,
+        'W.outer.(anonymous)#1': true,
+        'W.direct': true
+    });
+    // Scheme 1 measures named functions only: there a closure stays part of its function, as before.
+    assert.deepEqual(nondeterministic(1), {'W.build': true, 'W.outer': true, 'W.direct': true});
 });
 
 test('Dart: no closure is read out of a region tree-sitter had to recover (a Dart 3 record and switch expression misparsed)', () => {
