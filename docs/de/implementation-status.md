@@ -2660,9 +2660,18 @@ Finding der Golden-Korpora hat sich geändert.
     `Command/Command.php:682` und
     `DependencyInjection/AddConsoleCommandPass.php:107`, symfony/console läuft
     deshalb `partial` (172 / 174 Dateien, beide als übersprungen gemeldet —
-    der Lauf sagt es, statt darüber hinwegzugehen). Mögliche Korrektur:
-    `parser.version: '8.4'` in `src/analysis/PhpAdapter.ts` (nicht
-    angewendet).
+    der Lauf sagt es, statt darüber hinwegzugehen).
+    **Inzwischen behoben (2026-11-07):** `src/analysis/PhpAdapter.ts` setzt
+    das Sprachniveau des Parsers auf 8.5 (`PHP_LANGUAGE_LEVEL`), das neueste,
+    das php-parser 3.7.0 kennt: 8.4 bringt `new Foo()->bar()`, Property
+    Hooks und asymmetrische Sichtbarkeit, 8.5 den Pipe-Operator und
+    `clone(…)` mit Klammern (unter 8.3 scheiterte auch `clone ($this)`).
+    Neuere Stufen fügen nur Syntax hinzu. symfony/console: `partial`
+    172 / 174 → `complete` 174 / 174; die beiden Dateien bringen 8 Findings
+    (kognitive Komplexität, Verschachtelung, Parameterzahl in `Command` und
+    `AddConsoleCommandPass`), und mit `Command.php` im Modulgraphen
+    verschmelzen zwei R-DEP-CYCLE-Findings zu einem größeren Zyklus. Kein
+    anderes Ziel ändert sich. Tests: `test/PhpExtraction.test.ts`.
 - **Geändert:** neu `src/evaluation/ExternalValidation.ts`,
   `scripts/external-validation.ts`, `validation/external/` (README, 4
   Manifeste, 4 Label-Dateien), `test/ExternalValidation.test.ts` (9:
@@ -3375,7 +3384,7 @@ generischer ESLint-Fact-Adapter;
 Kontext-Facts (`flag.generatedCode`, `hasTests`) für reichhaltigere
 Suppression; LLM-Ausgabe-Evaluierung im Maßstab.
 
-**Offen aus der externen Validierung (2026-11-05, gemessen, nicht behoben — siehe „Externe Validierung"; else-if-Verschachtelung, R-UNUSED-EXPORT, das PHP-R-DEP-UNUSED und generierter Code sind inzwischen behoben):** Dart-Closures der umgebenden Funktion zugeordnet; PHP-8.4-Syntax (`php-parser` standardmäßig 8.3).
+**Offen aus der externen Validierung (2026-11-05, gemessen, nicht behoben — siehe „Externe Validierung"; else-if-Verschachtelung, R-UNUSED-EXPORT, das PHP-R-DEP-UNUSED, generierter Code und PHP-8.4-Syntax sind inzwischen behoben):** Dart-Closures der umgebenden Funktion zugeordnet.
 
 **Offen aus dem Evaluator-Integritäts-Folgeauftrag (2026-11-04):** in der
 TS-Extraktion das Parsen

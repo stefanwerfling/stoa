@@ -13,6 +13,15 @@ import {extractFacts} from './php/PhpExtraction.js';
  * (see docs technology-decision / open-questions OQ-3); the fact schema is
  * identical either way, so the choice is revisable.
  */
+/**
+ * The PHP language level the parser accepts. php-parser defaults to 8.3 and
+ * rejects newer syntax (`new Foo()->bar()`, property hooks, asymmetric
+ * visibility in 8.4; the pipe operator in 8.5) as a parse error, so a modern
+ * project would run `partial`. Newer levels only add syntax — the newest one
+ * the parser knows accepts every older program it accepts.
+ */
+const PHP_LANGUAGE_LEVEL = '8.5';
+
 export class PhpAdapter implements LanguageAdapter {
     public readonly id = 'php';
     public readonly version = '0.1.0';
@@ -20,7 +29,7 @@ export class PhpAdapter implements LanguageAdapter {
     private readonly engine: Engine;
 
     public constructor() {
-        this.engine = new Engine({parser: {extractDoc: true}, ast: {withPositions: true}});
+        this.engine = new Engine({parser: {extractDoc: true, version: PHP_LANGUAGE_LEVEL}, ast: {withPositions: true}});
     }
 
     public supports(file: FileMeta): boolean {

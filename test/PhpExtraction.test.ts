@@ -58,3 +58,24 @@ test('PHP detects non-deterministic built-ins and unused use statements', () => 
     const deep = facts.filter((fact) => fact.kind === 'deps.importDeep').map((fact) => fact.value);
     assert.deepEqual(deep, ['App\\Internal\\Secret']);
 });
+
+test('PHP 8.4 and 8.5 syntax parses, and the functions using it are measured', () => {
+    const content = [
+        '<?php',
+        'final class Box {',
+        '    public private(set) int $size = 0;',
+        '    public string $label { get => strtoupper($this->name); }',
+        '    public function __construct(private string $name) {}',
+        '    public function make(): string { return new Box("x")->label; }',
+        '    public function pipe(string $value): string { return $value |> trim(...); }',
+        '    public function copy(): Box { return clone ($this); }',
+        '}'
+    ].join('\n');
+    const parsed = adapter.parse({path: '/virtual/Box.php', content});
+    assert.deepEqual(parsed.diagnostics, []);
+    assert.equal(parsed.ok, true);
+    const facts = adapter.extractFacts(parsed, {rootDir: '/virtual'});
+    for (const method of ['Box.make', 'Box.pipe', 'Box.copy']) {
+        assert.equal(factFor(facts, 'metric.cyclomaticComplexity', method).value, 1);
+    }
+});

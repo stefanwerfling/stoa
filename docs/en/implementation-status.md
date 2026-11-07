@@ -2442,8 +2442,18 @@ golden corpora changed.
     `Command/Command.php:682` and
     `DependencyInjection/AddConsoleCommandPass.php:107`, so symfony/console
     runs `partial` (172 / 174 files, both reported as skipped — the run says
-    so instead of passing over it). Possible fix: `parser.version: '8.4'` in
-    `src/analysis/PhpAdapter.ts` (not applied).
+    so instead of passing over it).
+    **Fixed since (2026-11-07):** `src/analysis/PhpAdapter.ts` sets the
+    parser's language level to 8.5 (`PHP_LANGUAGE_LEVEL`), the newest
+    php-parser 3.7.0 knows: 8.4 adds `new Foo()->bar()`, property hooks and
+    asymmetric visibility, 8.5 the pipe operator and `clone(…)` with
+    parentheses (at 8.3 `clone ($this)` failed too). Newer levels only add
+    syntax. symfony/console: `partial` 172 / 174 → `complete` 174 / 174;
+    the two files add 8 findings (cognitive complexity, nesting, parameter
+    counts in `Command` and `AddConsoleCommandPass`), and with
+    `Command.php` in the module graph two R-DEP-CYCLE findings merge into
+    one larger cycle. No other target changes. Tests:
+    `test/PhpExtraction.test.ts`.
 - **Changed:** new `src/evaluation/ExternalValidation.ts`,
   `scripts/external-validation.ts`, `validation/external/` (README, 4
   manifests, 4 label files), `test/ExternalValidation.test.ts` (9: precision
@@ -3096,7 +3106,7 @@ exists, see "Baseline / diff mode"); a suppression workflow beyond the
 baseline; a generic ESLint fact adapter; context facts (`flag.generatedCode`, `hasTests`)
 for richer suppression; LLM-output evaluation at scale.
 
-**Open from the external validation (2026-11-05, measured, not fixed — see "External validation"; the else-if nesting, R-UNUSED-EXPORT, the PHP R-DEP-UNUSED and generated code are fixed since):** Dart closures attributed to the enclosing function; PHP 8.4 syntax (`php-parser` defaults to 8.3).
+**Open from the external validation (2026-11-05, measured, not fixed — see "External validation"; the else-if nesting, R-UNUSED-EXPORT, the PHP R-DEP-UNUSED, generated code and PHP 8.4 syntax are fixed since):** Dart closures attributed to the enclosing function.
 
 **Open from the evaluator-integrity track (2026-11-04):** in the TS
 extraction, the parse
