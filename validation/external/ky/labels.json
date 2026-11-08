@@ -78,8 +78,8 @@
       "file": "core/Ky.ts",
       "rule": "R-ERR-SWALLOWED",
       "symbol": "readResponseText>catch#0",
-      "verdict": "FP",
-      "reason": "catch returns undefined as a documented fallback (body unreadable -> no text); the error is handled by design."
+      "verdict": "TP",
+      "reason": "catch returns undefined as a documented fallback (body unreadable -> no text); the error is handled by design. Re-classified TP on 2026-11-08 by the project's definition (maintainer decision): an undocumented fallback without reading the error is a swallowed error; a comment in the catch documents the deliberate case."
     },
     {
       "file": "core/Ky.ts",

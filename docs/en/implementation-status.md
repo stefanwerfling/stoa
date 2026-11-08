@@ -2450,6 +2450,22 @@ golden corpora changed.
     closure, +1). A baseline entry on the function no longer reproduces
     (`notReproducible`); the closure's finding is new. Tests:
     `test/FunctionIdentity.test.ts`.
+    **R-ERR-SWALLOWED fixed since (2026-11-08):** a PHP catch variable
+    outlives the catch, so a read after it in the same scope (function,
+    method, closure, or the script) hands the error on — the retry loop in
+    `QuestionHelper.validateAttempts` (`catch (\Exception $error) {}` …
+    `throw $error;`) is no longer reported (`src/analysis/php/PhpCatch.ts`).
+    The definition is kept otherwise (maintainer decision): a fallback that
+    never reads the error (`return null;`, `$date = false;`) is a swallowed
+    error, and a comment in the catch documents the deliberate case
+    (`suppressWhen: doc.catchHasRationale`) — as the golden corpus and the
+    `catch-intent` regression corpus fix it. So the three labels that
+    called such fallbacks FP (ky `readResponseText`, symfony
+    `FileInputHelper.displayThumbnail`, `DateTimeValueResolver.resolveDate`)
+    are re-classified TP by that definition: R-ERR-SWALLOWED ky 2 / 2 / 0 /
+    0, symfony 5 / 3 / 1 / 1 (the table above keeps the first review).
+    Findings: symfony −1 (the labelled FP); no other target changes. Tests:
+    `test/CatchIntent.test.ts` (corpus +2 PHP cases).
   - **Reliable in this sample:** R-SIDEEFFECT-NONDETERMINISM 15 / 16 (the
     one FP is the Dart attribution), R-DEP-CYCLE 4 / 4 (every edge checked),
     the Flutter a11y rules 3 / 3, parameter counts always correct.

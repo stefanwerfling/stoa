@@ -10,6 +10,9 @@ export interface PhpNode {
     [key: string]: unknown;
 }
 
+/** The node kinds that are functions of their own: the boundary of an enclosing function's body. */
+export const FUNCTION_LIKE: ReadonlySet<string> = new Set(['function', 'method', 'closure', 'arrowfunc']);
+
 export const isPhpNode = (value: unknown): value is PhpNode => {
     return typeof value === 'object' && value !== null && typeof (value as PhpNode).kind === 'string';
 };

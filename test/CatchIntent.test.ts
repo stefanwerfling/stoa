@@ -12,7 +12,8 @@ const corpus = join(here, 'fixtures', 'catch-intent');
 // Regression for the SwipeMeister false positives: R-ERR-SWALLOWED must not
 // fire on a catch that documents the deliberate ignore with a comment
 // (doc.catchHasRationale) or that reads its error binding (`lastError = e`,
-// `return {error}`), in every language — while the undocumented catches that
+// `return {error}`; in PHP also after the catch — the binding outlives it), in
+// every language — while the undocumented catches that
 // never read the error stay reported. Run through the real `stoa eval` CLI so
 // all four grammars are initialized.
 test('R-ERR-SWALLOWED: commented or error-reading catches are not swallowed (all languages)', () => {
@@ -24,7 +25,7 @@ test('R-ERR-SWALLOWED: commented or error-reading catches are not swallowed (all
 
     assert.equal(result.overall.falsePositives, 0, 'no commented / error-reading catch is flagged');
     assert.equal(result.overall.falseNegatives, 0, 'the genuinely swallowing catches are still flagged');
-    assert.equal(result.overall.truePositives, 6);
+    assert.equal(result.overall.truePositives, 7);
 
     const languages = result.byLanguage.map((item) => item.language).sort();
     assert.deepEqual(languages, ['C/C++', 'Dart', 'PHP', 'TypeScript/JavaScript']);

@@ -2668,6 +2668,24 @@ Finding der Golden-Korpora hat sich geändert.
     Baseline-Eintrag auf der Funktion ist nicht mehr reproduzierbar
     (`notReproducible`); das Finding der Closure ist neu. Tests:
     `test/FunctionIdentity.test.ts`.
+    **R-ERR-SWALLOWED inzwischen behoben (2026-11-08):** Eine
+    PHP-catch-Variable lebt über den Catch hinaus, ein Lesen danach im
+    selben Scope (Funktion, Methode, Closure oder Skript) gibt den Fehler
+    also weiter — die Wiederholungsschleife in
+    `QuestionHelper.validateAttempts` (`catch (\Exception $error) {}` …
+    `throw $error;`) wird nicht mehr gemeldet
+    (`src/analysis/php/PhpCatch.ts`). Die Definition bleibt sonst bestehen
+    (Entscheidung des Maintainers): Ein Fallback, der den Fehler nie liest
+    (`return null;`, `$date = false;`), ist ein verschluckter Fehler, ein
+    Kommentar im Catch dokumentiert den bewussten Fall
+    (`suppressWhen: doc.catchHasRationale`) — so legen es Golden-Korpus und
+    der Regressionskorpus `catch-intent` fest. Die drei Labels, die solche
+    Fallbacks als FP werteten (ky `readResponseText`, symfony
+    `FileInputHelper.displayThumbnail`, `DateTimeValueResolver.resolveDate`),
+    sind nach dieser Definition als TP neu eingeordnet: R-ERR-SWALLOWED ky
+    2 / 2 / 0 / 0, symfony 5 / 3 / 1 / 1 (die Tabelle oben behält die erste
+    Prüfung). Findings: symfony −1 (der gelabelte FP); kein anderes Ziel
+    ändert sich. Tests: `test/CatchIntent.test.ts` (Korpus +2 PHP-Fälle).
   - **In dieser Stichprobe verlässlich:** R-SIDEEFFECT-NONDETERMINISM
     15 / 16 (der eine FP ist die Dart-Zuordnung), R-DEP-CYCLE 4 / 4 (jede
     Kante geprüft), die Flutter-a11y-Regeln 3 / 3, Parameterzahlen immer

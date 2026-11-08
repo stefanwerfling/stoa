@@ -33,3 +33,27 @@ function swallowed(): int
         return 0;
     }
 }
+
+// Negative: a PHP catch variable outlives the catch — the retry loop keeps
+// the last error and throws it after the final attempt (symfony QuestionHelper).
+function retried(): int
+{
+    $attempts = 3;
+    while ($attempts--) {
+        try {
+            return risky();
+        } catch (\Exception $error) {
+        }
+    }
+    throw $error;
+}
+
+// Positive: a later variable of the same name in another function is not a read.
+function swallowedAgain(): int
+{
+    try {
+        return risky();
+    } catch (\Exception $error) {
+        return 0;
+    }
+}

@@ -4,7 +4,8 @@ import {factBuilder, identitySchemeOf, type AdapterInfo} from '../FactBuilder.js
 import type {StructImportBinding} from '../StructFacts.js';
 import {isDeepImport} from '../ImportPath.js';
 import {destructiveDdl, nullableNoDefault, unguardedDdl} from '../MigrationSql.js';
-import {childNodes, collect, isPhpNode, rangeOf, type PhpNode} from './PhpAst.js';
+import {childNodes, collect, FUNCTION_LIKE, isPhpNode, rangeOf, type PhpNode} from './PhpAst.js';
+import {catchScopes, catchSwallowsError} from './PhpCatch.js';
 import {extractPhpMemberFacts} from './PhpMembers.js';
 import {referencedLocalNames} from './PhpReferences.js';
 
@@ -23,7 +24,6 @@ interface MetricState {
     maxNesting: number;
 }
 
-const FUNCTION_LIKE: ReadonlySet<string> = new Set(['function', 'method', 'closure', 'arrowfunc']);
 const NESTING_KINDS: ReadonlySet<string> = new Set(['if', 'for', 'foreach', 'while', 'do', 'switch', 'catch', 'retif']);
 const CYCLOMATIC_KINDS: ReadonlySet<string> = new Set(['if', 'for', 'foreach', 'while', 'do', 'case', 'catch', 'retif']);
 const LOGICAL_TYPES: ReadonlySet<string> = new Set(['&&', '||', '??', 'and', 'or']);
@@ -66,12 +66,11 @@ export const extractFacts = (program: PhpNode, content: string, filePath: string
         facts.push(build({kind: 'ast.usesNondeterminism', kindOf, symbol, identityKind, range, value: usesNondeterminism(body)}));
     }
 
+    const scopes = catchScopes(program);
     collect(program, (node) => node.kind === 'catch').forEach((clause, index) => {
         const body = clause.body as PhpNode | undefined;
         const children = (body?.children as PhpNode[] | undefined) ?? [];
         const empty = children.length === 0;
-        const hasThrow = children.length > 0 && exists(body as PhpNode, (node) => node.kind === 'throw');
-        const hasCall = children.length > 0 && exists(body as PhpNode, (node) => node.kind === 'call');
         const symbol = `catch#${index}`;
 
         facts.push(build({kind: 'ast.emptyCatch', kindOf: 'catch-clause', site: true, symbol, range: rangeOf(clause), value: empty}));
@@ -82,7 +81,7 @@ export const extractFacts = (program: PhpNode, content: string, filePath: string
                 site: true,
                 symbol,
                 range: rangeOf(clause),
-                value: !hasThrow && !hasCall && !catchReadsError(clause)
+                value: catchSwallowsError(clause, scopes.get(clause) ?? program)
             })
         );
         facts.push(
@@ -547,20 +546,6 @@ const visit = (node: PhpNode, nesting: number, state: MetricState): void => {
 
         visit(child, childNesting, state);
     }
-};
-
-// A catch whose bound `$e` is READ in the block (`$last = $e`, passed,
-// returned) hands the error on rather than swallowing it; the target of a plain
-// `$e = …` assignment is a write, not a read. Mirrors the TypeScript adapter.
-const catchReadsError = (clause: PhpNode): boolean => {
-    const variable = clause.variable as PhpNode | undefined;
-    const body = clause.body as PhpNode | undefined;
-    const name = variable?.name;
-    if (body === undefined || typeof name !== 'string') {
-        return false;
-    }
-    const writes = new Set(collect(body, (node) => node.kind === 'assign' && node.operator === '=').map((assign) => assign.left));
-    return exists(body, (node) => node.kind === 'variable' && node.name === name && !writes.has(node));
 };
 
 const exists = (root: PhpNode, predicate: (node: PhpNode) => boolean): boolean => {
