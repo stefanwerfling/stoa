@@ -1,6 +1,6 @@
 {
   "id": "R-WIDE-PUBLIC-SURFACE",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "title": "Wide public surface",
   "feature": "metric.exportCount",
   "appliesTo": ["file"],
@@ -10,6 +10,9 @@
     "all": [{ "fact": "metric.exportCount", "op": ">=", "value": 15 }]
   },
   "requiredEvidence": ["metric.exportCount"],
+  "suppressWhen": {
+    "any": [{ "fact": "module.isPackageEntry", "op": "==", "value": true }]
+  },
   "severity": {
     "base": "low",
     "escalateWhen": [{ "fact": "metric.exportCount", "op": ">=", "value": 30, "to": "medium" }]
@@ -37,6 +40,10 @@
     {
       "en": "Whether a wide surface is intentional (public API barrel) is not decidable statically.",
       "de": "Ob eine breite Fläche beabsichtigt ist (öffentliches API-Barrel), lässt sich statisch nicht entscheiden."
+    },
+    {
+      "en": "A package entry point is not reported: its exports are the package's public API, as wide as the package by design. Entries count when declared (`entryPoints` in stoa.config.json) or named by the root package.json (`main`, `module`, `types`, `exports`, `bin`) in a way that maps onto an analyzed file — an undeclared entry is still reported.",
+      "de": "Ein Paket-Einstieg wird nicht gemeldet: Seine Exporte sind die öffentliche API des Pakets, so breit wie das Paket. Einstiege zählen, wenn erklärt (`entryPoints` in stoa.config.json) oder von der Wurzel-package.json (`main`, `module`, `types`, `exports`, `bin`) eindeutig auf eine analysierte Datei abbildbar benannt — ein nicht erklärter Einstieg wird weiter gemeldet."
     }
   ],
   "tests": "test/Rules.test.ts"

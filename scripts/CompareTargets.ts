@@ -1,6 +1,6 @@
 // The target list of the comparison and measurement scripts
 // (compare-findings.ts, compare-jobs.ts, measure-phases.ts): a JSON array of
-// {name, path, solid?, deadExports?, architecture?, contracts?}; relative
+// {name, path, solid?, deadExports?, entryPoints?, architecture?, contracts?}; relative
 // paths resolve against the targets file's directory. The default
 // (scripts/compare-targets.json) covers this repository only — keep a list of
 // your own projects in `.stoa/compare-targets.json` (ignored by git).
@@ -21,6 +21,8 @@ export interface Target {
     path: string;
     solid?: boolean;
     deadExports?: boolean;
+    /** `entryPoints` of stoa.config.json: globs relative to `path`. */
+    entryPoints?: string[];
     architecture?: string;
     contracts?: string;
 }
@@ -41,7 +43,7 @@ export const analysisOptionsOf = (target: Target): AnalyzeAsyncOptions => ({
     rootPath: target.path,
     knowledgeDir: join(PACKAGE_ROOT, 'knowledge', 'marcus'),
     ruleSetDir: join(PACKAGE_ROOT, 'rules', 'default'),
-    config: DEFAULT_CONFIG,
+    config: target.entryPoints === undefined ? DEFAULT_CONFIG : {...DEFAULT_CONFIG, entryPoints: target.entryPoints},
     solid: target.solid === true,
     deadExports: target.deadExports === true,
     ...(target.architecture !== undefined ? {architecture: loadArchitectureConfig(target.architecture)} : {}),

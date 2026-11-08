@@ -2722,6 +2722,23 @@ Finding der Golden-Korpora hat sich geändert.
     SymbolGraph entstehen jetzt in jedem Lauf mit deklarierten Typen —
     gemessen +5–10 ms Graphen, ≤ +40 ms Auswertung (symfony), der
     Gesamtlauf im Rauschen. Tests: `test/OverrideParams.test.ts`.
+    **R-WIDE-PUBLIC-SURFACE inzwischen behoben (2026-11-08, 1.1.0):** ein
+    Paket-Einstieg wird nicht gemeldet — seine Exporte sind die öffentliche
+    API des Pakets, so breit wie das Paket, und genau der schmale
+    re-exportierende Einstieg, den die Abhilfe der Regel selbst empfiehlt.
+    Die Rule Engine leitet ein Fact `module.isPackageEntry`
+    (`src/model/PackageEntryFacts.ts`) aus denselben Einstiegs-Erklärungen
+    ab wie R-UNUSED-EXPORT (`src/config/EntryPoints.ts`: `entryPoints` in
+    stoa.config.json oder `main`, `module`, `types`, `exports`, `bin` der
+    Wurzel-package.json, auf eine analysierte Datei abgebildet), in jedem
+    Lauf, nicht nur unter `--dead-exports`; ein nicht erklärter Einstieg
+    wird weiter gemeldet. Die deklarierenden Module behalten ihre Zählung.
+    ky (Einstieg `index.ts` erklärt, wie im Manifest): −1, der gelabelte
+    FP; das `unclear`-Label `types/options.ts` bleibt gemeldet.
+    flyingfish-Schemas: −1, `src/index.ts` (package.json `types`, ein
+    Re-Export-Barrel). Kein anderes Ziel ändert sich über Regelversion und
+    Texte hinaus. Die Vergleichsziele (`scripts/CompareTargets.ts`) nehmen
+    jetzt `entryPoints`. Tests: `test/PackageEntry.test.ts`.
   - **In dieser Stichprobe verlässlich:** R-SIDEEFFECT-NONDETERMINISM
     15 / 16 (der eine FP ist die Dart-Zuordnung), R-DEP-CYCLE 4 / 4 (jede
     Kante geprüft), die Flutter-a11y-Regeln 3 / 3, Parameterzahlen immer
@@ -3455,7 +3472,7 @@ generischer ESLint-Fact-Adapter;
 Kontext-Facts (`flag.generatedCode`, `hasTests`) für reichhaltigere
 Suppression; LLM-Ausgabe-Evaluierung im Maßstab.
 
-**Aus der externen Validierung (2026-11-05, siehe „Externe Validierung"):** Alle zur Behebung gelisteten Defekte sind inzwischen behoben — else-if-Verschachtelung, R-UNUSED-EXPORT, das PHP-R-DEP-UNUSED, generierter Code, PHP-8.4-Syntax und die Dart-Closure-Zuordnung (2026-11-06/07). Die dort genannten einzelnen FP-Muster anderer Regeln bleiben offen.
+**Aus der externen Validierung (2026-11-05, siehe „Externe Validierung"):** Alle zur Behebung gelisteten Defekte sind inzwischen behoben — else-if-Verschachtelung, R-UNUSED-EXPORT, das PHP-R-DEP-UNUSED, generierter Code, PHP-8.4-Syntax und die Dart-Closure-Zuordnung (2026-11-06/07). Die dort genannten einzelnen FP-Muster anderer Regeln sind inzwischen ebenfalls behoben (2026-11-08): R-ERR-SWALLOWED (PHP-Catch-Variable nach dem Catch gelesen; der Rest per Definition beibehalten), R-VALIDATION-MISSING-BACKEND, R-FN-TOO-MANY-PARAMS und R-WIDE-PUBLIC-SURFACE.
 
 **Offen aus dem Evaluator-Integritäts-Folgeauftrag (2026-11-04):** in der
 TS-Extraktion das Parsen

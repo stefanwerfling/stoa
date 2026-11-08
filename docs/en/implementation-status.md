@@ -2498,6 +2498,22 @@ golden corpora changed.
     and texts. Cost: the TypeModel and SymbolGraph are now built in every
     run with declared types — measured +5–10 ms graphs, ≤ +40 ms evaluation
     (symfony), the total within noise. Tests: `test/OverrideParams.test.ts`.
+    **R-WIDE-PUBLIC-SURFACE fixed since (2026-11-08, 1.1.0):** a package
+    entry point is not reported — its exports are the package's public API,
+    as wide as the package by design, and the narrow re-exporting entry the
+    rule's own remediation recommends. The rule engine derives a
+    `module.isPackageEntry` fact (`src/model/PackageEntryFacts.ts`) from the
+    same entry declarations as R-UNUSED-EXPORT (`src/config/EntryPoints.ts`:
+    `entryPoints` in stoa.config.json, or the root package.json's `main`,
+    `module`, `types`, `exports`, `bin` mapped onto an analyzed file), in
+    every run, not only under `--dead-exports`; an undeclared entry is
+    still reported. The declaring modules keep their count. ky (entry
+    `index.ts` declared, as in the manifest): −1, the labelled FP; the
+    `unclear` `types/options.ts` stays reported. flyingfish schemas: −1,
+    `src/index.ts` (package.json `types`, a re-export barrel). No other
+    target changes beyond the rule version and texts. The comparison
+    targets (`scripts/CompareTargets.ts`) take `entryPoints` now. Tests:
+    `test/PackageEntry.test.ts`.
   - **Reliable in this sample:** R-SIDEEFFECT-NONDETERMINISM 15 / 16 (the
     one FP is the Dart attribution), R-DEP-CYCLE 4 / 4 (every edge checked),
     the Flutter a11y rules 3 / 3, parameter counts always correct.
@@ -3170,7 +3186,7 @@ exists, see "Baseline / diff mode"); a suppression workflow beyond the
 baseline; a generic ESLint fact adapter; context facts (`flag.generatedCode`, `hasTests`)
 for richer suppression; LLM-output evaluation at scale.
 
-**From the external validation (2026-11-05, see "External validation"):** all defects listed for fixing are fixed since — the else-if nesting, R-UNUSED-EXPORT, the PHP R-DEP-UNUSED, generated code, PHP 8.4 syntax and the Dart closure attribution (2026-11-06/07). The single FP patterns of other rules listed there remain open.
+**From the external validation (2026-11-05, see "External validation"):** all defects listed for fixing are fixed since — the else-if nesting, R-UNUSED-EXPORT, the PHP R-DEP-UNUSED, generated code, PHP 8.4 syntax and the Dart closure attribution (2026-11-06/07). The single FP patterns of other rules listed there are fixed since as well (2026-11-08): R-ERR-SWALLOWED (PHP catch variable read after the catch; the rest kept by definition), R-VALIDATION-MISSING-BACKEND, R-FN-TOO-MANY-PARAMS and R-WIDE-PUBLIC-SURFACE.
 
 **Open from the evaluator-integrity track (2026-11-04):** in the TS
 extraction, the parse

@@ -19,10 +19,19 @@ import type {SymbolGraph} from '../model/SymbolGraph.js';
 import type {FlutterWidgetGraph} from '../model/FlutterWidgetGraph.js';
 import type {DartLibraryIndex} from '../model/DartLibraryIndex.js';
 import {OVERRIDES_MEMBER, overrideFacts} from '../model/Overrides.js';
+import {PACKAGE_ENTRY, packageEntryFacts} from '../model/PackageEntryFacts.js';
+import type {EntryDeclarations} from '../config/EntryPoints.js';
 
 interface Unit {
     key: string;
     facts: FactUnit;
+}
+
+interface RuleEngineOptions {
+    /** The finding-identity scheme; the current one when absent. */
+    identityScheme?: IdentityScheme;
+    /** The project's package entry declarations (`module.isPackageEntry`); none when absent. */
+    entries?: EntryDeclarations | null;
 }
 
 interface KeyedFinding {
@@ -38,13 +47,19 @@ interface KeyedFinding {
  * rule-model §4 and finding-model §4.
  */
 export class RuleEngine {
+    private readonly identityScheme: IdentityScheme;
+    private readonly entries: EntryDeclarations | null;
+
     public constructor(
         private readonly knowledgeBase: KnowledgeBase,
         private readonly ruleSet: RuleSet,
         private readonly lang: string = DEFAULT_LANG,
         private readonly projectRules: ProjectRule[] = [new DependencyCycleRule()],
-        private readonly identityScheme: IdentityScheme = IDENTITY_SCHEME
-    ) {}
+        options: RuleEngineOptions = {}
+    ) {
+        this.identityScheme = options.identityScheme ?? IDENTITY_SCHEME;
+        this.entries = options.entries ?? null;
+    }
 
     /**
      * `analyzedFiles`: the files the run analyzed (see
@@ -73,9 +88,12 @@ export class RuleEngine {
             knowledgeBase: this.knowledgeBase,
             lang: this.lang
         };
-        // TypeModel-derived facts join the declarative pass only; the project
-        // rules read the extracted facts (and share the one memoized TypeModel).
-        const derived = this.needsTypeModel(facts) ? overrideFacts(facts, typeModelOf(input)) : [];
+        // Derived facts join the declarative pass only; the project rules read
+        // the extracted facts (and share the one memoized TypeModel).
+        const derived = [
+            ...(this.needsTypeModel(facts) ? overrideFacts(facts, typeModelOf(input)) : []),
+            ...(this.entries !== null && this.readsFact(PACKAGE_ENTRY) ? packageEntryFacts(facts, this.entries, analyzedFiles) : [])
+        ];
         const keyed = this.evaluateDeclarative(derived.length === 0 ? facts : [...facts, ...derived]);
         const projectFindings: Finding[] = [];
 
@@ -103,7 +121,12 @@ export class RuleEngine {
      * symbol graph the TypeModel resolves TS names through.
      */
     public usesTypeModel(): boolean {
-        return this.ruleSet.all().some((rule) => conditionFacts(rule).includes(OVERRIDES_MEMBER));
+        return this.readsFact(OVERRIDES_MEMBER);
+    }
+
+    /** Whether a declarative rule's conditions read facts of `kind`. */
+    private readsFact(kind: string): boolean {
+        return this.ruleSet.all().some((rule) => conditionFacts(rule).includes(kind));
     }
 
     /** Whether `facts` need the TypeModel for this rule set: a rule reads a derived fact, and some file declares a type (no type, nothing overrides). */

@@ -149,7 +149,7 @@ Deklarative Regeln (`rules/default/*.json`, Default aktiv):
 | `R-COMPLEXITY-COGNITIVE` | `metric.cognitiveComplexity` (+ `nestingDepth`) | `marcus.simplicity` | Komplexität | syntaktisch |
 | `R-DEEP-NESTING` | `metric.nestingDepth` | `marcus.simplicity` | Komplexität | syntaktisch |
 | `R-FN-TOO-MANY-PARAMS` | `metric.parameterCount` (unterdrückt durch `type.overridesMember`) | `marcus.purpose` | Verantwortungsgrenzen | syntaktisch (1.1.0: ein Override, dessen Signatur ein Supertyp vorgibt, wird nicht gemeldet) |
-| `R-WIDE-PUBLIC-SURFACE` | `metric.exportCount` | `marcus.purpose` | Verantwortungsgrenzen | syntaktisch (nur TS/JS) |
+| `R-WIDE-PUBLIC-SURFACE` | `metric.exportCount` (unterdrückt durch `module.isPackageEntry`) | `marcus.purpose` | Verantwortungsgrenzen | syntaktisch (nur TS/JS; 1.1.0: ein Paket-Einstieg wird nicht gemeldet) |
 | `R-ERR-SWALLOWED` | `ast.catchSwallowsError` (unterdrückt durch `doc.catchHasRationale`) | `marcus.obstacle` | Fehlerbehandlung | syntaktisch |
 | `R-SIDEEFFECT-NONDETERMINISM` | `ast.usesNondeterminism` | `marcus.control` | Seiteneffekt-Kontrolle | heuristisch |
 | `R-DEP-UNUSED` | `deps.importUnused` | `marcus.cooperation` | Abhängigkeiten | syntaktisch (1.1.0: PHP zählt PHPDoc-Tags, Attribute und Namespace-Alias-Präfixe als Verwendung) |

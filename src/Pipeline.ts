@@ -299,7 +299,7 @@ const startRun = (options: AnalyzeOptions): Run => {
     if (options.solid === true) {
         projectRules.push(...solidRules(architectureModel));
     }
-    const ruleEngine = new RuleEngine(knowledgeBase, ruleSet, options.lang ?? 'en', projectRules, options.identityScheme ?? IDENTITY_SCHEME);
+    const ruleEngine = new RuleEngine(knowledgeBase, ruleSet, options.lang ?? 'en', projectRules, {identityScheme: options.identityScheme ?? IDENTITY_SCHEME, entries: {patterns: options.config.entryPoints ?? [], project: projectConfig}});
 
     const startedAt = Date.now();
     const elapsedMs = (): number => Date.now() - startedAt;

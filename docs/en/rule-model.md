@@ -149,7 +149,7 @@ Declarative rules (`rules/default/*.json`, on by default):
 | `R-COMPLEXITY-COGNITIVE` | `metric.cognitiveComplexity` (+ `nestingDepth`) | `marcus.simplicity` | Complexity | syntactic |
 | `R-DEEP-NESTING` | `metric.nestingDepth` | `marcus.simplicity` | Complexity | syntactic |
 | `R-FN-TOO-MANY-PARAMS` | `metric.parameterCount` (suppressed by `type.overridesMember`) | `marcus.purpose` | Responsibility boundaries | syntactic (1.1.0: an override whose signature a supertype dictates is not reported) |
-| `R-WIDE-PUBLIC-SURFACE` | `metric.exportCount` | `marcus.purpose` | Responsibility boundaries | syntactic (TS/JS only) |
+| `R-WIDE-PUBLIC-SURFACE` | `metric.exportCount` (suppressed by `module.isPackageEntry`) | `marcus.purpose` | Responsibility boundaries | syntactic (TS/JS only; 1.1.0: a package entry point is not reported) |
 | `R-ERR-SWALLOWED` | `ast.catchSwallowsError` (suppressed by `doc.catchHasRationale`) | `marcus.obstacle` | Error handling | syntactic |
 | `R-SIDEEFFECT-NONDETERMINISM` | `ast.usesNondeterminism` | `marcus.control` | Side-effect control | heuristic |
 | `R-DEP-UNUSED` | `deps.importUnused` | `marcus.cooperation` | Dependencies | syntactic (1.1.0: PHP counts PHPDoc tags, attributes and namespace-alias prefixes as uses) |
