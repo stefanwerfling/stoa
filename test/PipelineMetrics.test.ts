@@ -49,10 +49,15 @@ test('called once; the counts agree with the report and the facts', () => {
     assert.ok(m.moduleGraph.edges > 0);
 });
 
-test('SymbolGraph and TypeModel are reported only when built: not without --solid, with counts under --solid', () => {
-    const plain = measured().metrics[0] as PipelineMetrics;
+test('SymbolGraph and TypeModel are reported only when built: not for code without types, with counts when a rule needs them', () => {
+    // No class, interface or mixin: no rule needs the TypeModel (R-FN-TOO-MANY-PARAMS reads
+    // `type.overridesMember` only where a type is declared), so neither graph is built.
+    const plain = measured({rootPath: join(here, 'fixtures', 'backend-validation', 'unvalidated.ts')}).metrics[0] as PipelineMetrics;
     assert.equal(plain.symbolGraph, null);
     assert.equal(plain.typeModel, null);
+    // Declared types without --solid: R-FN-TOO-MANY-PARAMS needs the TypeModel (override facts).
+    const typed = measured().metrics[0] as PipelineMetrics;
+    assert.ok(typed.symbolGraph !== null && typed.typeModel !== null && typed.typeModel.types > 0);
     const solid = measured({solid: true}).metrics[0] as PipelineMetrics;
     assert.ok(solid.symbolGraph !== null && solid.symbolGraph.bindings > 0);
     assert.equal(Object.values(solid.symbolGraph.byStatus).reduce((sum, n) => sum + n, 0), solid.symbolGraph.bindings);

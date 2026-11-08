@@ -11,13 +11,14 @@ import {IDENTITY_SCHEME, subjectIdentityKind, type IdentityScheme} from '../Find
 import {DEFAULT_LANG, localize, type LocalizedText} from '../i18n/Localized.js';
 import {certaintyCap, evalCondition, evalGroup, maxSeverity, weakestCertainty, type FactUnit} from './Evaluation.js';
 import {DependencyCycleRule} from './project/DependencyCycleRule.js';
-import type {ProjectRule} from './ProjectRule.js';
+import {typeModelOf, type ProjectRule, type ProjectRuleInput} from './ProjectRule.js';
 import type {RuleSet} from './RuleSet.js';
 import type {Rule} from './RuleTypes.js';
 import type {ModuleGraph} from '../model/ModuleGraph.js';
 import type {SymbolGraph} from '../model/SymbolGraph.js';
 import type {FlutterWidgetGraph} from '../model/FlutterWidgetGraph.js';
 import type {DartLibraryIndex} from '../model/DartLibraryIndex.js';
+import {OVERRIDES_MEMBER, overrideFacts} from '../model/Overrides.js';
 
 interface Unit {
     key: string;
@@ -60,22 +61,26 @@ export class RuleEngine {
         dartLibraryIndex?: DartLibraryIndex,
         analyzedFiles: ReadonlySet<string> = new Set(facts.map((fact) => fact.subject.file))
     ): Finding[] {
-        const keyed = this.evaluateDeclarative(facts);
+        const input: ProjectRuleInput = {
+            facts,
+            analyzedFiles,
+            ...(moduleGraph !== undefined ? {moduleGraph} : {}),
+            ...(symbolGraph !== undefined ? {symbolGraph} : {}),
+            ...(flutterWidgetGraph !== undefined ? {flutterWidgetGraph} : {}),
+            ...(dartLibraryIndex !== undefined ? {dartLibraryIndex} : {}),
+            identityScheme: this.identityScheme,
+            ruleSetId: this.ruleSet.id,
+            knowledgeBase: this.knowledgeBase,
+            lang: this.lang
+        };
+        // TypeModel-derived facts join the declarative pass only; the project
+        // rules read the extracted facts (and share the one memoized TypeModel).
+        const derived = this.needsTypeModel(facts) ? overrideFacts(facts, typeModelOf(input)) : [];
+        const keyed = this.evaluateDeclarative(derived.length === 0 ? facts : [...facts, ...derived]);
         const projectFindings: Finding[] = [];
 
         for (const projectRule of this.projectRules) {
-            const findings = projectRule.evaluate({
-                facts,
-                analyzedFiles,
-                ...(moduleGraph !== undefined ? {moduleGraph} : {}),
-                ...(symbolGraph !== undefined ? {symbolGraph} : {}),
-                ...(flutterWidgetGraph !== undefined ? {flutterWidgetGraph} : {}),
-                ...(dartLibraryIndex !== undefined ? {dartLibraryIndex} : {}),
-                identityScheme: this.identityScheme,
-                ruleSetId: this.ruleSet.id,
-                knowledgeBase: this.knowledgeBase,
-                lang: this.lang
-            });
+            const findings = projectRule.evaluate(input);
             // Not merged: a project rule reports each target once by
             // construction, and two of its findings with one id (a position)
             // may still be different identities — merging would drop one
@@ -89,6 +94,21 @@ export class RuleEngine {
         const all = [...dedupe(keyed), ...projectFindings];
         all.sort(compareFindings);
         return all;
+    }
+
+    /**
+     * Whether a declarative rule reads a fact derived from the TypeModel
+     * (`type.overridesMember`, model/Overrides.ts) — then the engine derives
+     * those facts before the declarative pass, and the pipeline builds the
+     * symbol graph the TypeModel resolves TS names through.
+     */
+    public usesTypeModel(): boolean {
+        return this.ruleSet.all().some((rule) => conditionFacts(rule).includes(OVERRIDES_MEMBER));
+    }
+
+    /** Whether `facts` need the TypeModel for this rule set: a rule reads a derived fact, and some file declares a type (no type, nothing overrides). */
+    public needsTypeModel(facts: readonly Fact[]): boolean {
+        return this.usesTypeModel() && facts.some((fact) => fact.kind === 'struct.typeDecl');
     }
 
     /**
@@ -213,6 +233,20 @@ export class RuleEngine {
         return {suggestion, drawbacks: localize(rule.remediation.drawbacks, this.lang)};
     }
 }
+
+/** Every fact kind a rule's trigger, suppression or escalation reads. */
+const conditionFacts = (rule: Rule): string[] => {
+    const kinds: string[] = [];
+    const visit = (condition: {fact: string; and?: {fact: string}[]}): void => {
+        kinds.push(condition.fact);
+        condition.and?.forEach(visit);
+    };
+    for (const group of [rule.trigger, rule.suppressWhen]) {
+        [...(group?.all ?? []), ...(group?.any ?? [])].forEach(visit);
+    }
+    rule.severity.escalateWhen?.forEach(visit);
+    return kinds;
+};
 
 const groupUnits = (facts: Fact[]): Unit[] => {
     const byKey = new Map<string, Unit>();

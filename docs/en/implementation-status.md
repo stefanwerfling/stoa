@@ -26,8 +26,10 @@
   supertypes, built lazily on first use), `DartLibraryIndex` and
   `FlutterWidgetGraph`. The SymbolGraph is built **only** when an active rule
   declares `usesTypeModel` (today: the SOLID LSP/ISP/DIP-concrete rules under
-  `--solid`) or `usesSymbolGraph` (R-UNUSED-EXPORT under `--dead-exports`);
-  otherwise it is not built at all.
+  `--solid`) or `usesSymbolGraph` (R-UNUSED-EXPORT under `--dead-exports`),
+  or when a declarative rule reads a TypeModel-derived fact and a file
+  declares a type (today: R-FN-TOO-MANY-PARAMS, `type.overridesMember`, in
+  every run); otherwise it is not built at all.
 - Memory-bounded pipeline with `coverage.status` `complete`/`partial`/`failed`
   and exit codes 0/2/1; per-file fact cache (`--cache`); opt-in parallel
   extraction on worker threads (`--jobs`); baseline/diff mode
@@ -2477,6 +2479,25 @@ golden corpora changed.
     the TypeScript adapter runs without lib types. ky: −2 findings, exactly
     the 2 labelled FP; no other target changes (flyingfish backend
     unchanged). Tests: `test/BackendValidation.test.ts`.
+    **R-FN-TOO-MANY-PARAMS fixed since (2026-11-08, 1.1.0):** a method whose
+    signature a supertype dictates is not reported; the finding stays on
+    the parent's declaration. The rule engine derives a
+    `type.overridesMember` fact from the TypeModel
+    (`src/model/Overrides.ts`) before the declarative pass — only when a
+    rule reads it and a file declares a type — and the rule suppresses on
+    it. A method overrides when it carries the override marker (Dart
+    `@override`, TS `override`, PHP `#[\Override]`; the parent may be
+    external), or when a project supertype reached through `extends`,
+    `implements`, `with` or `on`, transitively, declares a member of that
+    name with the same staticness (PHP names case-insensitive). An override
+    of an external base without a marker is still reported (its members are
+    unknown). symfony/console: −4 — the 2 labelled FP
+    (`TraceableCommand.addArgument`/`addOption`) and the same two in
+    `LazyCommand` (also decorators of `Command`); `Command.addArgument`
+    itself stays reported. No other target changes beyond the rule version
+    and texts. Cost: the TypeModel and SymbolGraph are now built in every
+    run with declared types — measured +5–10 ms graphs, ≤ +40 ms evaluation
+    (symfony), the total within noise. Tests: `test/OverrideParams.test.ts`.
   - **Reliable in this sample:** R-SIDEEFFECT-NONDETERMINISM 15 / 16 (the
     one FP is the Dart attribution), R-DEP-CYCLE 4 / 4 (every edge checked),
     the Flutter a11y rules 3 / 3, parameter counts always correct.

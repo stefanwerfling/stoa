@@ -524,11 +524,13 @@ const finishRun = (run: Run, ingestion: Ingestion, options: AnalyzeOptions): Ana
     // right after the module graph from the same facts (deps.importName +
     // deps.export + deps.reexport) + its resolved edges — ONLY when an active
     // rule declares `usesTypeModel` (the TypeModel resolves TS names through
-    // it) or `usesSymbolGraph` (R-UNUSED-EXPORT). One instance per run,
+    // it) or `usesSymbolGraph` (R-UNUSED-EXPORT), or a declarative rule reads
+    // a TypeModel-derived fact and a file declares a type
+    // (`RuleEngine.needsTypeModel`). One instance per run,
     // shared by every rule.
     // Same discipline: strings/fact-ids only (no AST, no fact copy), lives
     // only for this evaluate() call.
-    const symbolGraph = needsSymbolGraph(projectRules) ? buildSymbolGraph(facts, moduleGraph) : undefined;
+    const symbolGraph = needsSymbolGraph(projectRules) || ruleEngine.needsTypeModel(facts) ? buildSymbolGraph(facts, moduleGraph) : undefined;
     // Flutter Phase 1: the widget graph, same discipline (facts in, strings/
     // fact-ids out, lives only for this evaluate() call). Passed only when the
     // run actually produced widget trees; the Flutter layout rules (Phase 2,

@@ -108,7 +108,9 @@ Das Diagramm oben ist die Entwurfsabsicht. Die Umsetzung ergänzt eine
 Modellschicht zwischen Fact Store und Rule Engine: Nach der Extraktion baut die
 Pipeline je Lauf einmal den `ModuleGraph` (aufgelöste Import-Kanten über genau
 die analysierten Dateien), den `DartLibraryIndex`, den `FlutterWidgetGraph`
-und — nur wenn eine aktive Regel `usesTypeModel` deklariert — den
+und — nur wenn eine aktive Regel `usesTypeModel` deklariert oder eine
+deklarative Regel ein aus dem TypeModel abgeleitetes Fact
+(`type.overridesMember`) liest und eine Datei einen Typ deklariert — den
 `SymbolGraph` (den einzigen ES-Modul-Namensauflöser). Das `TypeModel` entsteht
 lazy aus Facts, ModuleGraph und SymbolGraph beim ersten Zugriff einer Regel.
 Projektregeln erhalten diese Modelle zusammen mit der expliziten Liste der

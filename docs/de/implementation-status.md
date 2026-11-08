@@ -28,7 +28,10 @@
   und `FlutterWidgetGraph`. Der SymbolGraph wird **nur** gebaut, wenn eine
   aktive Regel `usesTypeModel` deklariert (heute: die SOLID-Regeln
   LSP/ISP/DIP-concrete unter `--solid`) oder `usesSymbolGraph`
-  (R-UNUSED-EXPORT unter `--dead-exports`); sonst gar nicht.
+  (R-UNUSED-EXPORT unter `--dead-exports`), oder wenn eine deklarative Regel
+  ein aus dem TypeModel abgeleitetes Fact liest und eine Datei einen Typ
+  deklariert (heute: R-FN-TOO-MANY-PARAMS, `type.overridesMember`, in jedem
+  Lauf); sonst gar nicht.
 - Speicherbegrenzte Pipeline mit `coverage.status` `complete`/`partial`/`failed`
   und Exit-Codes 0/2/1; Pro-Datei-Fact-Cache (`--cache`); opt-in parallele
   Extraktion auf Worker-Threads (`--jobs`); Baseline-/Diff-Modus
@@ -2698,6 +2701,27 @@ Finding der Golden-Korpora hat sich geändert.
     der TypeScript-Adapter ohne Lib-Typen läuft. ky: −2 Findings, genau
     die 2 gelabelten FP; kein anderes Ziel ändert sich (flyingfish-Backend
     unverändert). Tests: `test/BackendValidation.test.ts`.
+    **R-FN-TOO-MANY-PARAMS inzwischen behoben (2026-11-08, 1.1.0):** eine
+    Methode, deren Signatur ein Supertyp vorgibt, wird nicht gemeldet; das
+    Finding bleibt an der Deklaration der Elternklasse. Die Rule Engine
+    leitet vor dem deklarativen Durchlauf ein Fact `type.overridesMember`
+    aus dem TypeModel ab (`src/model/Overrides.ts`) — nur wenn eine Regel
+    es liest und eine Datei einen Typ deklariert —, und die Regel
+    unterdrückt darauf. Eine Methode überschreibt, wenn sie das
+    Override-Kennzeichen trägt (Dart `@override`, TS `override`, PHP
+    `#[\Override]`; die Elternklasse darf extern sein) oder wenn ein
+    Projekt-Supertyp über `extends`, `implements`, `with` oder `on`,
+    transitiv, einen Member dieses Namens mit gleicher Statik deklariert
+    (PHP-Namen ohne Groß-/Kleinschreibung). Eine Überschreibung einer
+    externen Basis ohne Kennzeichen wird weiter gemeldet (deren Member sind
+    unbekannt). symfony/console: −4 — die 2 gelabelten FP
+    (`TraceableCommand.addArgument`/`addOption`) und dieselben zwei in
+    `LazyCommand` (ebenfalls Dekoratoren von `Command`);
+    `Command.addArgument` selbst bleibt gemeldet. Kein anderes Ziel ändert
+    sich über Regelversion und Texte hinaus. Kosten: TypeModel und
+    SymbolGraph entstehen jetzt in jedem Lauf mit deklarierten Typen —
+    gemessen +5–10 ms Graphen, ≤ +40 ms Auswertung (symfony), der
+    Gesamtlauf im Rauschen. Tests: `test/OverrideParams.test.ts`.
   - **In dieser Stichprobe verlässlich:** R-SIDEEFFECT-NONDETERMINISM
     15 / 16 (der eine FP ist die Dart-Zuordnung), R-DEP-CYCLE 4 / 4 (jede
     Kante geprüft), die Flutter-a11y-Regeln 3 / 3, Parameterzahlen immer

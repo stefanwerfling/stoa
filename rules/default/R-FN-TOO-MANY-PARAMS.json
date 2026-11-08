@@ -1,6 +1,6 @@
 {
   "id": "R-FN-TOO-MANY-PARAMS",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "title": "Too many parameters",
   "feature": "metric.parameterCount",
   "appliesTo": ["function", "method"],
@@ -10,6 +10,9 @@
     "all": [{ "fact": "metric.parameterCount", "op": ">=", "value": 5 }]
   },
   "requiredEvidence": ["metric.parameterCount"],
+  "suppressWhen": {
+    "any": [{ "fact": "type.overridesMember", "op": "!=", "value": "" }]
+  },
   "severity": {
     "base": "low",
     "escalateWhen": [{ "fact": "metric.parameterCount", "op": ">=", "value": 8, "to": "medium" }]
@@ -37,6 +40,10 @@
     {
       "en": "Whether the parameters form one cohesive concept needs domain knowledge.",
       "de": "Ob die Parameter ein zusammenhängendes Konzept bilden, erfordert Fachwissen."
+    },
+    {
+      "en": "A method that overrides or implements a supertype's method is not reported — its signature is dictated by the parent, where the finding belongs. Recognized: the override marker (Dart `@override`, TS `override`, PHP `#[\\Override]`), or a project supertype (extends/implements/with/on, transitively) declaring the same name. An override of an external base without a marker is still reported.",
+      "de": "Eine Methode, die eine Methode eines Supertyps überschreibt oder implementiert, wird nicht gemeldet — ihre Signatur gibt die Elternklasse vor, dort gehört das Finding hin. Erkannt werden: das Override-Kennzeichen (Dart `@override`, TS `override`, PHP `#[\\Override]`) oder ein Supertyp im Projekt (extends/implements/with/on, transitiv), der denselben Namen deklariert. Eine Überschreibung einer externen Basis ohne Kennzeichen wird weiter gemeldet."
     }
   ],
   "tests": "test/Rules.test.ts"

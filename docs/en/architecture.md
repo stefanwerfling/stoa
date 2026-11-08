@@ -108,8 +108,9 @@ The diagram above is the design intent. The implementation adds a model layer
 between the fact store and the rule engine: after extraction the pipeline
 builds, once per run, the `ModuleGraph` (resolved import edges over exactly
 the analyzed files), the `DartLibraryIndex`, the `FlutterWidgetGraph` and —
-only when an active rule declares `usesTypeModel` — the `SymbolGraph` (the
-single ES-module name resolver). The `TypeModel` is built lazily from facts,
+only when an active rule declares `usesTypeModel`, or a declarative rule
+reads a TypeModel-derived fact (`type.overridesMember`) and a file declares
+a type — the `SymbolGraph` (the single ES-module name resolver). The `TypeModel` is built lazily from facts,
 ModuleGraph and SymbolGraph on a rule's first access. Project rules receive
 these models together with the explicit list of analyzed files
 (`analyzedFiles`) and must not build a second resolver of their own. Measured
