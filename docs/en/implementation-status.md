@@ -2466,6 +2466,17 @@ golden corpora changed.
     0, symfony 5 / 3 / 1 / 1 (the table above keeps the first review).
     Findings: symfony −1 (the labelled FP); no other target changes. Tests:
     `test/CatchIntent.test.ts` (corpus +2 PHP cases).
+    **R-VALIDATION-MISSING-BACKEND fixed since (2026-11-08, 1.1.0):** a
+    `req`/`request` parameter annotated with the global Fetch API `Request`
+    (`Request`, `globalThis.Request`, optionally `| null`/`| undefined`) is
+    no client input: its `body` is the raw byte stream, not a parsed
+    payload, and it has no `query` — here the HTTP client's own outgoing
+    request. A file that imports or declares its own `Request` (Express,
+    Koa, …) keeps it a framework request. The check is syntactic
+    (`src/analysis/typescript/BackendValidation.ts`, `isFetchRequest`), as
+    the TypeScript adapter runs without lib types. ky: −2 findings, exactly
+    the 2 labelled FP; no other target changes (flyingfish backend
+    unchanged). Tests: `test/BackendValidation.test.ts`.
   - **Reliable in this sample:** R-SIDEEFFECT-NONDETERMINISM 15 / 16 (the
     one FP is the Dart attribution), R-DEP-CYCLE 4 / 4 (every edge checked),
     the Flutter a11y rules 3 / 3, parameter counts always correct.

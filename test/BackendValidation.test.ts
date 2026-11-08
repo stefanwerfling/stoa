@@ -127,3 +127,12 @@ test('mass assignment extension: the narrow ORM "merge" verb addition is recogni
     assert.ok(findings.some((f) => f.location.range.startLine === 47 && f.observation.evidence[0]?.value === 'merge(req.body)'));
     assert.ok(!findings.some((f) => f.location.range.startLine >= 54 && f.location.range.startLine <= 58), '/single-field-assignment: a single plucked field is not a mass-assignment risk');
 });
+
+test('a global Fetch API Request parameter is not client input; an imported framework Request still is', () => {
+    assert.deepEqual(rule(analyzeFixture('fetch-request.ts')), [], 'an HTTP client reading its own outgoing request.body (a stream) is out of scope');
+    assert.deepEqual(
+        rule(analyzeFixture('express-request.ts')).map((f) => `${f.location.range.startLine}:${f.observation.evidence[0]?.value}`),
+        ['9:request.body'],
+        'a file that imports Request (Express) keeps request.body a client payload'
+    );
+});

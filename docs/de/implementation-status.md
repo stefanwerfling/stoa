@@ -2686,6 +2686,18 @@ Finding der Golden-Korpora hat sich geändert.
     2 / 2 / 0 / 0, symfony 5 / 3 / 1 / 1 (die Tabelle oben behält die erste
     Prüfung). Findings: symfony −1 (der gelabelte FP); kein anderes Ziel
     ändert sich. Tests: `test/CatchIntent.test.ts` (Korpus +2 PHP-Fälle).
+    **R-VALIDATION-MISSING-BACKEND inzwischen behoben (2026-11-08,
+    1.1.0):** ein `req`/`request`-Parameter mit dem globalen Fetch-API-Typ
+    `Request` (`Request`, `globalThis.Request`, optional `| null`/
+    `| undefined`) ist kein Client-Input: sein `body` ist der rohe
+    Byte-Stream, keine geparste Nutzlast, und ein `query` hat er nicht —
+    hier der eigene ausgehende Request des HTTP-Clients. Eine Datei, die
+    ein eigenes `Request` importiert oder deklariert (Express, Koa, …),
+    behält einen Framework-Request. Die Prüfung ist syntaktisch
+    (`src/analysis/typescript/BackendValidation.ts`, `isFetchRequest`), da
+    der TypeScript-Adapter ohne Lib-Typen läuft. ky: −2 Findings, genau
+    die 2 gelabelten FP; kein anderes Ziel ändert sich (flyingfish-Backend
+    unverändert). Tests: `test/BackendValidation.test.ts`.
   - **In dieser Stichprobe verlässlich:** R-SIDEEFFECT-NONDETERMINISM
     15 / 16 (der eine FP ist die Dart-Zuordnung), R-DEP-CYCLE 4 / 4 (jede
     Kante geprüft), die Flutter-a11y-Regeln 3 / 3, Parameterzahlen immer

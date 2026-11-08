@@ -126,14 +126,66 @@ const isWholeObjectUse = (access: Node): boolean => {
     return true;
 };
 
-// `req.body` / `request.query` / `request.params` — a property access whose object
-// is a bare req/request identifier and whose name is body/query/params.
+// `req.body` / `request.query` — a property access whose object is a bare
+// req/request identifier and whose name is body/query. A Fetch API `Request`
+// is none: its `body` is the raw byte stream (`ReadableStream`), not a parsed
+// client payload, and it has no `query` — an HTTP client wrapping its own
+// outgoing request reads it that way (see `isFetchRequest`).
 const isRequestInput = (access: Node): boolean => {
     if (!Node.isPropertyAccessExpression(access)) {
         return false;
     }
     const object = access.getExpression();
-    return Node.isIdentifier(object) && REQUEST_OBJECTS.has(object.getText()) && REQUEST_PROPERTIES.has(access.getName());
+    return Node.isIdentifier(object) && REQUEST_OBJECTS.has(object.getText()) && REQUEST_PROPERTIES.has(access.getName()) && !isFetchRequest(object);
+};
+
+// Whether the req/request identifier is a parameter of an enclosing function
+// annotated with the global Fetch API `Request` (`Request`, `globalThis.Request`,
+// optionally `| null`/`| undefined`). A file that imports or declares its own
+// `Request` (Express, Koa, …) keeps it a framework request. Syntactic on
+// purpose: the TypeScript adapter runs without lib types, so a type check
+// could not tell the global `Request` from an unresolved one.
+const isFetchRequest = (identifier: Node): boolean => {
+    const name = identifier.getText();
+    const parameter = identifier.getAncestors()
+        .filter((ancestor) => FUNCTION_KINDS.has(ancestor.getKind()))
+        .flatMap((fn) => (Node.isFunctionLikeDeclaration(fn) ? fn.getParameters() : []))
+        .find((candidate) => candidate.getName() === name);
+    const typeNode = parameter?.getTypeNode();
+    if (typeNode === undefined || !isGlobalRequestType(typeNode)) {
+        return false;
+    }
+    return !declaresOwnRequest(identifier.getSourceFile());
+};
+
+const isGlobalRequestType = (typeNode: Node): boolean => {
+    if (Node.isUnionTypeNode(typeNode)) {
+        const members = typeNode.getTypeNodes().filter((member) => !['null', 'undefined'].includes(member.getText()));
+        return members.length === 1 && members[0] !== undefined && isGlobalRequestType(members[0]);
+    }
+    return Node.isTypeReference(typeNode) && ['Request', 'globalThis.Request'].includes(typeNode.getTypeName().getText());
+};
+
+const ownRequestDeclarations = new WeakMap<SourceFile, boolean>();
+
+// Whether the file binds `Request` itself — an import, or a local type,
+// interface, class or variable — so the name is not the global Fetch type.
+const declaresOwnRequest = (sourceFile: SourceFile): boolean => {
+    const cached = ownRequestDeclarations.get(sourceFile);
+    if (cached !== undefined) {
+        return cached;
+    }
+    const imported = sourceFile.getImportDeclarations().some((declaration) =>
+        declaration.getDefaultImport()?.getText() === 'Request'
+        || declaration.getNamespaceImport()?.getText() === 'Request'
+        || declaration.getNamedImports().some((specifier) => (specifier.getAliasNode() ?? specifier.getNameNode()).getText() === 'Request'));
+    const declared = imported
+        || sourceFile.getTypeAlias('Request') !== undefined
+        || sourceFile.getInterface('Request') !== undefined
+        || sourceFile.getClass('Request') !== undefined
+        || sourceFile.getVariableDeclaration('Request') !== undefined;
+    ownRequestDeclarations.set(sourceFile, declared);
+    return declared;
 };
 
 // Whether `node` is, after unwrapping casts/parens/`!`, ROOTED at a bare
