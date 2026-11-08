@@ -306,7 +306,7 @@ Procedural rules (`ProjectRule`, cross-file):
 
 | Rule ID | Basis | Principle | Dimension | Character |
 |---------|-------|-----------|-----------|-----------|
-| `R-DEP-CYCLE` | module graph: relative TS/JS imports, PHP `use` via PSR-4, unconditional C/C++ quoted includes (Tarjan SCC) | `marcus.cooperation` | Dependencies | syntactic |
+| `R-DEP-CYCLE` | module graph: relative TS/JS imports, PHP `use` via PSR-4, unconditional C/C++ includes — next to the file or through the include paths (Tarjan SCC) | `marcus.cooperation` | Dependencies | syntactic |
 | `R-UNUSED-EXPORT` | `deps.export` × `deps.importName`/`deps.reexport` (SymbolGraph), package entry points | `marcus.cooperation` | Dependencies | heuristic, opt-in `--dead-exports`; re-exports followed, entry exports public (`entryPoints`, package.json) |
 | `R-FLUTTER-PARENTDATA-MISUSE` | FlutterWidgetGraph: `Expanded`/`Flexible`/`Spacer` in a non-Flex, `Positioned*` in a non-Stack framework widget | `marcus.judgment` | Robustness | syntactic structure, identity resolved to a `package:flutter` declaration (Phase B, 1.1.0: imports, prefixes, show/hide, project barrels; ambiguous/unresolved never counts); 1.2.0: identity `owner>Widget#n` (numbered per file) |
 | `R-FLUTTER-UNBOUNDED-SCROLLABLE` | FlutterWidgetGraph: `ListView`/`GridView`/`CustomScrollView`/`PageView` directly in `Row`/`Column`/`Flex` whose viewport certainly gets an unbounded extent (`shrinkWrap` false, or a cross-axis scroll direction) | `marcus.judgment` | Robustness | as above; since 1.1.0 decides on literal values (absent = default, variable = unknown); 1.3.0: identity `owner>Widget#n` |

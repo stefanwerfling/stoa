@@ -56,7 +56,7 @@ SOLID-Regeln (`R-SOLID-DIP-LAYER-DIRECTION`, `-LSP-CONTRACT-COMPATIBILITY`,
 markierte Validation-Dataflow-Kanten, `R-SOLID-DIP-LAYER-DIRECTION`
 (semantisch-heuristisch, Konfidenz 0.5), namensbasierte Persistenz-Erkennung.
 
-**Nicht implementiert:** C/C++-Include-Pfade (`-I`); Dart-Kanten in
+**Nicht implementiert:** Dart-Kanten in
 `R-DEP-CYCLE`/`R-UNUSED-EXPORT` (Dart-Importe werden als `dart.importSpec`
 extrahiert und von ModuleGraph und DIP-Schichtregel genutzt, die beiden
 Abhängigkeitsregeln lesen aber nur TS-/PHP-/C/C++-Kanten); `R-UNUSED-EXPORT`
@@ -2774,6 +2774,63 @@ Finding der Golden-Korpora hat sich geändert.
   0 Fehler; `npm test` 709 / 709; `npm run build` ok; keine Abhängigkeit
   hinzugefügt.
 
+## C/C++-Include-Pfade (2026-11-08)
+
+Ein `#include` wird jetzt so gesucht, wie der Compiler sucht — nicht nur
+neben der einbindenden Datei. Die Include-Pfade kommen aus zwei Quellen
+(`src/config/CppIncludePaths.ts`, gelesen einmal je Lauf):
+
+- **Kompilierdatenbank** (`compile_commands.json`): die unter
+  `cpp.compileCommands` in `stoa.config.json` angegebene, sonst — wie bei
+  clangd — `<root>/compile_commands.json`, sonst
+  `<root>/build/compile_commands.json`. Betrachtet wird die erste, die
+  existiert. Sie wird verwendet, wenn mindestens ein Eintrag eine Datei nennt,
+  die auf der Platte existiert. Eine Datenbank eines anderen Rechners oder
+  Containers (kein Eintrag passt) heißt `stale` und wird nicht verwendet, eine
+  nicht lesbare `unreadable`, eine angegebene, aber fehlende `missing`. Alle
+  drei meldet die CLI auf stderr.
+- **`cpp.includePaths`** in `stoa.config.json`: Verzeichnisse relativ zur
+  Analysewurzel, durchsucht wie `-I` — für Projekte ohne Datenbank.
+
+**Suchreihenfolge** (`src/analysis/cpp/CppIncludeResolution.ts`):
+`#include "…"` zuerst neben der einbindenden Datei (`relative`, wie bisher).
+Danach für eine Übersetzungseinheit der Datenbank deren `-iquote` (nur für
+`"…"`), `-I`, `-isystem`, `-idirafter`, dann `cpp.includePaths`
+(`include-path`). Es gewinnt die erste Datei, die **existiert**: Ist sie nicht
+analysiert (ausgeschlossen, außerhalb der Wurzel), bleibt das Include
+unaufgelöst, statt dass ein späterer Kandidat gewinnt, den der Compiler nie
+liest — wie bei PSR-4. Eine Datei ohne eigenen Eintrag (ein Header, eine
+nicht gebaute Quelle) hat keine eigene Reihenfolge: Nach den konfigurierten
+Pfaden probiert sie alle Verzeichnisse der Datenbank und wird nur aufgelöst,
+wenn genau eine existierende Datei passt und diese analysiert ist. Flags:
+GCC/Clang verbunden (`-Isrc`) oder getrennt (`-I src`),
+`--include-directory=`; `/I` nur bei einem MSVC-Treiber (`cl`, `clang-cl`).
+`command` wird wie von einer POSIX-Shell zerlegt, `arguments` direkt gelesen.
+
+**Wirkung:** Kanten mit `resolution: 'include-path'` gehen wie die relativen in
+`R-DEP-CYCLE` ein (unbedingte Includes) und in die Schichtregeln.
+Der Report trägt `cppIncludes` (Anzahl konfigurierter Pfade, Datenbank mit
+Pfad, Status, Einträgen, passenden Einträgen), nur wenn eine Datenbank oder
+`cpp.includePaths` gefunden wurde. Ohne beides ist alles wie zuvor.
+
+**Gemessen** (Includes in Anführungszeichen, unaufgelöst vorher → nachher):
+mimirmind mit `cpp.compileCommands: "build-cpu/compile_commands.json"` 1986
+→ 8 (die 8: CUDA-Quellen, die der CPU-Build nicht übersetzt, und ein
+Werkzeug — korrekt offen; ohne Angabe findet die Auto-Suche die veraltete
+Docker-Datenbank in `build/` und meldet sie `stale`); anyany mit
+`includePaths: ["src"]` 23 → 0; rohc/src mit fünf Pfaden aus den
+`Makefile.am` 362 → 56 (übrig v. a. das erzeugte `config.h`). Neue
+`R-DEP-CYCLE`-Findings: keine.
+
+**Nicht gelesen:** CMake-, Autotools-, Meson- und MSBuild-Dateien — deren
+Pfade wären geraten; dafür gibt es `cpp.includePaths`. Makro-Includes und
+absolute Includes bleiben unaufgelöst.
+
+Tests: `test/CppIncludePaths.test.ts` (Reihenfolge `-iquote`/`-I`/`-isystem`,
+verdeckende nicht analysierte Datei, mehrdeutiger Header, Auto-Suche in
+`build/`, veraltete und fehlende Datenbank, `includePaths` samt Zyklus,
+Shell-Zerlegung, unverändertes Verhalten ohne Konfiguration).
+
 ## Baseline-/Diff-Modus (opt-in, `--baseline`)
 
 Verdrahtet `Finding.baselineStatus` (`'new' | 'known' | 'fixed'`), das seit
@@ -2908,7 +2965,7 @@ Protokolleinträge oben:
 
 | Regel | Prinzip | Dimension | Hinweis |
 |-------|---------|-----------|---------|
-| R-DEP-CYCLE | marcus.cooperation | Abhängigkeiten | Tarjan-SCC über relative Importe, PHP-`use` über PSR-4 und unbedingte C/C++-Includes in Anführungszeichen (1.1.0); type-only-Importe übersprungen |
+| R-DEP-CYCLE | marcus.cooperation | Abhängigkeiten | Tarjan-SCC über relative Importe, PHP-`use` über PSR-4 und unbedingte C/C++-Includes — neben der Datei oder über die Include-Pfade (1.1.0); type-only-Importe übersprungen |
 | R-UNUSED-EXPORT | marcus.cooperation | Abhängigkeiten | opt-in `--dead-exports`; nur bei Ganzprojekt-Scans sinnvoll |
 | R-SOLID-DIP-LAYER-DIRECTION | marcus.cooperation, marcus.control | Abhängigkeiten | opt-in `--solid`; **experimentell**, semantic-heuristic 0,5, low; Dart: eine UI-Bibliothek (aufgelöste Flutter-Widget-/State-Basis) importiert ein Datenzugriffs-Paket oder ein Datenzugriffs-Modul des Projekts (Stufe 1, Bibliotheksebene) |
 | R-VALIDATION-CONTRACT-INVALID-ID | marcus.purpose | Robustheit | opt-in `--contracts <datei>`; `stoa:validation`-Annotation entspricht nicht dem Trace-ID-Format |
@@ -3460,8 +3517,8 @@ zu liefern.
 
 ## Noch offen
 
-C/C++-Include-Pfade (`-I`, `compile_commands.json`) — ein Include in
-Anführungszeichen wird nur neben der einbindenden Datei aufgelöst;
+C/C++-Include-Pfade aus CMake-/Autotools-/Meson-Dateien (gelesen werden nur
+`compile_commands.json` und `cpp.includePaths`, siehe „C/C++-Include-Pfade");
 Dart-Kanten in R-DEP-CYCLE/R-UNUSED-EXPORT (Dart-Importe liegen als
 `dart.importSpec` im ModuleGraph, die beiden Regeln lesen aber nur
 TS-/PHP-/C/C++-Kanten); R-UNUSED-EXPORT für PHP (PSR-4-Auflösung gibt es

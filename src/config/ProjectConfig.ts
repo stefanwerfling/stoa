@@ -1,6 +1,8 @@
 import {existsSync, readFileSync, statSync} from 'node:fs';
 import {dirname, join} from 'node:path';
 import {ts} from 'ts-morph';
+import type {CppConfig} from '../Types.js';
+import {loadCppIncludeSearch, type CppIncludeSearch} from './CppIncludePaths.js';
 
 /**
  * The project-level configuration that INFLUENCES module resolution — read
@@ -8,7 +10,8 @@ import {ts} from 'ts-morph';
  * Phase 0 of the "Config-Aware Module Resolution" work: deliberately narrow,
  * deterministic, and fail-safe. It reads ONLY `tsconfig.json` (with its
  * `extends` chain, resolved by TypeScript's own config parser), the root
- * `package.json` and the root `composer.json` (PSR-4 only) — it never walks `node_modules`, never touches the network,
+ * `package.json`, the root `composer.json` (PSR-4 only) and the C/C++
+ * include paths (CppIncludePaths.ts) — it never walks `node_modules`, never touches the network,
  * and never guesses. Any read/parse error degrades to an empty config (no
  * alias/exports resolution), never an exception: a broken or absent config
  * must weaken resolution to "relative-only", not abort the analysis.
@@ -53,6 +56,8 @@ export interface ProjectConfig {
      * classified as external — see `ModuleResolver.resolvePhpClass`.
      */
     psr4?: Psr4Mapping[];
+    /** C/C++ include paths (compilation database, `cpp.includePaths`); absent when there are none — see CppIncludePaths.ts. */
+    cppIncludes?: CppIncludeSearch;
 }
 
 /** One PSR-4 namespace prefix (`App\\`, `''` for the fallback) and the directories it maps to. */
@@ -247,8 +252,9 @@ const readComposerPsr4 = (configDir: string): Psr4Mapping[] | undefined => {
  * `ProjectConfig`, which makes ModuleResolution behave exactly as the previous
  * relative-only resolver did).
  */
-export const loadProjectConfig = (rootPath: string): ProjectConfig => {
+export const loadProjectConfig = (rootPath: string, cpp?: CppConfig): ProjectConfig => {
     const configDir = dirOf(rootPath);
+    const cppIncludes = loadCppIncludeSearch(configDir, cpp);
     const tsconfig = readTsConfig(configDir);
     const pkg = readPackageJson(configDir);
     const psr4 = readComposerPsr4(configDir);
@@ -263,7 +269,8 @@ export const loadProjectConfig = (rootPath: string): ProjectConfig => {
         ...(pkg.packageEntries !== undefined ? {packageEntries: pkg.packageEntries} : {}),
         ...(tsconfig.outDir !== undefined ? {outDir: tsconfig.outDir} : {}),
         ...(tsconfig.rootDir !== undefined ? {rootDir: tsconfig.rootDir} : {}),
-        ...(psr4 !== undefined ? {psr4} : {})
+        ...(psr4 !== undefined ? {psr4} : {}),
+        ...(cppIncludes !== null ? {cppIncludes} : {})
     };
 };
 

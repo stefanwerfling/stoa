@@ -290,6 +290,20 @@ const warnAboutComparison = (report: AnalysisReport): void => {
     }
 };
 
+/** A compilation database that was found but not used, on stderr — its include paths are missing from the C/C++ dependency graph. */
+const CPP_DATABASE_TEXT = {
+    stale: 'names no file that exists here (built on another machine or in a container?)',
+    unreadable: 'is not a JSON array of compile commands',
+    missing: 'does not exist'
+} as const;
+
+const warnAboutCppDatabase = (report: AnalysisReport): void => {
+    const database = report.cppIncludes?.compileCommands;
+    if (database !== undefined && database.status !== 'used') {
+        process.stderr.write(`[stoa] WARNING: compilation database ${database.path} ${CPP_DATABASE_TEXT[database.status]} — not used; C/C++ includes resolve without its include paths.\n`);
+    }
+};
+
 /** An identity the run produced more than once (a rule defect), on stderr — the exit code stays as it is. */
 const warnAboutCollisions = (report: AnalysisReport, rootPath: string): void => {
     const duplicates = duplicateKeys(report.findings.map((finding) => findingKey(rootPath, finding)));
@@ -480,6 +494,7 @@ const runAnalyze = async (values: CliValues, target: string): Promise<number> =>
         process.stderr.write(`[stoa] WARNING: analysis is only partial${abortNote} — this report covers only the files actually reached, not the full selection (see coverage.excludedByReason/excludedSample).\n`);
     }
 
+    warnAboutCppDatabase(result.report);
     if (values.baseline === undefined) {
         // With a baseline, the comparison names a collision (see
         // `warnAboutComparison`); without one it would go unseen until the

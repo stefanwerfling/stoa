@@ -1,6 +1,8 @@
 import {existsSync} from 'node:fs';
 import {dirname, isAbsolute, join, resolve} from 'node:path';
 import type {ProjectConfig} from '../config/ProjectConfig.js';
+import type {CppIncludeValue} from './cpp/CppExtraction.js';
+import {resolveCppInclude, type CppIncludeTarget} from './cpp/CppIncludeResolution.js';
 
 /**
  * How an import specifier was resolved to a module in the analyzed set — the
@@ -259,6 +261,11 @@ export class ModuleResolver {
         }
         // The fallback prefix `''` matches every name: with it, nothing is provably outside the project.
         return {target: null, external: matching.length === 0};
+    }
+
+    /** The analyzed file a C/C++ `#include` in `from` reads, through the project's include paths — see CppIncludeResolution.ts. */
+    public resolveCppInclude(from: string, include: CppIncludeValue, analyzedFiles: ReadonlySet<string>): CppIncludeTarget | null {
+        return resolveCppInclude(this.config.cppIncludes, from, include, analyzedFiles);
     }
 
     // tsconfig `paths` + `baseUrl`. All matches (across every paths entry and

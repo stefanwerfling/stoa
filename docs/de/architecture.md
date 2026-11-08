@@ -262,6 +262,10 @@ Erlaubte Abhängigkeitsrichtung ist strikt **links → rechts**. Verboten:
   "ruleSet": "default@1",          // versionierter Regelsatz
   "knowledgeBase": "marcus@1",     // versionierte KB
   "entryPoints": ["src/index.ts"], // Paket-Einstiegspunkte: ihre Exporte sind öffentliche API (R-UNUSED-EXPORT)
+  "cpp": {                          // C/C++-Include-Pfade (sonst nur neben der einbindenden Datei)
+    "compileCommands": "build/compile_commands.json", // Standard: <root>/, dann <root>/build/
+    "includePaths": ["src"]         // wie -I, relativ zur Analysewurzel
+  },
   "thresholds": { "overrides": {} },
   "semantic": { "adapter": "noop" }, // LLM standardmäßig aus
   "baseline": ".stoa/baseline.json"

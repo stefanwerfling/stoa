@@ -1,4 +1,3 @@
-import {dirname, isAbsolute, resolve as resolvePath} from 'node:path';
 import type {Fact, SourceRange} from '../Types.js';
 import type {ModuleResolver, ResolutionMethod} from '../analysis/ModuleResolution.js';
 import type {DartDirectiveValue} from '../analysis/dart/DartDeclarations.js';
@@ -66,8 +65,8 @@ export interface ModuleEdge {
     specifier: string;
     /** From the `deps.import` fact: a type-only import (erased at compile time, no runtime dependency). */
     isTypeOnly: boolean;
-    /** How `specifier` was resolved to `to` -- always a resolved method here (never `unresolved`). `package` only for Dart edges, `psr4` only for PHP `use` edges. */
-    resolution: Exclude<ResolutionMethod, 'unresolved'> | 'package';
+    /** How `specifier` was resolved to `to` -- always a resolved method here (never `unresolved`). `package` only for Dart edges, `psr4` only for PHP `use` edges, `include-path` only for C/C++ includes found through an include path. */
+    resolution: Exclude<ResolutionMethod, 'unresolved'> | 'package' | 'include-path';
     /** Set only for Dart edges (`dart.importSpec`); absent = `deps.import`. */
     origin?: ModuleEdgeOrigin;
     /** Dart edges only: the directive that created the edge. */
@@ -272,20 +271,21 @@ const addPhpUse = (fact: Fact, {analyzedFiles, resolver, edgeByKey, unresolvedBy
     }
 };
 
-// One C/C++ `#include` → an edge or an unresolved import. Only a quoted
-// include resolves, and only to the file next to the including one — the
-// first place every compiler searches for `"x.h"`; the include paths (`-I`)
-// after it are not known without the build, so a quoted include not found
-// there stays unresolved (`external` unknown). A `<…>` include is external
-// when it names a standard library header, otherwise unknown; an include of
-// a macro (`#include NAME`) is never resolved.
-const addCppInclude = (fact: Fact, {analyzedFiles, edgeByKey, unresolvedByKey}: TsDependencySink): void => {
+// One C/C++ `#include` → an edge or an unresolved import. Resolved as the
+// compiler searches (`ModuleResolver.resolveCppInclude`): a quoted include
+// next to the including file (`relative`), then through the project's
+// include paths — compilation database, `cpp.includePaths` —
+// (`include-path`). Without include paths a quoted include not found next to
+// the file stays unresolved (`external` unknown). An unresolved `<…>`
+// include is external when it names a standard library header, otherwise
+// unknown; an include of a macro (`#include NAME`) is never resolved.
+const addCppInclude = (fact: Fact, {analyzedFiles, resolver, edgeByKey, unresolvedByKey}: TsDependencySink): void => {
     const value = fact.value as unknown as CppIncludeValue;
     const from = fact.subject.file;
     const specifier = value.module;
     const evidence: ImportEvidence = {factId: fact.id, range: fact.subject.range};
-    const candidate = value.form === 'quoted' && !isAbsolute(specifier) ? resolvePath(dirname(from), specifier) : null;
-    if (candidate === null || !analyzedFiles.has(candidate)) {
+    const found = resolver.resolveCppInclude(from, value, analyzedFiles);
+    if (found === null) {
         const key = `cpp ${from} ${specifier} ${value.form}`;
         const existing = unresolvedByKey.get(key);
         if (existing === undefined) {
@@ -296,10 +296,10 @@ const addCppInclude = (fact: Fact, {analyzedFiles, edgeByKey, unresolvedByKey}: 
         }
         return;
     }
-    const key = `cpp ${from} ${candidate} ${specifier} ${value.conditional}`;
+    const key = `cpp ${from} ${found.target} ${specifier} ${value.conditional}`;
     const existing = edgeByKey.get(key);
     if (existing === undefined) {
-        edgeByKey.set(key, {from, to: candidate, specifier, isTypeOnly: false, resolution: 'relative', origin: 'cpp.include', conditional: value.conditional, evidence: [evidence]});
+        edgeByKey.set(key, {from, to: found.target, specifier, isTypeOnly: false, resolution: found.resolution, origin: 'cpp.include', conditional: value.conditional, evidence: [evidence]});
     } else {
         addEvidence(existing.evidence, evidence);
     }
@@ -352,8 +352,8 @@ const addDartDirective = (
  * Dart edges (E2, `origin: 'dart.importSpec'`) are excluded: Dart cycles are
  * not reported (see the module comment).
  *
- * Identity spec, phase 4: C/C++ include edges (`origin: 'cpp.include'`) are
- * included unless conditional — a header that includes, directly or through
+ * Identity spec, phase 4: C/C++ include edges (`origin: 'cpp.include'`,
+ * next to the file or through an include path) are included unless conditional — a header that includes, directly or through
  * others, the file including it is a cycle in what the compiler reads,
  * whatever the include guards make of it. A conditional include exists only
  * in some configurations and is left out. PHP `use` edges (`psr4`) are
@@ -366,7 +366,7 @@ export const cycleAdjacency = (graph: ModuleGraph): Map<string, Set<string>> => 
     }
     for (const edge of graph.edges) {
         const cppInclude = edge.origin === 'cpp.include' && edge.conditional !== true;
-        const resolved = edge.resolution === 'relative' || (edge.resolution === 'psr4' && edge.origin === undefined);
+        const resolved = edge.resolution === 'relative' || (edge.resolution === 'psr4' && edge.origin === undefined) || (edge.resolution === 'include-path' && cppInclude);
         if ((edge.origin !== undefined && !cppInclude) || !resolved || edge.isTypeOnly || edge.from === edge.to) {
             continue;
         }

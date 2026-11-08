@@ -407,6 +407,8 @@ export interface AnalysisReport {
     filter?: FilterSummary;
     /** Present only with `--architecture` (E5b). */
     architecture?: ArchitectureSummary;
+    /** Present only when a compilation database or `cpp.includePaths` was found (config/CppIncludePaths.ts). */
+    cppIncludes?: CppIncludeSummary;
     /** Present only when `coverage.status === 'failed'` (see Cli.ts) — the caught error that prevented a real analysis from running at all. */
     error?: string;
 }
@@ -415,6 +417,22 @@ export interface AnalysisReport {
 export interface AnalysisResult {
     report: AnalysisReport;
     facts: Fact[];
+}
+
+/** Where C/C++ `#include`s are searched besides the including file's directory — see config/CppIncludePaths.ts. */
+export interface CppConfig {
+    /** Include directories relative to the analysis root, searched like `-I` in this order. */
+    includePaths?: string[];
+    /** A compilation database relative to the analysis root; default: `compile_commands.json`, else `build/compile_commands.json`. */
+    compileCommands?: string;
+}
+
+/** What the C/C++ include search read (config/CppIncludePaths.ts). */
+export interface CppIncludeSummary {
+    /** How many `cpp.includePaths` were configured. */
+    includePaths: number;
+    /** The compilation database considered, if any: `used`, `stale` (no entry names an existing file — not used), `unreadable` or `missing` (configured but absent). */
+    compileCommands?: {path: string; status: 'used' | 'stale' | 'unreadable' | 'missing'; entries: number; matchedEntries: number};
 }
 
 export interface SemanticConfig {
@@ -433,6 +451,8 @@ export interface StoaConfig {
      * Optional; the root package.json is consulted as well (EntryPoints.ts).
      */
     entryPoints?: string[];
+    /** C/C++ include paths (see config/CppIncludePaths.ts). Optional. */
+    cpp?: CppConfig;
     ruleSet: string;
     knowledgeBase: string;
     semantic: SemanticConfig;

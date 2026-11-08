@@ -289,7 +289,7 @@ const startRun = (options: AnalyzeOptions): Run => {
     const ruleSet = RuleSet.loadFromDirectory(options.ruleSetDir, options.config.ruleSet);
     const architectureModel = architectureModelOf(options);
     const projectRules: ProjectRule[] = [new DependencyCycleRule(), ...flutterLayoutRules(), ...flutterLifecycleRules()];
-    const projectConfig = loadProjectConfig(options.rootPath);
+    const projectConfig = loadProjectConfig(options.rootPath, options.config.cpp);
     if (options.deadExports === true) {
         projectRules.push(new DeadExportRule({patterns: options.config.entryPoints ?? [], project: projectConfig}));
     }
@@ -586,7 +586,8 @@ const finishRun = (run: Run, ingestion: Ingestion, options: AnalyzeOptions): Ana
             ...(cache !== null ? {cacheHits} : {})
         },
         findings,
-        ...architectureSummaryOf(architectureModel, analyzedPaths)
+        ...architectureSummaryOf(architectureModel, analyzedPaths),
+        ...(projectConfig.cppIncludes !== undefined ? {cppIncludes: projectConfig.cppIncludes.summary} : {})
     };
 
     options.onMetrics?.({

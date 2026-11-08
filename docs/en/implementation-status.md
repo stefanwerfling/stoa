@@ -53,7 +53,7 @@
 edges marked `heuristic`, `R-SOLID-DIP-LAYER-DIRECTION` (semantic-heuristic,
 confidence 0.5), name-based persistence detection.
 
-**Not implemented:** C/C++ include paths (`-I`); Dart edges in
+**Not implemented:** Dart edges in
 `R-DEP-CYCLE`/`R-UNUSED-EXPORT` (Dart imports are extracted as
 `dart.importSpec` and used by the ModuleGraph and the DIP layer rule, but the
 two dependency rules read only TS/PHP/C/C++ edges); `R-UNUSED-EXPORT` for
@@ -2546,6 +2546,60 @@ golden corpora changed.
 - **Checked:** `npm run typecheck`, `npm run typecheck:test`, `npm run lint`
   0 errors; `npm test` 709 / 709; `npm run build` ok; no dependency added.
 
+## C/C++ include paths (2026-11-08)
+
+An `#include` is now searched the way the compiler searches — not only next
+to the including file. The include paths come from two sources
+(`src/config/CppIncludePaths.ts`, read once per run):
+
+- **Compilation database** (`compile_commands.json`): the one given as
+  `cpp.compileCommands` in `stoa.config.json`, else — as clangd looks —
+  `<root>/compile_commands.json`, else `<root>/build/compile_commands.json`.
+  The first that exists is the one considered. It is used when at least one
+  entry names a file that exists on disk. A database from another machine or
+  container (no entry matches) is `stale` and not used, an unparseable one
+  `unreadable`, a configured but absent one `missing`. The CLI reports all
+  three on stderr.
+- **`cpp.includePaths`** in `stoa.config.json`: directories relative to the
+  analysis root, searched like `-I` — for projects without a database.
+
+**Search order** (`src/analysis/cpp/CppIncludeResolution.ts`):
+`#include "…"` first next to the including file (`relative`, as before).
+Then, for a translation unit of the database, its `-iquote` (`"…"` only),
+`-I`, `-isystem`, `-idirafter`, then `cpp.includePaths` (`include-path`). The
+first file that **exists** wins: when it is not analyzed (excluded, outside
+the root), the include stays unresolved instead of letting a later candidate
+win that the compiler never reads — as with PSR-4. A file without its own
+entry (a header, a source the build does not compile) has no order of its
+own: after the configured paths it tries every directory of the database and
+resolves only when exactly one existing file matches and that file is
+analyzed. Flags: GCC/Clang joined (`-Isrc`) or separate (`-I src`),
+`--include-directory=`; `/I` only for an MSVC driver (`cl`, `clang-cl`).
+`command` is split as a POSIX shell would, `arguments` is read directly.
+
+**Effect:** edges with `resolution: 'include-path'` feed `R-DEP-CYCLE` like
+the relative ones (unconditional includes) and the layer rules. The report
+carries `cppIncludes` (number of configured paths; the database with path,
+status, entries, matching entries), only when a database or
+`cpp.includePaths` was found. Without either, nothing changes.
+
+**Measured** (quoted includes unresolved before → after): mimirmind with
+`cpp.compileCommands: "build-cpu/compile_commands.json"` 1986 → 8 (the 8:
+CUDA sources the CPU build does not compile, and one tool — correctly open;
+without the setting the auto-search finds the outdated Docker database in
+`build/` and reports it `stale`); anyany with `includePaths: ["src"]`
+23 → 0; rohc/src with five paths from its `Makefile.am` 362 → 56 (mostly
+the generated `config.h`). New `R-DEP-CYCLE` findings: none.
+
+**Not read:** CMake, Autotools, Meson and MSBuild files — their paths would
+be guesses; `cpp.includePaths` covers them. Macro and absolute includes stay
+unresolved.
+
+Tests: `test/CppIncludePaths.test.ts` (order `-iquote`/`-I`/`-isystem`, a
+shadowing non-analyzed file, an ambiguous header, auto-search in `build/`,
+stale and missing database, `includePaths` with a cycle, shell splitting,
+unchanged behaviour without configuration).
+
 ## Baseline / diff mode (opt-in, `--baseline`)
 
 Wires up `Finding.baselineStatus` (`'new' | 'known' | 'fixed'`), present in
@@ -2670,7 +2724,7 @@ above:
 
 | Rule | Principle | Dimension | Note |
 |------|-----------|-----------|------|
-| R-DEP-CYCLE | marcus.cooperation | dependencies | Tarjan SCC over relative imports, PHP `use` via PSR-4 and unconditional C/C++ quoted includes (1.1.0); type-only imports skipped |
+| R-DEP-CYCLE | marcus.cooperation | dependencies | Tarjan SCC over relative imports, PHP `use` via PSR-4 and unconditional C/C++ includes — next to the file or through the include paths (1.1.0); type-only imports skipped |
 | R-UNUSED-EXPORT | marcus.cooperation | dependencies | opt-in `--dead-exports`; only sound for whole-project scans |
 | R-SOLID-DIP-LAYER-DIRECTION | marcus.cooperation, marcus.control | dependencies | opt-in `--solid`; **experimental**, semantic-heuristic 0.5, low; Dart: a UI library (resolved Flutter widget/State base) imports a data-access package or a project data-access module (stage 1, library level) |
 | R-VALIDATION-CONTRACT-INVALID-ID | marcus.purpose | robustness | opt-in `--contracts <file>`; a `stoa:validation` annotation does not match the Trace ID format |
@@ -3176,8 +3230,9 @@ fails fast (exit 1, concrete errors) instead of silently yielding 0 findings.
 
 ## Not yet done
 
-C/C++ include paths (`-I`, `compile_commands.json`) — a quoted include is
-resolved only next to the including file; Dart edges in R-DEP-CYCLE /
+C/C++ include paths from CMake/Autotools/Meson files (only
+`compile_commands.json` and `cpp.includePaths` are read, see "C/C++ include
+paths"); Dart edges in R-DEP-CYCLE /
 R-UNUSED-EXPORT (Dart imports exist as `dart.importSpec` in the ModuleGraph,
 but the two rules read only TS/PHP/C/C++ edges); R-UNUSED-EXPORT for PHP
 (PSR-4 resolution exists since identity spec phase 4, export/import-name

@@ -1,6 +1,6 @@
 // The target list of the comparison and measurement scripts
 // (compare-findings.ts, compare-jobs.ts, measure-phases.ts): a JSON array of
-// {name, path, solid?, deadExports?, entryPoints?, architecture?, contracts?}; relative
+// {name, path, solid?, deadExports?, entryPoints?, cpp?, architecture?, contracts?}; relative
 // paths resolve against the targets file's directory. The default
 // (scripts/compare-targets.json) covers this repository only — keep a list of
 // your own projects in `.stoa/compare-targets.json` (ignored by git).
@@ -10,6 +10,7 @@ import {dirname, join, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {loadArchitectureConfig} from '../src/architecture/ArchitectureConfig.js';
 import {DEFAULT_CONFIG} from '../src/Config.js';
+import type {CppConfig} from '../src/Types.js';
 import {loadValidationContract} from '../src/contracts/ValidationContract.js';
 import type {AnalyzeAsyncOptions} from '../src/Pipeline.js';
 
@@ -23,6 +24,8 @@ export interface Target {
     deadExports?: boolean;
     /** `entryPoints` of stoa.config.json: globs relative to `path`. */
     entryPoints?: string[];
+    /** `cpp` of stoa.config.json: include paths / compilation database relative to `path`. */
+    cpp?: CppConfig;
     architecture?: string;
     contracts?: string;
 }
@@ -43,7 +46,7 @@ export const analysisOptionsOf = (target: Target): AnalyzeAsyncOptions => ({
     rootPath: target.path,
     knowledgeDir: join(PACKAGE_ROOT, 'knowledge', 'marcus'),
     ruleSetDir: join(PACKAGE_ROOT, 'rules', 'default'),
-    config: target.entryPoints === undefined ? DEFAULT_CONFIG : {...DEFAULT_CONFIG, entryPoints: target.entryPoints},
+    config: {...DEFAULT_CONFIG, ...(target.entryPoints === undefined ? {} : {entryPoints: target.entryPoints}), ...(target.cpp === undefined ? {} : {cpp: target.cpp})},
     solid: target.solid === true,
     deadExports: target.deadExports === true,
     ...(target.architecture !== undefined ? {architecture: loadArchitectureConfig(target.architecture)} : {}),
